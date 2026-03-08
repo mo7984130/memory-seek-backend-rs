@@ -1,6 +1,9 @@
+use std::borrow::Cow;
 use once_cell::sync::Lazy;
-use regex::Regex;
+use fancy_regex::Regex;
+use tracing::error;
 use validator::ValidationError;
+use crate::utils::ResultExt;
 
 pub struct PasswordValidConfig;
 impl PasswordValidConfig {
@@ -29,11 +32,13 @@ pub fn validate_password(password: &str) -> Result<(), ValidationError> {
     }
 
     // 3. 复杂性检查 (Pattern: 字母+数字)
-    if !PASSWORD_REGEX.is_match(password) {
-        return Err(ValidationError::new("invalid_password")
-            .with_message(PasswordValidConfig::PATTERN_MSG.into()));
+    match PASSWORD_REGEX.is_match(password) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(ValidationError::new("invalid_password").with_message(PasswordValidConfig::PATTERN_MSG.into())),
+        Err(e) => {
+            error!("密码正则解析时出现问题: {:?}", e);
+            Err(ValidationError::new("internal_error").with_message("服务器内部校验错误".into()))
+        }
     }
-
-    Ok(())
 }
 

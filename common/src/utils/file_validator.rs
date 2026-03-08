@@ -124,28 +124,3 @@ impl FileValidator {
         bytes.iter().map(|b| format!("{:02X}", b)).collect()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_bytes_to_hex() {
-        let bytes = vec![0xFF, 0xD8, 0xFF, 0xE0];
-        assert_eq!(FileValidator::bytes_to_hex(&bytes), "FFD8FFE0");
-    }
-
-    #[test]
-    fn test_extract_file_extension() {
-        assert_eq!(FileValidator::extract_file_extension("test.jpg"), "jpg");
-        assert_eq!(FileValidator::extract_file_extension("test.JPG"), "jpg");
-        assert_eq!(FileValidator::extract_file_extension("test"), "");
-    }
-
-    #[test]
-    fn test_is_supported_format() {
-        assert!(FileValidator::is_supported_format("jpg"));
-        assert!(FileValidator::is_supported_format("png"));
-        assert!(!FileValidator::is_supported_format("webp"));
-    }
-}

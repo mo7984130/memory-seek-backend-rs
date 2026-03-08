@@ -1,0 +1,25 @@
+[package]
+name = "photo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+common = { path = "../../common" }
+entities = { path = "../../entities" }
+oss = { path = "../../libs/oss" }
+imgproxy = { path = "../../libs/imgproxy" }
+face_engine = { path = "../../libs/face_engine" }
+
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sea-orm = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+md5 = { workspace = true }
+image = { workspace = true }
+uuid = { workspace = true }
+futures = { workspace = true }
+deadpool-redis = { workspace = true }
