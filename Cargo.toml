@@ -4,8 +4,10 @@ members = [
     "domains/auth",
     "domains/user",
     "server",
-    "libs/oss"
-, "libs/email", "entities"]
+    "libs/oss",
+    "libs/email",
+    "entities"
+]
 resolver = "3"
 
 [workspace.dependencies]
