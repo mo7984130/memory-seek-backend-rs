@@ -1,0 +1,15 @@
+[package]
+name = "auth"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+common = { path = "../../common" }
+sea-orm = { workspace = true }
+entities = { path = "../../entities" }
+serde = { workspace = true }
+validator = { workspace = true }
+chrono = { workspace = true }
+email = { path = "../../libs/email" }
+bcrypt = { workspace = true }
+deadpool-redis = { workspace = true }

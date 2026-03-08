@@ -1,0 +1,17 @@
+[package]
+name = "user"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+common = { path = "../../common" }
+entities = { path = "../../entities" }
+oss = { path = "../../libs/oss" }
+serde = { version = "1.0.228", features = ["derive"] }
+validator = { workspace = true }
+chrono = { workspace = true }
+sea-orm = { workspace = true }
+redis = { workspace = true }
+uuid = { workspace = true }
+bcrypt = { workspace = true }
+deadpool-redis = { workspace = true }

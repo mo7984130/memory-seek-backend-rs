@@ -1,10 +1,15 @@
-[package]
-name = "RustByExample"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "common",
+    "domains/auth",
+    "domains/user",
+    "server",
+    "libs/oss"
+, "libs/email", "entities"]
+resolver = "3"
 
-[dependencies]
-axum = { version = "0.8.8", features = ["macros", "multipart"] }
+[workspace.dependencies]
+axum = { version = "0.8.8", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
 
 serde = { version = "1.0.228", features = ["derive"] }
@@ -30,8 +35,7 @@ validator = { version="0.20.0", features = ["derive"] }
 once_cell = "1.21.3"
 regex = "1.12.3"
 lettre = { version = "0.11.19", features = ["tokio1-native-tls", "hostname", "builder"] }
-aws-config = "1.8.14"
-aws-sdk-s3 = "1.124.0"
+
 uuid = { version = "1.21.0", features = ["v4"] }
 futures = "0.3.32"
 const_format = "0.2.35"
