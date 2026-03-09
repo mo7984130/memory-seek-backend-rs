@@ -24,6 +24,6 @@ pub struct ChangeNicknameRequest {
 
 #[derive(Deserialize)]
 pub struct GetUserInfoBatchRequest {
-    pub user_ids: Vec<u32>
+    pub user_ids: Vec<i64>
 }
 

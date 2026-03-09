@@ -2,9 +2,8 @@ use chrono::Utc;
 use common::error::AppError;
 use common::utils::ResultExt;
 use deadpool_redis::Pool;
-use entities::{face_feature, face_person, photo};
+use entities::{face_feature, face_person, photo, Embedding};
 use face_engine::{FaceAligner, FaceEngine};
-use imgproxy::ImgProxyService;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
     QuerySelect, Set,
@@ -20,6 +19,8 @@ use crate::models::face::{
 };
 use crate::models::photo::CursorPageVO;
 use crate::services::photo_service::FaceTask;
+use futures::future::join_all;
+use img_url_generator::{ImageUrlGenerator, ImageUrlProvider};
 
 pub struct FaceService;
 
@@ -52,14 +53,7 @@ impl FaceService {
                 .map_internal_err("特征提取失败")?;
 
             let embedding = vector_utils::l2_normalize(&embedding);
-            let embedding_str = format!(
-                "[{}]",
-                embedding
-                    .iter()
-                    .map(|f| f.to_string())
-                    .collect::<Vec<_>>()
-                    .join(",")
-            );
+            let embedding = Embedding::new(embedding.to_vec());
 
             let bbox_json = serde_json::json!({
                 "x": detection.bbox.x,
@@ -72,7 +66,7 @@ impl FaceService {
             let feature = face_feature::ActiveModel {
                 photo_id: Set(photo_id),
                 person_id: Set(None),
-                embedding: Set(embedding_str),
+                embedding: Set(embedding),
                 bbox: Set(sea_orm::JsonValue::Object(bbox_json.as_object().unwrap().clone())),
                 score: Set(detection.score),
                 created_at: Set(now.into()),
@@ -111,7 +105,7 @@ impl FaceService {
             .map(|f| FeatureNode {
                 id: f.id,
                 photo_id: f.photo_id,
-                embedding: Self::parse_embedding(&f.embedding),
+                embedding: f.embedding.to_vec(),
                 score: f.score,
                 person_id: f.person_id,
             })
@@ -145,14 +139,7 @@ impl FaceService {
                 .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
                 .unwrap();
 
-            let centroid_str = format!(
-                "[{}]",
-                seed.vector
-                    .iter()
-                    .map(|f| f.to_string())
-                    .collect::<Vec<_>>()
-                    .join(",")
-            );
+            let centroid = Embedding::new(seed.vector.clone());
 
             let now = Utc::now();
 
@@ -165,7 +152,7 @@ impl FaceService {
                 max_score_feature_id: Set(best.id),
                 max_score: Set(best.score),
                 total_photo_count: Set(seed.member_nodes.len() as i64),
-                centroid_embedding: Set(centroid_str),
+                centroid_embedding: Set(centroid),
                 total_weight_count: Set(seed.total_weight),
                 created_at: Set(now.into()),
                 updated_at: Set(now.into()),
@@ -192,19 +179,11 @@ impl FaceService {
         Ok(())
     }
 
-    fn parse_embedding(s: &str) -> Vec<f32> {
-        s.trim_start_matches('[')
-            .trim_end_matches(']')
-            .split(',')
-            .filter_map(|v| v.trim().parse::<f32>().ok())
-            .collect()
-    }
-
     pub async fn get_person_page(
         db: &DatabaseConnection,
         cursor: Option<i64>,
         size: u32,
-        imgproxy: &ImgProxyService,
+        img_url_generator: &ImageUrlProvider,
     ) -> Result<CursorPageVO<FacePersonVO, i64>, AppError> {
         let limit = size as u64 + 1;
         let mut query = face_person::Entity::find()
@@ -239,11 +218,17 @@ impl FaceService {
 
         let photo_map: HashMap<i64, _> = photos.into_iter().map(|p| (p.id, p)).collect();
 
-        let records: Vec<FacePersonVO> = persons
-            .iter()
-            .filter_map(|p| {
-                feature_map.get(&p.max_score_feature_id).and_then(|f| {
-                    photo_map.get(&f.photo_id).map(|photo| {
+        let next_cursor = persons.last().map(|p| p.total_photo_count);
+
+        let futures = persons.into_iter().map(|p| {
+            let feature_opt = feature_map.get(&p.max_score_feature_id).cloned();
+            let photo_opt = feature_opt.as_ref().and_then(|f| photo_map.get(&f.photo_id).cloned());
+            let person_id = p.id;
+            let person_name = p.name;
+            let total_photo_count = p.total_photo_count;
+            async move {
+                if let Some(photo) = photo_opt {
+                    if let Some(f) = feature_opt {
                         let bbox: face_feature::FaceBBox =
                             serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
                                 face_feature::FaceBBox {
@@ -254,32 +239,36 @@ impl FaceService {
                                 }
                             });
 
-                        let cw = (bbox.w * photo.width as f32) as i32;
-                        let ch = (bbox.h * photo.height as f32) as i32;
-                        let cx = (bbox.x * photo.width as f32) as i32;
-                        let cy = (bbox.y * photo.height as f32) as i32;
+                        let cw = (bbox.w * photo.width as f32) as i64;
+                        let ch = (bbox.h * photo.height as f32) as i64;
+                        let cx = (bbox.x * photo.width as f32) as i64;
+                        let cy = (bbox.y * photo.height as f32) as i64;
 
-                        let cover_url = imgproxy.generate_crop_url(
-                            &photo.file_id,
-                            cx,
-                            cy,
-                            cw,
-                            ch,
+                        let cover_url = img_url_generator.crop(
+                            photo.file_id.clone(),
+                            cx as i32,
+                            cy as i32,
+                            cw as i32,
+                            ch as i32,
                             200,
-                        );
+                        ).await;
 
-                        FacePersonVO {
-                            id: p.id.to_string(),
-                            name: p.name.clone(),
-                            total_photo_count: p.total_photo_count,
+                        return Some(FacePersonVO {
+                            id: person_id.to_string(),
+                            name: person_name,
+                            total_photo_count,
                             cover_url: Some(cover_url),
-                        }
-                    })
-                })
-            })
+                        });
+                    }
+                }
+                None
+            }
+        });
+        let records: Vec<FacePersonVO> = join_all(futures)
+            .await
+            .into_iter()
+            .flatten()
             .collect();
-
-        let next_cursor = persons.last().map(|p| p.total_photo_count);
 
         Ok(CursorPageVO {
             records,
@@ -370,28 +359,20 @@ impl FaceService {
         let w2 = target.total_weight_count;
         let new_weight = w1 + w2;
 
-        let c1 = Self::parse_embedding(&source.centroid_embedding);
-        let c2 = Self::parse_embedding(&target.centroid_embedding);
+        let c1 = source.centroid_embedding.to_vec();
+        let c2 = target.centroid_embedding.to_vec();
 
         let mut merged = vec![0.0f32; 512];
         for i in 0..512 {
             merged[i] = (c1[i] * w1 + c2[i] * w2) / new_weight;
         }
         let merged = vector_utils::l2_normalize(&merged);
-
-        let merged_str = format!(
-            "[{}]",
-            merged
-                .iter()
-                .map(|f| f.to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
+        let merged_embedding = Embedding::new(merged.to_vec());
 
         let new_photo_count = target.total_photo_count + source.total_photo_count;
 
         let mut target_active: face_person::ActiveModel = target.into();
-        target_active.centroid_embedding = Set(merged_str);
+        target_active.centroid_embedding = Set(merged_embedding);
         target_active.total_weight_count = Set(new_weight);
         target_active.total_photo_count = Set(new_photo_count);
         target_active.updated_at = Set(Utc::now().into());
@@ -508,7 +489,7 @@ impl FaceService {
     pub async fn get_person_info(
         db: &DatabaseConnection,
         person_id: i64,
-        imgproxy: &ImgProxyService,
+        img_url_generator: &ImageUrlProvider,
     ) -> Result<FacePersonVO, AppError> {
         let person = face_person::Entity::find_by_id(person_id)
             .one(db)
@@ -536,11 +517,11 @@ impl FaceService {
                             h: 0.1,
                         }
                     });
-                let cw = (bbox.w * p.width as f32) as i32;
-                let ch = (bbox.h * p.height as f32) as i32;
-                let cx = (bbox.x * p.width as f32) as i32;
-                let cy = (bbox.y * p.height as f32) as i32;
-                Some(imgproxy.generate_crop_url(&p.file_id, cx, cy, cw, ch, 200))
+                let cw = (bbox.w * p.width as f32) as i64;
+                let ch = (bbox.h * p.height as f32) as i64;
+                let cx = (bbox.x * p.width as f32) as i64;
+                let cy = (bbox.y * p.height as f32) as i64;
+                Some(img_url_generator.crop(p.file_id.clone(), cx as i32, cy as i32, cw as i32, ch as i32, 200).await)
             } else {
                 None
             }
@@ -561,7 +542,7 @@ impl FaceService {
         person_id: i64,
         cursor: Option<i64>,
         size: u32,
-        imgproxy: &ImgProxyService,
+        img_url_generator: &ImageUrlProvider,
     ) -> Result<CursorPageVO<crate::models::photo::PhotoVO, i64>, AppError> {
         let limit = size as u64 + 1;
         let mut query = face_feature::Entity::find()
@@ -587,29 +568,40 @@ impl FaceService {
 
         let photo_map: HashMap<i64, _> = photos.into_iter().map(|p| (p.id, p)).collect();
 
-        let records: Vec<crate::models::photo::PhotoVO> = features
-            .iter()
-            .filter_map(|f| {
-                photo_map.get(&f.photo_id).map(|p| crate::models::photo::PhotoVO {
-                    id: p.id.to_string(),
-                    name: p.name.clone(),
-                    thumbnail_url: imgproxy.generate_thumbnail_url(&p.file_id),
-                    preview_url: imgproxy.generate_preview_url(&p.file_id),
-                    original_url: imgproxy.generate_original_url(
-                        &p.file_id,
-                        p.file_id.rsplit('.').next().unwrap_or("jpg"),
-                    ),
-                    width: p.width,
-                    height: p.height,
-                    size: p.size,
-                    created_at: p.created_at.with_timezone(&Utc),
-                    is_favorited: None,
-                    is_collected: None,
-                })
-            })
-            .collect();
-
         let next_cursor = features.last().map(|f| f.id);
+
+        let futures = features.into_iter().map(|f| {
+            let photo_opt = photo_map.get(&f.photo_id).cloned();
+            async move {
+                if let Some(p) = photo_opt {
+                    let file_id = p.file_id.clone();
+                    let extension = file_id.rsplit('.').next().unwrap_or("jpg").to_string();
+                    let thumbnail_url = img_url_generator.thumbnail(file_id.clone()).await;
+                    let preview_url = img_url_generator.preview(file_id.clone()).await;
+                    let original_url = img_url_generator.original(file_id, extension).await;
+                    Some(crate::models::photo::PhotoVO {
+                        id: p.id.to_string(),
+                        name: p.name,
+                        thumbnail_url,
+                        preview_url,
+                        original_url,
+                        width: p.width,
+                        height: p.height,
+                        size: p.size,
+                        created_at: p.created_at.with_timezone(&Utc),
+                        is_favorited: None,
+                        is_collected: None,
+                    })
+                } else {
+                    None
+                }
+            }
+        });
+        let records: Vec<crate::models::photo::PhotoVO> = join_all(futures)
+            .await
+            .into_iter()
+            .flatten()
+            .collect();
 
         Ok(CursorPageVO {
             records,
@@ -672,10 +664,8 @@ impl FaceService {
     }
 
     pub async fn process_face_tasks(
-        db: DatabaseConnection,
-        _redis: Pool,
+        db: &DatabaseConnection,
         mut rx: mpsc::Receiver<FaceTask>,
-        _imgproxy: ImgProxyService,
     ) {
         let face_engine = match FaceEngine::new(
             "models/det_10g.onnx",
@@ -692,7 +682,7 @@ impl FaceService {
             info!("Processing face task for photo {}", task.photo_id);
             
             if let Err(e) = Self::detect_and_recognize(
-                &db,
+                db,
                 &face_engine,
                 task.photo_id,
                 task.image_bytes,

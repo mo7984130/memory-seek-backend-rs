@@ -7,7 +7,7 @@ pub struct CollectionVO {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
-    pub photo_count: i32,
+    pub photo_count: i64,
     pub cover_image_url: Option<String>,
     pub is_favorite: bool,
     pub created_at: DateTime<Utc>,

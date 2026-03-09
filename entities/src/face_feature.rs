@@ -1,5 +1,6 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use crate::Embedding;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "photo_face_feature")]
@@ -8,8 +9,7 @@ pub struct Model {
     pub id: i64,
     pub photo_id: i64,
     pub person_id: Option<i64>,
-    #[sea_orm(column_type = "Text")]
-    pub embedding: String,
+    pub embedding: Embedding,
     #[sea_orm(column_type = "Json")]
     pub bbox: Json,
     pub score: f32,
@@ -46,21 +46,6 @@ impl Related<super::face_person::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
-
-impl Model {
-    pub fn embedding_to_vec(&self) -> Vec<f32> {
-        self.embedding
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .split(',')
-            .filter_map(|s| s.trim().parse::<f32>().ok())
-            .collect()
-    }
-
-    pub fn embedding_from_vec(vec: &[f32]) -> String {
-        format!("[{}]", vec.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(","))
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FaceBBox {

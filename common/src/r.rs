@@ -4,6 +4,7 @@ use serde_with::skip_serializing_none;
 
 #[derive(Serialize)]
 #[skip_serializing_none]
+#[serde(rename_all = "camelCase")]
 pub struct R<T> {
     pub code: u16,
     pub msg: Option<String>,

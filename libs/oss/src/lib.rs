@@ -1,8 +1,10 @@
+use std::time::Duration;
 use common::error::AppError;
 use common::utils::ResultExt;
 use aws_config::Region;
 use aws_sdk_s3::config::Credentials;
 use aws_sdk_s3::Client;
+use aws_sdk_s3::presigning::PresigningConfig;
 use serde::Deserialize;
 
 #[derive(Clone)]
@@ -20,6 +22,7 @@ pub struct S3Config {
     pub region: String,
     pub bucket: String,
     pub public_url: String,
+    pub force_path_style: bool
 }
 impl S3Client {
     pub async fn new(
@@ -40,7 +43,7 @@ impl S3Client {
             .load().await;
 
         let s3_config_builder = aws_sdk_s3::config::Builder::from(&config)
-            .force_path_style(true).build();
+            .force_path_style(s3_config.force_path_style).build();
 
         let client = Client::from_conf(s3_config_builder);
 
@@ -73,5 +76,45 @@ impl S3Client {
 
     pub fn get_url(&self, key: &str) -> String {
         format!("{}/{}", self.public_url, key.trim_start_matches('/'))
+    }
+
+    pub async fn get_signed_url(&self, key: &str, expires: Duration) -> Result<String, AppError> {
+        self.get_signed_url_with_params(key, expires, None).await
+    }
+
+    pub async fn get_signed_url_with_params(
+        &self,
+        key: &str,
+        expires: Duration,
+        process: Option<String>,
+    ) -> Result<String, AppError> {
+        let presigning_config = PresigningConfig::expires_in(expires)
+            .map_internal_err("签名配置错误")?;
+
+        let builder = self.client.get_object().bucket(&self.bucket).key(key);
+
+        let presigned_res = if let Some(p) = process {
+            builder
+                .customize()
+                // 关键修正：显式标注返回类型 Result<_, std::convert::Infallible>
+                .map_request(move |mut req| -> Result<_, std::convert::Infallible> {
+                    let uri_str = req.uri().to_string();
+                    let connector = if uri_str.contains('?') { "&" } else { "?" };
+                    let new_uri_str = format!("{}{}x-oss-process={}", uri_str, connector, p);
+
+                    if let Ok(parsed_uri) = new_uri_str.try_into() {
+                        *req.uri_mut() = parsed_uri;
+                    }
+                    Ok(req)
+                })
+                .presigned(presigning_config)
+                .await
+        } else {
+            builder.presigned(presigning_config).await
+        };
+
+        let output = presigned_res.map_internal_err("OSS 签名失败")?;
+
+        Ok(output.uri().to_string())
     }
 }

@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 #[sea_orm(table_name = "auth_user")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id: u32,
+    pub id: i64,
     #[sea_orm(unique)]
     pub username: String,
     pub email: String,

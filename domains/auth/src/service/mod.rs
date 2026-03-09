@@ -16,7 +16,7 @@ use serde::Serialize;
 
 #[derive(FromQueryResult)]
 struct LoginUser {
-    id: u32,
+    id: i64,
     password: String,
 }
 pub async fn login(
@@ -154,7 +154,7 @@ pub struct AccessTokenResponse {
 pub async fn refresh_access_token(
     db: &DatabaseConnection,
     redis: &Pool,
-    user_id: u32,
+    user_id: i64,
     refresh_token: String
 ) -> Result<AccessTokenResponse, AppError> {
     // 验证refresh_token
@@ -189,7 +189,7 @@ struct RefreshTokenValidation {
     refresh_token: Option<String>,
     refresh_token_expire_at: Option<DateTimeWithTimeZone>
 }
-async fn verify_refresh_token(db: &DatabaseConnection, user_id: u32, refresh_token: &str) -> Result<(), AppError> {
+async fn verify_refresh_token(db: &DatabaseConnection, user_id: i64, refresh_token: &str) -> Result<(), AppError> {
     // 获取数据库中的refresh_token
     let res = user::Entity::find()
         .select_only()

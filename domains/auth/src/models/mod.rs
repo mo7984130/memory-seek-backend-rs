@@ -7,6 +7,7 @@ use serde::Deserialize;
 use validator::Validate;
 
 #[derive(Debug, Validate, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     #[validate(custom(function = "validate_account"))]
     pub account: String,
@@ -15,6 +16,7 @@ pub struct LoginRequest {
 }
 
 #[derive(Debug, Validate, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
     #[validate(custom(function = "validate_username"))]
     pub username: String,
@@ -34,6 +36,7 @@ pub struct RegisterRequest {
 }
 
 #[derive(Debug, Validate, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendEmailCodeRequest {
     #[validate(custom(function = "validate_email"))]
     pub email: String,

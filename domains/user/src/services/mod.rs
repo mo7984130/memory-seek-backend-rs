@@ -19,7 +19,7 @@ use entities::user::UserDTO;
 
 pub async fn get_user_info(
     db: &DatabaseConnection,
-    user_id: u32
+    user_id: i64
 ) -> Result<UserDTO, AppError> {
     let user = user::Entity::find()
         .filter(user::Column::Id.eq(user_id))
@@ -31,13 +31,14 @@ pub async fn get_user_info(
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct  InviterCodeDTO {
     inviter_code: String,
     expires_at: DateTime<Utc>,
 }
 pub async fn generate_inviter_code(
     redis: &Pool,
-    user_id: u32
+    user_id: i64
 ) -> Result<InviterCodeDTO, AppError> {
     loop {
         let code: String = rand_utils::generate_random_str(6);
@@ -67,7 +68,7 @@ pub async fn generate_inviter_code(
 pub async fn change_nickname(
     db: &DatabaseConnection,
     redis: &Pool,
-    user_id: u32,
+    user_id: i64,
     new_nickname: String
 ) -> Result<String, AppError> {
     let update_res = user::Entity::update_many()
@@ -88,7 +89,7 @@ pub async fn update_avatar(
     db: &DatabaseConnection,
     redis: &Pool,
     s3_client: &S3Client,
-    user_id: u32,
+    user_id: i64,
     file_name: String,
     file_date: Vec<u8>,
     content_type: String
@@ -139,7 +140,7 @@ pub async fn update_avatar(
 pub async fn change_password(
     db: &DatabaseConnection,
     redis: &Pool,
-    user_id: u32,
+    user_id: i64,
     req: ChangePasswordRequest
 ) -> Result<(), AppError> {
     // 查询用户
@@ -175,7 +176,7 @@ pub async fn change_password(
 pub async fn logout(
     db: &DatabaseConnection,
     redis: &Pool,
-    user_id: u32
+    user_id: i64
 ) -> Result<(), AppError> {
     // 删除数据库的refresh_token
     user::ActiveModel {
@@ -193,15 +194,16 @@ pub async fn logout(
 }
 
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserInfoDTO {
-    pub user_id: u32,
+    pub user_id: i64,
     pub nickname: String,
     pub avatar_url: Option<String>,
 }
 pub async fn get_user_info_batch(
     db: &DatabaseConnection,
     redis: &Pool,
-    user_ids: Vec<u32>
+    user_ids: Vec<i64>
 ) -> Result<Vec<Option<UserInfoDTO>>, AppError> {
     redis.get_or_load_batch(
         user_ids,

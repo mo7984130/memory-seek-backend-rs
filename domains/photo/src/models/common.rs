@@ -5,6 +5,6 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct PhotoTimelineStatVO {
     pub date_str: String,
-    pub count: i32,
+    pub count: i64,
     pub anchor_time: DateTime<Utc>,
 }

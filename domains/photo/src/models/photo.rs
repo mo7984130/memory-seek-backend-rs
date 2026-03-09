@@ -57,6 +57,7 @@ impl<T, C> CursorPageVO<T, C> {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UploadWithCreatedAtQuery {
     pub created_at: DateTime<Utc>,
 }

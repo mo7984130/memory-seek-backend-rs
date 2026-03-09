@@ -1,6 +1,6 @@
 create table if not exists "auth_user"
 (
-    id                      SERIAL PRIMARY KEY ,
+    id                      BIGSERIAL PRIMARY KEY ,
     username                varchar(255) not null,
     email                   varchar(255) not null,
     password                varchar(255) not null,

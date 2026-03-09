@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "photo_collection_photo")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub id: i32,
-    pub collection_id: i32,
+    pub id: i64,
+    pub collection_id: i64,
     pub photo_id: i64,
-    pub user_id: i32,
+    pub user_id: i64,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

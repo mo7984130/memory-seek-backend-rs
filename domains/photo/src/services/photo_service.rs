@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::utils::{FileValidator, ResultExt};
 use deadpool_redis::Pool;
 use entities::photo;
-use imgproxy::ImgProxyService;
+use futures::future::join_all;
+use img_url_generator::{ImageUrlGenerator, ImageUrlProvider};
 use oss::S3Client;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
@@ -28,12 +29,12 @@ impl PhotoService {
         _redis: &Pool,
         s3: &S3Client,
         face_tx: &mpsc::Sender<FaceTask>,
-        user_id: u32,
+        user_id: i64,
         file_data: Vec<u8>,
         file_name: String,
         content_type: String,
         created_at: Option<DateTime<Utc>>,
-        imgproxy: &ImgProxyService,
+        img_url_generator: &ImageUrlProvider,
     ) -> Result<PhotoVO, AppError> {
         let md5_hash = format!("{:x}", md5::compute(&file_data));
 
@@ -41,34 +42,33 @@ impl PhotoService {
             return Err(AppError::bad_request("图片已存在"));
         }
 
-        let img = image::load_from_memory(&file_data).map_internal_err("无法解析图片")?;
-        let (width, height) = (img.width() as i32, img.height() as i32);
+        let metadata = FileValidator::validate_image(
+            &file_data, file_name, content_type
+        ).to_bad_request_error()?;
 
-        let format = Self::get_format_from_mime(&content_type);
         let date_path = chrono::Local::now().format("%Y/%m/%d");
         let uuid = Uuid::new_v4();
-        let file_id = format!("photos/{}/{}.{}", date_path, uuid, format);
+        let file_id = format!("photos/{}/{}.{}", date_path, uuid, metadata.format);
 
-        s3.upload(&file_id, file_data.clone(), &content_type)
+        let file_data_len = file_data.len();
+        s3.upload(&file_id, file_data.clone(), &metadata.mime_type)
             .await
             .map_internal_err("OSS上传失败")?;
 
         let now = Utc::now();
         let photo = photo::ActiveModel {
-            user_id: Set(user_id as i64),
-            name: Set(file_name),
-            size: Set(file_data.len() as i64),
-            width: Set(width),
-            height: Set(height),
-            mime_type: Set(content_type),
+            user_id: Set(user_id),
+            name: Set(metadata.name),
+            size: Set(file_data_len as i64),
+            width: Set(metadata.width as i32),
+            height: Set(metadata.height as i32),
+            mime_type: Set(metadata.mime_type),
             md5: Set(md5_hash),
             file_id: Set(file_id.clone()),
             created_at: Set(created_at.unwrap_or(now).into()),
             updated_at: Set(now.into()),
             ..Default::default()
-        };
-
-        let photo = photo
+        }
             .insert(db)
             .await
             .map_internal_err("保存照片失败")?;
@@ -88,12 +88,12 @@ impl PhotoService {
         Ok(PhotoVO {
             id: photo_id.to_string(),
             name: photo.name,
-            thumbnail_url: imgproxy.generate_thumbnail_url(&photo.file_id),
-            preview_url: imgproxy.generate_preview_url(&photo.file_id),
-            original_url: imgproxy.generate_original_url(
-                &photo.file_id,
-                Self::get_extension(&photo.file_id),
-            ),
+            thumbnail_url: img_url_generator.thumbnail(photo.file_id.clone()).await,
+            preview_url: img_url_generator.preview(photo.file_id.clone()).await,
+            original_url: img_url_generator.original(
+                photo.file_id.clone(),
+                Self::get_extension(&photo.file_id).to_string(),
+            ).await,
             width: photo.width,
             height: photo.height,
             size: photo.size,
@@ -106,14 +106,14 @@ impl PhotoService {
     pub async fn get_photo_cursor_page(
         db: &DatabaseConnection,
         _redis: &Pool,
-        user_id: u32,
+        user_id: i64,
         query: PhotoCursorQuery,
-        imgproxy: &ImgProxyService,
+        img_url_generator: &ImageUrlProvider,
     ) -> Result<CursorPageVO<PhotoVO, DateTime<Utc>>, AppError> {
         let size = query.size as u64;
 
         let mut photos_query = photo::Entity::find()
-            .filter(photo::Column::UserId.eq(user_id as i64))
+            .filter(photo::Column::UserId.eq(user_id))
             .order_by_desc(photo::Column::CreatedAt)
             .limit(size + 1);
 
@@ -130,25 +130,29 @@ impl PhotoService {
         let has_more = photos.len() > size as usize;
         let photos: Vec<_> = photos.into_iter().take(size as usize).collect();
 
-        let records: Vec<PhotoVO> = photos
-            .iter()
-            .map(|p| PhotoVO {
-                id: p.id.to_string(),
-                name: p.name.clone(),
-                thumbnail_url: imgproxy.generate_thumbnail_url(&p.file_id),
-                preview_url: imgproxy.generate_preview_url(&p.file_id),
-                original_url: imgproxy.generate_original_url(
-                    &p.file_id,
-                    Self::get_extension(&p.file_id),
-                ),
-                width: p.width,
-                height: p.height,
-                size: p.size,
-                created_at: p.created_at.with_timezone(&Utc),
-                is_favorited: None,
-                is_collected: None,
-            })
-            .collect();
+        let futures = photos.into_iter().map(|p| {
+            let file_id = p.file_id.clone();
+            let extension = Self::get_extension(&file_id).to_string();
+            async move {
+                let thumbnail_url = img_url_generator.thumbnail(file_id.clone()).await;
+                let preview_url = img_url_generator.preview(file_id.clone()).await;
+                let original_url = img_url_generator.original(file_id, extension).await;
+                PhotoVO {
+                    id: p.id.to_string(),
+                    name: p.name,
+                    thumbnail_url,
+                    preview_url,
+                    original_url,
+                    width: p.width,
+                    height: p.height,
+                    size: p.size,
+                    created_at: p.created_at.with_timezone(&Utc),
+                    is_favorited: None,
+                    is_collected: None,
+                }
+            }
+        });
+        let records: Vec<PhotoVO> = join_all(futures).await;
 
         let next_cursor = records.last().map(|r| r.created_at);
 
@@ -191,16 +195,6 @@ impl PhotoService {
             .unwrap_or_else(Utc::now);
 
         Ok((min_time, max_time))
-    }
-
-    fn get_format_from_mime(mime: &str) -> &str {
-        match mime {
-            "image/jpeg" => "jpg",
-            "image/png" => "png",
-            "image/gif" => "gif",
-            "image/webp" => "webp",
-            _ => "jpg",
-        }
     }
 
     fn get_extension(file_id: &str) -> &str {

@@ -15,10 +15,10 @@ pub struct CommentService;
 impl CommentService {
     pub async fn get_comment_page(
         db: &DatabaseConnection,
-        photo_id: u64,
-        user_id: u32,
+        photo_id: i64,
+        user_id: i64,
         cursor: Option<DateTime<Utc>>,
-        limit: u32,
+        limit: i64,
     ) -> Result<CursorPageVO<PhotoCommentVO, DateTime<Utc>>, AppError> {
         let hot_comments = if cursor.is_none() {
             comment::Entity::find()
@@ -96,8 +96,8 @@ impl CommentService {
 
     pub async fn publish_comment(
         db: &DatabaseConnection,
-        photo_id: u64,
-        user_id: u32,
+        photo_id: i64,
+        user_id: i64,
         content: String,
     ) -> Result<PhotoCommentVO, AppError> {
         let now = Utc::now();
@@ -125,8 +125,8 @@ impl CommentService {
 
     pub async fn delete_comment(
         db: &DatabaseConnection,
-        user_id: u32,
-        comment_id: u64,
+        user_id: i64,
+        comment_id: i64,
     ) -> Result<(), AppError> {
         let comment = comment::Entity::find_by_id(comment_id as i64)
             .one(db)
@@ -154,8 +154,8 @@ impl CommentService {
 
     pub async fn toggle_like(
         db: &DatabaseConnection,
-        user_id: u32,
-        comment_id: u64,
+        user_id: i64,
+        comment_id: i64,
     ) -> Result<bool, AppError> {
         let existing = comment_like::Entity::find()
             .filter(comment_like::Column::UserId.eq(user_id as i64))

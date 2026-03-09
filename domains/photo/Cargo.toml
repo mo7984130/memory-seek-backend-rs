@@ -7,7 +7,7 @@ edition = "2024"
 common = { path = "../../common" }
 entities = { path = "../../entities" }
 oss = { path = "../../libs/oss" }
-imgproxy = { path = "../../libs/imgproxy" }
+img_url_generator = { path = "../../libs/img_url_generator" }
 face_engine = { path = "../../libs/face_engine" }
 
 axum = { workspace = true }

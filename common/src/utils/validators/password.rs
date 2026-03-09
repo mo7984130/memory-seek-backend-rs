@@ -1,9 +1,7 @@
-use std::borrow::Cow;
 use once_cell::sync::Lazy;
 use fancy_regex::Regex;
 use tracing::error;
 use validator::ValidationError;
-use crate::utils::ResultExt;
 
 pub struct PasswordValidConfig;
 impl PasswordValidConfig {

@@ -13,6 +13,7 @@ pub struct PhotoCommentVO {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PublishCommentDTO {
     pub content: String,
 }
