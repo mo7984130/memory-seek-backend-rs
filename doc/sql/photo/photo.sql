@@ -41,7 +41,7 @@ COMMENT ON COLUMN photo_photo.updated_at IS '更新时间';
 create table if not exists photo_timeline_stat
 (
     date_str char(7) NOT NULL PRIMARY KEY,
-    count INTEGER NOT NULL DEFAULT 0,
+    count BIGINT NOT NULL DEFAULT 0,
     anchor_time TIMESTAMPTZ NOT NULL,
 
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
