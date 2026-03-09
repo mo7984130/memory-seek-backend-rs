@@ -22,7 +22,7 @@ impl CommentService {
     ) -> Result<CursorPageVO<PhotoCommentVO, DateTime<Utc>>, AppError> {
         let hot_comments = if cursor.is_none() {
             comment::Entity::find()
-                .filter(comment::Column::PhotoId.eq(photo_id as i64))
+                .filter(comment::Column::PhotoId.eq(photo_id))
                 .filter(comment::Column::LikeCount.gt(5))
                 .order_by_desc(comment::Column::LikeCount)
                 .limit(3)
@@ -37,7 +37,7 @@ impl CommentService {
 
         let limit = limit as u64 + 1;
         let mut query = comment::Entity::find()
-            .filter(comment::Column::PhotoId.eq(photo_id as i64))
+            .filter(comment::Column::PhotoId.eq(photo_id))
             .order_by_desc(comment::Column::CreatedAt)
             .limit(limit);
 
@@ -61,7 +61,7 @@ impl CommentService {
 
         let liked = if !comment_ids.is_empty() {
             comment_like::Entity::find()
-                .filter(comment_like::Column::UserId.eq(user_id as i64))
+                .filter(comment_like::Column::UserId.eq(user_id))
                 .filter(comment_like::Column::CommentId.is_in(comment_ids))
                 .all(db)
                 .await
@@ -102,8 +102,8 @@ impl CommentService {
     ) -> Result<PhotoCommentVO, AppError> {
         let now = Utc::now();
         let comment = comment::ActiveModel {
-            photo_id: Set(photo_id as i64),
-            user_id: Set(user_id as i64),
+            photo_id: Set(photo_id),
+            user_id: Set(user_id),
             content: Set(content),
             like_count: Set(0),
             created_at: Set(now.into()),
@@ -128,23 +128,23 @@ impl CommentService {
         user_id: i64,
         comment_id: i64,
     ) -> Result<(), AppError> {
-        let comment = comment::Entity::find_by_id(comment_id as i64)
+        let comment = comment::Entity::find_by_id(comment_id)
             .one(db)
             .await
             .map_internal_err("查询失败")?
             .ok_or_else(|| AppError::bad_request("评论不存在"))?;
 
-        if comment.user_id != user_id as i64 {
+        if comment.user_id != user_id {
             return Err(AppError::bad_request("无权限删除"));
         }
 
         comment_like::Entity::delete_many()
-            .filter(comment_like::Column::CommentId.eq(comment_id as i64))
+            .filter(comment_like::Column::CommentId.eq(comment_id))
             .exec(db)
             .await
             .ok();
 
-        comment::Entity::delete_by_id(comment_id as i64)
+        comment::Entity::delete_by_id(comment_id)
             .exec(db)
             .await
             .map_internal_err("删除失败")?;
@@ -158,8 +158,8 @@ impl CommentService {
         comment_id: i64,
     ) -> Result<bool, AppError> {
         let existing = comment_like::Entity::find()
-            .filter(comment_like::Column::UserId.eq(user_id as i64))
-            .filter(comment_like::Column::CommentId.eq(comment_id as i64))
+            .filter(comment_like::Column::UserId.eq(user_id))
+            .filter(comment_like::Column::CommentId.eq(comment_id))
             .one(db)
             .await
             .map_internal_err("查询失败")?;
@@ -170,7 +170,7 @@ impl CommentService {
                 .await
                 .map_internal_err("取消点赞失败")?;
 
-            let comment = comment::Entity::find_by_id(comment_id as i64)
+            let comment = comment::Entity::find_by_id(comment_id)
                 .one(db)
                 .await
                 .map_internal_err("查询评论失败")?;
@@ -184,8 +184,8 @@ impl CommentService {
         } else {
             let now = Utc::now();
             let like = comment_like::ActiveModel {
-                comment_id: Set(comment_id as i64),
-                user_id: Set(user_id as i64),
+                comment_id: Set(comment_id),
+                user_id: Set(user_id),
                 created_at: Set(now.into()),
                 updated_at: Set(now.into()),
                 ..Default::default()
@@ -193,7 +193,7 @@ impl CommentService {
 
             like.insert(db).await.map_internal_err("点赞失败")?;
 
-            let comment = comment::Entity::find_by_id(comment_id as i64)
+            let comment = comment::Entity::find_by_id(comment_id)
                 .one(db)
                 .await
                 .map_internal_err("查询评论失败")?;

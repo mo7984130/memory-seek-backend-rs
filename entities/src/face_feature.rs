@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::sea_query::Alias;
 use serde::{Deserialize, Serialize};
 use crate::Embedding;
 

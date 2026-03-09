@@ -23,7 +23,7 @@ impl CollectionService {
         img_url_generator: &ImageUrlProvider,
     ) -> Result<Vec<CollectionVO>, AppError> {
         let collections = collection::Entity::find()
-            .filter(collection::Column::UserId.eq(user_id as i64))
+            .filter(collection::Column::UserId.eq(user_id))
             .order_by_asc(collection::Column::IsFavorite)
             .order_by_desc(collection::Column::CreatedAt)
             .all(db)
@@ -33,7 +33,7 @@ impl CollectionService {
         let collections = if collections.is_empty() {
             Self::create_favorite_collection(db, user_id).await?;
             collection::Entity::find()
-                .filter(collection::Column::UserId.eq(user_id as i64))
+                .filter(collection::Column::UserId.eq(user_id))
                 .order_by_asc(collection::Column::IsFavorite)
                 .order_by_desc(collection::Column::CreatedAt)
                 .all(db)
@@ -48,7 +48,7 @@ impl CollectionService {
         let photos_with_covers = if cover_ids.iter().any(|id| id.is_some()) {
             let cover_ids: Vec<i64> = cover_ids.into_iter().flatten().collect();
             photo::Entity::find()
-                .filter(photo::Column::Id.is_in(cover_ids.iter().map(|&id| id as i64)))
+                .filter(photo::Column::Id.is_in(cover_ids))
                 .all(db)
                 .await
                 .map_internal_err("查询封面失败")?
@@ -86,7 +86,7 @@ impl CollectionService {
 
         let all_photo_ids: Vec<i64> = collections
             .iter()
-            .filter_map(|c| c.cover_image_id.map(|id| id as i64))
+            .filter_map(|c| c.cover_image_id)
             .chain(latest_photo_map.values().cloned())
             .collect();
 
@@ -105,7 +105,7 @@ impl CollectionService {
         let futures = collections.into_iter().map(|c| {
             let cover_file_id = c
                 .cover_image_id
-                .and_then(|id| all_photo_map.get(&(id as i64)))
+                .and_then(|id| all_photo_map.get(&id))
                 .or_else(|| {
                     latest_photo_map
                         .get(&c.id)
@@ -143,7 +143,7 @@ impl CollectionService {
     ) -> Result<CollectionVO, AppError> {
         let now = Utc::now();
         let collection = collection::ActiveModel {
-            user_id: Set(user_id as i64),
+            user_id: Set(user_id),
             name: Set(name),
             description: Set(description),
             photo_count: Set(0),
@@ -177,13 +177,13 @@ impl CollectionService {
         name: Option<String>,
         description: Option<String>,
     ) -> Result<CollectionVO, AppError> {
-        let collection = collection::Entity::find_by_id(collection_id as i64)
+        let collection = collection::Entity::find_by_id(collection_id)
             .one(db)
             .await
             .map_internal_err("查询收藏夹失败")?
             .ok_or_else(|| AppError::bad_request("收藏夹不存在"))?;
 
-        if collection.user_id != user_id as i64 {
+        if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
@@ -217,13 +217,13 @@ impl CollectionService {
         user_id: i64,
         collection_id: i64,
     ) -> Result<(), AppError> {
-        let collection = collection::Entity::find_by_id(collection_id as i64)
+        let collection = collection::Entity::find_by_id(collection_id)
             .one(db)
             .await
             .map_internal_err("查询收藏夹失败")?
             .ok_or_else(|| AppError::bad_request("收藏夹不存在"))?;
 
-        if collection.user_id != user_id as i64 {
+        if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
@@ -232,12 +232,12 @@ impl CollectionService {
         }
 
         collection_photo::Entity::delete_many()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id as i64))
+            .filter(collection_photo::Column::CollectionId.eq(collection_id))
             .exec(db)
             .await
             .map_internal_err("删除收藏夹照片失败")?;
 
-        collection::Entity::delete_by_id(collection_id as i64)
+        collection::Entity::delete_by_id(collection_id)
             .exec(db)
             .await
             .map_internal_err("删除收藏夹失败")?;
@@ -251,21 +251,21 @@ impl CollectionService {
         collection_id: i64,
         photo_id: i64,
     ) -> Result<(), AppError> {
-        let collection = collection::Entity::find_by_id(collection_id as i64)
+        let collection = collection::Entity::find_by_id(collection_id)
             .one(db)
             .await
             .map_internal_err("查询收藏夹失败")?
             .ok_or_else(|| AppError::bad_request("收藏夹不存在"))?;
 
-        if collection.user_id != user_id as i64 {
+        if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
         let now = Utc::now();
         let relation = collection_photo::ActiveModel {
-            collection_id: Set(collection_id as i64),
-            photo_id: Set(photo_id as i64),
-            user_id: Set(user_id as i64),
+            collection_id: Set(collection_id),
+            photo_id: Set(photo_id),
+            user_id: Set(user_id),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
             ..Default::default()
@@ -274,7 +274,7 @@ impl CollectionService {
         match relation.insert(db).await {
             Ok(_) => {
                 let updated = collection::ActiveModel {
-                    id: Set(collection_id as i64),
+                    id: Set(collection_id),
                     photo_count: Set(collection.photo_count + 1),
                     ..Default::default()
                 };
@@ -299,21 +299,21 @@ impl CollectionService {
         photo_id: i64,
     ) -> Result<(), AppError> {
         let result = collection_photo::Entity::delete_many()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id as i64))
-            .filter(collection_photo::Column::PhotoId.eq(photo_id as i64))
-            .filter(collection_photo::Column::UserId.eq(user_id as i64))
+            .filter(collection_photo::Column::CollectionId.eq(collection_id))
+            .filter(collection_photo::Column::PhotoId.eq(photo_id))
+            .filter(collection_photo::Column::UserId.eq(user_id))
             .exec(db)
             .await
             .map_internal_err("移除失败")?;
 
         if result.rows_affected > 0 {
-            let collection = collection::Entity::find_by_id(collection_id as i64)
+            let collection = collection::Entity::find_by_id(collection_id)
                 .one(db)
                 .await
                 .map_internal_err("查询失败")?;
             if let Some(c) = collection {
                 let updated = collection::ActiveModel {
-                    id: Set(collection_id as i64),
+                    id: Set(collection_id),
                     photo_count: Set((c.photo_count - 1).max(0)),
                     ..Default::default()
                 };
@@ -333,19 +333,19 @@ impl CollectionService {
         size: u32,
         img_url_generator: &ImageUrlProvider,
     ) -> Result<CursorPageVO<CollectionPhotoVO, DateTime<Utc>>, AppError> {
-        let collection = collection::Entity::find_by_id(collection_id as i64)
+        let collection = collection::Entity::find_by_id(collection_id)
             .one(db)
             .await
             .map_internal_err("查询收藏夹失败")?
             .ok_or_else(|| AppError::bad_request("收藏夹不存在"))?;
 
-        if collection.user_id != user_id as i64 {
+        if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
         let limit = size as u64 + 1;
         let mut query = collection_photo::Entity::find()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id as i64))
+            .filter(collection_photo::Column::CollectionId.eq(collection_id))
             .order_by_desc(collection_photo::Column::CreatedAt)
             .limit(limit);
 
@@ -423,8 +423,8 @@ impl CollectionService {
         photo_id: i64,
     ) -> Result<Vec<String>, AppError> {
         let relations = collection_photo::Entity::find()
-            .filter(collection_photo::Column::UserId.eq(user_id as i64))
-            .filter(collection_photo::Column::PhotoId.eq(photo_id as i64))
+            .filter(collection_photo::Column::UserId.eq(user_id))
+            .filter(collection_photo::Column::PhotoId.eq(photo_id))
             .all(db)
             .await
             .map_internal_err("查询失败")?;
@@ -437,7 +437,7 @@ impl CollectionService {
         user_id: i64,
     ) -> Result<CollectionVO, AppError> {
         let existing = collection::Entity::find()
-            .filter(collection::Column::UserId.eq(user_id as i64))
+            .filter(collection::Column::UserId.eq(user_id))
             .filter(collection::Column::IsFavorite.eq(true))
             .one(db)
             .await
@@ -457,7 +457,7 @@ impl CollectionService {
 
         let now = Utc::now();
         let collection = collection::ActiveModel {
-            user_id: Set(user_id as i64),
+            user_id: Set(user_id),
             name: Set("我喜欢".to_string()),
             description: Set(Some("喜欢收藏夹".to_string())),
             photo_count: Set(0),
@@ -490,7 +490,7 @@ impl CollectionService {
         user_id: i64,
     ) -> Result<i64, AppError> {
         let collection = collection::Entity::find()
-            .filter(collection::Column::UserId.eq(user_id as i64))
+            .filter(collection::Column::UserId.eq(user_id))
             .filter(collection::Column::IsFavorite.eq(true))
             .one(db)
             .await

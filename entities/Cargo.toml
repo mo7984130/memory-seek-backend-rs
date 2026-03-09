@@ -7,4 +7,3 @@ edition = "2024"
 sea-orm = { workspace = true }
 serde = { workspace = true }
 chrono = { workspace = true }
-pgvector = { workspace = true }
