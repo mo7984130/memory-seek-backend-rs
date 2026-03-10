@@ -2,7 +2,7 @@ use chrono::Utc;
 use common::error::AppError;
 use common::utils::ResultExt;
 use deadpool_redis::Pool;
-use entities::{face_feature, face_person, photo, Embedding};
+use entities::{face_feature, face_person, photo, DrVector};
 use face_engine::{FaceAligner, FaceEngine};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
@@ -53,7 +53,7 @@ impl FaceService {
                 .map_internal_err("特征提取失败")?;
 
             let embedding = vector_utils::l2_normalize(&embedding);
-            let embedding = Embedding::new(embedding.to_vec());
+            let embedding = DrVector::new(embedding.to_vec());
 
             let bbox_json = serde_json::json!({
                 "x": detection.bbox.x,
@@ -139,7 +139,7 @@ impl FaceService {
                 .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
                 .unwrap();
 
-            let centroid = Embedding::new(seed.vector.clone());
+            let centroid = DrVector::new(seed.vector.clone());
 
             let now = Utc::now();
 
@@ -367,7 +367,7 @@ impl FaceService {
             merged[i] = (c1[i] * w1 + c2[i] * w2) / new_weight;
         }
         let merged = vector_utils::l2_normalize(&merged);
-        let merged_embedding = Embedding::new(merged.to_vec());
+        let merged_embedding = DrVector::new(merged.to_vec());
 
         let new_photo_count = target.total_photo_count + source.total_photo_count;
 

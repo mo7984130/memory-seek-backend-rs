@@ -1,4 +1,4 @@
-pub mod embedding;
+pub mod vector;
 pub mod user;
 pub mod photo;
 pub mod collection;
@@ -9,4 +9,4 @@ pub mod comment;
 pub mod comment_like;
 pub mod timeline_stat;
 
-pub use embedding::Embedding;
+pub use vector::DrVector;

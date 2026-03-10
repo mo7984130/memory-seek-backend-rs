@@ -1,6 +1,6 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::Embedding;
+use crate::vector::DrVector;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "photo_face_feature")]
@@ -9,7 +9,7 @@ pub struct Model {
     pub id: i64,
     pub photo_id: i64,
     pub person_id: Option<i64>,
-    pub embedding: Embedding,
+    pub embedding: DrVector,
     #[sea_orm(column_type = "Json")]
     pub bbox: Json,
     pub score: f32,

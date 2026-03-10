@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS photo_face_person(
     centroid_embedding vector(512) default '[0.0]' NOT NULL, -- 中心特征向量
     total_weight_count FLOAT4 DEFAULT 0.0 NOT NULL, -- 总权重
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uk_person_name UNIQUE (name)
 );
 COMMENT ON TABLE photo_face_person IS '人物信息表';
 COMMENT ON COLUMN photo_face_person.id IS '人物ID';
@@ -33,9 +35,7 @@ CREATE TABLE IF NOT EXISTS photo_face_feature(
     bbox JSONB NOT NULL,
     score FLOAT4 NOT NULL,
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW() NOT NULL,
-    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW() NOT NULL,
-
-    CONSTRAINT uk_person_name UNIQUE (name)
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW() NOT NULL
 );
 COMMENT ON TABLE photo_face_feature IS '人脸特征表';
 COMMENT ON COLUMN photo_face_feature.id IS '特征ID';

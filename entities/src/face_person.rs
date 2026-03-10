@@ -1,6 +1,6 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::Embedding;
+use crate::vector::DrVector;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "photo_face_person")]
@@ -11,7 +11,7 @@ pub struct Model {
     pub max_score_feature_id: i64,
     pub max_score: f32,
     pub total_photo_count: i64,
-    pub centroid_embedding: Embedding,
+    pub centroid_embedding: DrVector,
     pub total_weight_count: f32,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
