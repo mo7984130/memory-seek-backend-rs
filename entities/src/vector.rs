@@ -1,9 +1,9 @@
-use sea_orm::sea_query::{Value, ValueType, ValueTypeErr, ColumnType, Alias, SeaRc, Nullable};
-use sea_orm::{QueryResult, TryGetable, TryGetError, ColIdx, DbErr};
-use serde::{Serialize, Deserialize};
-use std::convert::TryInto;
+use pgvector::Vector;
+use sea_orm::sea_query::{Alias, ColumnType, Nullable, SeaRc, Value, ValueType, ValueTypeErr};
+use sea_orm::{ColIdx, QueryResult, TryGetError, TryGetable};
+use serde::{Deserialize, Serialize};
+use sqlx::Row;
 
-/// 向量包装类，直接对接 PostgreSQL 的 vector 扩展
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DrVector(pub Vec<f32>);
 
@@ -12,61 +12,50 @@ impl DrVector {
         DrVector(v)
     }
 
-    /// 将 PostgreSQL 的二进制 vector 格式解析为 Vector 结构体
-    /// Postgres vector 协议：前2字节维度(dim)，后2字节保留(unused)，之后每4字节一个大端序 f32
-    pub fn from_sql(buf: &[u8]) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
-        if buf.len() < 4 {
-            return Err("Data too short for vector header".into());
-        }
-        let dim = u16::from_be_bytes(buf[0..2].try_into()?).into();
-        let mut vec = Vec::with_capacity(dim);
-        for i in 0..dim {
-            let start = 4 + 4 * i;
-            if start + 4 <= buf.len() {
-                vec.push(f32::from_be_bytes(buf[start..start + 4].try_into()?));
-            }
-        }
-        Ok(DrVector(vec))
+    pub fn to_vec(&self) -> Vec<f32> {
+        self.0.clone()
+    }
+
+    pub fn as_slice(&self) -> &[f32] {
+        &self.0
     }
 }
 
-// --- SQLx 适配层 ---
-impl sqlx::Type<sqlx::Postgres> for DrVector {
-    fn type_info() -> sqlx::postgres::PgTypeInfo {
-        sqlx::postgres::PgTypeInfo::with_name("vector")
+impl From<Vec<f32>> for DrVector {
+    fn from(vec: Vec<f32>) -> Self {
+        Self(vec)
     }
 }
 
-impl<'r> sqlx::Decode<'r, sqlx::Postgres> for DrVector {
-    fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        use sqlx::Decode;
-        // 尝试作为字节流解码
-        let buf = <&[u8] as Decode<sqlx::Postgres>>::decode(value)?;
-        Self::from_sql(buf)
+impl From<DrVector> for Vec<f32> {
+    fn from(val: DrVector) -> Self {
+        val.0
     }
 }
 
-// --- SeaORM 适配层 ---
+impl From<Vector> for DrVector {
+    fn from(v: Vector) -> Self {
+        DrVector(v.into())
+    }
+}
+
+impl From<DrVector> for Vector {
+    fn from(val: DrVector) -> Self {
+        Vector::from(val.0)
+    }
+}
+
 impl TryGetable for DrVector {
     fn try_get_by<I: ColIdx>(res: &QueryResult, index: I) -> Result<Self, TryGetError> {
-        // 首先尝试直接从 QueryResult 获取，这会触发 sqlx::Decode
-        let raw_res: Result<Self, DbErr> = res.try_get_by(index);
-        if let Ok(v) = raw_res {
-            return Ok(v);
-        }
-
-        // 降级方案：处理可能的字符串返回格式
-        let val: Value = res.try_get_by(index).map_err(TryGetError::DbErr)?;
-        match val {
-            Value::String(Some(s)) => {
-                let data = s.trim_matches(|c| c == '[' || c == ']')
-                    .split(',')
-                    .filter_map(|v| v.trim().parse::<f32>().ok())
-                    .collect();
-                Ok(DrVector(data))
-            },
-            _ => Err(TryGetError::Null),
-        }
+        let pg_row = res.try_as_pg_row().ok_or_else(|| {
+            TryGetError::DbErr(sea_orm::DbErr::Type("Not a PostgreSQL row".into()))
+        })?;
+        let value: Option<Vector> = pg_row
+            .try_get(index.as_sqlx_postgres_index())
+            .map_err(|e| TryGetError::DbErr(sea_orm::DbErr::Type(format!("Vector decode: {e}"))))?;
+        value
+            .map(DrVector::from)
+            .ok_or_else(|| TryGetError::Null(String::new()))
     }
 }
 
@@ -74,7 +63,8 @@ impl ValueType for DrVector {
     fn try_from(v: Value) -> Result<Self, ValueTypeErr> {
         match v {
             Value::String(Some(s)) => {
-                let data = s.trim_matches(|c| c == '[' || c == ']')
+                let data = s
+                    .trim_matches(|c| c == '[' || c == ']')
                     .split(',')
                     .filter_map(|v| v.trim().parse::<f32>().ok())
                     .collect();
@@ -84,7 +74,9 @@ impl ValueType for DrVector {
         }
     }
 
-    fn type_name() -> String { "DrVector".into() }
+    fn type_name() -> String {
+        "DrVector".into()
+    }
 
     fn array_type() -> sea_orm::sea_query::ArrayType {
         sea_orm::sea_query::ArrayType::Float
@@ -97,8 +89,14 @@ impl ValueType for DrVector {
 
 impl From<DrVector> for Value {
     fn from(val: DrVector) -> Self {
-        // 写入时转为 "[1.0, 2.0]" 文本格式，Postgres 会自动识别
-        let s = format!("[{}]", val.0.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(","));
+        let s = format!(
+            "[{}]",
+            val.0
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
         Value::String(Some(Box::new(s)))
     }
 }
