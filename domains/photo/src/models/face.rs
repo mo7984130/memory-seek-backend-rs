@@ -6,7 +6,7 @@ pub struct FacePersonVO {
     pub id: String,
     pub name: String,
     pub total_photo_count: i64,
-    pub cover_url: Option<String>,
+    pub cover_token: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -27,6 +27,7 @@ pub struct FaceFeatureVO {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct FaceBBox {
     pub x: f32,
     pub y: f32,
@@ -47,6 +48,13 @@ pub struct MergePersonRequest {
     pub target_person_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonPageQuery {
+    pub cursor: Option<String>,
+    pub size: Option<u32>,
+}
+
 #[derive(Debug, Clone)]
 pub struct FeatureNode {
     pub id: i64,
@@ -56,6 +64,7 @@ pub struct FeatureNode {
     pub person_id: Option<i64>,
 }
 
+#[derive(Debug, Clone)]
 pub struct PersonCluster {
     pub id: i64,
     pub vector: Vec<f32>,

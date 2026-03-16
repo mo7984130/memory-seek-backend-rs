@@ -8,7 +8,7 @@ pub struct CollectionVO {
     pub name: String,
     pub description: Option<String>,
     pub photo_count: i64,
-    pub cover_image_url: Option<String>,
+    pub cover_token: Option<String>,
     pub is_favorite: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -32,4 +32,11 @@ pub struct CollectionEditDTO {
 pub struct CollectionPhotoVO {
     pub photo: super::photo::PhotoVO,
     pub collected_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionPhotoQuery {
+    pub cursor: Option<DateTime<Utc>>,
+    pub size: Option<u32>,
 }

@@ -1,4 +1,4 @@
-use axum::{response::IntoResponse, Json};
+use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 
@@ -8,7 +8,7 @@ use serde_with::skip_serializing_none;
 pub struct R<T> {
     pub code: u16,
     pub msg: Option<String>,
-    pub data: Option<T>
+    pub data: Option<T>,
 }
 
 impl<T> R<T>
@@ -19,7 +19,7 @@ where
         Self {
             code: 200,
             msg: None,
-            data: Some(data)
+            data: Some(data),
         }
     }
 }
@@ -29,16 +29,17 @@ impl R<()> {
         Self {
             code,
             msg: Some(msg.to_string()),
-            data: None
+            data: None,
         }
     }
 }
 
 impl<T> IntoResponse for R<T>
 where
-    T: Serialize
+    T: Serialize,
 {
     fn into_response(self) -> axum::response::Response {
-        Json(self).into_response()
+        let status = StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        (status, Json(self)).into_response()
     }
 }

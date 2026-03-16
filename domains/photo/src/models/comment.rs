@@ -17,3 +17,10 @@ pub struct PhotoCommentVO {
 pub struct PublishCommentDTO {
     pub content: String,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentPageQuery {
+    pub cursor: Option<DateTime<Utc>>,
+    pub limit: Option<i64>,
+}

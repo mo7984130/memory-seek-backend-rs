@@ -6,9 +6,6 @@ use serde::{Deserialize, Serialize};
 pub struct PhotoVO {
     pub id: String,
     pub name: String,
-    pub thumbnail_url: String,
-    pub preview_url: String,
-    pub original_url: String,
     pub width: i32,
     pub height: i32,
     pub size: i64,
@@ -17,6 +14,12 @@ pub struct PhotoVO {
     pub is_favorited: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_collected: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,4 +63,17 @@ impl<T, C> CursorPageVO<T, C> {
 #[serde(rename_all = "camelCase")]
 pub struct UploadWithCreatedAtQuery {
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Md5Query {
+    pub md5: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimeRangeVO {
+    pub min: DateTime<Utc>,
+    pub max: DateTime<Utc>,
 }

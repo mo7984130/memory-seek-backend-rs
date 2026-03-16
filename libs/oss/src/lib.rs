@@ -5,6 +5,7 @@ use aws_config::Region;
 use aws_sdk_s3::config::Credentials;
 use aws_sdk_s3::Client;
 use aws_sdk_s3::presigning::PresigningConfig;
+use aws_sdk_s3::primitives::ByteStream;
 use serde::Deserialize;
 
 #[derive(Clone)]
@@ -116,5 +117,56 @@ impl S3Client {
         let output = presigned_res.map_internal_err("OSS 签名失败")?;
 
         Ok(output.uri().to_string())
+    }
+
+    /// 下载文件（流式）
+    /// 
+    /// # 参数
+    /// - `key`: 文件路径
+    /// 
+    /// # 返回
+    /// 返回 ByteStream 流，可直接用于 HTTP 响应
+    pub async fn download(&self, key: &str) -> Result<ByteStream, AppError> {
+        let output = self.client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .map_internal_err("OSS下载失败")?;
+        
+        Ok(output.body)
+    }
+
+    /// 下载文件并应用图片处理参数（流式）
+    /// 
+    /// # 参数
+    /// - `key`: 文件路径
+    /// - `process`: OSS图片处理参数，如 "image/resize,w_300"
+    /// 
+    /// # 返回
+    /// 返回 ByteStream 流，可直接用于 HTTP 响应
+    pub async fn download_with_process(&self, key: &str, process: &str) -> Result<ByteStream, AppError> {
+        let process = process.to_string();
+        let output = self.client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .customize()
+            .map_request(move |mut req| -> Result<_, std::convert::Infallible> {
+                let uri_str = req.uri().to_string();
+                let connector = if uri_str.contains('?') { "&" } else { "?" };
+                let new_uri_str = format!("{}{}x-oss-process={}", uri_str, connector, process);
+
+                if let Ok(parsed_uri) = new_uri_str.try_into() {
+                    *req.uri_mut() = parsed_uri;
+                }
+                Ok(req)
+            })
+            .send()
+            .await
+            .map_internal_err("OSS下载失败")?;
+        
+        Ok(output.body)
     }
 }

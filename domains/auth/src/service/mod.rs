@@ -3,16 +3,15 @@ use common::constants::{redis_keys, RedisKeys};
 use entities::user;
 use entities::user::UserDTO;
 use common::error::AppError;
-use crate::models::{LoginRequest, RegisterRequest, SendEmailCodeRequest};
+use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest, SendEmailCodeRequest};
 use common::utils::RedisExt;
 use common::utils::ResultExt;
 use common::utils::rand_utils;
 use bcrypt::verify;
 use chrono::{Duration, Utc};
 use deadpool_redis::Pool;
-use sea_orm::prelude::{DateTimeUtc, DateTimeWithTimeZone};
+use sea_orm::prelude::{DateTimeWithTimeZone};
 use sea_orm::{ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QuerySelect, Set};
-use serde::Serialize;
 
 #[derive(FromQueryResult)]
 struct LoginUser {
@@ -24,7 +23,6 @@ pub async fn login(
     redis: &Pool,
     request: LoginRequest
 ) -> Result<UserDTO, AppError> {
-    // 验证邮箱或用户名是否存在
     let user = user::Entity::find()
         .select_only()
         .column(user::Column::Id)
@@ -42,23 +40,19 @@ pub async fn login(
             AppError::bad_request("账号或密码错误")
         })?;
 
-    // 验证密码
     let valid = verify(&request.password, &user.password)
         .map_internal_err("登陆时 验证密码错误")?;
     if !valid {
         return Err(AppError::bad_request("账号或密码错误"));
     };
 
-    // 生成Token
     let new_refresh_token = rand_utils::generate_random_str(32);
     let new_refresh_token_expire = Utc::now() + Duration::days(30);
     let new_access_token = rand_utils::generate_random_str(16);
-    // 存储access_token
     redis.set_ex(&RedisKeys::user::user_access_token(user.id), &new_access_token, 2 * 60 * 60)
         .await
         .map_internal_err("登录时 向Redis存入access_token失败")?;
-    // 存储refresh_token
-    let new_user = user::ActiveModel {
+    let updated_user = user::ActiveModel {
         id: Set(user.id),
         refresh_token: Set(Some(new_refresh_token.clone())),
         refresh_token_expire_at: Set(Some(new_refresh_token_expire.into())),
@@ -67,10 +61,18 @@ pub async fn login(
         .update(db).await
         .map_internal_err("登陆时 向数据库更新refresh_token错误")?;
 
-    let dto = UserDTO::from(new_user)
-        .with_access_token(new_access_token, Utc::now() + Duration::hours(2))
-        .with_refresh_token(new_refresh_token, new_refresh_token_expire);
-    Ok(dto)
+    Ok(UserDTO {
+        id: updated_user.id.to_string(),
+        username: updated_user.username,
+        nickname: updated_user.nickname,
+        email: updated_user.email,
+        avatar_token: None,
+        created_at: updated_user.created_at.into(),
+        refresh_token: Some(new_refresh_token),
+        refresh_token_expire_at: Some(new_refresh_token_expire),
+        access_token: Some(new_access_token),
+        access_token_expire_at: Some(Utc::now() + Duration::hours(2)),
+    })
 }
 
 pub async fn register(
@@ -78,16 +80,13 @@ pub async fn register(
     redis: &Pool,
     request: RegisterRequest,
 ) -> Result<UserDTO, AppError> {
-    // 效验邮箱验证码
     let email_verified = verify_email_verify_code(redis, &request.email, &request.email_verify_code).await?;
     if !email_verified {
         return Err(AppError::bad_request("邮箱验证码错误"));
     }
 
-    // 效验邀请码
     let inviter_id = verify_inviter_code(redis, &request.inviter_code).await?;
 
-    // 检查用户名/邮箱是否重复
     let exists = user::Entity::find()
         .filter(
             Condition::any()
@@ -104,7 +103,6 @@ pub async fn register(
 
     let hashed_pw = bcrypt::hash(&request.password, bcrypt::DEFAULT_COST)
         .map_internal_err("密码加密失败")?;
-    // 插入用户
     let new_user = user::ActiveModel {
         username: Set(request.username),
         email: Set(request.email),
@@ -117,7 +115,18 @@ pub async fn register(
         .await
         .map_internal_err("在注册时 插入用户失败")?;
 
-    Ok(UserDTO::from(new_user))
+    Ok(UserDTO {
+        id: new_user.id.to_string(),
+        username: new_user.username,
+        nickname: new_user.nickname,
+        email: new_user.email,
+        avatar_token: None,
+        created_at: new_user.created_at.into(),
+        refresh_token: None,
+        refresh_token_expire_at: None,
+        access_token: None,
+        access_token_expire_at: None,
+    })
 }
 
 pub async fn send_email_code(
@@ -146,21 +155,14 @@ pub async fn send_email_code(
     Ok(())
 }
 
-#[derive(Serialize)]
-pub struct AccessTokenResponse {
-    pub access_token: String,
-    pub access_token_expire_at: DateTimeUtc
-}
 pub async fn refresh_access_token(
     db: &DatabaseConnection,
     redis: &Pool,
     user_id: i64,
     refresh_token: String
 ) -> Result<AccessTokenResponse, AppError> {
-    // 验证refresh_token
     verify_refresh_token(db, user_id, &refresh_token).await?;
 
-    // 存储新的access_token
     let new_access_token = rand_utils::generate_random_str(16);
     redis.set_ex(&RedisKeys::user::user_access_token(user_id), &new_access_token, 2 * 60 * 60).await?;
 
@@ -190,7 +192,6 @@ struct RefreshTokenValidation {
     refresh_token_expire_at: Option<DateTimeWithTimeZone>
 }
 async fn verify_refresh_token(db: &DatabaseConnection, user_id: i64, refresh_token: &str) -> Result<(), AppError> {
-    // 获取数据库中的refresh_token
     let res = user::Entity::find()
         .select_only()
         .column(user::Column::RefreshToken)
@@ -201,11 +202,9 @@ async fn verify_refresh_token(db: &DatabaseConnection, user_id: i64, refresh_tok
         .await
         .map_internal_err("刷新access_token时 查询 数据库RefreshToken 失败")?
         .ok_or_else(|| AppError::bad_request("用户不存在"))?;
-    // 判断是否一致
     if res.refresh_token.as_deref() != Some(refresh_token) {
         return Err(AppError::Unauthorized);
     }
-    // 判断是否过期
     if let Some(expire_at) = res.refresh_token_expire_at {
         if Utc::now() > expire_at {
             return Err(AppError::Unauthorized);

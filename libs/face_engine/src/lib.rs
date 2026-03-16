@@ -2,70 +2,81 @@ use image::DynamicImage;
 use thiserror::Error;
 use tracing::info;
 
+mod aligner;
+mod base;
+mod detector;
+mod lazy_engine;
+mod recognizer;
+mod types;
+
+pub use aligner::FaceAligner;
+pub use detector::Detector;
+pub use lazy_engine::LazyFaceEngine;
+pub use recognizer::Recognizer;
+pub use types::{BBox, FaceDetection, Point};
+
 #[derive(Error, Debug)]
 pub enum FaceEngineError {
     #[error("Image error: {0}")]
     ImageError(#[from] image::ImageError),
+    #[error("ONNX Runtime error: {0}")]
+    OrtError(String),
     #[error("No face detected")]
     NoFaceDetected,
-    #[error("Invalid input")]
-    InvalidInput,
-    #[error("Not implemented")]
-    NotImplemented,
-}
-
-#[derive(Debug, Clone)]
-pub struct FaceDetection {
-    pub bbox: BBox,
-    pub landmarks: [f32; 10],
-    pub score: f32,
-}
-
-#[derive(Debug, Clone)]
-pub struct BBox {
-    pub x: f32,
-    pub y: f32,
-    pub w: f32,
-    pub h: f32,
-}
-
-impl BBox {
-    pub fn area(&self) -> f32 {
-        self.w * self.h
-    }
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+    #[error("Invalid output: {0}")]
+    InvalidOutput(String),
+    #[error("Face alignment failed")]
+    AlignmentFailed,
+    #[error("Model not loaded")]
+    ModelNotLoaded,
 }
 
 pub struct FaceEngine {
-    _detector_path: String,
-    _recognizer_path: String,
+    detector: Detector,
+    recognizer: Recognizer,
 }
 
 impl FaceEngine {
     pub fn new(det_model_path: &str, rec_model_path: &str) -> Result<Self, FaceEngineError> {
-        info!("Face engine initialized (stub mode)");
-        info!("Detector model: {}", det_model_path);
-        info!("Recognizer model: {}", rec_model_path);
-        Ok(Self {
-            _detector_path: det_model_path.to_string(),
-            _recognizer_path: rec_model_path.to_string(),
-        })
+        info!("初始化人脸识别模型...");
+        info!("Detector 模型路径: {}", det_model_path);
+        info!("Recognizer 模型路径: {}", rec_model_path);
+
+        let detector = Detector::new(det_model_path)?;
+        let recognizer = Recognizer::new(rec_model_path)?;
+
+        detector.warmup()?;
+        recognizer.warmup()?;
+
+        info!("FaceEngine initialized successfully");
+
+        Ok(Self { detector, recognizer })
     }
 
-    pub fn detect_faces(&self, _image_bytes: &[u8]) -> Result<Vec<FaceDetection>, FaceEngineError> {
-        Ok(vec![])
+    pub fn detect_faces(&self, image_bytes: &[u8]) -> Result<Vec<FaceDetection>, FaceEngineError> {
+        self.detector.detect(image_bytes)
     }
 
-    pub fn extract_embedding(&self, _aligned_face: &DynamicImage) -> Result<[f32; 512], FaceEngineError> {
-        Ok([0.0f32; 512])
+    pub fn extract_embedding(&self, aligned_face: &DynamicImage) -> Result<[f32; 512], FaceEngineError> {
+        self.recognizer.extract(aligned_face)
     }
-}
 
-pub struct FaceAligner;
+    pub fn detect_and_extract(
+        &self,
+        image_bytes: &[u8],
+    ) -> Result<Vec<(FaceDetection, [f32; 512])>, FaceEngineError> {
+        let detections = self.detect_faces(image_bytes)?;
 
-impl FaceAligner {
-    pub fn align(image_bytes: &[u8], _landmarks: &[f32; 10]) -> Result<DynamicImage, FaceEngineError> {
-        let img = image::load_from_memory(image_bytes)?;
-        let resized = img.resize_exact(112, 112, image::imageops::FilterType::Lanczos3);
-        Ok(resized)
+        let mut results = Vec::new();
+
+        for detection in detections {
+            let aligned = FaceAligner::align(image_bytes, &detection.landmarks)?;
+            let embedding = self.extract_embedding(&aligned)?;
+            results.push((detection, embedding));
+        }
+
+        Ok(results)
     }
 }

@@ -2,46 +2,72 @@ use chrono::Utc;
 use common::error::AppError;
 use common::utils::ResultExt;
 use deadpool_redis::Pool;
-use entities::{face_feature, face_person, photo, DrVector};
-use face_engine::{FaceAligner, FaceEngine};
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
-};
-use std::collections::HashMap;
-use tokio::sync::mpsc;
+use entities::{face_feature, face_person, DrVector};
+use face_engine::{FaceAligner, FaceEngine, LazyFaceEngine};
+use img_url_generator::{encrypt_face_cover_token, FaceBBoxPixels};
+use std::sync::Arc;
+use sea_orm::{Set, EntityTrait, TransactionTrait};
+use tokio::sync::{mpsc, Semaphore};
 use tracing::info;
 
 use crate::clustering::union_find::{filter_valid_seeds, grow_stage, UnionFind};
 use crate::clustering::vector_utils;
+use crate::mappers::{FaceFeatureMapper, FacePersonMapper, PhotoMapper};
 use crate::models::face::{
-    FaceFeatureVO, FacePersonSimpleVO, FacePersonVO, FeatureNode, PersonCluster,
+    FacePersonSimpleVO, FacePersonVO, FeatureNode, PersonCluster,
 };
 use crate::models::photo::CursorPageVO;
 use crate::services::photo_service::FaceTask;
-use futures::future::join_all;
-use img_url_generator::{ImageUrlGenerator, ImageUrlProvider};
 
 pub struct FaceService;
 
 impl FaceService {
+    /// 检测并识别人脸
+    /// 
+    /// 对照片进行人脸检测，提取特征向量并保存
+    /// 过滤掉置信度低和面积小的人脸
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `face_engine`: 人脸引擎（检测器和特征提取器）
+    /// - `photo_id`: 照片ID
+    /// - `image_bytes`: 图片字节数据
+    /// 
+    /// # 返回
+    /// 成功返回空元组
     pub async fn detect_and_recognize(
-        db: &DatabaseConnection,
+        db: &sea_orm::DatabaseConnection,
         face_engine: &FaceEngine,
         photo_id: i64,
         image_bytes: Vec<u8>,
     ) -> Result<(), AppError> {
-        info!("开始检测照片 {} 的人脸", photo_id);
+        info!("开始检测人脸, photo_id: {}", photo_id);
+
+        let img = image::load_from_memory(&image_bytes)
+            .map_internal_err("图片解码失败")?;
+        let (img_width, img_height) = (img.width() as f32, img.height() as f32);
 
         let detections = face_engine
             .detect_faces(&image_bytes)
             .map_internal_err("人脸检测失败")?;
 
-        info!("在照片 {} 中检测到 {} 张人脸", photo_id, detections.len());
+        info!("照片 {} 检测到 {} 张人脸", photo_id, detections.len());
+
+        if detections.is_empty() {
+            return Ok(());
+        }
+
+        let mut face_features = Vec::new();
 
         for detection in detections {
-            let px_area = detection.bbox.w * detection.bbox.h;
-            if detection.score < 0.65 || px_area < 0.01 {
+            let raw_bbox = &detection.bbox;
+            let px_area = (raw_bbox.w * img_width) * (raw_bbox.h * img_height);
+
+            if detection.score < 0.65
+                || px_area < 160.0 * 160.0
+                || raw_bbox.w < 0.05
+                || raw_bbox.h < 0.05
+            {
                 continue;
             }
 
@@ -52,49 +78,61 @@ impl FaceService {
                 .extract_embedding(&aligned_face)
                 .map_internal_err("特征提取失败")?;
 
-            let embedding = vector_utils::l2_normalize(&embedding);
-            let embedding = DrVector::new(embedding.to_vec());
+            let norm_embedding = vector_utils::l2_normalize(&embedding);
+            let dr_vector = DrVector::new(norm_embedding.to_vec());
 
-            let bbox_json = serde_json::json!({
+            let bbox_value = serde_json::json!({
                 "x": detection.bbox.x,
                 "y": detection.bbox.y,
                 "w": detection.bbox.w,
                 "h": detection.bbox.h
             });
 
-            let now = Utc::now();
-            let feature = face_feature::ActiveModel {
+            face_features.push(face_feature::ActiveModel {
                 photo_id: Set(photo_id),
                 person_id: Set(None),
-                embedding: Set(embedding),
-                bbox: Set(sea_orm::JsonValue::Object(bbox_json.as_object().unwrap().clone())),
+                embedding: Set(dr_vector),
+                bbox: Set(bbox_value),
                 score: Set(detection.score),
-                created_at: Set(now.into()),
-                updated_at: Set(now.into()),
                 ..Default::default()
-            };
+            });
+        }
 
-            feature
-                .insert(db)
+        if !face_features.is_empty() {
+            let count = face_features.len();
+            face_feature::Entity::insert_many(face_features)
+                .exec(db)
                 .await
-                .map_internal_err("保存特征失败")?;
+                .map_internal_err("批量保存人脸特征失败")?;
+            info!("照片 {} 处理完成，入库 {} 张人脸", photo_id, count);
+        } else {
+            info!("照片 {} 处理完成，无有效人脸", photo_id);
         }
 
         Ok(())
     }
 
+    /// 执行人脸聚类
+    /// 
+    /// 使用Union-Find算法对人脸特征进行聚类
+    /// 通过种子点生长阶段优化聚类结果
+    /// 将聚类结果同步到数据库
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `seed_radius`: 种子点半径阈值
+    /// - `min_points`: 最小聚类点数
+    /// 
+    /// # 返回
+    /// 返回聚类结果列表
     pub async fn perform_clustering(
-        db: &DatabaseConnection,
-        seed_radius: f64,
+        db: &sea_orm::DatabaseConnection,
+        seed_radius: f32,
         min_points: usize,
     ) -> Result<Vec<PersonCluster>, AppError> {
         info!("开始执行人脸聚类");
 
-        let features = face_feature::Entity::find()
-            .order_by_asc(face_feature::Column::Id)
-            .all(db)
-            .await
-            .map_internal_err("查询特征失败")?;
+        let features = FaceFeatureMapper::find_all_ordered(db).await?;
 
         if features.len() < min_points {
             return Ok(vec![]);
@@ -111,7 +149,7 @@ impl FaceService {
             })
             .collect();
 
-        let clusters = UnionFind::cluster(&nodes, seed_radius);
+        let clusters = UnionFind::cluster(&nodes, seed_radius as f64);
         let mut seeds = filter_valid_seeds(clusters, &nodes, min_points);
 
         grow_stage(&mut seeds, &nodes, 0.75, true);
@@ -124,150 +162,124 @@ impl FaceService {
         Ok(seeds)
     }
 
+    /// 将聚类结果同步到数据库
+    /// 
+    /// 为每个聚类创建人物记录，并更新特征的关联
+    /// 使用事务保证原子性
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `seeds`: 聚类结果列表
     async fn sync_to_db(
-        db: &DatabaseConnection,
+        db: &sea_orm::DatabaseConnection,
         seeds: &[PersonCluster],
     ) -> Result<(), AppError> {
-        for seed in seeds {
-            if seed.member_nodes.is_empty() {
-                continue;
-            }
+        let seeds: Vec<PersonCluster> = seeds.to_vec();
 
-            let best = seed
-                .member_nodes
-                .iter()
-                .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
-                .unwrap();
+        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            Box::pin(async move {
+                for seed in seeds {
+                    if seed.member_nodes.is_empty() {
+                        continue;
+                    }
 
-            let centroid = DrVector::new(seed.vector.clone());
+                    let best = seed
+                        .member_nodes
+                        .iter()
+                        .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
+                        .unwrap();
 
-            let now = Utc::now();
+                    let centroid = DrVector::new(seed.vector.clone());
 
-            let person = face_person::ActiveModel {
-                name: Set(format!(
-                    "人物_{}_{}",
-                    now.format("%Y%m%d"),
-                    uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
-                )),
-                max_score_feature_id: Set(best.id),
-                max_score: Set(best.score),
-                total_photo_count: Set(seed.member_nodes.len() as i64),
-                centroid_embedding: Set(centroid),
-                total_weight_count: Set(seed.total_weight),
-                created_at: Set(now.into()),
-                updated_at: Set(now.into()),
-                ..Default::default()
-            };
+                    let person = FacePersonMapper::insert(
+                        txn,
+                        format!(
+                            "人物_{}_{}",
+                            Utc::now().format("%Y%m%d"),
+                            uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
+                        ),
+                        best.id,
+                        best.score,
+                        seed.member_nodes.len() as i64,
+                        centroid,
+                        seed.total_weight,
+                    ).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
-            let person = person.insert(db).await.map_internal_err("创建人物失败")?;
-            let person_id = person.id;
+                    let person_id = person.id;
 
-            for node in &seed.member_nodes {
-                if let Some(feature) = face_feature::Entity::find_by_id(node.id)
-                    .one(db)
-                    .await
-                    .map_internal_err("查询特征失败")?
-                {
-                    let mut active: face_feature::ActiveModel = feature.into();
-                    active.person_id = Set(Some(person_id));
-                    active.updated_at = Set(now.into());
-                    let _ = active.update(db).await;
+                    for node in &seed.member_nodes {
+                        FaceFeatureMapper::update_person_id(txn, node.id, Some(person_id))
+                            .await
+                            .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    }
                 }
-            }
-        }
 
-        Ok(())
+                Ok(())
+            })
+        }).await.map_err(|e| {
+            tracing::error!(target:"logs", "同步聚类结果失败: {:?}", e);
+            AppError::InternalServerError
+        })
     }
 
+    /// 获取人物分页列表
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `cursor`: 游标值（照片数量）
+    /// - `size`: 每页数量
+    /// - `encryption_key`: 加密密钥
+    /// 
+    /// # 返回
+    /// 返回分页的人物列表，包含封面图token
     pub async fn get_person_page(
-        db: &DatabaseConnection,
+        db: &sea_orm::DatabaseConnection,
         cursor: Option<i64>,
         size: u32,
-        img_url_generator: &ImageUrlProvider,
+        encryption_key: &[u8; 32],
     ) -> Result<CursorPageVO<FacePersonVO, i64>, AppError> {
-        let limit = size as u64 + 1;
-        let mut query = face_person::Entity::find()
-            .order_by_desc(face_person::Column::TotalPhotoCount)
-            .limit(limit);
-
-        if let Some(c) = cursor {
-            query = query.filter(face_person::Column::TotalPhotoCount.lt(c));
-        }
-
-        let persons = query.all(db).await.map_internal_err("查询失败")?;
+        let persons = FacePersonMapper::find_cursor_page(db, cursor, size as u64).await?;
 
         let has_more = persons.len() > size as usize;
         let persons: Vec<_> = persons.into_iter().take(size as usize).collect();
 
         let feature_ids: Vec<i64> = persons.iter().map(|p| p.max_score_feature_id).collect();
-
-        let features = face_feature::Entity::find()
-            .filter(face_feature::Column::Id.is_in(feature_ids))
-            .all(db)
-            .await
-            .map_internal_err("查询特征失败")?;
-
-        let feature_map: HashMap<i64, _> = features.into_iter().map(|f| (f.id, f)).collect();
+        let feature_map = FaceFeatureMapper::find_by_ids_map(db, feature_ids).await?;
 
         let photo_ids: Vec<i64> = feature_map.values().map(|f| f.photo_id).collect();
-        let photos = photo::Entity::find()
-            .filter(photo::Column::Id.is_in(photo_ids))
-            .all(db)
-            .await
-            .map_internal_err("查询照片失败")?;
-
-        let photo_map: HashMap<i64, _> = photos.into_iter().map(|p| (p.id, p)).collect();
+        let photo_map = PhotoMapper::find_by_ids_map(db, photo_ids).await?;
 
         let next_cursor = persons.last().map(|p| p.total_photo_count);
 
-        let futures = persons.into_iter().map(|p| {
-            let feature_opt = feature_map.get(&p.max_score_feature_id).cloned();
-            let photo_opt = feature_opt.as_ref().and_then(|f| photo_map.get(&f.photo_id).cloned());
-            let person_id = p.id;
-            let person_name = p.name;
-            let total_photo_count = p.total_photo_count;
-            async move {
-                if let Some(photo) = photo_opt {
-                    if let Some(f) = feature_opt {
-                        let bbox: face_feature::FaceBBox =
-                            serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
-                                face_feature::FaceBBox {
-                                    x: 0.0,
-                                    y: 0.0,
-                                    w: 0.1,
-                                    h: 0.1,
-                                }
-                            });
-
-                        let cw = (bbox.w * photo.width as f32) as i64;
-                        let ch = (bbox.h * photo.height as f32) as i64;
-                        let cx = (bbox.x * photo.width as f32) as i64;
-                        let cy = (bbox.y * photo.height as f32) as i64;
-
-                        let cover_url = img_url_generator.crop(
-                            photo.file_id.clone(),
-                            cx as i32,
-                            cy as i32,
-                            cw as i32,
-                            ch as i32,
-                            200,
-                        ).await;
-
-                        return Some(FacePersonVO {
-                            id: person_id.to_string(),
-                            name: person_name,
-                            total_photo_count,
-                            cover_url: Some(cover_url),
-                        });
-                    }
-                }
-                None
-            }
-        });
-        let records: Vec<FacePersonVO> = join_all(futures)
-            .await
+        let records: Vec<FacePersonVO> = persons
             .into_iter()
-            .flatten()
+            .map(|p| {
+                let feature = feature_map.get(&p.max_score_feature_id);
+                let photo = feature.and_then(|f| photo_map.get(&f.photo_id));
+                let cover_token = photo.and_then(|ph| {
+                    feature.and_then(|f| {
+                        let bbox: face_feature::FaceBBox = serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
+                            face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
+                        });
+                        let x = (bbox.x * ph.width as f32) as i32;
+                        let y = (bbox.y * ph.height as f32) as i32;
+                        let w = (bbox.w * ph.width as f32) as i32;
+                        let h = (bbox.h * ph.height as f32) as i32;
+                        encrypt_face_cover_token(
+                            &ph.file_id,
+                            &FaceBBoxPixels { x, y, w, h },
+                            encryption_key,
+                        ).ok()
+                    })
+                });
+                
+                FacePersonVO {
+                    id: p.id.to_string(),
+                    name: p.name,
+                    total_photo_count: p.total_photo_count,
+                    cover_token,
+                }
+            })
             .collect();
 
         Ok(CursorPageVO {
@@ -277,14 +289,17 @@ impl FaceService {
         })
     }
 
+    /// 获取所有人物简单列表
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// 
+    /// # 返回
+    /// 返回所有人物的简单信息列表（ID和名称）
     pub async fn get_all_person(
-        db: &DatabaseConnection,
+        db: &sea_orm::DatabaseConnection,
     ) -> Result<Vec<FacePersonSimpleVO>, AppError> {
-        let persons = face_person::Entity::find()
-            .order_by_asc(face_person::Column::Name)
-            .all(db)
-            .await
-            .map_internal_err("查询失败")?;
+        let persons = FacePersonMapper::find_all(db).await?;
 
         Ok(persons
             .iter()
@@ -295,33 +310,32 @@ impl FaceService {
             .collect())
     }
 
+    /// 重命名人物
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `redis`: Redis连接池（用于清除缓存）
+    /// - `person_id`: 人物ID
+    /// - `new_name`: 新名称
+    /// 
+    /// # 返回
+    /// 返回更新后的人物VO
+    /// 
+    /// # 错误
+    /// - 名称已存在返回400错误
     pub async fn rename_person(
-        db: &DatabaseConnection,
+        db: &sea_orm::DatabaseConnection,
         redis: &Pool,
         person_id: i64,
         new_name: String,
     ) -> Result<FacePersonVO, AppError> {
-        let existing = face_person::Entity::find()
-            .filter(face_person::Column::Name.eq(&new_name))
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?;
+        let existing = FacePersonMapper::find_by_name(db, &new_name).await?;
 
         if existing.is_some() {
             return Err(AppError::bad_request("人物名称已存在"));
         }
 
-        let person = face_person::Entity::find_by_id(person_id)
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?
-            .ok_or_else(|| AppError::bad_request("人物不存在"))?;
-
-        let mut active: face_person::ActiveModel = person.into();
-        active.name = Set(new_name);
-        active.updated_at = Set(Utc::now().into());
-
-        let person = active.update(db).await.map_internal_err("更新失败")?;
+        let person = FacePersonMapper::update(db, person_id, Some(new_name), None, None, None, None, None).await?;
 
         let _ = Self::invalidate_person_cache(redis, person_id).await;
 
@@ -329,12 +343,30 @@ impl FaceService {
             id: person.id.to_string(),
             name: person.name,
             total_photo_count: person.total_photo_count,
-            cover_url: None,
+            cover_token: None,
         })
     }
 
+    /// 合并两个人物
+    /// 
+    /// 将源人物的所有特征转移到目标人物
+    /// 重新计算目标人物的质心向量和照片数量
+    /// 删除源人物
+    /// 使用事务保证原子性
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `redis`: Redis连接池（用于清除缓存）
+    /// - `source_id`: 源人物ID
+    /// - `target_id`: 目标人物ID
+    /// 
+    /// # 返回
+    /// 返回合并后的人物VO
+    /// 
+    /// # 错误
+    /// - 源和目标相同返回400错误
     pub async fn merge_person(
-        db: &DatabaseConnection,
+        db: &sea_orm::DatabaseConnection,
         redis: &Pool,
         source_id: i64,
         target_id: i64,
@@ -343,17 +375,8 @@ impl FaceService {
             return Err(AppError::bad_request("源人物和目标人物相同"));
         }
 
-        let source = face_person::Entity::find_by_id(source_id)
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?
-            .ok_or_else(|| AppError::bad_request("源人物不存在"))?;
-
-        let target = face_person::Entity::find_by_id(target_id)
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?
-            .ok_or_else(|| AppError::bad_request("目标人物不存在"))?;
+        let source = FacePersonMapper::find_by_id(db, source_id).await?;
+        let target = FacePersonMapper::find_by_id(db, target_id).await?;
 
         let w1 = source.total_weight_count;
         let w2 = target.total_weight_count;
@@ -371,31 +394,35 @@ impl FaceService {
 
         let new_photo_count = target.total_photo_count + source.total_photo_count;
 
-        let mut target_active: face_person::ActiveModel = target.into();
-        target_active.centroid_embedding = Set(merged_embedding);
-        target_active.total_weight_count = Set(new_weight);
-        target_active.total_photo_count = Set(new_photo_count);
-        target_active.updated_at = Set(Utc::now().into());
+        let target = db.transaction::<_, face_person::Model, sea_orm::DbErr>(|txn| {
+            Box::pin(async move {
+                let target = FacePersonMapper::update(
+                    txn,
+                    target_id,
+                    None,
+                    None,
+                    None,
+                    Some(new_photo_count),
+                    Some(merged_embedding),
+                    Some(new_weight),
+                ).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
-        let target = target_active.update(db).await.map_internal_err("更新失败")?;
+                let source_features = FaceFeatureMapper::find_by_person_id(txn, source_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
-        let source_features = face_feature::Entity::find()
-            .filter(face_feature::Column::PersonId.eq(source_id))
-            .all(db)
-            .await
-            .map_internal_err("查询源人物特征失败")?;
+                for feature in source_features {
+                    FaceFeatureMapper::update_person_id(txn, feature.id, Some(target_id))
+                        .await
+                        .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                }
 
-        for feature in source_features {
-            let mut active: face_feature::ActiveModel = feature.into();
-            active.person_id = Set(Some(target_id));
-            active.updated_at = Set(Utc::now().into());
-            let _ = active.update(db).await;
-        }
+                FacePersonMapper::delete_by_id(txn, source_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
-        face_person::Entity::delete_by_id(source_id)
-            .exec(db)
-            .await
-            .map_internal_err("删除源人物失败")?;
+                Ok(target)
+            })
+        }).await.map_err(|e| {
+            tracing::error!(target:"logs", "合并人物失败: {:?}", e);
+            AppError::InternalServerError
+        })?;
 
         let _ = Self::invalidate_person_cache(redis, source_id).await;
 
@@ -403,10 +430,15 @@ impl FaceService {
             id: target.id.to_string(),
             name: target.name,
             total_photo_count: target.total_photo_count,
-            cover_url: None,
+            cover_token: None,
         })
     }
 
+    /// 清除人物缓存
+    /// 
+    /// # 参数
+    /// - `redis`: Redis连接池
+    /// - `person_id`: 人物ID
     async fn invalidate_person_cache(redis: &Pool, person_id: i64) -> Result<(), AppError> {
         let key = format!("photo:face:person:name:{}", person_id);
         let mut conn = redis.get().await.map_internal_err("Redis连接失败")?;
@@ -415,113 +447,39 @@ impl FaceService {
         Ok(())
     }
 
-    pub async fn get_photo_features(
-        db: &DatabaseConnection,
-        redis: &Pool,
-        photo_id: i64,
-    ) -> Result<Vec<FaceFeatureVO>, AppError> {
-        let features = face_feature::Entity::find()
-            .filter(face_feature::Column::PhotoId.eq(photo_id))
-            .all(db)
-            .await
-            .map_internal_err("查询失败")?;
-
-        if features.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let person_ids: Vec<i64> = features.iter().filter_map(|f| f.person_id).collect();
-
-        let person_names = if !person_ids.is_empty() {
-            Self::get_person_names_batch(db, redis, &person_ids).await?
-        } else {
-            HashMap::new()
-        };
-
-        Ok(features
-            .iter()
-            .map(|f| {
-                let person_name = f
-                    .person_id
-                    .and_then(|pid| person_names.get(&pid).cloned())
-                    .unwrap_or_else(|| "未知人物".to_string());
-
-                let bbox: face_feature::FaceBBox =
-                    serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
-                        face_feature::FaceBBox {
-                            x: 0.0,
-                            y: 0.0,
-                            w: 0.1,
-                            h: 0.1,
-                        }
-                    });
-
-                FaceFeatureVO {
-                    id: f.id.to_string(),
-                    person_id: f.person_id.map(|id| id.to_string()),
-                    person_name,
-                    bbox: crate::models::face::FaceBBox {
-                        x: bbox.x,
-                        y: bbox.y,
-                        w: bbox.w,
-                        h: bbox.h,
-                    },
-                    score: f.score,
-                }
-            })
-            .collect())
-    }
-
-    async fn get_person_names_batch(
-        db: &DatabaseConnection,
-        _redis: &Pool,
-        person_ids: &[i64],
-    ) -> Result<HashMap<i64, String>, AppError> {
-        let persons = face_person::Entity::find()
-            .filter(face_person::Column::Id.is_in(person_ids.to_vec()))
-            .all(db)
-            .await
-            .map_internal_err("查询失败")?;
-
-        Ok(persons.into_iter().map(|p| (p.id, p.name)).collect())
-    }
-
+    /// 获取人物详细信息
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `person_id`: 人物ID
+    /// - `encryption_key`: 加密密钥
+    /// 
+    /// # 返回
+    /// 返回人物VO，包含封面图token
     pub async fn get_person_info(
-        db: &DatabaseConnection,
+        db: &sea_orm::DatabaseConnection,
         person_id: i64,
-        img_url_generator: &ImageUrlProvider,
+        encryption_key: &[u8; 32],
     ) -> Result<FacePersonVO, AppError> {
-        let person = face_person::Entity::find_by_id(person_id)
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?
-            .ok_or_else(|| AppError::bad_request("人物不存在"))?;
+        let person = FacePersonMapper::find_by_id(db, person_id).await?;
 
-        let feature = face_feature::Entity::find_by_id(person.max_score_feature_id)
-            .one(db)
-            .await
-            .map_internal_err("查询特征失败")?;
+        let feature = FaceFeatureMapper::find_by_id(db, person.max_score_feature_id).await.ok();
 
-        let cover_url = if let Some(f) = feature {
-            let photo = photo::Entity::find_by_id(f.photo_id)
-                .one(db)
-                .await
-                .map_internal_err("查询照片失败")?;
+        let cover_token = if let Some(f) = feature {
+            let photo = PhotoMapper::find_by_id(db, f.photo_id).await.ok();
             if let Some(p) = photo {
-                let bbox: face_feature::FaceBBox =
-                    serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
-                        face_feature::FaceBBox {
-                            x: 0.0,
-                            y: 0.0,
-                            w: 0.1,
-                            h: 0.1,
-                        }
-                    });
-                let cw = (bbox.w * p.width as f32) as i64;
-                let ch = (bbox.h * p.height as f32) as i64;
-                let cx = (bbox.x * p.width as f32) as i64;
-                let cy = (bbox.y * p.height as f32) as i64;
-                Some(img_url_generator.crop(p.file_id.clone(), cx as i32, cy as i32, cw as i32, ch as i32, 200).await)
+                let bbox: face_feature::FaceBBox = serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
+                    face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
+                });
+                let x = (bbox.x * p.width as f32) as i32;
+                let y = (bbox.y * p.height as f32) as i32;
+                let w = (bbox.w * p.width as f32) as i32;
+                let h = (bbox.h * p.height as f32) as i32;
+                encrypt_face_cover_token(
+                    &p.file_id,
+                    &FaceBBoxPixels { x, y, w, h },
+                    encryption_key,
+                ).ok()
             } else {
                 None
             }
@@ -533,74 +491,67 @@ impl FaceService {
             id: person.id.to_string(),
             name: person.name,
             total_photo_count: person.total_photo_count,
-            cover_url,
+            cover_token,
         })
     }
 
+    /// 获取人物的照片列表
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `redis`: Redis连接池
+    /// - `user_id`: 用户ID（用于查询收藏状态）
+    /// - `person_id`: 人物ID
+    /// - `cursor`: 游标值（特征ID）
+    /// - `size`: 每页数量
+    /// - `encryption_key`: 加密密钥
+    /// 
+    /// # 返回
+    /// 返回分页的照片列表
     pub async fn get_person_photo(
-        db: &DatabaseConnection,
+        db: &sea_orm::DatabaseConnection,
+        redis: &Pool,
+        user_id: i64,
         person_id: i64,
         cursor: Option<i64>,
         size: u32,
-        img_url_generator: &ImageUrlProvider,
+        encryption_key: &[u8; 32],
     ) -> Result<CursorPageVO<crate::models::photo::PhotoVO, i64>, AppError> {
-        let limit = size as u64 + 1;
-        let mut query = face_feature::Entity::find()
-            .filter(face_feature::Column::PersonId.eq(person_id))
-            .order_by_desc(face_feature::Column::Id)
-            .limit(limit);
-
-        if let Some(c) = cursor {
-            query = query.filter(face_feature::Column::Id.lt(c));
-        }
-
-        let features = query.all(db).await.map_internal_err("查询失败")?;
+        let features = FaceFeatureMapper::find_cursor_page(db, person_id, cursor, size as u64).await?;
 
         let has_more = features.len() > size as usize;
         let features: Vec<_> = features.into_iter().take(size as usize).collect();
 
         let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-        let photos = photo::Entity::find()
-            .filter(photo::Column::Id.is_in(photo_ids))
-            .all(db)
-            .await
-            .map_internal_err("查询照片失败")?;
+        let photo_map = PhotoMapper::find_by_ids_map(db, photo_ids.clone()).await?;
 
-        let photo_map: HashMap<i64, _> = photos.into_iter().map(|p| (p.id, p)).collect();
+        let favorite_collection_id = crate::services::CollectionService::get_favorite_collection_id(db, redis, user_id).await?;
+        let favorited_photo_ids = crate::mappers::CollectionPhotoMapper::exists_in_collection(db, favorite_collection_id, photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
 
         let next_cursor = features.last().map(|f| f.id);
 
-        let futures = features.into_iter().map(|f| {
-            let photo_opt = photo_map.get(&f.photo_id).cloned();
-            async move {
-                if let Some(p) = photo_opt {
-                    let file_id = p.file_id.clone();
-                    let extension = file_id.rsplit('.').next().unwrap_or("jpg").to_string();
-                    let thumbnail_url = img_url_generator.thumbnail(file_id.clone()).await;
-                    let preview_url = img_url_generator.preview(file_id.clone()).await;
-                    let original_url = img_url_generator.original(file_id, extension).await;
-                    Some(crate::models::photo::PhotoVO {
-                        id: p.id.to_string(),
-                        name: p.name,
-                        thumbnail_url,
-                        preview_url,
-                        original_url,
-                        width: p.width,
-                        height: p.height,
-                        size: p.size,
-                        created_at: p.created_at.with_timezone(&Utc),
-                        is_favorited: None,
-                        is_collected: None,
-                    })
-                } else {
-                    None
-                }
-            }
-        });
-        let records: Vec<crate::models::photo::PhotoVO> = join_all(futures)
-            .await
+        let records: Vec<crate::models::photo::PhotoVO> = features
             .into_iter()
-            .flatten()
+            .filter_map(|f| {
+                let p = photo_map.get(&f.photo_id)?;
+                let thumbnail_token = img_url_generator::encrypt_image_token(&img_url_generator::ImageToken::thumbnail(p.file_id.clone()), encryption_key).ok();
+                let preview_token = img_url_generator::encrypt_image_token(&img_url_generator::ImageToken::preview(p.file_id.clone()), encryption_key).ok();
+                let original_token = img_url_generator::encrypt_image_token(&img_url_generator::ImageToken::original(p.file_id.clone()), encryption_key).ok();
+                
+                Some(crate::models::photo::PhotoVO {
+                    id: p.id.to_string(),
+                    name: p.name.clone(),
+                    width: p.width,
+                    height: p.height,
+                    size: p.size,
+                    created_at: p.created_at.with_timezone(&Utc),
+                    is_favorited: Some(favorited_photo_ids.contains(&p.id)),
+                    is_collected: None,
+                    thumbnail_token,
+                    preview_token,
+                    original_token,
+                })
+            })
             .collect();
 
         Ok(CursorPageVO {
@@ -610,89 +561,98 @@ impl FaceService {
         })
     }
 
-    pub async fn delete_person(db: &DatabaseConnection, person_id: i64) -> Result<bool, AppError> {
-        let _person = face_person::Entity::find_by_id(person_id)
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?
-            .ok_or_else(|| AppError::bad_request("人物不存在"))?;
+    /// 删除人物
+    /// 
+    /// 将人物关联的所有特征解除关联，然后删除人物
+    /// 使用事务保证原子性
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `person_id`: 人物ID
+    /// 
+    /// # 返回
+    /// 成功返回true
+    pub async fn delete_person(db: &sea_orm::DatabaseConnection, person_id: i64) -> Result<bool, AppError> {
+        let _person = FacePersonMapper::find_by_id(db, person_id).await?;
 
-        let features = face_feature::Entity::find()
-            .filter(face_feature::Column::PersonId.eq(person_id))
-            .all(db)
-            .await
-            .map_internal_err("查询特征失败")?;
+        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            Box::pin(async move {
+                let features = FaceFeatureMapper::find_by_person_id(txn, person_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
-        for feature in features {
-            let mut active: face_feature::ActiveModel = feature.into();
-            active.person_id = Set(None);
-            active.updated_at = Set(Utc::now().into());
-            let _ = active.update(db).await;
-        }
+                for feature in features {
+                    FaceFeatureMapper::update_person_id(txn, feature.id, None)
+                        .await
+                        .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                }
 
-        face_person::Entity::delete_by_id(person_id)
-            .exec(db)
-            .await
-            .map_internal_err("删除人物失败")?;
+                FacePersonMapper::delete_by_id(txn, person_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+
+                Ok(())
+            })
+        }).await.map_err(|e| {
+            tracing::error!(target:"logs", "删除人物失败: {:?}", e);
+            AppError::InternalServerError
+        })?;
 
         Ok(true)
     }
 
-    pub async fn change_face_belonging(
-        db: &DatabaseConnection,
-        feature_id: i64,
-        person_id: i64,
-    ) -> Result<(), AppError> {
-        let feature = face_feature::Entity::find_by_id(feature_id)
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?
-            .ok_or_else(|| AppError::bad_request("特征不存在"))?;
-
-        let _person = face_person::Entity::find_by_id(person_id)
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?
-            .ok_or_else(|| AppError::bad_request("目标人物不存在"))?;
-
-        let mut feature_active: face_feature::ActiveModel = feature.into();
-        feature_active.person_id = Set(Some(person_id));
-        feature_active.updated_at = Set(Utc::now().into());
-        feature_active.update(db).await.map_internal_err("更新失败")?;
-
-        Ok(())
-    }
-
+    /// 处理人脸检测任务的后台任务
+    /// 
+    /// 从通道接收照片上传任务，执行人脸检测和聚类
+    /// 使用懒加载引擎，模型在第一次请求时加载，闲置10分钟后自动释放
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `rx`: 人脸检测任务接收通道
+    /// - `lazy_engine`: 懒加载人脸引擎
     pub async fn process_face_tasks(
-        db: &DatabaseConnection,
+        db: &sea_orm::DatabaseConnection,
         mut rx: mpsc::Receiver<FaceTask>,
+        lazy_engine: Arc<LazyFaceEngine>,
     ) {
-        let face_engine = match FaceEngine::new(
-            "models/det_10g.onnx",
-            "models/w600k_r50.onnx",
-        ) {
-            Ok(engine) => engine,
-            Err(e) => {
-                tracing::error!("Failed to initialize face engine: {}", e);
-                return;
-            }
-        };
+        let cpus = num_cpus::get();
+        let max_concurrency = (cpus / 2).max(1);
+        let semaphore = Arc::new(Semaphore::new(max_concurrency));
+
+        info!("人脸处理任务处理器启动, cpu核心数为: {}, 最大并发数为: {}", cpus, max_concurrency);
 
         while let Some(task) = rx.recv().await {
-            info!("Processing face task for photo {}", task.photo_id);
-            
-            if let Err(e) = Self::detect_and_recognize(
-                db,
-                &face_engine,
-                task.photo_id,
-                task.image_bytes,
-            ).await {
-                tracing::error!("Face processing failed for photo {}: {}", task.photo_id, e);
-            }
+            let permit = semaphore.clone().acquire_owned().await.unwrap();
+            let db_clone = db.clone();
+            let lazy_engine_clone = lazy_engine.clone();
 
-            if let Err(e) = Self::perform_clustering(&db, 0.6, 3).await {
-                tracing::error!("Face clustering failed: {}", e);
-            }
+            info!("处理照片, id为 {}", task.photo_id);
+
+            tokio::spawn(async move {
+                let engine = match lazy_engine_clone.get_or_load().await {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::error!("加载人脸模型失败: {}", e);
+                        return;
+                    }
+                };
+
+                let res = tokio::task::spawn_blocking(move || {
+                    let _permit = permit;
+
+                    let handle = tokio::runtime::Handle::current();
+                    handle.block_on(async {
+                        if let Err(e) = Self::detect_and_recognize(
+                            &db_clone,
+                            &engine,
+                            task.photo_id,
+                            task.image_bytes,
+                        ).await {
+                            tracing::error!("人脸处理时出现问题, 照片id为: {}, 错误为: {}", task.photo_id, e);
+                        }
+                    })
+                }).await;
+
+                if let Err(e) = res {
+                    tracing::error!("人脸处理任务出现错误: {:?}", e);
+                }
+            });
         }
     }
 }

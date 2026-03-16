@@ -53,3 +53,26 @@ impl<T, E: std::fmt::Debug> ResultExt<T, E> for Result<T, E> {
         self.map(R::ok).map_err(|e| e.into())
     }
 }
+
+pub trait ToOkExt {
+    fn into_ok<E>(self) -> Result<Self, E>
+    where
+        Self: Sized;
+
+    // 针对你常用的 AppError 进一步简化
+    fn ok_res(self) -> Result<Self, AppError>
+    where
+        Self: Sized;
+}
+
+impl<T> ToOkExt for T {
+    #[inline]
+    fn into_ok<E>(self) -> Result<Self, E> {
+        Ok(self)
+    }
+
+    #[inline]
+    fn ok_res(self) -> Result<Self, AppError> {
+        Ok(self)
+    }
+}

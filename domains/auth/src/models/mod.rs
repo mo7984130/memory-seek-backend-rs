@@ -1,9 +1,10 @@
+use chrono::{DateTime, Utc};
 use common::utils::validators::validate_account;
 use common::utils::validators::validate_email;
 use common::utils::validators::validate_password;
 use common::utils::validators::validate_username;
 use common::utils::validators::validate_normal_char;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 #[derive(Debug, Validate, Deserialize)]
@@ -40,4 +41,11 @@ pub struct RegisterRequest {
 pub struct SendEmailCodeRequest {
     #[validate(custom(function = "validate_email"))]
     pub email: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccessTokenResponse {
+    pub access_token: String,
+    pub access_token_expire_at: DateTime<Utc>,
 }

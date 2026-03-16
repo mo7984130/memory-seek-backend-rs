@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use async_trait::async_trait;
 use oss::S3Client;
-use crate::ImageUrlGenerator;
+use crate::{ImageUrl, ImageUrlGenerator};
+
+const CACHE_AGE: u32 = 604800;
 
 pub struct AliyunOssGenerator {
     pub s3_client: Arc<S3Client>,
@@ -10,34 +12,42 @@ pub struct AliyunOssGenerator {
 
 #[async_trait]
 impl ImageUrlGenerator for AliyunOssGenerator {
-    async fn thumbnail(&self, file_id: String) -> String {
+    async fn thumbnail(&self, file_id: &str) -> ImageUrl {
         let process = "image/resize,m_fill,w_300,h_300/format,webp";
-        self.s3_client
-            .get_signed_url_with_params(&file_id, Duration::from_secs(1800), Option::from(process.to_string()))
+        let url = self.s3_client
+            .get_signed_url_with_params(file_id, Duration::from_secs(CACHE_AGE as u64), Some(process.to_string()))
             .await
-            .unwrap_or_default()
+            .unwrap_or_default();
+        
+        ImageUrl { url, cache_age: CACHE_AGE }
     }
 
-    async fn preview(&self, file_id: String) -> String {
+    async fn preview(&self, file_id: &str) -> ImageUrl {
         let process = "image/resize,w_1200/format,webp";
-        self.s3_client
-            .get_signed_url_with_params(&file_id, Duration::from_secs(1800), process.to_string().into() )
+        let url = self.s3_client
+            .get_signed_url_with_params(file_id, Duration::from_secs(CACHE_AGE as u64), Some(process.to_string()))
             .await
-            .unwrap_or_default()
+            .unwrap_or_default();
+        
+        ImageUrl { url, cache_age: CACHE_AGE }
     }
 
-    async fn original(&self, file_id: String, _extension: String) -> String {
-        self.s3_client
-            .get_signed_url(&file_id, Duration::from_secs(3600))
+    async fn original(&self, file_id: &str, _extension: &str) -> ImageUrl {
+        let url = self.s3_client
+            .get_signed_url(file_id, Duration::from_secs(CACHE_AGE as u64))
             .await
-            .unwrap_or_default()
+            .unwrap_or_default();
+        
+        ImageUrl { url, cache_age: CACHE_AGE }
     }
 
-    async fn crop(&self, file_id: String, x: i32, y: i32, w: i32, h: i32, size: u32) -> String {
+    async fn crop(&self, file_id: &str, x: i32, y: i32, w: i32, h: i32, size: u32) -> ImageUrl {
         let process = format!("image/crop,x_{},y_{},w_{},h_{}/resize,m_fill,w_{},h_{}/format,webp", x, y, w, h, size, size);
-        self.s3_client
-            .get_signed_url_with_params(&file_id, Duration::from_secs(1800), process.into())
+        let url = self.s3_client
+            .get_signed_url_with_params(file_id, Duration::from_secs(CACHE_AGE as u64), Some(process))
             .await
-            .unwrap_or_default()
+            .unwrap_or_default();
+        
+        ImageUrl { url, cache_age: CACHE_AGE }
     }
 }

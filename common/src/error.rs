@@ -12,6 +12,12 @@ pub enum AppError {
     #[error("{0}")]
     BadRequest(Cow<'static, str>),
 
+    #[error("{0}")]
+    NotFound(Cow<'static, str>),
+
+    #[error("{0}")]
+    Forbidden(Cow<'static, str>),
+
     #[error("服务器内部错误")]
     InternalServerError
 }
@@ -28,11 +34,21 @@ impl AppError {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::Forbidden(_) => StatusCode::FORBIDDEN,
         }
     }
 
     pub fn bad_request<S: Into<Cow<'static, str>>>(msg: S) -> Self {
         Self::BadRequest(msg.into())
+    }
+
+    pub fn not_found<S: Into<Cow<'static, str>>>(msg: S) -> Self {
+        Self::NotFound(msg.into())
+    }
+
+    pub fn forbidden<S: Into<Cow<'static, str>>>(msg: S) -> Self {
+        Self::Forbidden(msg.into())
     }
 }
 

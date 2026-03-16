@@ -23,3 +23,4 @@ image = { workspace = true }
 uuid = { workspace = true }
 futures = { workspace = true }
 deadpool-redis = { workspace = true }
+num_cpus = { workspace = true }

@@ -1,44 +1,42 @@
 use chrono::{DateTime, Utc};
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::utils::CacheExtension;
 use deadpool_redis::Pool;
-use entities::{collection, collection_photo, photo};
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
-};
+use img_url_generator::{encrypt_image_token, ImageToken};
+use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::collections::HashMap;
-use futures::future::join_all;
-use img_url_generator::{ImageUrlGenerator, ImageUrlProvider};
+use common::constants::RedisKeys;
+use crate::mappers::{CollectionMapper, CollectionPhotoMapper, PhotoMapper};
 use crate::models::collection::{CollectionPhotoVO, CollectionVO};
 use crate::models::photo::CursorPageVO;
 
 pub struct CollectionService;
 
 impl CollectionService {
+    /// 获取用户的收藏夹列表
+    /// 
+    /// 如果用户没有收藏夹，会自动创建"我喜欢"收藏夹
+    /// 为每个收藏夹生成封面图token
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `_redis`: Redis连接池（暂未使用）
+    /// - `user_id`: 用户ID
+    /// - `encryption_key`: 加密密钥
+    /// 
+    /// # 返回
+    /// 返回收藏夹VO列表
     pub async fn get_collection_list(
         db: &DatabaseConnection,
         _redis: &Pool,
         user_id: i64,
-        img_url_generator: &ImageUrlProvider,
+        encryption_key: &[u8; 32],
     ) -> Result<Vec<CollectionVO>, AppError> {
-        let collections = collection::Entity::find()
-            .filter(collection::Column::UserId.eq(user_id))
-            .order_by_asc(collection::Column::IsFavorite)
-            .order_by_desc(collection::Column::CreatedAt)
-            .all(db)
-            .await
-            .map_internal_err("查询收藏夹失败")?;
+        let collections = CollectionMapper::find_by_user_id(db, user_id).await?;
 
         let collections = if collections.is_empty() {
             Self::create_favorite_collection(db, user_id).await?;
-            collection::Entity::find()
-                .filter(collection::Column::UserId.eq(user_id))
-                .order_by_asc(collection::Column::IsFavorite)
-                .order_by_desc(collection::Column::CreatedAt)
-                .all(db)
-                .await
-                .map_internal_err("查询收藏夹失败")?
+            CollectionMapper::find_by_user_id(db, user_id).await?
         } else {
             collections
         };
@@ -47,11 +45,7 @@ impl CollectionService {
 
         let photos_with_covers = if cover_ids.iter().any(|id| id.is_some()) {
             let cover_ids: Vec<i64> = cover_ids.into_iter().flatten().collect();
-            photo::Entity::find()
-                .filter(photo::Column::Id.is_in(cover_ids))
-                .all(db)
-                .await
-                .map_internal_err("查询封面失败")?
+            PhotoMapper::find_by_ids(db, cover_ids).await?
         } else {
             vec![]
         };
@@ -66,23 +60,7 @@ impl CollectionService {
             .map(|c| c.id)
             .collect();
 
-        let latest_photos = if !no_cover_ids.is_empty() {
-            collection_photo::Entity::find()
-                .filter(collection_photo::Column::CollectionId.is_in(no_cover_ids))
-                .order_by_desc(collection_photo::Column::CreatedAt)
-                .all(db)
-                .await
-                .map_internal_err("查询最新照片失败")?
-        } else {
-            vec![]
-        };
-
-        let mut latest_photo_map: HashMap<i64, i64> = HashMap::new();
-        for cp in latest_photos {
-            if !latest_photo_map.contains_key(&cp.collection_id) {
-                latest_photo_map.insert(cp.collection_id, cp.photo_id);
-            }
-        }
+        let latest_photo_map = CollectionPhotoMapper::find_latest_photo_ids_by_collections(db, no_cover_ids).await?;
 
         let all_photo_ids: Vec<i64> = collections
             .iter()
@@ -90,86 +68,81 @@ impl CollectionService {
             .chain(latest_photo_map.values().cloned())
             .collect();
 
-        let all_photos = if !all_photo_ids.is_empty() {
-            photo::Entity::find()
-                .filter(photo::Column::Id.is_in(all_photo_ids))
-                .all(db)
-                .await
-                .map_internal_err("查询照片失败")?
-        } else {
-            vec![]
-        };
-        let all_photo_map: HashMap<i64, _> =
-            all_photos.into_iter().map(|p| (p.id, p)).collect();
+        let all_photo_map = PhotoMapper::find_by_ids_map(db, all_photo_ids).await?;
 
-        let futures = collections.into_iter().map(|c| {
-            let cover_file_id = c
-                .cover_image_id
-                .and_then(|id| all_photo_map.get(&id))
-                .or_else(|| {
-                    latest_photo_map
-                        .get(&c.id)
-                        .and_then(|pid| all_photo_map.get(pid))
-                })
-                .map(|p| p.file_id.clone());
+        let result: Vec<CollectionVO> = collections
+            .into_iter()
+            .map(|c| {
+                let cover_file_id = c
+                    .cover_image_id
+                    .and_then(|id| all_photo_map.get(&id))
+                    .or_else(|| {
+                        latest_photo_map
+                            .get(&c.id)
+                            .and_then(|pid| all_photo_map.get(pid))
+                    })
+                    .map(|p| p.file_id.clone());
 
-            async move {
-                let cover_image_url = if let Some(file_id) = cover_file_id {
-                    Some(img_url_generator.thumbnail(file_id).await)
-                } else {
-                    None
-                };
+                let cover_token = cover_file_id.and_then(|fid| encrypt_image_token(&ImageToken::thumbnail(fid), encryption_key).ok());
+                
                 CollectionVO {
                     id: c.id.to_string(),
                     name: c.name,
                     description: c.description,
                     photo_count: c.photo_count,
-                    cover_image_url,
+                    cover_token,
                     is_favorite: c.is_favorite,
                     created_at: c.created_at.with_timezone(&Utc),
                 }
-            }
-        });
-        let result: Vec<CollectionVO> = join_all(futures).await;
+            })
+            .collect();
 
         Ok(result)
     }
 
+    /// 创建新收藏夹
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `user_id`: 用户ID
+    /// - `name`: 收藏夹名称
+    /// - `description`: 收藏夹描述
+    /// 
+    /// # 返回
+    /// 返回创建的收藏夹VO
     pub async fn create_collection(
         db: &DatabaseConnection,
         user_id: i64,
         name: String,
         description: Option<String>,
     ) -> Result<CollectionVO, AppError> {
-        let now = Utc::now();
-        let collection = collection::ActiveModel {
-            user_id: Set(user_id),
-            name: Set(name),
-            description: Set(description),
-            photo_count: Set(0),
-            cover_image_id: Set(None),
-            is_favorite: Set(false),
-            created_at: Set(now.into()),
-            updated_at: Set(now.into()),
-            ..Default::default()
-        };
-
-        let collection = collection
-            .insert(db)
-            .await
-            .map_internal_err("创建收藏夹失败")?;
+        let collection = CollectionMapper::insert(db, user_id, name, description, false).await?;
 
         Ok(CollectionVO {
             id: collection.id.to_string(),
             name: collection.name,
             description: collection.description,
             photo_count: 0,
-            cover_image_url: None,
+            cover_token: None,
             is_favorite: false,
             created_at: collection.created_at.with_timezone(&Utc),
         })
     }
 
+    /// 编辑收藏夹信息
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `user_id`: 用户ID（用于权限验证）
+    /// - `collection_id`: 收藏夹ID
+    /// - `name`: 新名称（可选）
+    /// - `description`: 新描述（可选）
+    /// 
+    /// # 返回
+    /// 返回更新后的收藏夹VO
+    /// 
+    /// # 错误
+    /// - 无权限返回400错误
     pub async fn edit_collection(
         db: &DatabaseConnection,
         user_id: i64,
@@ -177,51 +150,43 @@ impl CollectionService {
         name: Option<String>,
         description: Option<String>,
     ) -> Result<CollectionVO, AppError> {
-        let collection = collection::Entity::find_by_id(collection_id)
-            .one(db)
-            .await
-            .map_internal_err("查询收藏夹失败")?
-            .ok_or_else(|| AppError::bad_request("收藏夹不存在"))?;
+        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
-        let mut active: collection::ActiveModel = collection.into();
-        if let Some(n) = name {
-            active.name = Set(n);
-        }
-        if let Some(d) = description {
-            active.description = Set(Some(d));
-        }
-        active.updated_at = Set(Utc::now().into());
-
-        let collection = active
-            .update(db)
-            .await
-            .map_internal_err("更新收藏夹失败")?;
+        let collection = CollectionMapper::update(db, collection_id, name, description, None, None).await?;
 
         Ok(CollectionVO {
             id: collection.id.to_string(),
             name: collection.name,
             description: collection.description,
             photo_count: collection.photo_count,
-            cover_image_url: None,
+            cover_token: None,
             is_favorite: collection.is_favorite,
             created_at: collection.created_at.with_timezone(&Utc),
         })
     }
 
+    /// 删除收藏夹
+    /// 
+    /// 使用事务保证原子性
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `user_id`: 用户ID（用于权限验证）
+    /// - `collection_id`: 收藏夹ID
+    /// 
+    /// # 错误
+    /// - 无权限返回400错误
+    /// - 尝试删除"我喜欢"返回400错误
     pub async fn delete_collection(
         db: &DatabaseConnection,
         user_id: i64,
         collection_id: i64,
     ) -> Result<(), AppError> {
-        let collection = collection::Entity::find_by_id(collection_id)
-            .one(db)
-            .await
-            .map_internal_err("查询收藏夹失败")?
-            .ok_or_else(|| AppError::bad_request("收藏夹不存在"))?;
+        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
@@ -231,183 +196,179 @@ impl CollectionService {
             return Err(AppError::bad_request("我喜欢不可删除"));
         }
 
-        collection_photo::Entity::delete_many()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .exec(db)
-            .await
-            .map_internal_err("删除收藏夹照片失败")?;
-
-        collection::Entity::delete_by_id(collection_id)
-            .exec(db)
-            .await
-            .map_internal_err("删除收藏夹失败")?;
-
-        Ok(())
+        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            Box::pin(async move {
+                CollectionPhotoMapper::delete_by_collection_id(txn, collection_id)
+                    .await
+                    .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                CollectionMapper::delete_by_id(txn, collection_id)
+                    .await
+                    .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                Ok(())
+            })
+        }).await.map_err(|e| {
+            tracing::error!(target:"logs", "删除收藏夹失败: {:?}", e);
+            AppError::InternalServerError
+        })
     }
 
+    /// 添加照片到收藏夹
+    /// 
+    /// 使用事务保证原子性，使用 ON CONFLICT 检测重复
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `user_id`: 用户ID（用于权限验证）
+    /// - `collection_id`: 收藏夹ID
+    /// - `photo_id`: 照片ID
+    /// 
+    /// # 错误
+    /// - 无权限返回400错误
+    /// - 照片已在收藏夹中返回400错误
     pub async fn add_photo_to_collection(
         db: &DatabaseConnection,
         user_id: i64,
         collection_id: i64,
         photo_id: i64,
     ) -> Result<(), AppError> {
-        let collection = collection::Entity::find_by_id(collection_id)
-            .one(db)
-            .await
-            .map_internal_err("查询收藏夹失败")?
-            .ok_or_else(|| AppError::bad_request("收藏夹不存在"))?;
+        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
-        let now = Utc::now();
-        let relation = collection_photo::ActiveModel {
-            collection_id: Set(collection_id),
-            photo_id: Set(photo_id),
-            user_id: Set(user_id),
-            created_at: Set(now.into()),
-            updated_at: Set(now.into()),
-            ..Default::default()
-        };
-
-        match relation.insert(db).await {
-            Ok(_) => {
-                let updated = collection::ActiveModel {
-                    id: Set(collection_id),
-                    photo_count: Set(collection.photo_count + 1),
-                    ..Default::default()
-                };
-                let _ = updated.update(db).await;
-                Ok(())
-            }
-            Err(e) => {
-                if e.to_string().contains("duplicate") {
-                    Err(AppError::bad_request("照片已在收藏夹中"))
-                } else {
-                    tracing::error!(target:"logs", "添加到收藏夹失败: {:?}", e);
-                    Err(AppError::InternalServerError)
-                }
-            }
+        if CollectionPhotoMapper::exists_photo_in_collection(db, collection_id, photo_id).await? {
+            return Err(AppError::bad_request("照片已在收藏夹中"));
         }
+
+        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            Box::pin(async move {
+                CollectionPhotoMapper::insert(txn, collection_id, photo_id, user_id)
+                    .await
+                    .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                CollectionMapper::increment_photo_count(txn, collection_id, 1)
+                    .await
+                    .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                Ok(())
+            })
+        }).await.map_err(|e| {
+            tracing::error!(target:"logs", "添加到收藏夹失败: {:?}", e);
+            AppError::InternalServerError
+        })
     }
 
+    /// 从收藏夹移除照片
+    /// 
+    /// 使用事务保证原子性
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `user_id`: 用户ID
+    /// - `collection_id`: 收藏夹ID
+    /// - `photo_id`: 照片ID
+    /// 
+    /// # 错误
+    /// - 未找到收藏关系返回400错误
     pub async fn remove_photo_from_collection(
         db: &DatabaseConnection,
         user_id: i64,
         collection_id: i64,
         photo_id: i64,
     ) -> Result<(), AppError> {
-        let result = collection_photo::Entity::delete_many()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .filter(collection_photo::Column::PhotoId.eq(photo_id))
-            .filter(collection_photo::Column::UserId.eq(user_id))
-            .exec(db)
-            .await
-            .map_internal_err("移除失败")?;
+        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            Box::pin(async move {
+                let removed = CollectionPhotoMapper::delete(txn, collection_id, photo_id, user_id)
+                    .await
+                    .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
-        if result.rows_affected > 0 {
-            let collection = collection::Entity::find_by_id(collection_id)
-                .one(db)
-                .await
-                .map_internal_err("查询失败")?;
-            if let Some(c) = collection {
-                let updated = collection::ActiveModel {
-                    id: Set(collection_id),
-                    photo_count: Set((c.photo_count - 1).max(0)),
-                    ..Default::default()
-                };
-                let _ = updated.update(db).await;
+                if removed {
+                    CollectionMapper::increment_photo_count(txn, collection_id, -1)
+                        .await
+                        .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    Ok(())
+                } else {
+                    Err(sea_orm::DbErr::Custom("未找到该收藏关系".to_string()))
+                }
+            })
+        }).await.map_err(|e| {
+            tracing::error!(target:"logs", "从收藏夹移除失败: {:?}", e);
+            if e.to_string().contains("未找到该收藏关系") {
+                AppError::bad_request("未找到该收藏关系")
+            } else {
+                AppError::InternalServerError
             }
-            Ok(())
-        } else {
-            Err(AppError::bad_request("未找到该收藏关系"))
-        }
+        })
     }
 
+    /// 获取收藏夹中的照片列表
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `redis`: Redis连接池
+    /// - `user_id`: 用户ID（用于权限验证和查询收藏状态）
+    /// - `collection_id`: 收藏夹ID
+    /// - `cursor`: 游标时间点
+    /// - `size`: 每页数量
+    /// - `encryption_key`: 加密密钥
+    /// 
+    /// # 返回
+    /// 返回分页的收藏照片列表
+    /// 
+    /// # 错误
+    /// - 无权限返回400错误
     pub async fn get_collection_photos(
         db: &DatabaseConnection,
+        redis: &Pool,
         user_id: i64,
         collection_id: i64,
         cursor: Option<DateTime<Utc>>,
         size: u32,
-        img_url_generator: &ImageUrlProvider,
+        encryption_key: &[u8; 32],
     ) -> Result<CursorPageVO<CollectionPhotoVO, DateTime<Utc>>, AppError> {
-        let collection = collection::Entity::find_by_id(collection_id)
-            .one(db)
-            .await
-            .map_internal_err("查询收藏夹失败")?
-            .ok_or_else(|| AppError::bad_request("收藏夹不存在"))?;
+        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
-        let limit = size as u64 + 1;
-        let mut query = collection_photo::Entity::find()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .order_by_desc(collection_photo::Column::CreatedAt)
-            .limit(limit);
-
-        if let Some(c) = cursor {
-            query = query.filter(collection_photo::Column::CreatedAt.lt(c));
-        }
-
-        let relations = query.all(db).await.map_internal_err("查询失败")?;
+        let relations = CollectionPhotoMapper::find_by_collection_id(db, collection_id, cursor, size as u64).await?;
 
         let has_more = relations.len() > size as usize;
         let relations: Vec<_> = relations.into_iter().take(size as usize).collect();
 
         let photo_ids: Vec<i64> = relations.iter().map(|r| r.photo_id).collect();
+        let photo_map = PhotoMapper::find_by_ids_map(db, photo_ids.clone()).await?;
 
-        let photos = if !photo_ids.is_empty() {
-            photo::Entity::find()
-                .filter(photo::Column::Id.is_in(photo_ids))
-                .all(db)
-                .await
-                .map_internal_err("查询照片失败")?
-        } else {
-            vec![]
-        };
-        let photo_map: HashMap<i64, _> = photos.into_iter().map(|p| (p.id, p)).collect();
+        let favorite_collection_id = Self::get_favorite_collection_id(db, redis, user_id).await?;
+        let favorited_photo_ids = CollectionPhotoMapper::exists_in_collection(db, favorite_collection_id, photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
 
         let next_cursor = relations.last().map(|r| r.created_at.with_timezone(&Utc));
 
-        let futures = relations.into_iter().map(|r| {
-            let photo_opt = photo_map.get(&r.photo_id).cloned();
-            let collected_at = r.created_at.with_timezone(&Utc);
-            async move {
-                if let Some(p) = photo_opt {
-                    let file_id = p.file_id.clone();
-                    let extension = file_id.rsplit('.').next().unwrap_or("jpg").to_string();
-                    let thumbnail_url = img_url_generator.thumbnail(file_id.clone()).await;
-                    let preview_url = img_url_generator.preview(file_id.clone()).await;
-                    let original_url = img_url_generator.original(file_id, extension).await;
-                    Some(CollectionPhotoVO {
-                        photo: crate::models::photo::PhotoVO {
-                            id: p.id.to_string(),
-                            name: p.name,
-                            thumbnail_url,
-                            preview_url,
-                            original_url,
-                            width: p.width,
-                            height: p.height,
-                            size: p.size,
-                            created_at: p.created_at.with_timezone(&Utc),
-                            is_favorited: None,
-                            is_collected: None,
-                        },
-                        collected_at,
-                    })
-                } else {
-                    None
-                }
-            }
-        });
-        let records: Vec<CollectionPhotoVO> = join_all(futures)
-            .await
+        let records: Vec<CollectionPhotoVO> = relations
             .into_iter()
-            .flatten()
+            .filter_map(|r| {
+                let p = photo_map.get(&r.photo_id)?;
+                let thumbnail_token = encrypt_image_token(&ImageToken::thumbnail(p.file_id.clone()), encryption_key).ok();
+                let preview_token = encrypt_image_token(&ImageToken::preview(p.file_id.clone()), encryption_key).ok();
+                let original_token = encrypt_image_token(&ImageToken::original(p.file_id.clone()), encryption_key).ok();
+                
+                Some(CollectionPhotoVO {
+                    photo: crate::models::photo::PhotoVO {
+                        id: p.id.to_string(),
+                        name: p.name.clone(),
+                        width: p.width,
+                        height: p.height,
+                        size: p.size,
+                        created_at: p.created_at.with_timezone(&Utc),
+                        is_favorited: Some(favorited_photo_ids.contains(&p.id)),
+                        is_collected: None,
+                        thumbnail_token,
+                        preview_token,
+                        original_token,
+                    },
+                    collected_at: r.created_at.with_timezone(&Utc),
+                })
+            })
             .collect();
 
         Ok(CursorPageVO {
@@ -417,31 +378,39 @@ impl CollectionService {
         })
     }
 
+    /// 查询照片所在的收藏夹ID列表
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `user_id`: 用户ID
+    /// - `photo_id`: 照片ID
+    /// 
+    /// # 返回
+    /// 返回收藏夹ID字符串列表
     pub async fn find_collection_ids_by_photo(
         db: &DatabaseConnection,
         user_id: i64,
         photo_id: i64,
     ) -> Result<Vec<String>, AppError> {
-        let relations = collection_photo::Entity::find()
-            .filter(collection_photo::Column::UserId.eq(user_id))
-            .filter(collection_photo::Column::PhotoId.eq(photo_id))
-            .all(db)
-            .await
-            .map_internal_err("查询失败")?;
-
-        Ok(relations.iter().map(|r| r.collection_id.to_string()).collect())
+        let ids = CollectionPhotoMapper::find_collection_ids_by_photo(db, user_id, photo_id).await?;
+        Ok(ids.iter().map(|id| id.to_string()).collect())
     }
 
+    /// 创建"我喜欢"收藏夹
+    /// 
+    /// 如果已存在则返回现有收藏夹
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `user_id`: 用户ID
+    /// 
+    /// # 返回
+    /// 返回"我喜欢"收藏夹VO
     pub async fn create_favorite_collection(
         db: &DatabaseConnection,
         user_id: i64,
     ) -> Result<CollectionVO, AppError> {
-        let existing = collection::Entity::find()
-            .filter(collection::Column::UserId.eq(user_id))
-            .filter(collection::Column::IsFavorite.eq(true))
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?;
+        let existing = CollectionMapper::find_favorite_by_user_id(db, user_id).await?;
 
         if let Some(c) = existing {
             return Ok(CollectionVO {
@@ -449,58 +418,52 @@ impl CollectionService {
                 name: c.name,
                 description: c.description,
                 photo_count: c.photo_count,
-                cover_image_url: None,
+                cover_token: None,
                 is_favorite: true,
                 created_at: c.created_at.with_timezone(&Utc),
             });
         }
 
-        let now = Utc::now();
-        let collection = collection::ActiveModel {
-            user_id: Set(user_id),
-            name: Set("我喜欢".to_string()),
-            description: Set(Some("喜欢收藏夹".to_string())),
-            photo_count: Set(0),
-            cover_image_id: Set(None),
-            is_favorite: Set(true),
-            created_at: Set(now.into()),
-            updated_at: Set(now.into()),
-            ..Default::default()
-        };
-
-        let collection = collection
-            .insert(db)
-            .await
-            .map_internal_err("创建我喜欢失败")?;
+        let collection = CollectionMapper::insert(db, user_id, "我喜欢".to_string(), Some("喜欢收藏夹".to_string()), true).await?;
 
         Ok(CollectionVO {
             id: collection.id.to_string(),
             name: collection.name,
             description: collection.description,
             photo_count: 0,
-            cover_image_url: None,
+            cover_token: None,
             is_favorite: true,
             created_at: collection.created_at.with_timezone(&Utc),
         })
     }
 
+    /// 获取用户"我喜欢"收藏夹ID
+    /// 
+    /// 使用Redis缓存，缓存时间24小时
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `redis`: Redis连接池
+    /// - `user_id`: 用户ID
+    /// 
+    /// # 返回
+    /// 返回"我喜欢"收藏夹ID
+    /// 
+    /// # 错误
+    /// - 未找到收藏夹返回404错误
     pub async fn get_favorite_collection_id(
         db: &DatabaseConnection,
-        _redis: &Pool,
+        redis: &Pool,
         user_id: i64,
     ) -> Result<i64, AppError> {
-        let collection = collection::Entity::find()
-            .filter(collection::Column::UserId.eq(user_id))
-            .filter(collection::Column::IsFavorite.eq(true))
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?;
-
-        if let Some(c) = collection {
-            Ok(c.id)
-        } else {
-            let created = Self::create_favorite_collection(db, user_id).await?;
-            Ok(created.id.parse().unwrap_or(0))
-        }
+        redis.get_or_load(
+            RedisKeys::photo::favorite_collection_id(user_id),
+            24 * 60 * 60,
+            || async move {
+                CollectionMapper::find_favorite_collection_id(db, user_id)
+                    .await?
+                    .ok_or_else(|| AppError::not_found("未找到收藏夹"))
+            }
+        ).await
     }
 }

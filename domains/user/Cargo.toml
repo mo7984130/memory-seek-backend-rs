@@ -7,6 +7,7 @@ edition = "2024"
 common = { path = "../../common" }
 entities = { path = "../../entities" }
 oss = { path = "../../libs/oss" }
+img_url_generator = { path = "../../libs/img_url_generator" }
 serde = { version = "1.0.228", features = ["derive"] }
 validator = { workspace = true }
 chrono = { workspace = true }

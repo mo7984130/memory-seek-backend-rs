@@ -1,41 +1,50 @@
-use oss::S3Client;
+use chrono::{Duration, Utc};
 use common::constants::RedisKeys;
+use deadpool_redis::Pool;
 use entities::user;
+use img_url_generator::{encrypt_image_token, ImageToken};
+use sea_orm::sea_query::Expr;
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
+use sea_orm::sqlx::types::uuid;
+
+use crate::models::{ChangePasswordRequest, InviterCodeDTO, UserInfoDTO, UserInfoVO};
 use common::error::AppError;
-use crate::models::ChangePasswordRequest;
 use common::utils::DbUtils;
-use common::utils::{CacheExtension, RedisExt};
-use common::utils::ResultExt;
+use common::utils::{CacheExtension, RedisExt, ResultExt};
 use common::utils::{rand_utils, FileValidator};
 use bcrypt::{hash, verify, DEFAULT_COST};
-use chrono::{DateTime, Duration, Utc};
-use deadpool_redis::Pool;
-use sea_orm::sea_query::Expr;
-use sea_orm::sqlx::types::uuid;
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
-use sea_orm::{ColumnTrait, FromQueryResult, QuerySelect};
-use serde::{Deserialize, Serialize};
-use entities::user::UserDTO;
+use oss::S3Client;
 
 pub async fn get_user_info(
     db: &DatabaseConnection,
-    user_id: i64
-) -> Result<UserDTO, AppError> {
+    user_id: i64,
+    encryption_key: &[u8; 32],
+) -> Result<user::UserDTO, AppError> {
     let user = user::Entity::find()
         .filter(user::Column::Id.eq(user_id))
         .one(db)
         .await
         .map_internal_err("在获取用户信息时 查询数据库错误")?
         .ok_or_else(|| AppError::bad_request("用户不存在"))?;
-    Ok(UserDTO::from(user))
+    
+    let avatar_token = user.avatar_url
+        .as_ref()
+        .and_then(|key| encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok());
+    
+    Ok(user::UserDTO {
+        id: user.id.to_string(),
+        username: user.username,
+        nickname: user.nickname,
+        email: user.email,
+        avatar_token,
+        created_at: user.created_at.into(),
+        refresh_token: user.refresh_token,
+        refresh_token_expire_at: user.refresh_token_expire_at.map(|dt| dt.with_timezone(&Utc)),
+        access_token: None,
+        access_token_expire_at: None,
+    })
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct  InviterCodeDTO {
-    inviter_code: String,
-    expires_at: DateTime<Utc>,
-}
 pub async fn generate_inviter_code(
     redis: &Pool,
     user_id: i64
@@ -91,16 +100,16 @@ pub async fn update_avatar(
     s3_client: &S3Client,
     user_id: i64,
     file_name: String,
-    file_date: Vec<u8>,
-    content_type: String
+    file_data: Vec<u8>,
+    content_type: String,
+    encryption_key: &[u8; 32],
 ) -> Result<String, AppError> {
-    // 验证图片
-    let img_metadata = FileValidator::validate_image(&file_date, file_name, content_type)
+    let img_metadata = FileValidator::validate_image(&file_data, file_name, content_type)
         .to_bad_request_error()?;
 
     let new_key = format!("avatars/{}/{}.{}", user_id, uuid::Uuid::new_v4(), &img_metadata.format);
 
-    s3_client.upload(&new_key, file_date, &img_metadata.mime_type).await?;
+    s3_client.upload(&new_key, file_data, &img_metadata.mime_type).await?;
 
     let new_key_for_db = new_key.clone();
     let old_key = DbUtils::write(db, move |txn| {
@@ -110,7 +119,7 @@ pub async fn update_avatar(
             let old_key: Option<String> = user::Entity::find_by_id(user_id)
                 .select_only()
                 .column(user::Column::AvatarUrl)
-                .into_values::<Option<String>, user::Column>() // 关键：直接转为值
+                .into_values::<Option<String>, user::Column>()
                 .one(txn)
                 .await
                 .map_internal_err("在上传头像时 查询头像url发生错误")?
@@ -127,14 +136,13 @@ pub async fn update_avatar(
         })
     }).await?;
 
-    // 删除redis缓存
     redis.delete(&RedisKeys::user::user_info_cache(user_id)).await?;
-    // 删除OSS存储
     if let Some(old_key) = old_key {
         s3_client.delete(&old_key).await?;
     }
 
-    Ok(s3_client.get_url(&new_key))
+    encrypt_image_token(&ImageToken::thumbnail(new_key), encryption_key)
+        .map_internal_err("生成头像token失败")
 }
 
 pub async fn change_password(
@@ -143,21 +151,18 @@ pub async fn change_password(
     user_id: i64,
     req: ChangePasswordRequest
 ) -> Result<(), AppError> {
-    // 查询用户
     let user = user::Entity::find_by_id(user_id)
         .one(db)
         .await
         .map_internal_err("更改密码: 数据库查询用户失败")?
-        .ok_or_else(|| AppError::BadRequest("用户不存在".into()))?;
+        .ok_or_else(|| AppError::bad_request("用户不存在"))?;
 
-    // 验证密码
     let is_valid = verify(&req.old_password, &user.password)
         .map_bad_request_err("密码效验错误")?;
     if !is_valid {
-        return Err(AppError::BadRequest("原密码错误".into()));
+        return Err(AppError::bad_request("原密码错误"));
     }
 
-    // 修改密码
     let new_password_hash = hash(req.new_password, DEFAULT_COST).map_bad_request_err("加密新密码失败")?;
     let active_user: user::ActiveModel = user::ActiveModel {
         id: Set(user_id),
@@ -167,7 +172,6 @@ pub async fn change_password(
     active_user.update(db).await
         .map_internal_err("更改密码: 数据库更新错误")?;
 
-    // 删除token
     logout(db, redis, user_id).await?;
 
     Ok(())
@@ -178,7 +182,6 @@ pub async fn logout(
     redis: &Pool,
     user_id: i64
 ) -> Result<(), AppError> {
-    // 删除数据库的refresh_token
     user::ActiveModel {
         id: Set(user_id),
         refresh_token: Set(None),
@@ -187,25 +190,18 @@ pub async fn logout(
     }.update(db).await
         .map_internal_err("登出时 清除refresh_token失败")?;
 
-    // 删除redis里的access_token
     redis.delete(&RedisKeys::user::user_access_token(user_id)).await?;
 
     Ok(())
 }
 
-#[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserInfoDTO {
-    pub user_id: i64,
-    pub nickname: String,
-    pub avatar_url: Option<String>,
-}
 pub async fn get_user_info_batch(
     db: &DatabaseConnection,
     redis: &Pool,
-    user_ids: Vec<i64>
-) -> Result<Vec<Option<UserInfoDTO>>, AppError> {
-    redis.get_or_load_batch(
+    user_ids: Vec<i64>,
+    encryption_key: &[u8; 32],
+) -> Result<Vec<Option<UserInfoVO>>, AppError> {
+    let result: Vec<Option<UserInfoDTO>> = redis.get_or_load_batch(
         user_ids,
         |id| RedisKeys::user::user_info_cache(*id),
         1 * 24 * 60 * 60,
@@ -224,5 +220,9 @@ pub async fn get_user_info_batch(
             })
         },
         |dto| dto.user_id
-    ).await
+    ).await?;
+    
+    Ok(result.into_iter().map(|opt| {
+        opt.map(|dto| UserInfoVO::from_dto(dto, encryption_key))
+    }).collect())
 }

@@ -8,5 +8,6 @@ mod file_validator;
 pub use file_validator::FileValidator;
 pub use db_utils::DbUtils;
 pub use result_ext::ResultExt;
+pub use result_ext::ToOkExt;
 pub use redis_ext::RedisExt;
 pub use redis_ext::CacheExtension;
