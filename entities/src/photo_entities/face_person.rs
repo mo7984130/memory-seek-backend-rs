@@ -8,6 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
     pub name: String,
+    pub name_initials: Option<String>,
     pub max_score_feature_id: i64,
     pub max_score: f32,
     pub total_photo_count: i64,

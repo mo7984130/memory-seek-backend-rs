@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use common::constants::redis_keys::photo::face_person_name;
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::utils::RedisExt;
 use deadpool_redis::Pool;
 use entities::{face_feature, DrVector};
 use crate::clustering::vector_utils;
@@ -60,14 +61,11 @@ impl FeatureService {
         }
 
         let old_weight = person.total_weight_count;
-        let new_weight = old_weight - 1.0;
         let centroid = person.centroid_embedding.to_vec();
         let embedding = feature.embedding.to_vec();
 
-        let mut new_centroid = vec![0.0f32; 512];
-        for i in 0..512 {
-            new_centroid[i] = (centroid[i] * old_weight - embedding[i]) / new_weight;
-        }
+        // 使用 ndarray 优化的减量质心计算
+        let new_centroid = vector_utils::decrement_centroid(&centroid, old_weight, &embedding);
         let new_centroid = vector_utils::l2_normalize(&new_centroid);
 
         let (max_feature_id, max_score) = if person.max_score_feature_id == feature.id {
@@ -92,11 +90,12 @@ impl FeatureService {
             db,
             person_id,
             None,
+            None,
             Some(max_feature_id),
             Some(max_score),
             Some(person.total_photo_count - 1),
             Some(DrVector::new(new_centroid.to_vec())),
-            Some(new_weight),
+            Some(old_weight - 1.0),
         ).await?;
 
         Self::invalidate_person_cache(redis, person_id).await?;
@@ -157,22 +156,13 @@ impl FeatureService {
             return Ok(());
         }
 
-        let total_weight = features.len() as f32;
-        let mut centroid = vec![0.0f32; 512];
-        
-        for feature in &features {
-            let embedding = feature.embedding.to_vec();
-            for i in 0..512 {
-                centroid[i] += embedding[i];
-            }
-        }
-        
-        for i in 0..512 {
-            centroid[i] /= total_weight;
-        }
-        
+        // 使用 ndarray 优化的质心计算（避免内存拷贝）
+        let embeddings: Vec<&[f32]> = features.iter().map(|f| f.embedding.as_slice()).collect();
+        let centroid = vector_utils::calculate_centroid(&embeddings);
         let centroid = vector_utils::l2_normalize(&centroid);
         let centroid_embedding = DrVector::new(centroid.to_vec());
+
+        let total_weight = features.len() as f32;
 
         let best_feature = features
             .iter()
@@ -182,6 +172,7 @@ impl FeatureService {
         FacePersonMapper::update(
             db,
             person_id,
+            None,
             None,
             Some(best_feature.id),
             Some(best_feature.score),
@@ -201,10 +192,8 @@ impl FeatureService {
     /// - `redis`: Redis连接池
     /// - `person_id`: 人物ID
     async fn invalidate_person_cache(redis: &Pool, person_id: i64) -> Result<(), AppError> {
-        let key = format!("photo:face:person:name:{}", person_id);
-        let mut conn = redis.get().await.map_internal_err("Redis连接失败")?;
-        use deadpool_redis::redis::AsyncCommands;
-        let _: Option<()> = conn.del(&key).await.ok();
+        let key = face_person_name(person_id);
+        redis.delete(&key).await.ok();
         Ok(())
     }
 

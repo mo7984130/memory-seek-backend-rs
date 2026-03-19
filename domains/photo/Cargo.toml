@@ -24,3 +24,6 @@ uuid = { workspace = true }
 futures = { workspace = true }
 deadpool-redis = { workspace = true }
 num_cpus = { workspace = true }
+rayon = "1.11.0"
+ndarray = { version = "0.16", features = ["rayon"] }
+pinyin = { workspace = true }

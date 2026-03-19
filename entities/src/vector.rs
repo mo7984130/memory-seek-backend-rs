@@ -93,7 +93,13 @@ impl From<DrVector> for Value {
             "[{}]",
             val.0
                 .iter()
-                .map(|f| f.to_string())
+                .map(|f| {
+                    if f.fract() == 0.0 {
+                        format!("{:.1}", f)
+                    } else {
+                        f.to_string()
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join(",")
         );

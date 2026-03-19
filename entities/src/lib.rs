@@ -1,12 +1,16 @@
 pub mod vector;
-pub mod user;
-pub mod photo;
-pub mod collection;
-pub mod collection_photo;
-pub mod face_feature;
-pub mod face_person;
-pub mod comment;
-pub mod comment_like;
-pub mod timeline_stat;
+pub mod photo_entities;
+pub mod user_entities;
 
 pub use vector::DrVector;
+
+pub use photo_entities::collection;
+pub use photo_entities::collection_photo;
+pub use photo_entities::comment;
+pub use photo_entities::comment_like;
+pub use photo_entities::face_feature;
+pub use photo_entities::face_person;
+pub use photo_entities::photo;
+pub use photo_entities::timeline_stat;
+
+pub use user_entities::user;

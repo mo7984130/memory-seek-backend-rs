@@ -5,7 +5,7 @@ use validator::ValidationError;
 pub struct CommonValidConfig;
 
 impl CommonValidConfig {
-    pub const NORMAL_CHAR_PATTERN: &'static str = r#"^[^<>/\\"\'&@]+$"#;
+    pub const NORMAL_CHAR_PATTERN: &'static str = r#"^[^<>/\\"'&@]+$"#;
     pub const NORMAL_CHAR_MSG: &'static str = "不能包含 < > / \\ \" ' & @等特殊符号";
 }
 
@@ -14,9 +14,68 @@ static NORMAL_CHAR_REGEX: Lazy<Regex> = Lazy::new(|| {
 });
 
 pub fn validate_normal_char(value: &str) -> Result<(), ValidationError> {
+    // 空字符串或只包含空格的字符串直接拒绝
+    if value.is_empty() || value.trim().is_empty() {
+        return Err(ValidationError::new("invalid_characters")
+            .with_message(CommonValidConfig::NORMAL_CHAR_MSG.into()));
+    }
+    
     if !NORMAL_CHAR_REGEX.is_match(value) {
         return Err(ValidationError::new("invalid_characters")
             .with_message(CommonValidConfig::NORMAL_CHAR_MSG.into()));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 测试符合要求的普通字符（不包含禁止的特殊符号）
+    #[test]
+    fn test_validate_normal_char_valid() {
+        // 有效字符测试
+        assert!(validate_normal_char("hello").is_ok());
+        assert!(validate_normal_char("你好").is_ok());
+        assert!(validate_normal_char("test123").is_ok());
+        assert!(validate_normal_char("test_name").is_ok());
+        assert!(validate_normal_char("test-name").is_ok());
+        assert!(validate_normal_char("测试 123").is_ok());
+        assert!(validate_normal_char("Hello World").is_ok());
+    }
+
+    /// 测试包含禁止字符的情况（< > / \ " ' & @ 等）
+    #[test]
+    fn test_validate_normal_char_invalid() {
+        // 包含禁止字符
+        assert!(validate_normal_char("test<value>").is_err()); // < >
+        assert!(validate_normal_char("test/value").is_err()); // /
+        assert!(validate_normal_char(r"test\value").is_err()); // \
+        assert!(validate_normal_char("test\"value\"").is_err()); // "
+        assert!(validate_normal_char("test'value'").is_err()); // '
+        assert!(validate_normal_char("test&value").is_err()); // &
+        assert!(validate_normal_char("test@value").is_err()); // @
+    }
+
+    /// 测试包含多个禁止字符的情况
+    #[test]
+    fn test_validate_normal_char_multiple_invalid_chars() {
+        // 包含多个禁止字符
+        assert!(validate_normal_char("<>/\\").is_err());
+        assert!(validate_normal_char("\"'&@").is_err());
+        assert!(validate_normal_char("test<@>&").is_err());
+    }
+
+    /// 测试空字符串和全空格字符串的处理
+    #[test]
+    fn test_validate_normal_char_empty() {
+        // 空字符串应该失败（长度为 0）
+        assert!(validate_normal_char("").is_err());
+        
+        // 全为空格也应该失败
+        assert!(validate_normal_char(" ").is_err());
+        assert!(validate_normal_char("   ").is_err());
+        assert!(validate_normal_char("\t").is_err());
+        assert!(validate_normal_char("  \t  ").is_err());
+    }
 }

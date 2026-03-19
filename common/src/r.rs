@@ -1,13 +1,13 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::Serialize;
-use serde_with::skip_serializing_none;
 
-#[derive(Serialize)]
-#[skip_serializing_none]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct R<T> {
     pub code: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub msg: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
 }
 

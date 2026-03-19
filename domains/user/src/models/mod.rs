@@ -35,7 +35,7 @@ pub struct GetUserInfoBatchRequest {
 #[serde(rename_all = "camelCase")]
 pub struct InviterCodeDTO {
     pub inviter_code: String,
-    pub expires_at: DateTime<Utc>,
+    pub expire_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]

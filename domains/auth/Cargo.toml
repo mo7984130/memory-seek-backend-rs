@@ -13,3 +13,5 @@ chrono = { workspace = true }
 email = { path = "../../libs/email" }
 bcrypt = { workspace = true }
 deadpool-redis = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use img_url_generator::{encrypt_image_token, ImageToken};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -20,6 +21,19 @@ pub struct PhotoVO {
     pub preview_token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_token: Option<String>,
+}
+
+impl PhotoVO {
+    pub fn generate_tokens(
+        file_id: &str,
+        encryption_key: &[u8; 32],
+    ) -> (Option<String>, Option<String>, Option<String>) {
+        let thumbnail_token = encrypt_image_token(&ImageToken::thumbnail(file_id.to_string()), encryption_key).ok();
+        let preview_token = encrypt_image_token(&ImageToken::preview(file_id.to_string()), encryption_key).ok();
+        let original_token = encrypt_image_token(&ImageToken::original(file_id.to_string()), encryption_key).ok();
+        
+        (thumbnail_token, preview_token, original_token)
+    }
 }
 
 #[derive(Debug, Deserialize)]

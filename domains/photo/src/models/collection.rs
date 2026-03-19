@@ -40,3 +40,19 @@ pub struct CollectionPhotoQuery {
     pub cursor: Option<DateTime<Utc>>,
     pub size: Option<u32>,
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchPhotosDTO {
+    pub photo_ids: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchOperationResultVO {
+    pub success_count: u32,
+    pub already_exists_count: u32,
+    pub already_exists_photo_ids: Vec<String>,
+    pub failed_count: u32,
+    pub failed_photo_ids: Vec<String>,
+}

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use common::error::AppError;
 use common::utils::ResultExt;
-use entities::photo;
+use entities::photo::{Entity, Model, Column};
 use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use std::collections::HashMap;
@@ -18,8 +18,8 @@ impl PhotoMapper {
     /// # 返回
     /// - 成功: 返回照片模型
     /// - 失败: 照片不存在返回404错误，数据库错误返回500错误
-    pub async fn find_by_id(db: &DatabaseConnection, id: i64) -> Result<photo::Model, AppError> {
-        photo::Entity::find_by_id(id)
+    pub async fn find_by_id(db: &DatabaseConnection, id: i64) -> Result<Model, AppError> {
+        Entity::find_by_id(id)
             .one(db)
             .await
             .map_internal_err("查询照片失败")?
@@ -34,12 +34,12 @@ impl PhotoMapper {
     /// 
     /// # 返回
     /// 返回匹配的照片列表，空ID列表返回空列表
-    pub async fn find_by_ids(db: &DatabaseConnection, ids: Vec<i64>) -> Result<Vec<photo::Model>, AppError> {
+    pub async fn find_by_ids(db: &DatabaseConnection, ids: Vec<i64>) -> Result<Vec<Model>, AppError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
-        photo::Entity::find()
-            .filter(photo::Column::Id.is_in(ids))
+        Entity::find()
+            .filter(Column::Id.is_in(ids))
             .all(db)
             .await
             .map_internal_err("查询照片失败")
@@ -53,22 +53,22 @@ impl PhotoMapper {
     /// 
     /// # 返回
     /// 返回以照片ID为键的HashMap
-    pub async fn find_by_ids_map(db: &DatabaseConnection, ids: Vec<i64>) -> Result<HashMap<i64, photo::Model>, AppError> {
+    pub async fn find_by_ids_map(db: &DatabaseConnection, ids: Vec<i64>) -> Result<HashMap<i64, Model>, AppError> {
         let photos = Self::find_by_ids(db, ids).await?;
         Ok(photos.into_iter().map(|p| (p.id, p)).collect())
     }
 
-    /// 检查指定MD5的照片是否已存在
+    /// 检查MD5是否已存在
     /// 
     /// # 参数
     /// - `db`: 数据库连接
-    /// - `md5`: 文件的MD5哈希值
+    /// - `md5`: 文件MD5哈希值
     /// 
     /// # 返回
-    /// 存在返回true，否则返回false
+    /// 返回该MD5是否存在
     pub async fn exists_by_md5(db: &DatabaseConnection, md5: &str) -> Result<bool, AppError> {
-        let count = photo::Entity::find()
-            .filter(photo::Column::Md5.eq(md5))
+        let count = Entity::find()
+            .filter(Column::Md5.eq(md5))
             .count(db)
             .await
             .map_internal_err("查询MD5失败")?;
@@ -83,14 +83,14 @@ impl PhotoMapper {
     /// # 返回
     /// 返回最早和最晚照片的创建时间元组，无照片时返回当前时间
     pub async fn find_time_range(db: &DatabaseConnection) -> Result<(DateTime<Utc>, DateTime<Utc>), AppError> {
-        let min = photo::Entity::find()
-            .order_by_asc(photo::Column::CreatedAt)
+        let min = Entity::find()
+            .order_by_asc(Column::CreatedAt)
             .one(db)
             .await
             .map_internal_err("查询失败")?;
 
-        let max = photo::Entity::find()
-            .order_by_desc(photo::Column::CreatedAt)
+        let max = Entity::find()
+            .order_by_desc(Column::CreatedAt)
             .one(db)
             .await
             .map_internal_err("查询失败")?;
@@ -114,23 +114,22 @@ impl PhotoMapper {
     /// - `direction`: 分页方向，"next"为下一页，其他为上一页
     /// 
     /// # 返回
-    /// 返回照片列表，按创建时间倒序排列，实际返回数量可能比size多1用于判断是否有更多数据
+    /// 返回照片列表，按创建时间倒序排列
     pub async fn find_cursor_page(
         db: &DatabaseConnection,
         cursor: Option<DateTime<Utc>>,
         size: u64,
         direction: &str,
-    ) -> Result<Vec<photo::Model>, AppError> {
-        let limit = size + 1;
-        let mut query = photo::Entity::find()
-            .order_by_desc(photo::Column::CreatedAt)
-            .limit(limit);
+    ) -> Result<Vec<Model>, AppError> {
+        let mut query = Entity::find()
+            .order_by_desc(Column::CreatedAt)
+            .limit(size);
 
         if let Some(c) = cursor {
             if direction == "next" {
-                query = query.filter(photo::Column::CreatedAt.lt(c));
+                query = query.filter(Column::CreatedAt.lt(c));
             } else {
-                query = query.filter(photo::Column::CreatedAt.gt(c));
+                query = query.filter(Column::CreatedAt.gt(c));
             }
         }
 
@@ -145,9 +144,9 @@ impl PhotoMapper {
     /// 
     /// # 返回
     /// 返回匹配的照片模型，不存在返回404错误
-    pub async fn find_by_file_id(db: &DatabaseConnection, file_id: &str) -> Result<photo::Model, AppError> {
-        photo::Entity::find()
-            .filter(photo::Column::FileId.eq(file_id))
+    pub async fn find_by_file_id(db: &DatabaseConnection, file_id: &str) -> Result<Model, AppError> {
+        Entity::find()
+            .filter(Column::FileId.eq(file_id))
             .one(db)
             .await
             .map_internal_err("查询照片失败")?
@@ -163,25 +162,24 @@ impl PhotoMapper {
     /// - `direction`: 分页方向，"next"为下一页，其他为上一页
     ///
     /// # 返回
-    /// 返回照片id，按创建时间倒序排列，实际返回数量可能比size多1用于判断是否有更多数据
+    /// 返回照片id，按创建时间倒序排列
     pub async fn find_cursor_page_ids(
         db: &DatabaseConnection,
         cursor: Option<DateTime<Utc>>,
         size: u64,
         direction: &str,
     ) -> Result<Vec<i64>, AppError> {
-        let limit = size + 1;
-        let mut query = photo::Entity::find()
-            .order_by_desc(photo::Column::CreatedAt)
+        let mut query = Entity::find()
+            .order_by_desc(Column::CreatedAt)
             .select_only()
-            .column(photo::Column::Id)
-            .limit(limit);
+            .column(Column::Id)
+            .limit(size);
 
         if let Some(c) = cursor {
             if direction == "next" {
-                query = query.filter(photo::Column::CreatedAt.lt(c));
+                query = query.filter(Column::CreatedAt.lt(c));
             } else {
-                query = query.filter(photo::Column::CreatedAt.gt(c));
+                query = query.filter(Column::CreatedAt.gt(c));
             }
         }
 
@@ -200,7 +198,7 @@ impl PhotoMapper {
     /// # 返回
     /// 成功返回空元组
     pub async fn delete_by_id<C: ConnectionTrait>(db: &C, id: i64) -> Result<(), AppError> {
-        photo::Entity::delete_by_id(id)
+        Entity::delete_by_id(id)
             .exec(db)
             .await
             .map_internal_err("删除照片失败")?;

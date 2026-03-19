@@ -60,12 +60,12 @@ impl FaceFeatureMapper {
     /// 根据ID列表批量查询人脸特征
     /// 
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `db`: 数据库连接或事务
     /// - `ids`: 特征ID列表
     /// 
     /// # 返回
     /// 返回匹配的特征列表
-    pub async fn find_by_ids(db: &DatabaseConnection, ids: Vec<i64>) -> Result<Vec<face_feature::Model>, AppError> {
+    pub async fn find_by_ids<C: ConnectionTrait>(db: &C, ids: Vec<i64>) -> Result<Vec<face_feature::Model>, AppError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -79,12 +79,12 @@ impl FaceFeatureMapper {
     /// 根据ID列表批量查询人脸特征，返回Map结构
     /// 
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `db`: 数据库连接或事务
     /// - `ids`: 特征ID列表
     /// 
     /// # 返回
     /// 返回以特征ID为键的HashMap
-    pub async fn find_by_ids_map(db: &DatabaseConnection, ids: Vec<i64>) -> Result<HashMap<i64, face_feature::Model>, AppError> {
+    pub async fn find_by_ids_map<C: ConnectionTrait>(db: &C, ids: Vec<i64>) -> Result<HashMap<i64, face_feature::Model>, AppError> {
         let features = Self::find_by_ids(db, ids).await?;
         Ok(features.into_iter().map(|f| (f.id, f)).collect())
     }
@@ -120,11 +120,10 @@ impl FaceFeatureMapper {
         cursor: Option<i64>,
         size: u64,
     ) -> Result<Vec<face_feature::Model>, AppError> {
-        let limit = size + 1;
         let mut query = face_feature::Entity::find()
             .filter(face_feature::Column::PersonId.eq(person_id))
             .order_by_desc(face_feature::Column::Id)
-            .limit(limit);
+            .limit(size);
 
         if let Some(c) = cursor {
             query = query.filter(face_feature::Column::Id.lt(c));

@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 pub struct FacePersonVO {
     pub id: String,
     pub name: String,
-    pub total_photo_count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_photo_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cover_token: Option<String>,
 }
 
@@ -55,6 +57,16 @@ pub struct PersonPageQuery {
     pub size: Option<u32>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonSearchQuery {
+    pub keyword: String,
+    pub cursor: Option<String>,
+    pub size: Option<u32>,
+    #[serde(default)]
+    pub detailed: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct FeatureNode {
     pub id: i64,
@@ -68,6 +80,7 @@ pub struct FeatureNode {
 pub struct PersonCluster {
     pub id: i64,
     pub vector: Vec<f32>,
-    pub member_nodes: Vec<FeatureNode>,
+    /// 存储成员特征的 ID 列表（避免存储完整的 FeatureNode，节省内存）
+    pub member_ids: Vec<i64>,
     pub total_weight: f32,
 }

@@ -68,7 +68,7 @@ pub async fn generate_inviter_code(
         if success {
             return Ok(InviterCodeDTO {
                 inviter_code: code,
-                expires_at: Utc::now() + Duration::minutes(10)
+                expire_at: Utc::now() + Duration::minutes(10)
             });
         }
     }

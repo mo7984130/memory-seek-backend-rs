@@ -2,12 +2,11 @@ use chrono::{DateTime, Utc};
 use common::error::AppError;
 use common::utils::CacheExtension;
 use deadpool_redis::Pool;
-use img_url_generator::{encrypt_image_token, ImageToken};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::collections::HashMap;
 use common::constants::RedisKeys;
 use crate::mappers::{CollectionMapper, CollectionPhotoMapper, PhotoMapper};
-use crate::models::collection::{CollectionPhotoVO, CollectionVO};
+use crate::models::collection::{BatchOperationResultVO, CollectionPhotoVO, CollectionVO};
 use crate::models::photo::CursorPageVO;
 
 pub struct CollectionService;
@@ -83,7 +82,10 @@ impl CollectionService {
                     })
                     .map(|p| p.file_id.clone());
 
-                let cover_token = cover_file_id.and_then(|fid| encrypt_image_token(&ImageToken::thumbnail(fid), encryption_key).ok());
+                let cover_token = cover_file_id.as_ref().and_then(|fid| {
+                    let (thumbnail_token, _, _) = crate::models::photo::PhotoVO::generate_tokens(fid, encryption_key);
+                    thumbnail_token
+                });
                 
                 CollectionVO {
                     id: c.id.to_string(),
@@ -331,7 +333,7 @@ impl CollectionService {
             return Err(AppError::bad_request("无权限"));
         }
 
-        let relations = CollectionPhotoMapper::find_by_collection_id(db, collection_id, cursor, size as u64).await?;
+        let relations = CollectionPhotoMapper::find_by_collection_id(db, collection_id, cursor, (size + 1) as u64).await?;
 
         let has_more = relations.len() > size as usize;
         let relations: Vec<_> = relations.into_iter().take(size as usize).collect();
@@ -348,9 +350,8 @@ impl CollectionService {
             .into_iter()
             .filter_map(|r| {
                 let p = photo_map.get(&r.photo_id)?;
-                let thumbnail_token = encrypt_image_token(&ImageToken::thumbnail(p.file_id.clone()), encryption_key).ok();
-                let preview_token = encrypt_image_token(&ImageToken::preview(p.file_id.clone()), encryption_key).ok();
-                let original_token = encrypt_image_token(&ImageToken::original(p.file_id.clone()), encryption_key).ok();
+                let (thumbnail_token, preview_token, original_token) = 
+                    crate::models::photo::PhotoVO::generate_tokens(&p.file_id, encryption_key);
                 
                 Some(CollectionPhotoVO {
                     photo: crate::models::photo::PhotoVO {
@@ -465,5 +466,186 @@ impl CollectionService {
                     .ok_or_else(|| AppError::not_found("未找到收藏夹"))
             }
         ).await
+    }
+
+    /// 批量添加照片到收藏夹
+    /// 
+    /// 使用事务保证原子性
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `user_id`: 用户ID（用于权限验证）
+    /// - `collection_id`: 收藏夹ID
+    /// - `photo_ids`: 照片ID列表
+    /// 
+    /// # 返回
+    /// 返回批量操作结果
+    /// - success_count: 成功添加数量
+    /// - already_exists_count/count: 已存在于收藏夹的数量
+    /// - failed_count: 失败数量（照片不存在等原因）
+    /// 
+    /// # 错误
+    /// - 无权限返回400错误
+    /// - 数据库错误返回500错误（事务会回滚）
+    pub async fn batch_add_photos_to_collection(
+        db: &DatabaseConnection,
+        user_id: i64,
+        collection_id: i64,
+        photo_ids: Vec<i64>,
+    ) -> Result<BatchOperationResultVO, AppError> {
+        if photo_ids.is_empty() {
+            return Ok(BatchOperationResultVO {
+                success_count: 0,
+                already_exists_count: 0,
+                already_exists_photo_ids: vec![],
+                failed_count: 0,
+                failed_photo_ids: vec![],
+            });
+        }
+
+        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
+
+        if collection.user_id != user_id {
+            return Err(AppError::bad_request("无权限"));
+        }
+
+        let photo_ids_set: std::collections::HashSet<i64> = photo_ids.iter().cloned().collect();
+        let unique_photo_ids: Vec<i64> = photo_ids_set.into_iter().collect();
+
+        let already_exists_ids = CollectionPhotoMapper::exists_in_collection(
+            db,
+            collection_id,
+            unique_photo_ids.clone(),
+        )
+        .await?;
+        let already_exists_set: std::collections::HashSet<i64> =
+            already_exists_ids.iter().cloned().collect();
+
+        let not_exists_in_collection: Vec<i64> = unique_photo_ids
+            .iter()
+            .filter(|id| !already_exists_set.contains(id))
+            .cloned()
+            .collect();
+
+        let existing_photos = PhotoMapper::find_by_ids(db, not_exists_in_collection.clone()).await?;
+        let existing_photo_ids: std::collections::HashSet<i64> =
+            existing_photos.iter().map(|p| p.id).collect();
+
+        let valid_photo_ids: Vec<i64> = not_exists_in_collection
+            .into_iter()
+            .filter(|id| existing_photo_ids.contains(id))
+            .collect();
+
+        let failed_ids: Vec<i64> = unique_photo_ids
+            .into_iter()
+            .filter(|id| {
+                !already_exists_set.contains(&id) && !existing_photo_ids.contains(&id)
+            })
+            .collect();
+
+        let success_count = db
+            .transaction::<_, u32, sea_orm::DbErr>(|txn| {
+                Box::pin(async move {
+                    let count = CollectionPhotoMapper::batch_insert(
+                        txn,
+                        collection_id,
+                        valid_photo_ids,
+                        user_id,
+                    )
+                    .await
+                    .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+
+                    if count > 0 {
+                        CollectionMapper::increment_photo_count(txn, collection_id, count as i32)
+                            .await
+                            .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    }
+
+                    Ok(count)
+                })
+            })
+            .await
+            .map_err(|e| {
+                tracing::error!(target: "logs", "批量添加到收藏夹失败: {:?}", e);
+                AppError::InternalServerError
+            })?;
+
+        Ok(BatchOperationResultVO {
+            success_count,
+            already_exists_count: already_exists_ids.len() as u32,
+            already_exists_photo_ids: already_exists_ids.iter().map(|id| id.to_string()).collect(),
+            failed_count: failed_ids.len() as u32,
+            failed_photo_ids: failed_ids.iter().map(|id| id.to_string()).collect(),
+        })
+    }
+
+    /// 批量从收藏夹移除照片
+    /// 
+    /// 使用事务保证原子性
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `user_id`: 用户ID
+    /// - `collection_id`: 收藏夹ID
+    /// - `photo_ids`: 照片ID列表
+    /// 
+    /// # 返回
+    /// 返回批量操作结果
+    /// - success_count: 成功移除数量
+    /// - failed_count: 失败数量（不在收藏夹中）
+    pub async fn batch_remove_photos_from_collection(
+        db: &DatabaseConnection,
+        user_id: i64,
+        collection_id: i64,
+        photo_ids: Vec<i64>,
+    ) -> Result<BatchOperationResultVO, AppError> {
+        if photo_ids.is_empty() {
+            return Ok(BatchOperationResultVO {
+                success_count: 0,
+                already_exists_count: 0,
+                already_exists_photo_ids: vec![],
+                failed_count: 0,
+                failed_photo_ids: vec![],
+            });
+        }
+
+        let photo_ids_set: std::collections::HashSet<i64> = photo_ids.iter().cloned().collect();
+        let unique_photo_ids: Vec<i64> = photo_ids_set.into_iter().collect();
+        let total_count = unique_photo_ids.len() as u32;
+
+        let success_count = db
+            .transaction::<_, u32, sea_orm::DbErr>(|txn| {
+                Box::pin(async move {
+                    let count = CollectionPhotoMapper::batch_delete(
+                        txn,
+                        collection_id,
+                        unique_photo_ids,
+                        user_id,
+                    )
+                    .await
+                    .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+
+                    if count > 0 {
+                        CollectionMapper::increment_photo_count(txn, collection_id, -(count as i32))
+                            .await
+                            .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    }
+
+                    Ok(count)
+                })
+            })
+            .await
+            .map_err(|e| {
+                tracing::error!(target: "logs", "批量从收藏夹移除失败: {:?}", e);
+                AppError::InternalServerError
+            })?;
+
+        Ok(BatchOperationResultVO {
+            success_count,
+            already_exists_count: 0,
+            already_exists_photo_ids: vec![],
+            failed_count: total_count - success_count,
+            failed_photo_ids: vec![],
+        })
     }
 }

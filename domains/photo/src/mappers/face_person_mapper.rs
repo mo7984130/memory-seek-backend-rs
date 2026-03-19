@@ -1,7 +1,7 @@
 use common::error::AppError;
 use common::utils::ResultExt;
 use entities::{face_person, DrVector};
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 
 use std::collections::HashMap;
 
@@ -70,10 +70,9 @@ impl FacePersonMapper {
         cursor: Option<i64>,
         size: u64,
     ) -> Result<Vec<face_person::Model>, AppError> {
-        let limit = size + 1;
         let mut query = face_person::Entity::find()
             .order_by_desc(face_person::Column::TotalPhotoCount)
-            .limit(limit);
+            .limit(size);
 
         if let Some(c) = cursor {
             query = query.filter(face_person::Column::TotalPhotoCount.lt(c));
@@ -119,6 +118,7 @@ impl FacePersonMapper {
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `name`: 人物名称
+    /// - `name_initials`: 名字首字母
     /// - `max_score_feature_id`: 最高分特征ID
     /// - `max_score`: 最高分值
     /// - `total_photo_count`: 照片总数
@@ -130,6 +130,7 @@ impl FacePersonMapper {
     pub async fn insert<C: ConnectionTrait>(
         db: &C,
         name: String,
+        name_initials: Option<String>,
         max_score_feature_id: i64,
         max_score: f32,
         total_photo_count: i64,
@@ -139,6 +140,7 @@ impl FacePersonMapper {
         let now = chrono::Utc::now();
         let person = face_person::ActiveModel {
             name: Set(name),
+            name_initials: Set(name_initials),
             max_score_feature_id: Set(max_score_feature_id),
             max_score: Set(max_score),
             total_photo_count: Set(total_photo_count),
@@ -158,6 +160,7 @@ impl FacePersonMapper {
     /// - `db`: 数据库连接或事务
     /// - `id`: 人物ID
     /// - `name`: 新名称（可选）
+    /// - `name_initials`: 新首字母（可选）
     /// - `max_score_feature_id`: 新最高分特征ID（可选）
     /// - `max_score`: 新最高分值（可选）
     /// - `total_photo_count`: 新照片总数（可选）
@@ -170,6 +173,7 @@ impl FacePersonMapper {
         db: &C,
         id: i64,
         name: Option<String>,
+        name_initials: Option<String>,
         max_score_feature_id: Option<i64>,
         max_score: Option<f32>,
         total_photo_count: Option<i64>,
@@ -185,6 +189,9 @@ impl FacePersonMapper {
 
         if let Some(n) = name {
             active.name = Set(n);
+        }
+        if let Some(ni) = name_initials {
+            active.name_initials = Set(Some(ni));
         }
         if let Some(f) = max_score_feature_id {
             active.max_score_feature_id = Set(f);
@@ -220,5 +227,39 @@ impl FacePersonMapper {
             .await
             .map_internal_err("删除人物失败")?;
         Ok(())
+    }
+
+    /// 根据首字母搜索人物（支持游标分页）
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `keyword`: 搜索关键词（首字母）
+    /// - `cursor`: 游标值（人物ID）
+    /// - `size`: 返回数量
+    /// 
+    /// # 返回
+    /// 返回匹配的人物列表
+    pub async fn search_by_keyword(
+        db: &DatabaseConnection,
+        keyword: &str,
+        cursor: Option<i64>,
+        size: u64,
+    ) -> Result<Vec<face_person::Model>, AppError> {
+        let keyword_lower = keyword.to_lowercase();
+
+        let mut query = face_person::Entity::find()
+            .filter(
+                Condition::any()
+                    .add(face_person::Column::NameInitials.like(format!("{}%", keyword_lower)))
+            )
+            .order_by_desc(face_person::Column::TotalPhotoCount)
+            .order_by_desc(face_person::Column::Id)
+            .limit(size);
+
+        if let Some(c) = cursor {
+            query = query.filter(face_person::Column::Id.lt(c));
+        }
+
+        query.all(db).await.map_internal_err("搜索失败")
     }
 }

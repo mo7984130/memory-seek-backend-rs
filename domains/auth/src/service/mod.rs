@@ -4,20 +4,16 @@ use entities::user;
 use entities::user::UserDTO;
 use common::error::AppError;
 use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest, SendEmailCodeRequest};
-use common::utils::RedisExt;
+use common::utils::{RedisExt, ToOkExt};
 use common::utils::ResultExt;
 use common::utils::rand_utils;
 use bcrypt::verify;
 use chrono::{Duration, Utc};
 use deadpool_redis::Pool;
 use sea_orm::prelude::{DateTimeWithTimeZone};
-use sea_orm::{ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QuerySelect, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QuerySelect, Set};
+use sea_orm::{error::DbErr, RuntimeErr};
 
-#[derive(FromQueryResult)]
-struct LoginUser {
-    id: i64,
-    password: String,
-}
 pub async fn login(
     db: &DatabaseConnection,
     redis: &Pool,
@@ -32,7 +28,7 @@ pub async fn login(
                 .add(user::Column::Username.eq(&request.account))
                 .add(user::Column::Email.eq(&request.account))
         )
-        .into_model::<LoginUser>()
+        .into_tuple::<(i64, String)>()
         .one(db)
         .await
         .map_internal_err("登录时 数据库查询失败")?
@@ -40,7 +36,7 @@ pub async fn login(
             AppError::bad_request("账号或密码错误")
         })?;
 
-    let valid = verify(&request.password, &user.password)
+    let valid = verify(&request.password, &user.1)
         .map_internal_err("登陆时 验证密码错误")?;
     if !valid {
         return Err(AppError::bad_request("账号或密码错误"));
@@ -49,11 +45,11 @@ pub async fn login(
     let new_refresh_token = rand_utils::generate_random_str(32);
     let new_refresh_token_expire = Utc::now() + Duration::days(30);
     let new_access_token = rand_utils::generate_random_str(16);
-    redis.set_ex(&RedisKeys::user::user_access_token(user.id), &new_access_token, 2 * 60 * 60)
+    redis.set_ex(&RedisKeys::user::user_access_token(user.0), &new_access_token, 2 * 60 * 60)
         .await
         .map_internal_err("登录时 向Redis存入access_token失败")?;
     let updated_user = user::ActiveModel {
-        id: Set(user.id),
+        id: Set(user.0),
         refresh_token: Set(Some(new_refresh_token.clone())),
         refresh_token_expire_at: Set(Some(new_refresh_token_expire.into())),
         ..Default::default()
@@ -87,22 +83,9 @@ pub async fn register(
 
     let inviter_id = verify_inviter_code(redis, &request.inviter_code).await?;
 
-    let exists = user::Entity::find()
-        .filter(
-            Condition::any()
-                .add(user::Column::Username.eq(&request.username))
-                .add(user::Column::Email.eq(&request.email))
-        )
-        .count(db)
-        .await
-        .map_internal_err("在注册时 数据库查询失败")?;
-
-    if exists > 0 {
-        return Err(AppError::bad_request("用户名或邮箱已存在"));
-    }
-
     let hashed_pw = bcrypt::hash(&request.password, bcrypt::DEFAULT_COST)
         .map_internal_err("密码加密失败")?;
+    
     let new_user = user::ActiveModel {
         username: Set(request.username),
         email: Set(request.email),
@@ -110,23 +93,49 @@ pub async fn register(
         nickname: Set(request.nickname),
         inviter: Set(inviter_id.into()),
         ..Default::default()
-    }
-        .update(db)
-        .await
-        .map_internal_err("在注册时 插入用户失败")?;
+    };
 
-    Ok(UserDTO {
-        id: new_user.id.to_string(),
-        username: new_user.username,
-        nickname: new_user.nickname,
-        email: new_user.email,
-        avatar_token: None,
-        created_at: new_user.created_at.into(),
-        refresh_token: None,
-        refresh_token_expire_at: None,
-        access_token: None,
-        access_token_expire_at: None,
-    })
+    // 执行插入并捕获唯一约束冲突错误
+    let insert_result = new_user.insert(db).await;
+
+    match insert_result {
+        Ok(user_model) => {
+            // 注册成功，返回 DTO
+            UserDTO {
+                id: user_model.id.to_string(),
+                username: user_model.username,
+                nickname: user_model.nickname,
+                email: user_model.email,
+                avatar_token: None,
+                created_at: user_model.created_at.into(),
+                refresh_token: None,
+                refresh_token_expire_at: None,
+                access_token: None,
+                access_token_expire_at: None,
+            }.ok_res()
+        }
+        Err(e) => {
+            // 尝试提取底层的数据库错误码
+            if let DbErr::Query(RuntimeErr::SqlxError(ref sqlx_err)) = e {
+                if let Some(pg_err) = sqlx_err.as_database_error() {
+                    // Postgres 的唯一约束冲突错误码是 23505
+                    if pg_err.code() == Some("23505".into()) {
+                        let detail = pg_err.to_string();
+                        return if detail.contains("username") || detail.contains("Username") {
+                            Err(AppError::bad_request("该用户名已被占用"))
+                        } else if detail.contains("email") || detail.contains("Email") {
+                            Err(AppError::bad_request("该邮箱已被注册"))
+                        } else {
+                            Err(AppError::bad_request("记录已存在"))
+                        };
+                    }
+                }
+            }
+            // 其他数据库错误（如连接断开、字段超长等）
+            tracing::error!(target: "logs", "注册时数据库错误：{:?}", e);
+            Err(AppError::InternalServerError)
+        }
+    }
 }
 
 pub async fn send_email_code(
@@ -135,23 +144,29 @@ pub async fn send_email_code(
     req: SendEmailCodeRequest
 ) -> Result<(), AppError> {
     let code = rand_utils::generate_random_str(6);
+    redis.set_ex(&redis_keys::user::email_verify_code(&req.email), &code, 10 * 60).await.map_internal_err("在发送邮箱验证码时 设置redis值错误")?;
 
-    let html_body = format!(
-        r#"
+    let client = email_client.clone();
+    tokio::spawn(async move {
+        let html_body = format!(
+            r#"
         <p>您的验证码为: <strong>{}</strong></p>
         <p>该验证码有效期为 10 分钟。</p>
         "#,
-        code
-    ).trim().to_string();
-    email_client.send_html(
-        "no-reply@memory-seek.driftcloud.ink",
-        "寻忆",
-        &req.email,
-        "寻忆邮箱验证码",
-        html_body
-    ).await?;
+            code
+        ).trim().to_string();
 
-    redis.set_ex(&redis_keys::user::email_verify_code(&req.email), code, 10 * 60).await.map_internal_err("在发送邮箱验证码时 设置redis值错误")?;
+        if let Err(e) = client.send_html(
+            "no-reply@memory-seek.ink",
+            "寻忆",
+            &req.email,
+            "寻忆邮箱验证码",
+            html_body
+        ).await {
+            tracing::error!("后台发送邮件失败: {:?}", e);
+        }
+    });
+
     Ok(())
 }
 

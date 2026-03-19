@@ -3,8 +3,7 @@ use chrono::{DateTime, Utc};
 use common::error::AppError;
 use common::utils::{CacheExtension, FileValidator, ResultExt};
 use deadpool_redis::Pool;
-use entities::photo;
-use img_url_generator::{encrypt_image_token, ImageToken};
+use entities::photo::{ActiveModel, Model};
 use oss::S3Client;
 use sea_orm::{ActiveModelTrait, Set, TransactionTrait};
 use tokio::sync::mpsc;
@@ -16,10 +15,14 @@ use crate::services::CollectionService;
 use crate::services::feature_service::FeatureService;
 use crate::services::timeline_stat_service::TimelineStatService;
 
-/// 人脸检测任务，包含照片ID和图片字节数据
+/// 人脸检测任务，包含照片ID、图片字节数据和元数据
 pub struct FaceTask {
     pub photo_id: i64,
     pub image_bytes: Vec<u8>,
+    /// 图片宽度（像素）
+    pub img_width: u32,
+    /// 图片高度（像素）
+    pub img_height: u32,
 }
 
 pub struct PhotoService;
@@ -81,7 +84,7 @@ impl PhotoService {
             .map_internal_err("OSS上传失败")?;
 
         let now = Utc::now();
-        let photo = photo::ActiveModel {
+        let photo = ActiveModel {
             user_id: Set(user_id),
             name: Set(metadata.name),
             size: Set(file_data_len as i64),
@@ -107,12 +110,12 @@ impl PhotoService {
             .send(FaceTask {
                 photo_id,
                 image_bytes: file_data,
+                img_width: metadata.width,
+                img_height: metadata.height,
             })
             .await;
 
-        let thumbnail_token = encrypt_image_token(&ImageToken::thumbnail(file_id.clone()), encryption_key).ok();
-        let preview_token = encrypt_image_token(&ImageToken::preview(file_id.clone()), encryption_key).ok();
-        let original_token = encrypt_image_token(&ImageToken::original(file_id.clone()), encryption_key).ok();
+        let (thumbnail_token, preview_token, original_token) = PhotoVO::generate_tokens(&file_id, encryption_key);
 
         Ok(PhotoVO {
             id: photo_id.to_string(),
@@ -149,7 +152,7 @@ impl PhotoService {
     ) -> Result<CursorPageVO<PhotoVO, DateTime<Utc>>, AppError> {
         let size = query.size as u64;
 
-        let photo_ids = PhotoMapper::find_cursor_page_ids(db, query.cursor, size, &query.direction).await?;
+        let photo_ids = PhotoMapper::find_cursor_page_ids(db, query.cursor, size + 1, &query.direction).await?;
         let photos = redis.get_or_load_batch(
             photo_ids,
             |id| RedisKeys::photo::photo_info(*id),
@@ -170,9 +173,7 @@ impl PhotoService {
         let records: Vec<PhotoVO> = photos
             .into_iter()
             .map(|p| {
-                let thumbnail_token = encrypt_image_token(&ImageToken::thumbnail(p.file_id.clone()), encryption_key).ok();
-                let preview_token = encrypt_image_token(&ImageToken::preview(p.file_id.clone()), encryption_key).ok();
-                let original_token = encrypt_image_token(&ImageToken::original(p.file_id.clone()), encryption_key).ok();
+                let (thumbnail_token, preview_token, original_token) = PhotoVO::generate_tokens(&p.file_id, encryption_key);
                 
                 PhotoVO {
                     id: p.id.to_string(),
@@ -210,7 +211,7 @@ impl PhotoService {
     pub async fn get_photo_by_id(
         db: &sea_orm::DatabaseConnection,
         photo_id: i64,
-    ) -> Result<photo::Model, AppError> {
+    ) -> Result<Model, AppError> {
         PhotoMapper::find_by_id(db, photo_id).await
     }
 

@@ -25,11 +25,10 @@ impl CollectionPhotoMapper {
         cursor: Option<DateTime<Utc>>,
         size: u64,
     ) -> Result<Vec<collection_photo::Model>, AppError> {
-        let limit = size + 1;
         let mut query = collection_photo::Entity::find()
             .filter(collection_photo::Column::CollectionId.eq(collection_id))
             .order_by_desc(collection_photo::Column::CreatedAt)
-            .limit(limit);
+            .limit(size);
 
         if let Some(c) = cursor {
             query = query.filter(collection_photo::Column::CreatedAt.lt(c));
@@ -126,8 +125,8 @@ impl CollectionPhotoMapper {
     /// 
     /// # 返回
     /// 返回在收藏夹中的照片ID列表
-    pub async fn exists_in_collection(
-        db: &DatabaseConnection,
+    pub async fn exists_in_collection<C: ConnectionTrait>(
+        db: &C,
         collection_id: i64,
         photo_ids: Vec<i64>,
     ) -> Result<Vec<i64>, AppError> {
@@ -268,5 +267,80 @@ impl CollectionPhotoMapper {
         }
 
         Ok(collection_ids)
+    }
+
+    /// 批量添加照片到收藏夹
+    /// 
+    /// 注意：调用方需确保照片ID有效且不在收藏夹中
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接或事务
+    /// - `collection_id`: 收藏夹ID
+    /// - `photo_ids`: 照片ID列表（应确保不存在重复和已存在）
+    /// - `user_id`: 用户ID
+    /// 
+    /// # 返回
+    /// 返回成功插入的数量
+    pub async fn batch_insert<C: ConnectionTrait>(
+        db: &C,
+        collection_id: i64,
+        photo_ids: Vec<i64>,
+        user_id: i64,
+    ) -> Result<u32, AppError> {
+        if photo_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let now = Utc::now();
+        let models: Vec<collection_photo::ActiveModel> = photo_ids
+            .into_iter()
+            .map(|photo_id| collection_photo::ActiveModel {
+                collection_id: Set(collection_id),
+                photo_id: Set(photo_id),
+                user_id: Set(user_id),
+                created_at: Set(now.into()),
+                updated_at: Set(now.into()),
+                ..Default::default()
+            })
+            .collect();
+
+        let count = models.len() as u32;
+        collection_photo::Entity::insert_many(models)
+            .exec(db)
+            .await
+            .map_internal_err("批量添加到收藏夹失败")?;
+
+        Ok(count)
+    }
+
+    /// 批量从收藏夹移除照片
+    /// 
+    /// # 参数
+    /// - `db`: 数据库连接或事务
+    /// - `collection_id`: 收藏夹ID
+    /// - `photo_ids`: 照片ID列表
+    /// - `user_id`: 用户ID
+    /// 
+    /// # 返回
+    /// 返回成功删除的数量
+    pub async fn batch_delete<C: ConnectionTrait>(
+        db: &C,
+        collection_id: i64,
+        photo_ids: Vec<i64>,
+        user_id: i64,
+    ) -> Result<u32, AppError> {
+        if photo_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let result = collection_photo::Entity::delete_many()
+            .filter(collection_photo::Column::CollectionId.eq(collection_id))
+            .filter(collection_photo::Column::PhotoId.is_in(photo_ids))
+            .filter(collection_photo::Column::UserId.eq(user_id))
+            .exec(db)
+            .await
+            .map_internal_err("批量移除失败")?;
+
+        Ok(result.rows_affected as u32)
     }
 }

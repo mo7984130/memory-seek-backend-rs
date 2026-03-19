@@ -124,3 +124,191 @@ impl FileValidator {
         bytes.iter().map(|b| format!("{:02X}", b)).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 辅助工具：生成指定开头的字节数组
+    fn create_mock_file(header_hex: &str, total_size: usize) -> Vec<u8> {
+        let mut data = Vec::with_capacity(total_size);
+        // 将 Hex 字符串转回字节
+        for i in (0..header_hex.len()).step_by(2) {
+            data.push(u8::from_str_radix(&header_hex[i..i+2], 16).unwrap());
+        }
+        data.resize(total_size, 0);
+        data
+    }
+
+    /// 测试空文件的处理
+    #[test]
+    fn test_empty_file() {
+        let result = FileValidator::validate_image(&[], "test.jpg".into(), "image/jpeg".into());
+        assert!(matches!(result, Err(FileValidationError::EmptyFile)));
+    }
+
+    /// 测试超过最大文件大小限制（20MB）
+    #[test]
+    fn test_file_too_large() {
+        // 模拟一个超过 20MB 的数据（实际上不用真的分配，只要长度够）
+        let big_data = vec![0u8; (FileValidator::ALLOW_IMAGE_MAX_SIZE + 1) as usize];
+        let result = FileValidator::validate_image(&big_data, "big.jpg".into(), "image/jpeg".into());
+        assert!(matches!(result, Err(FileValidationError::TooLarge)));
+    }
+
+    /// 测试不支持的文件扩展名
+    #[test]
+    fn test_unsupported_extension() {
+        let data = create_mock_file("FFD8FF", 10);
+        let result = FileValidator::validate_image(&data, "test.exe".into(), "application/octet-stream".into());
+        assert!(matches!(result, Err(FileValidationError::UnsupportedFileType)));
+    }
+
+    /// 测试文件头与扩展名不匹配的情况
+    #[test]
+    fn test_invalid_header_mismatch() {
+        // 后缀是 png，但文件头给的是 JPG 的
+        let data = create_mock_file("FFD8FF", 10);
+        let result = FileValidator::validate_image(&data, "test.png".into(), "image/png".into());
+        assert!(matches!(result, Err(FileValidationError::InvalidHeader)));
+    }
+
+    /// 测试空文件名的处理
+    #[test]
+    fn test_empty_file_name() {
+        let data = create_mock_file("FFD8FF", 10);
+        let result = FileValidator::validate_image(&data, "".into(), "image/jpeg".into());
+        assert!(matches!(result, Err(FileValidationError::EmptyFileName)));
+    }
+
+    /// 测试文件太小无法读取完整文件头的情况
+    #[test]
+    fn test_file_too_small_for_header() {
+        // 文件太小，无法读取完整的文件头
+        let small_data = vec![0xFFu8; 2]; // 只有 2 字节，不够 4 字节
+        let result = FileValidator::validate_image(&small_data, "test.jpg".into(), "image/jpeg".into());
+        assert!(matches!(result, Err(FileValidationError::InvalidHeader)));
+    }
+
+    // 注意：extract_image_metadata 依赖真正的图片解码，
+    // 所以你需要准备一个极其微小的真实图片 Base64 或者 字节数组进行"真图片"测试。
+
+    /// 测试真实 PNG 图片的完整解析流程
+    #[test]
+    fn test_valid_image_parsing() {
+        // 一个 1x1 像素的红色 PNG 字节流
+        let tiny_png = hex::decode("89504E470D0A1A0A0000000D4948445200000001000000010802000000907753DE0000000C4944415408D763F8FF7F0005FE02FE0DC444830000000049454E44AE426082").unwrap();
+        
+        let result = FileValidator::validate_image(
+            &tiny_png,
+            "pixel.png".into(),
+            "image/png".into()
+        );
+        
+        assert!(result.is_ok());
+        let meta = result.unwrap();
+        assert_eq!(meta.width, 1);
+        assert_eq!(meta.height, 1);
+        assert_eq!(meta.format, "png");
+    }
+
+    /// 测试 JPEG 文件头验证（非真实图片）
+    #[test]
+    fn test_valid_jpeg_parsing() {
+        // 一个最小的有效 JPEG 文件头（实际 JPEG 需要更多内容，但这里只测试文件头验证）
+        let jpeg_data = create_mock_file("FFD8FFE0", 100);
+        
+        // 由于这不是真正的 JPEG，图片解析会失败，但文件头验证应该通过
+        let result = FileValidator::validate_image(
+            &jpeg_data,
+            "test.jpg".into(),
+            "image/jpeg".into()
+        );
+        
+        // 文件头验证应该通过，但图片解析可能失败
+        match result {
+            Ok(_) => {}, // 如果图片解析成功也可以
+            Err(FileValidationError::ParseError(_)) => {}, // 图片解析失败是预期的
+            _ => panic!("Unexpected error: {:?}", result),
+        }
+    }
+
+    /// 测试 PNG 文件头验证
+    #[test]
+    fn test_valid_png_header() {
+        // PNG 文件头
+        let png_data = create_mock_file("89504E47", 100);
+        
+        let result = FileValidator::validate_image(
+            &png_data,
+            "test.png".into(),
+            "image/png".into()
+        );
+        
+        // 文件头验证应该通过
+        match result {
+            Ok(_) => {},
+            Err(FileValidationError::ParseError(_)) => {}, // 图片解析失败是预期的
+            _ => panic!("Unexpected error: {:?}", result),
+        }
+    }
+
+    /// 测试 GIF 文件头验证
+    #[test]
+    fn test_valid_gif_header() {
+        // GIF 文件头 (GIF8)
+        let gif_data = create_mock_file("47494638", 100);
+        
+        let result = FileValidator::validate_image(
+            &gif_data,
+            "test.gif".into(),
+            "image/gif".into()
+        );
+        
+        // 文件头验证应该通过
+        match result {
+            Ok(_) => {},
+            Err(FileValidationError::ParseError(_)) => {},
+            _ => panic!("Unexpected error: {:?}", result),
+        }
+    }
+
+    /// 测试 BMP 文件头验证
+    #[test]
+    fn test_valid_bmp_header() {
+        // BMP 文件头 (BM)
+        let bmp_data = create_mock_file("424D", 100);
+        
+        let result = FileValidator::validate_image(
+            &bmp_data,
+            "test.bmp".into(),
+            "image/bmp".into()
+        );
+        
+        // 文件头验证应该通过
+        match result {
+            Ok(_) => {},
+            Err(FileValidationError::ParseError(_)) => {},
+            _ => panic!("Unexpected error: {:?}", result),
+        }
+    }
+
+    /// 测试文件扩展名大小写不敏感
+    #[test]
+    fn test_case_insensitive_extension() {
+        // 测试扩展名大小写不敏感
+        let data = create_mock_file("FFD8FF", 100);
+        
+        let result = FileValidator::validate_image(
+            &data,
+            "test.JPG".into(),
+            "image/jpeg".into()
+        );
+        
+        match result {
+            Ok(_) => {},
+            Err(FileValidationError::ParseError(_)) => {},
+            _ => panic!("Unexpected error: {:?}", result),
+        }
+    }
+}
