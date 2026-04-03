@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -37,8 +38,27 @@ pub struct CollectionPhotoVO {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionPhotoQuery {
-    pub cursor: Option<DateTime<Utc>>,
+    pub cursor: Option<String>,
     pub size: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectionPhotoCursor {
+    pub created_at: DateTime<Utc>,
+    pub id: i64,
+}
+
+impl CollectionPhotoCursor {
+    pub fn encode(&self) -> String {
+        let json = serde_json::to_string(self).unwrap_or_default();
+        URL_SAFE_NO_PAD.encode(json.as_bytes())
+    }
+
+    pub fn decode(s: &str) -> Option<Self> {
+        let bytes = URL_SAFE_NO_PAD.decode(s).ok()?;
+        let json = String::from_utf8(bytes).ok()?;
+        serde_json::from_str(&json).ok()
+    }
 }
 
 #[derive(Debug, Deserialize)]

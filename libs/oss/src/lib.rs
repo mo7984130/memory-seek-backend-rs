@@ -1,12 +1,12 @@
-use std::time::Duration;
-use common::error::AppError;
-use common::utils::ResultExt;
 use aws_config::Region;
 use aws_sdk_s3::config::Credentials;
-use aws_sdk_s3::Client;
 use aws_sdk_s3::presigning::PresigningConfig;
 use aws_sdk_s3::primitives::ByteStream;
+use aws_sdk_s3::Client;
+use common::error::AppError;
+use common::utils::ResultExt;
 use serde::Deserialize;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct S3Client {

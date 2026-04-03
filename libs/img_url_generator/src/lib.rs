@@ -2,19 +2,19 @@ mod alioss_generator;
 mod crypto;
 mod imgproxy_generator;
 
-use std::sync::Arc;
 use async_trait::async_trait;
 use serde::Deserialize;
+use std::sync::Arc;
 
 use crate::alioss_generator::AliyunOssGenerator;
 use crate::imgproxy_generator::ImgProxyGenerator;
 use oss::S3Client;
 
 pub use crypto::{
-    decrypt_file_id, encrypt_file_id, 
-    encrypt_face_cover_token, decrypt_face_cover_token,
-    encrypt_image_token, decrypt_image_token,
-    CryptoError, ImageToken, ImageTokenType, FaceBBoxPixels,
+    decrypt_face_cover_token, decrypt_file_id,
+    decrypt_image_token, encrypt_face_cover_token,
+    encrypt_file_id, encrypt_image_token,
+    CryptoError, FaceBBoxPixels, ImageToken, ImageTokenType,
 };
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]

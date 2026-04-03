@@ -15,3 +15,6 @@ bcrypt = { workspace = true }
 deadpool-redis = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+img_url_generator = { path = "../../libs/img_url_generator" }
+metrics = "0.24.3"
+uuid = { workspace = true }

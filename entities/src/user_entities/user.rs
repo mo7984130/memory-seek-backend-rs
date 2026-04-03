@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::Serialize;
-use chrono::{DateTime, Utc};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "auth_user")]
@@ -12,7 +12,7 @@ pub struct Model {
     pub email: String,
     pub password: String,
     pub nickname: String,
-    pub avatar_url: Option<String>,
+    pub avatar_file_id: Option<String>,
     pub inviter: i64,
     pub refresh_token: Option<String>,
     pub refresh_token_expire_at: Option<DateTimeWithTimeZone>,

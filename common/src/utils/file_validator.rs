@@ -1,6 +1,6 @@
 use const_format::formatcp;
-use thiserror::Error;
 use std::io::Cursor;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct ImageMetaData {

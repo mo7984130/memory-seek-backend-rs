@@ -1,9 +1,10 @@
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use common::error::AppError;
 use common::utils::ResultExt;
 use entities::collection_photo;
 use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 
+use crate::models::collection::CollectionPhotoCursor;
 use std::collections::HashMap;
 
 pub struct CollectionPhotoMapper;
@@ -14,24 +15,33 @@ impl CollectionPhotoMapper {
     /// # 参数
     /// - `db`: 数据库连接
     /// - `collection_id`: 收藏夹ID
-    /// - `cursor`: 游标时间点
+    /// - `cursor`: 复合游标（base64编码）
     /// - `size`: 每页数量
     /// 
     /// # 返回
-    /// 返回收藏夹-照片关系列表，按添加时间倒序
+    /// 返回收藏夹-照片关系列表，按添加时间倒序、ID倒序
     pub async fn find_by_collection_id(
         db: &DatabaseConnection,
         collection_id: i64,
-        cursor: Option<DateTime<Utc>>,
+        cursor: Option<&CollectionPhotoCursor>,
         size: u64,
     ) -> Result<Vec<collection_photo::Model>, AppError> {
         let mut query = collection_photo::Entity::find()
             .filter(collection_photo::Column::CollectionId.eq(collection_id))
             .order_by_desc(collection_photo::Column::CreatedAt)
+            .order_by_desc(collection_photo::Column::Id)
             .limit(size);
 
         if let Some(c) = cursor {
-            query = query.filter(collection_photo::Column::CreatedAt.lt(c));
+            query = query.filter(
+                sea_orm::Condition::any()
+                    .add(collection_photo::Column::CreatedAt.lt(c.created_at))
+                    .add(
+                        sea_orm::Condition::all()
+                            .add(collection_photo::Column::CreatedAt.eq(c.created_at))
+                            .add(collection_photo::Column::Id.lt(c.id))
+                    )
+            );
         }
 
         query.all(db).await.map_internal_err("查询失败")

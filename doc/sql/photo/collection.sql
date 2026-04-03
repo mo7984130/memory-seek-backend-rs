@@ -47,6 +47,6 @@ COMMENT ON COLUMN photo_collection_photo.updated_at IS '关系更新时间';
 
 -- 3. 物理索引 (优化查询)
 CREATE INDEX idx_collection_user_id ON photo_collection(user_id);
-CREATE INDEX idx_fp_collection_id_created ON photo_collection_photo(collection_id, created_at DESC);
+CREATE INDEX idx_fp_collection_id_created_id ON photo_collection_photo(collection_id, created_at DESC, id DESC);
 COMMENT ON INDEX idx_collection_user_id IS '优化：按用户查询收藏夹列表';
-COMMENT ON INDEX idx_fp_collection_id_created IS '优化：按收藏时间倒序查询收藏夹内容';
+COMMENT ON INDEX idx_fp_collection_id_created_id IS '优化：按收藏时间倒序查询收藏夹内容（复合游标）';

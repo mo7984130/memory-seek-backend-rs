@@ -1,68 +1,106 @@
-use email::EmailClient;
-use common::constants::{redis_keys, RedisKeys};
-use entities::user;
-use entities::user::UserDTO;
-use common::error::AppError;
 use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest, SendEmailCodeRequest};
-use common::utils::{RedisExt, ToOkExt};
-use common::utils::ResultExt;
-use common::utils::rand_utils;
 use bcrypt::verify;
 use chrono::{Duration, Utc};
+use common::constants::{redis_keys, RedisKeys};
+use common::error::AppError;
+use common::utils::ResultExt;
+use common::utils::{rand_utils, MetricsConcurrencyGuard};
+use common::utils::{BoolExt, MetricsTimer, OptionExt, RedisExt, ToOkExt};
 use deadpool_redis::Pool;
-use sea_orm::prelude::{DateTimeWithTimeZone};
-use sea_orm::{ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QuerySelect, Set};
+use email::EmailClient;
+use entities::user;
+use entities::user::UserDTO;
+use img_url_generator::{encrypt_image_token, ImageToken};
+use metrics::counter;
+use sea_orm::prelude::DateTimeWithTimeZone;
 use sea_orm::{error::DbErr, RuntimeErr};
+use sea_orm::{ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QuerySelect, Set};
+use tokio::task;
+use tracing::{info, Span};
 
 pub async fn login(
     db: &DatabaseConnection,
     redis: &Pool,
-    request: LoginRequest
+    request: LoginRequest,
+    encryption_key: &[u8; 32],
 ) -> Result<UserDTO, AppError> {
-    let user = user::Entity::find()
-        .select_only()
-        .column(user::Column::Id)
-        .column(user::Column::Password)
-        .filter(
-            Condition::any()
-                .add(user::Column::Username.eq(&request.account))
-                .add(user::Column::Email.eq(&request.account))
-        )
-        .into_tuple::<(i64, String)>()
-        .one(db)
-        .await
-        .map_internal_err("登录时 数据库查询失败")?
-        .ok_or_else(|| {
-            AppError::bad_request("账号或密码错误")
-        })?;
+    let _total_timer = MetricsTimer::start("total_seconds");
+    let _concurrency_guard = MetricsConcurrencyGuard::start("concurrency");
+    counter!("total_attempts").increment(1);
 
-    let valid = verify(&request.password, &user.1)
-        .map_internal_err("登陆时 验证密码错误")?;
-    if !valid {
-        return Err(AppError::bad_request("账号或密码错误"));
+    // 查找用户
+    let user = {
+        let _timer = MetricsTimer::start("db_query_duration_seconds");
+        user::Entity::find()
+            .select_only()
+            .column(user::Column::Id)
+            .column(user::Column::Password)
+            .column(user::Column::AvatarFileId)
+            .filter(
+                Condition::any()
+                    .add(user::Column::Username.eq(&request.account))
+                    .add(user::Column::Email.eq(&request.account))
+            )
+            .into_tuple::<(i64, String, Option<String>)>()
+            .one(db)
+            .await
+            .trace_internal_err("db_query_error", "查询用户时数据库错误")?
+            .ok_or_warn("user_not_found", "登录失败：账号不存在")?
     };
 
+    // 密码验证
+    {
+        let _timer = MetricsTimer::start("verify_seconds");
+        task::spawn_blocking(move || {
+            verify(&request.password, &user.1)
+        })
+            .await
+            .trace_internal_err("tokio_error", "线程调度错误")?
+            .trace_internal_err("verify_error", "验证密码时发生错误")?
+            .ok_or_warn("invalid_password", "密码错误")?
+    };
+
+    let new_access_token = rand_utils::generate_random_str(16);
+    // access_token
+    {
+        let _timer = MetricsTimer::start("redis_seconds");
+        redis.set_ex(&RedisKeys::user::user_access_token(user.0), &new_access_token, 2 * 60 * 60)
+            .await
+            .trace_internal_err("redis_error","向Redis存入access_token失败")?;
+    }
+    // refresh_token
     let new_refresh_token = rand_utils::generate_random_str(32);
     let new_refresh_token_expire = Utc::now() + Duration::days(30);
-    let new_access_token = rand_utils::generate_random_str(16);
-    redis.set_ex(&RedisKeys::user::user_access_token(user.0), &new_access_token, 2 * 60 * 60)
-        .await
-        .map_internal_err("登录时 向Redis存入access_token失败")?;
-    let updated_user = user::ActiveModel {
-        id: Set(user.0),
-        refresh_token: Set(Some(new_refresh_token.clone())),
-        refresh_token_expire_at: Set(Some(new_refresh_token_expire.into())),
-        ..Default::default()
-    }
-        .update(db).await
-        .map_internal_err("登陆时 向数据库更新refresh_token错误")?;
+    let updated_user = {
+        let _timer = MetricsTimer::start("refresh_token_cost_seconds");
+        user::ActiveModel {
+            id: Set(user.0),
+            refresh_token: Set(Some(new_refresh_token.clone())),
+            refresh_token_expire_at: Set(Some(new_refresh_token_expire.into())),
+            ..Default::default()
+        }
+            .update(db)
+            .await
+            .trace_internal_err("db_error","向数据库更新refresh_token错误")?
+    };
+
+    // 加密头像token
+    let avatar_token = {
+        let _timer = MetricsTimer::start("crypto_avatar_token_seconds");
+        user.2.as_ref().and_then(|key| {
+            encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok()
+        })
+    };
+
+    // 完成
+    info!(status="success", user_id = %user.0, username = %updated_user.username, "用户登录成功");
 
     Ok(UserDTO {
         id: updated_user.id.to_string(),
         username: updated_user.username,
         nickname: updated_user.nickname,
         email: updated_user.email,
-        avatar_token: None,
+        avatar_token,
         created_at: updated_user.created_at.into(),
         refresh_token: Some(new_refresh_token),
         refresh_token_expire_at: Some(new_refresh_token_expire),

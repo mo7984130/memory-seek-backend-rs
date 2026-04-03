@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet};
-use rayon::prelude::*;
-use crate::models::face::{FeatureNode, PersonCluster};
 use crate::clustering::vector_utils::{self, calculate_weighted_centroid as calc_weighted_centroid};
+use crate::models::face::{FeatureNode, PersonCluster};
+use rayon::prelude::*;
+use std::collections::{HashMap, HashSet};
 
 pub struct UnionFind {
     parent: Vec<usize>,

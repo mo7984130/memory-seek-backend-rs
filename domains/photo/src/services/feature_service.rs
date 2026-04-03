@@ -1,12 +1,12 @@
-use std::collections::HashMap;
+use crate::clustering::vector_utils;
+use crate::mappers::{FaceFeatureMapper, FacePersonMapper};
+use crate::models::face::FaceFeatureVO;
 use common::constants::redis_keys::photo::face_person_name;
 use common::error::AppError;
 use common::utils::RedisExt;
 use deadpool_redis::Pool;
 use entities::{face_feature, DrVector};
-use crate::clustering::vector_utils;
-use crate::mappers::{FaceFeatureMapper, FacePersonMapper};
-use crate::models::face::FaceFeatureVO;
+use std::collections::HashMap;
 
 pub struct FeatureService;
 

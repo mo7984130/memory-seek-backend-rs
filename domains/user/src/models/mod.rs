@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use common::utils::validators::validate_password;
 use common::utils::validators::validate_normal_char;
+use common::utils::validators::validate_password;
 use img_url_generator::{encrypt_image_token, ImageToken};
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,7 @@ pub struct InviterCodeDTO {
 pub struct UserInfoDTO {
     pub user_id: i64,
     pub nickname: String,
-    pub avatar_url: Option<String>,
+    pub avatar_file_id: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -56,7 +56,7 @@ pub struct UserInfoVO {
 
 impl UserInfoVO {
     pub fn from_dto(dto: UserInfoDTO, encryption_key: &[u8; 32]) -> Self {
-        let avatar_token = dto.avatar_url
+        let avatar_token = dto.avatar_file_id
             .as_ref()
             .and_then(|key| encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok());
         

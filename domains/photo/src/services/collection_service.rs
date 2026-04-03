@@ -1,13 +1,13 @@
-use chrono::{DateTime, Utc};
+use crate::mappers::{CollectionMapper, CollectionPhotoMapper, PhotoMapper};
+use crate::models::collection::{BatchOperationResultVO, CollectionPhotoCursor, CollectionPhotoVO, CollectionVO};
+use crate::models::photo::CursorPageVO;
+use chrono::Utc;
+use common::constants::RedisKeys;
 use common::error::AppError;
 use common::utils::CacheExtension;
 use deadpool_redis::Pool;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::collections::HashMap;
-use common::constants::RedisKeys;
-use crate::mappers::{CollectionMapper, CollectionPhotoMapper, PhotoMapper};
-use crate::models::collection::{BatchOperationResultVO, CollectionPhotoVO, CollectionVO};
-use crate::models::photo::CursorPageVO;
 
 pub struct CollectionService;
 
@@ -309,7 +309,7 @@ impl CollectionService {
     /// - `redis`: Redis连接池
     /// - `user_id`: 用户ID（用于权限验证和查询收藏状态）
     /// - `collection_id`: 收藏夹ID
-    /// - `cursor`: 游标时间点
+    /// - `cursor`: 复合游标（base64编码的字符串）
     /// - `size`: 每页数量
     /// - `encryption_key`: 加密密钥
     /// 
@@ -323,17 +323,18 @@ impl CollectionService {
         redis: &Pool,
         user_id: i64,
         collection_id: i64,
-        cursor: Option<DateTime<Utc>>,
+        cursor: Option<String>,
         size: u32,
         encryption_key: &[u8; 32],
-    ) -> Result<CursorPageVO<CollectionPhotoVO, DateTime<Utc>>, AppError> {
+    ) -> Result<CursorPageVO<CollectionPhotoVO, String>, AppError> {
         let collection = CollectionMapper::find_by_id(db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
-        let relations = CollectionPhotoMapper::find_by_collection_id(db, collection_id, cursor, (size + 1) as u64).await?;
+        let decoded_cursor = cursor.as_ref().and_then(|s| CollectionPhotoCursor::decode(s));
+        let relations = CollectionPhotoMapper::find_by_collection_id(db, collection_id, decoded_cursor.as_ref(), (size + 1) as u64).await?;
 
         let has_more = relations.len() > size as usize;
         let relations: Vec<_> = relations.into_iter().take(size as usize).collect();
@@ -344,7 +345,12 @@ impl CollectionService {
         let favorite_collection_id = Self::get_favorite_collection_id(db, redis, user_id).await?;
         let favorited_photo_ids = CollectionPhotoMapper::exists_in_collection(db, favorite_collection_id, photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
 
-        let next_cursor = relations.last().map(|r| r.created_at.with_timezone(&Utc));
+        let next_cursor = relations.last().map(|r| {
+            CollectionPhotoCursor {
+                created_at: r.created_at.with_timezone(&Utc),
+                id: r.id,
+            }.encode()
+        });
 
         let records: Vec<CollectionPhotoVO> = relations
             .into_iter()

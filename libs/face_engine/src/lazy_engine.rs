@@ -14,6 +14,7 @@ pub struct LazyFaceEngine {
     det_model_path: String,
     rec_model_path: String,
     ttl: Duration,
+    enabled: bool,
 }
 
 impl LazyFaceEngine {
@@ -24,10 +25,30 @@ impl LazyFaceEngine {
             det_model_path: det_model_path.to_string(),
             rec_model_path: rec_model_path.to_string(),
             ttl: Duration::from_secs(DEFAULT_TTL_SECS),
+            enabled: true,
         }
     }
 
+    pub fn new_disabled() -> Self {
+        Self {
+            engine: Arc::new(RwLock::new(None)),
+            last_used: Arc::new(RwLock::new(None)),
+            det_model_path: String::new(),
+            rec_model_path: String::new(),
+            ttl: Duration::from_secs(DEFAULT_TTL_SECS),
+            enabled: false,
+        }
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
     pub async fn get_or_load(&self) -> Result<Arc<FaceEngine>, FaceEngineError> {
+        if !self.enabled {
+            tracing::error!("尝试使用已禁用的 FaceEngine");
+            return Err(FaceEngineError::EngineDisabled);
+        }
         {
             let engine_read = self.engine.read().await;
             if let Some(engine) = engine_read.as_ref() {

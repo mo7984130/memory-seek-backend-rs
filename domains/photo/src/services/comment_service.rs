@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use common::error::AppError;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 
-use crate::mappers::{CommentMapper, CommentLikeMapper};
+use crate::mappers::{CommentLikeMapper, CommentMapper};
 use crate::models::comment::PhotoCommentVO;
 use crate::models::photo::CursorPageVO;
 

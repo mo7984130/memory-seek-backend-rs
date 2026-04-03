@@ -1,10 +1,10 @@
-use std::fs;
-use std::path::Path;
 use crate::FaceEngineError;
 use image::DynamicImage;
+use ort::execution_providers::{CPUExecutionProvider, CUDAExecutionProvider};
 use ort::session::builder::GraphOptimizationLevel;
 use ort::value::Value;
-use ort::execution_providers::{CPUExecutionProvider, CUDAExecutionProvider};
+use std::fs;
+use std::path::Path;
 use std::sync::Mutex;
 use tracing::info;
 

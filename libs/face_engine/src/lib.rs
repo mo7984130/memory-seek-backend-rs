@@ -31,6 +31,8 @@ pub enum FaceEngineError {
     AlignmentFailed,
     #[error("Model not loaded")]
     ModelNotLoaded,
+    #[error("Face engine is disabled")]
+    EngineDisabled,
 }
 
 pub struct FaceEngine {

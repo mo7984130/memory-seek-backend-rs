@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::r::R;
-use tracing::error;
+use std::fmt::{Debug, Display};
+use tracing::{error, warn, Span};
 
 pub trait ResultExt<T, E> {
     fn map_internal_err(self, context: &'static str) -> Result<T, AppError>;
@@ -8,20 +9,28 @@ pub trait ResultExt<T, E> {
 
     fn to_bad_request_error(self) -> Result<T, AppError>
     where
-        E: std::fmt::Display;
+        E: Display;
 
     fn into_ok_res(self) -> Result<R<T>, AppError>
     where
         Self: Sized,
         E: Into<AppError>,
         T: serde::Serialize;
+
+    fn trace_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
+    where
+        E: Debug;
+
+    fn trace_bad_request_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
+    where
+        E: Display;
 }
 
-impl<T, E: std::fmt::Debug> ResultExt<T, E> for Result<T, E> {
+impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
     #[inline]
     fn map_internal_err(self, context: &'static str) -> Result<T, AppError> {
         self.map_err(|e| {
-            error!(target:"logs", "内部错误: {} \n {:?}", context, e);
+            error!("内部错误: {} \n {:?}", context, e);
             AppError::InternalServerError
         })
     }
@@ -37,7 +46,7 @@ impl<T, E: std::fmt::Debug> ResultExt<T, E> for Result<T, E> {
     #[inline]
     fn to_bad_request_error(self) -> Result<T, AppError>
     where
-        E: std::fmt::Display,
+        E: Display
     {
         self.map_err(|e| {
             AppError::BadRequest(e.to_string().into())
@@ -51,6 +60,26 @@ impl<T, E: std::fmt::Debug> ResultExt<T, E> for Result<T, E> {
         T: serde::Serialize,
     {
         self.map(R::ok).map_err(|e| e.into())
+    }
+
+    fn trace_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
+    where
+        E: Debug
+    {
+        self.map_err(|e| {
+            error!(%reason, status = "error", error = ?e, "{context}");
+            AppError::InternalServerError
+        })
+    }
+
+    fn trace_bad_request_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
+    where
+        E: Display
+    {
+        self.map_err(|e| {
+            warn!(%reason, status="failed", error = %e, "{context}");
+            AppError::bad_request(context)
+        })
     }
 }
 

@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::{DateTime, Utc};
 use img_url_generator::{encrypt_image_token, ImageToken};
 use serde::{Deserialize, Serialize};
@@ -39,7 +40,7 @@ impl PhotoVO {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PhotoCursorQuery {
-    pub cursor: Option<DateTime<Utc>>,
+    pub cursor: Option<String>,
     #[serde(default = "default_size")]
     pub size: u32,
     #[serde(default = "default_direction")]
@@ -53,6 +54,25 @@ fn default_size() -> u32 {
 
 fn default_direction() -> String {
     "next".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhotoCursor {
+    pub created_at: DateTime<Utc>,
+    pub id: i64,
+}
+
+impl PhotoCursor {
+    pub fn encode(&self) -> String {
+        let json = serde_json::to_string(self).unwrap_or_default();
+        URL_SAFE_NO_PAD.encode(json.as_bytes())
+    }
+
+    pub fn decode(s: &str) -> Option<Self> {
+        let bytes = URL_SAFE_NO_PAD.decode(s).ok()?;
+        let json = String::from_utf8(bytes).ok()?;
+        serde_json::from_str(&json).ok()
+    }
 }
 
 #[derive(Serialize)]

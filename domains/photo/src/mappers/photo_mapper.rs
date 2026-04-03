@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use common::error::AppError;
 use common::utils::ResultExt;
-use entities::photo::{Entity, Model, Column};
+use entities::photo::{Column, Entity, Model};
 use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 
+use crate::models::photo::PhotoCursor;
 use std::collections::HashMap;
 
 pub struct PhotoMapper;
@@ -109,27 +110,44 @@ impl PhotoMapper {
     /// 
     /// # 参数
     /// - `db`: 数据库连接
-    /// - `cursor`: 游标时间点，用于分页
+    /// - `cursor`: 复合游标
     /// - `size`: 每页数量
     /// - `direction`: 分页方向，"next"为下一页，其他为上一页
     /// 
     /// # 返回
-    /// 返回照片列表，按创建时间倒序排列
+    /// 返回照片列表，按创建时间倒序、ID倒序排列
     pub async fn find_cursor_page(
         db: &DatabaseConnection,
-        cursor: Option<DateTime<Utc>>,
+        cursor: Option<&PhotoCursor>,
         size: u64,
         direction: &str,
     ) -> Result<Vec<Model>, AppError> {
         let mut query = Entity::find()
             .order_by_desc(Column::CreatedAt)
+            .order_by_desc(Column::Id)
             .limit(size);
 
         if let Some(c) = cursor {
             if direction == "next" {
-                query = query.filter(Column::CreatedAt.lt(c));
+                query = query.filter(
+                    sea_orm::Condition::any()
+                        .add(Column::CreatedAt.lt(c.created_at))
+                        .add(
+                            sea_orm::Condition::all()
+                                .add(Column::CreatedAt.eq(c.created_at))
+                                .add(Column::Id.lt(c.id))
+                        )
+                );
             } else {
-                query = query.filter(Column::CreatedAt.gt(c));
+                query = query.filter(
+                    sea_orm::Condition::any()
+                        .add(Column::CreatedAt.gt(c.created_at))
+                        .add(
+                            sea_orm::Condition::all()
+                                .add(Column::CreatedAt.eq(c.created_at))
+                                .add(Column::Id.gt(c.id))
+                        )
+                );
             }
         }
 
@@ -157,29 +175,46 @@ impl PhotoMapper {
     ///
     /// # 参数
     /// - `db`: 数据库连接
-    /// - `cursor`: 游标时间点，用于分页
+    /// - `cursor`: 复合游标
     /// - `size`: 每页数量
     /// - `direction`: 分页方向，"next"为下一页，其他为上一页
     ///
     /// # 返回
-    /// 返回照片id，按创建时间倒序排列
+    /// 返回照片id，按创建时间倒序、ID倒序排列
     pub async fn find_cursor_page_ids(
         db: &DatabaseConnection,
-        cursor: Option<DateTime<Utc>>,
+        cursor: Option<&PhotoCursor>,
         size: u64,
         direction: &str,
     ) -> Result<Vec<i64>, AppError> {
         let mut query = Entity::find()
             .order_by_desc(Column::CreatedAt)
+            .order_by_desc(Column::Id)
             .select_only()
             .column(Column::Id)
             .limit(size);
 
         if let Some(c) = cursor {
             if direction == "next" {
-                query = query.filter(Column::CreatedAt.lt(c));
+                query = query.filter(
+                    sea_orm::Condition::any()
+                        .add(Column::CreatedAt.lt(c.created_at))
+                        .add(
+                            sea_orm::Condition::all()
+                                .add(Column::CreatedAt.eq(c.created_at))
+                                .add(Column::Id.lt(c.id))
+                        )
+                );
             } else {
-                query = query.filter(Column::CreatedAt.gt(c));
+                query = query.filter(
+                    sea_orm::Condition::any()
+                        .add(Column::CreatedAt.gt(c.created_at))
+                        .add(
+                            sea_orm::Condition::all()
+                                .add(Column::CreatedAt.eq(c.created_at))
+                                .add(Column::Id.gt(c.id))
+                        )
+                );
             }
         }
 

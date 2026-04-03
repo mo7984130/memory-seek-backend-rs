@@ -4,15 +4,15 @@ use deadpool_redis::Pool;
 use entities::user;
 use img_url_generator::{encrypt_image_token, ImageToken};
 use sea_orm::sea_query::Expr;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
 use sea_orm::sqlx::types::uuid;
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
 
 use crate::models::{ChangePasswordRequest, InviterCodeDTO, UserInfoDTO, UserInfoVO};
+use bcrypt::{hash, verify, DEFAULT_COST};
 use common::error::AppError;
 use common::utils::DbUtils;
-use common::utils::{CacheExtension, RedisExt, ResultExt};
 use common::utils::{rand_utils, FileValidator};
-use bcrypt::{hash, verify, DEFAULT_COST};
+use common::utils::{CacheExtension, RedisExt, ResultExt};
 use oss::S3Client;
 
 pub async fn get_user_info(
@@ -27,7 +27,7 @@ pub async fn get_user_info(
         .map_internal_err("在获取用户信息时 查询数据库错误")?
         .ok_or_else(|| AppError::bad_request("用户不存在"))?;
     
-    let avatar_token = user.avatar_url
+    let avatar_token = user.avatar_file_id
         .as_ref()
         .and_then(|key| encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok());
     
@@ -118,7 +118,7 @@ pub async fn update_avatar(
         Box::pin(async move {
             let old_key: Option<String> = user::Entity::find_by_id(user_id)
                 .select_only()
-                .column(user::Column::AvatarUrl)
+                .column(user::Column::AvatarFileId)
                 .into_values::<Option<String>, user::Column>()
                 .one(txn)
                 .await
@@ -127,7 +127,7 @@ pub async fn update_avatar(
 
             user::ActiveModel {
                 id: Set(user_id),
-                avatar_url: Set(Some(new_key_inner)),
+                avatar_file_id: Set(Some(new_key_inner)),
                 ..Default::default()
             }.update(txn).await
                 .map_internal_err("在上传头像时 更新头像url发送错误")?;
@@ -212,7 +212,7 @@ pub async fn get_user_info_batch(
                     .select_only()
                     .column_as(user::Column::Id, "user_id")
                     .column(user::Column::Nickname)
-                    .column(user::Column::AvatarUrl)
+                    .column(user::Column::AvatarFileId)
                     .into_model::<UserInfoDTO>()
                     .all(db)
                     .await

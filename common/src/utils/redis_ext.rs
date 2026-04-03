@@ -5,8 +5,8 @@ use redis::{AsyncCommands, FromRedisValue, ToSingleRedisArg};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
-use tracing::{error, warn};
 use std::future::Future;
+use tracing::{error, warn};
 
 pub trait RedisExt {
     fn get_conn(&self) -> impl Future<Output = Result<Connection, AppError>> + Send;

@@ -6,8 +6,8 @@ use deadpool_redis::Pool;
 use entities::{face_feature, face_person, DrVector};
 use face_engine::{FaceAligner, FaceEngine, LazyFaceEngine};
 use img_url_generator::{encrypt_face_cover_token, FaceBBoxPixels};
+use sea_orm::{EntityTrait, Set, TransactionTrait};
 use std::sync::Arc;
-use sea_orm::{Set, EntityTrait, TransactionTrait};
 use tokio::sync::{mpsc, Semaphore};
 use tracing::info;
 
@@ -15,7 +15,7 @@ use crate::clustering::union_find::{filter_valid_seeds, grow_stage, UnionFind};
 use crate::clustering::vector_utils;
 use crate::mappers::{FaceFeatureMapper, FacePersonMapper, PhotoMapper};
 use crate::models::face::{
-    FacePersonSimpleVO, FacePersonVO, FeatureNode, PersonCluster,
+    FacePersonSimpleVO, FacePersonVO, FeatureNode, PersonCluster, PersonCursor,
 };
 use crate::models::photo::CursorPageVO;
 use crate::services::photo_service::FaceTask;
@@ -238,65 +238,70 @@ impl FaceService {
         })
     }
 
-    /// 获取人物分页列表
+    /// 获取人物列表（游标分页）
     /// 
     /// # 参数
     /// - `db`: 数据库连接
-    /// - `cursor`: 游标值（照片数量）
-    /// - `size`: 每页数量
+    /// - `redis`: Redis连接池
+    /// - `query`: 分页查询参数
     /// - `encryption_key`: 加密密钥
     /// 
     /// # 返回
-    /// 返回分页的人物列表，包含封面图token
+    /// 返回分页人物列表
     pub async fn get_person_page(
         db: &sea_orm::DatabaseConnection,
-        cursor: Option<i64>,
-        size: u32,
+        _redis: &Pool,
+        query: crate::models::face::PersonPageQuery,
         encryption_key: &[u8; 32],
-    ) -> Result<CursorPageVO<FacePersonVO, i64>, AppError> {
-        let persons = FacePersonMapper::find_cursor_page(db, cursor, (size + 1) as u64).await?;
+    ) -> Result<CursorPageVO<FacePersonVO, String>, AppError> {
+        let size = query.size.unwrap_or(20) as u64;
+        let decoded_cursor = query.cursor.as_ref().and_then(|s| PersonCursor::decode(s));
+        
+        let persons = FacePersonMapper::find_cursor_page(db, decoded_cursor.as_ref(), size + 1).await?;
 
         let has_more = persons.len() > size as usize;
         let persons: Vec<_> = persons.into_iter().take(size as usize).collect();
 
         let feature_ids: Vec<i64> = persons.iter().map(|p| p.max_score_feature_id).collect();
-        let feature_map = FaceFeatureMapper::find_by_ids_map(db, feature_ids).await?;
-
-        let photo_ids: Vec<i64> = feature_map.values().map(|f| f.photo_id).collect();
-        let photo_map = PhotoMapper::find_by_ids_map(db, photo_ids).await?;
-
-        let next_cursor = persons.last().map(|p| p.total_photo_count);
+        let features = FaceFeatureMapper::find_by_ids(db, feature_ids).await?;
+        let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
+        let photos = PhotoMapper::find_by_ids_map(db, photo_ids).await?;
 
         let records: Vec<FacePersonVO> = persons
             .into_iter()
-            .map(|p| {
-                let feature = feature_map.get(&p.max_score_feature_id);
-                let photo = feature.and_then(|f| photo_map.get(&f.photo_id));
-                let cover_token = photo.and_then(|ph| {
-                    feature.and_then(|f| {
-                        let bbox: face_feature::FaceBBox = serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
-                            face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
-                        });
-                        let x = (bbox.x * ph.width as f32) as i32;
-                        let y = (bbox.y * ph.height as f32) as i32;
-                        let w = (bbox.w * ph.width as f32) as i32;
-                        let h = (bbox.h * ph.height as f32) as i32;
-                        encrypt_face_cover_token(
-                            &ph.file_id,
-                            &FaceBBoxPixels { x, y, w, h },
-                            encryption_key,
-                        ).ok()
-                    })
+            .filter_map(|p| {
+                let feature = features.iter().find(|f| f.id == p.max_score_feature_id)?;
+                let photo = photos.get(&feature.photo_id)?;
+                let bbox: face_feature::FaceBBox = serde_json::from_value(feature.bbox.clone()).unwrap_or_else(|_| {
+                    face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
                 });
-                
-                FacePersonVO {
+                let x = (bbox.x * photo.width as f32) as i32;
+                let y = (bbox.y * photo.height as f32) as i32;
+                let w = (bbox.w * photo.width as f32) as i32;
+                let h = (bbox.h * photo.height as f32) as i32;
+                let cover_token = encrypt_face_cover_token(
+                    &photo.file_id,
+                    &FaceBBoxPixels { x, y, w, h },
+                    encryption_key,
+                ).ok()?;
+
+                Some(FacePersonVO {
                     id: p.id.to_string(),
                     name: p.name,
                     total_photo_count: Some(p.total_photo_count),
-                    cover_token,
-                }
+                    cover_token: Some(cover_token),
+                })
             })
             .collect();
+
+        let next_cursor = records.last().and_then(|r| {
+            let person_id = r.id.parse().ok()?;
+            let count = r.total_photo_count?;
+            Some(PersonCursor {
+                total_photo_count: count,
+                id: person_id,
+            }.encode())
+        });
 
         Ok(CursorPageVO {
             records,
@@ -611,72 +616,69 @@ impl FaceService {
         Ok(true)
     }
 
-    /// 搜索人物（支持游标分页）
+    /// 搜索人物（游标分页）
     /// 
     /// # 参数
     /// - `db`: 数据库连接
-    /// - `keyword`: 搜索关键词（首字母）
-    /// - `cursor`: 游标值（人物ID）
-    /// - `size`: 返回数量
-    /// - `detailed`: 是否返回详细信息
-    /// - `encryption_key`: 加密密钥（详细模式需要）
+    /// - `query`: 搜索查询参数
+    /// - `encryption_key`: 加密密钥
     /// 
     /// # 返回
-    /// 返回分页的人物搜索结果
+    /// 返回匹配的人物列表
     pub async fn search_person(
         db: &sea_orm::DatabaseConnection,
-        keyword: &str,
-        cursor: Option<i64>,
-        size: u32,
-        detailed: bool,
-        encryption_key: Option<&[u8; 32]>,
-    ) -> Result<CursorPageVO<FacePersonVO, i64>, AppError> {
-        let persons = FacePersonMapper::search_by_keyword(db, keyword, cursor, (size + 1) as u64).await?;
+        query: crate::models::face::PersonSearchQuery,
+        encryption_key: &[u8; 32],
+    ) -> Result<CursorPageVO<FacePersonVO, String>, AppError> {
+        let size = query.size.unwrap_or(20) as u64;
+        let decoded_cursor = query.cursor.as_ref().and_then(|s| PersonCursor::decode(s));
+
+        let persons = FacePersonMapper::search_by_keyword(db, &query.keyword, decoded_cursor.as_ref(), size + 1).await?;
 
         let has_more = persons.len() > size as usize;
         let persons: Vec<_> = persons.into_iter().take(size as usize).collect();
 
-        let next_cursor = persons.last().map(|p| p.id);
-
-        if detailed {
-            let encryption_key = encryption_key.ok_or(AppError::InternalServerError)?;
-
+        if query.detailed {
             let feature_ids: Vec<i64> = persons.iter().map(|p| p.max_score_feature_id).collect();
-            let feature_map = FaceFeatureMapper::find_by_ids_map(db, feature_ids).await?;
-
-            let photo_ids: Vec<i64> = feature_map.values().map(|f| f.photo_id).collect();
-            let photo_map = PhotoMapper::find_by_ids_map(db, photo_ids).await?;
+            let features = FaceFeatureMapper::find_by_ids(db, feature_ids).await?;
+            let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
+            let photos = PhotoMapper::find_by_ids_map(db, photo_ids).await?;
 
             let records: Vec<FacePersonVO> = persons
                 .into_iter()
-                .map(|p| {
-                    let feature = feature_map.get(&p.max_score_feature_id);
-                    let photo = feature.and_then(|f| photo_map.get(&f.photo_id));
-                    let cover_token = photo.and_then(|ph| {
-                        feature.and_then(|f| {
-                            let bbox: face_feature::FaceBBox = serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
-                                face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
-                            });
-                            let x = (bbox.x * ph.width as f32) as i32;
-                            let y = (bbox.y * ph.height as f32) as i32;
-                            let w = (bbox.w * ph.width as f32) as i32;
-                            let h = (bbox.h * ph.height as f32) as i32;
-                            encrypt_face_cover_token(
-                                &ph.file_id,
-                                &FaceBBoxPixels { x, y, w, h },
-                                encryption_key,
-                            ).ok()
-                        })
+                .filter_map(|p| {
+                    let feature = features.iter().find(|f| f.id == p.max_score_feature_id)?;
+                    let photo = photos.get(&feature.photo_id)?;
+                    let bbox: face_feature::FaceBBox = serde_json::from_value(feature.bbox.clone()).unwrap_or_else(|_| {
+                        face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
                     });
+                    let x = (bbox.x * photo.width as f32) as i32;
+                    let y = (bbox.y * photo.height as f32) as i32;
+                    let w = (bbox.w * photo.width as f32) as i32;
+                    let h = (bbox.h * photo.height as f32) as i32;
+                    let cover_token = encrypt_face_cover_token(
+                        &photo.file_id,
+                        &FaceBBoxPixels { x, y, w, h },
+                        encryption_key,
+                    ).ok()?;
 
-                    FacePersonVO {
+                    Some(FacePersonVO {
                         id: p.id.to_string(),
                         name: p.name,
                         total_photo_count: Some(p.total_photo_count),
-                        cover_token,
-                    }
+                        cover_token: Some(cover_token),
+                    })
                 })
                 .collect();
+
+            let next_cursor = records.last().and_then(|r| {
+                let person_id = r.id.parse().ok()?;
+                let count = r.total_photo_count?;
+                Some(PersonCursor {
+                    total_photo_count: count,
+                    id: person_id,
+                }.encode())
+            });
 
             Ok(CursorPageVO {
                 records,
@@ -689,10 +691,19 @@ impl FaceService {
                 .map(|p| FacePersonVO {
                     id: p.id.to_string(),
                     name: p.name,
-                    total_photo_count: None,
+                    total_photo_count: Some(p.total_photo_count),
                     cover_token: None,
                 })
                 .collect();
+
+            let next_cursor = records.last().and_then(|r| {
+                let person_id = r.id.parse().ok()?;
+                let count = r.total_photo_count?;
+                Some(PersonCursor {
+                    total_photo_count: count,
+                    id: person_id,
+                }.encode())
+            });
 
             Ok(CursorPageVO {
                 records,

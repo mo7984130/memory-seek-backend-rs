@@ -1,19 +1,19 @@
-use std::collections::HashSet;
+use crate::mappers::{CollectionMapper, CollectionPhotoMapper, CommentLikeMapper, CommentMapper, FaceFeatureMapper, PhotoMapper};
+use crate::models::photo::{CursorPageVO, PhotoCursor, PhotoCursorQuery, PhotoVO};
+use crate::services::feature_service::FeatureService;
+use crate::services::timeline_stat_service::TimelineStatService;
+use crate::services::CollectionService;
 use chrono::{DateTime, Utc};
+use common::constants::RedisKeys;
 use common::error::AppError;
 use common::utils::{CacheExtension, FileValidator, ResultExt};
 use deadpool_redis::Pool;
 use entities::photo::{ActiveModel, Model};
 use oss::S3Client;
 use sea_orm::{ActiveModelTrait, Set, TransactionTrait};
+use std::collections::HashSet;
 use tokio::sync::mpsc;
 use uuid::Uuid;
-use common::constants::RedisKeys;
-use crate::mappers::{CollectionMapper, CollectionPhotoMapper, CommentLikeMapper, CommentMapper, FaceFeatureMapper, PhotoMapper};
-use crate::models::photo::{CursorPageVO, PhotoCursorQuery, PhotoVO};
-use crate::services::CollectionService;
-use crate::services::feature_service::FeatureService;
-use crate::services::timeline_stat_service::TimelineStatService;
 
 /// 人脸检测任务，包含照片ID、图片字节数据和元数据
 pub struct FaceTask {
@@ -56,7 +56,7 @@ impl PhotoService {
         db: &sea_orm::DatabaseConnection,
         _redis: &Pool,
         s3: &S3Client,
-        face_tx: &mpsc::Sender<FaceTask>,
+        face_tx: &Option<mpsc::Sender<FaceTask>>,
         user_id: i64,
         file_data: Vec<u8>,
         file_name: String,
@@ -106,14 +106,16 @@ impl PhotoService {
 
         let _ = TimelineStatService::incr_stat(db, photo_created_at).await;
 
-        let _ = face_tx
-            .send(FaceTask {
-                photo_id,
-                image_bytes: file_data,
-                img_width: metadata.width,
-                img_height: metadata.height,
-            })
-            .await;
+        if let Some(tx) = face_tx {
+            let _ = tx
+                .send(FaceTask {
+                    photo_id,
+                    image_bytes: file_data,
+                    img_width: metadata.width,
+                    img_height: metadata.height,
+                })
+                .await;
+        }
 
         let (thumbnail_token, preview_token, original_token) = PhotoVO::generate_tokens(&file_id, encryption_key);
 
@@ -149,10 +151,11 @@ impl PhotoService {
         user_id: i64,
         query: PhotoCursorQuery,
         encryption_key: &[u8; 32],
-    ) -> Result<CursorPageVO<PhotoVO, DateTime<Utc>>, AppError> {
+    ) -> Result<CursorPageVO<PhotoVO, String>, AppError> {
         let size = query.size as u64;
+        let decoded_cursor = query.cursor.as_ref().and_then(|s| PhotoCursor::decode(s));
 
-        let photo_ids = PhotoMapper::find_cursor_page_ids(db, query.cursor, size + 1, &query.direction).await?;
+        let photo_ids = PhotoMapper::find_cursor_page_ids(db, decoded_cursor.as_ref(), size + 1, &query.direction).await?;
         let photos = redis.get_or_load_batch(
             photo_ids,
             |id| RedisKeys::photo::photo_info(*id),
@@ -191,7 +194,12 @@ impl PhotoService {
             })
             .collect();
 
-        let next_cursor = records.last().map(|r| r.created_at);
+        let next_cursor = records.last().map(|r| {
+            PhotoCursor {
+                created_at: r.created_at,
+                id: r.id.parse().unwrap_or(0),
+            }.encode()
+        });
 
         Ok(CursorPageVO {
             records,

@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -65,6 +66,25 @@ pub struct PersonSearchQuery {
     pub size: Option<u32>,
     #[serde(default)]
     pub detailed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonCursor {
+    pub total_photo_count: i64,
+    pub id: i64,
+}
+
+impl PersonCursor {
+    pub fn encode(&self) -> String {
+        let json = serde_json::to_string(self).unwrap_or_default();
+        URL_SAFE_NO_PAD.encode(json.as_bytes())
+    }
+
+    pub fn decode(s: &str) -> Option<Self> {
+        let bytes = URL_SAFE_NO_PAD.decode(s).ok()?;
+        let json = String::from_utf8(bytes).ok()?;
+        serde_json::from_str(&json).ok()
+    }
 }
 
 #[derive(Debug, Clone)]

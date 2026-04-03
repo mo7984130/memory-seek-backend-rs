@@ -1,6 +1,6 @@
+use crate::vector::DrVector;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::vector::DrVector;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "photo_face_feature")]

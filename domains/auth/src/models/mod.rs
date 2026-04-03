@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use common::utils::validators::validate_account;
 use common::utils::validators::validate_email;
+use common::utils::validators::validate_normal_char;
 use common::utils::validators::validate_password;
 use common::utils::validators::validate_username;
-use common::utils::validators::validate_normal_char;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 

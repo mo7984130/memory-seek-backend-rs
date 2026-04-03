@@ -3,6 +3,7 @@ use common::utils::ResultExt;
 use entities::{face_person, DrVector};
 use sea_orm::{ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 
+use crate::models::face::PersonCursor;
 use std::collections::HashMap;
 
 pub struct FacePersonMapper;
@@ -60,22 +61,31 @@ impl FacePersonMapper {
     /// 
     /// # 参数
     /// - `db`: 数据库连接
-    /// - `cursor`: 游标值（照片数量）
+    /// - `cursor`: 复合游标
     /// - `size`: 每页数量
     /// 
     /// # 返回
-    /// 返回人物列表，按照片数量倒序排列
+    /// 返回人物列表，按照片数量倒序、ID倒序排列
     pub async fn find_cursor_page(
         db: &DatabaseConnection,
-        cursor: Option<i64>,
+        cursor: Option<&PersonCursor>,
         size: u64,
     ) -> Result<Vec<face_person::Model>, AppError> {
         let mut query = face_person::Entity::find()
             .order_by_desc(face_person::Column::TotalPhotoCount)
+            .order_by_desc(face_person::Column::Id)
             .limit(size);
 
         if let Some(c) = cursor {
-            query = query.filter(face_person::Column::TotalPhotoCount.lt(c));
+            query = query.filter(
+                Condition::any()
+                    .add(face_person::Column::TotalPhotoCount.lt(c.total_photo_count))
+                    .add(
+                        Condition::all()
+                            .add(face_person::Column::TotalPhotoCount.eq(c.total_photo_count))
+                            .add(face_person::Column::Id.lt(c.id))
+                    )
+            );
         }
 
         query.all(db).await.map_internal_err("查询失败")
@@ -234,7 +244,7 @@ impl FacePersonMapper {
     /// # 参数
     /// - `db`: 数据库连接
     /// - `keyword`: 搜索关键词（首字母）
-    /// - `cursor`: 游标值（人物ID）
+    /// - `cursor`: 复合游标
     /// - `size`: 返回数量
     /// 
     /// # 返回
@@ -242,7 +252,7 @@ impl FacePersonMapper {
     pub async fn search_by_keyword(
         db: &DatabaseConnection,
         keyword: &str,
-        cursor: Option<i64>,
+        cursor: Option<&PersonCursor>,
         size: u64,
     ) -> Result<Vec<face_person::Model>, AppError> {
         let keyword_lower = keyword.to_lowercase();
@@ -251,13 +261,22 @@ impl FacePersonMapper {
             .filter(
                 Condition::any()
                     .add(face_person::Column::NameInitials.like(format!("{}%", keyword_lower)))
+                    .add(face_person::Column::Name.like(format!("{}%", keyword)))
             )
             .order_by_desc(face_person::Column::TotalPhotoCount)
             .order_by_desc(face_person::Column::Id)
             .limit(size);
 
         if let Some(c) = cursor {
-            query = query.filter(face_person::Column::Id.lt(c));
+            query = query.filter(
+                Condition::any()
+                    .add(face_person::Column::TotalPhotoCount.lt(c.total_photo_count))
+                    .add(
+                        Condition::all()
+                            .add(face_person::Column::TotalPhotoCount.eq(c.total_photo_count))
+                            .add(face_person::Column::Id.lt(c.id))
+                    )
+            );
         }
 
         query.all(db).await.map_internal_err("搜索失败")
