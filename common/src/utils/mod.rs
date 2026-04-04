@@ -6,11 +6,13 @@ pub mod validators;
 mod file_validator;
 mod option_ext;
 mod bool_ext;
+#[cfg(feature = "metrics")]
 mod metrics_ext;
 
 pub use bool_ext::BoolExt;
 pub use db_utils::DbUtils;
 pub use file_validator::FileValidator;
+#[cfg(feature = "metrics")]
 pub use metrics_ext::*;
 pub use option_ext::OptionExt;
 pub use redis_ext::CacheExtension;

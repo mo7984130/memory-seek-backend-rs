@@ -3,34 +3,48 @@ use bcrypt::verify;
 use chrono::{Duration, Utc};
 use common::constants::{redis_keys, RedisKeys};
 use common::error::AppError;
-use common::utils::ResultExt;
-use common::utils::{rand_utils, MetricsConcurrencyGuard};
-use common::utils::{BoolExt, MetricsTimer, OptionExt, RedisExt, ToOkExt};
+use common::utils::{MetricsTimerExt, ResultExt};
+use common::utils::rand_utils;
+#[cfg(feature = "metrics")]
+use common::utils::{MetricsConcurrencyGuard, MetricsTimer};
+use common::utils::{BoolExt, OptionExt, RedisExt, ToOkExt};
 use deadpool_redis::Pool;
 use email::EmailClient;
 use entities::user;
 use entities::user::UserDTO;
 use img_url_generator::{encrypt_image_token, ImageToken};
+#[cfg(feature = "metrics")]
 use metrics::counter;
 use sea_orm::prelude::DateTimeWithTimeZone;
 use sea_orm::{error::DbErr, RuntimeErr};
 use sea_orm::{ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter, QuerySelect, Set};
 use tokio::task;
-use tracing::{info, Span};
+use tracing::{error, info, warn};
 
+#[tracing::instrument(
+    name = "auth_login",
+    skip_all,
+    fields(
+            account = %req.account
+    )
+)]
 pub async fn login(
     db: &DatabaseConnection,
     redis: &Pool,
-    request: LoginRequest,
+    req: LoginRequest,
     encryption_key: &[u8; 32],
 ) -> Result<UserDTO, AppError> {
-    let _total_timer = MetricsTimer::start("total_seconds");
-    let _concurrency_guard = MetricsConcurrencyGuard::start("concurrency");
-    counter!("total_attempts").increment(1);
+    #[cfg(feature = "metrics")]
+    let (_timer, _guard, _) = (
+        MetricsTimer::start("login_total_seconds"),
+        MetricsConcurrencyGuard::start("login_concurrency"),
+        counter!("login_attempts").increment(1)
+    );
 
-    // 查找用户
     let user = {
-        let _timer = MetricsTimer::start("db_query_duration_seconds");
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("login_db_query_duration_seconds");
+        
         user::Entity::find()
             .select_only()
             .column(user::Column::Id)
@@ -38,21 +52,22 @@ pub async fn login(
             .column(user::Column::AvatarFileId)
             .filter(
                 Condition::any()
-                    .add(user::Column::Username.eq(&request.account))
-                    .add(user::Column::Email.eq(&request.account))
+                    .add(user::Column::Username.eq(&req.account))
+                    .add(user::Column::Email.eq(&req.account))
             )
             .into_tuple::<(i64, String, Option<String>)>()
             .one(db)
             .await
             .trace_internal_err("db_query_error", "查询用户时数据库错误")?
-            .ok_or_warn("user_not_found", "登录失败：账号不存在")?
+            .ok_or_warn("user_not_found","登录失败：账号不存在", "账号不存在")?
     };
 
-    // 密码验证
     {
-        let _timer = MetricsTimer::start("verify_seconds");
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("login_verify_seconds");
+        
         task::spawn_blocking(move || {
-            verify(&request.password, &user.1)
+            verify(&req.password, &user.1)
         })
             .await
             .trace_internal_err("tokio_error", "线程调度错误")?
@@ -61,18 +76,20 @@ pub async fn login(
     };
 
     let new_access_token = rand_utils::generate_random_str(16);
-    // access_token
     {
-        let _timer = MetricsTimer::start("redis_seconds");
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("login_redis_seconds");
+        
         redis.set_ex(&RedisKeys::user::user_access_token(user.0), &new_access_token, 2 * 60 * 60)
             .await
             .trace_internal_err("redis_error","向Redis存入access_token失败")?;
     }
-    // refresh_token
     let new_refresh_token = rand_utils::generate_random_str(32);
     let new_refresh_token_expire = Utc::now() + Duration::days(30);
     let updated_user = {
-        let _timer = MetricsTimer::start("refresh_token_cost_seconds");
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("login_refresh_token_cost_seconds");
+        
         user::ActiveModel {
             id: Set(user.0),
             refresh_token: Set(Some(new_refresh_token.clone())),
@@ -84,15 +101,18 @@ pub async fn login(
             .trace_internal_err("db_error","向数据库更新refresh_token错误")?
     };
 
-    // 加密头像token
     let avatar_token = {
-        let _timer = MetricsTimer::start("crypto_avatar_token_seconds");
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("login_crypto_avatar_token_seconds");
+        
         user.2.as_ref().and_then(|key| {
             encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok()
         })
     };
 
-    // 完成
+    #[cfg(feature = "metrics")]
+    counter!("login_success").increment(1);
+    
     info!(status="success", user_id = %user.0, username = %updated_user.username, "用户登录成功");
 
     Ok(UserDTO {
@@ -109,36 +129,75 @@ pub async fn login(
     })
 }
 
+#[tracing::instrument(
+    name = "auth_register",
+    skip_all,
+    fields(
+        user.username = %req.username,
+        user.email = %req.email,
+        user.nickname = %req.nickname,
+        inviter_code = %req.inviter_code,
+        email_code_prefix = %&req.email_verify_code[..2]
+    )
+)]
 pub async fn register(
     db: &DatabaseConnection,
     redis: &Pool,
-    request: RegisterRequest,
+    req: RegisterRequest,
 ) -> Result<UserDTO, AppError> {
-    let email_verified = verify_email_verify_code(redis, &request.email, &request.email_verify_code).await?;
-    if !email_verified {
-        return Err(AppError::bad_request("邮箱验证码错误"));
-    }
+    #[cfg(feature = "metrics")]
+    let (_timer, _guard, _) = (
+        MetricsTimer::start("register_total_seconds"),
+        MetricsConcurrencyGuard::start("register_concurrency"),
+        counter!("register_attempts").increment(1)
+    );
 
-    let inviter_id = verify_inviter_code(redis, &request.inviter_code).await?;
+    {
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("verify_email_code_seconds");
+        
+        verify_email_verify_code(redis, &req.email, &req.email_verify_code).await?
+            .ok_or_warn("invalid_email_code","邮箱验证码错误")?
+    };
 
-    let hashed_pw = bcrypt::hash(&request.password, bcrypt::DEFAULT_COST)
-        .map_internal_err("密码加密失败")?;
+    let inviter_id = {
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("verify_inviter_code_seconds");
+        
+        verify_inviter_code(redis, &req.inviter_code).await?
+    };
+
+    let hashed_pw = {
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("hash_password_seconds");
+        
+        bcrypt::hash(&req.password, bcrypt::DEFAULT_COST)
+            .trace_internal_err("hash_error", "密码加密失败")?
+    };
     
     let new_user = user::ActiveModel {
-        username: Set(request.username),
-        email: Set(request.email),
+        username: Set(req.username),
+        email: Set(req.email),
         password: Set(hashed_pw),
-        nickname: Set(request.nickname),
+        nickname: Set(req.nickname),
         inviter: Set(inviter_id.into()),
         ..Default::default()
     };
 
-    // 执行插入并捕获唯一约束冲突错误
-    let insert_result = new_user.insert(db).await;
+    let insert_result = {
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("db_insert_seconds");
+        
+        new_user.insert(db).await
+    };
 
     match insert_result {
         Ok(user_model) => {
-            // 注册成功，返回 DTO
+            #[cfg(feature = "metrics")]
+            counter!("register_success").increment(1);
+            
+            info!(status = "success", "用户注册成功");
+            
             UserDTO {
                 id: user_model.id.to_string(),
                 username: user_model.username,
@@ -153,39 +212,64 @@ pub async fn register(
             }.ok_res()
         }
         Err(e) => {
-            // 尝试提取底层的数据库错误码
             if let DbErr::Query(RuntimeErr::SqlxError(ref sqlx_err)) = e {
                 if let Some(pg_err) = sqlx_err.as_database_error() {
-                    // Postgres 的唯一约束冲突错误码是 23505
                     if pg_err.code() == Some("23505".into()) {
-                        let detail = pg_err.to_string();
-                        return if detail.contains("username") || detail.contains("Username") {
-                            Err(AppError::bad_request("该用户名已被占用"))
-                        } else if detail.contains("email") || detail.contains("Email") {
-                            Err(AppError::bad_request("该邮箱已被注册"))
+                        let detail = pg_err.to_string().to_lowercase();
+
+                        let (reason, msg) = if detail.contains("username") {
+                            ("username_existed", "该用户名已被占用")
+                        } else if detail.contains("email") {
+                            ("email_existed", "该邮箱已被注册")
                         } else {
-                            Err(AppError::bad_request("记录已存在"))
+                            ("row_existed", "记录已存在")
                         };
+
+                        warn!(reason = %reason, status = "failed", "用户注册冲突");
+                        return Err(AppError::bad_request(msg));
                     }
                 }
             }
-            // 其他数据库错误（如连接断开、字段超长等）
-            tracing::error!(target: "logs", "注册时数据库错误：{:?}", e);
+
+            error!(error = ?e, status = "error", "用户注册时发生数据库异常");
             Err(AppError::InternalServerError)
         }
     }
 }
 
+#[tracing::instrument(
+    name = "auth_send_email_code",
+    skip_all,
+    fields(
+            email = %req.email
+    )
+)]
 pub async fn send_email_code(
     redis: &Pool,
     email_client: &EmailClient,
     req: SendEmailCodeRequest
 ) -> Result<(), AppError> {
+    #[cfg(feature = "metrics")]
+    let (_timer, _guard, _) = (
+        MetricsTimer::start("send_email_code_total_seconds"),
+        MetricsConcurrencyGuard::start("send_email_code_concurrency"),
+        counter!("send_email_code_attempts").increment(1)
+    );
+
     let code = rand_utils::generate_random_str(6);
-    redis.set_ex(&redis_keys::user::email_verify_code(&req.email), &code, 10 * 60).await.map_internal_err("在发送邮箱验证码时 设置redis值错误")?;
+    
+    {
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("redis_set_seconds");
+        
+        redis.set_ex(&redis_keys::user::email_verify_code(&req.email), &code, 10 * 60).await
+            .trace_internal_err("redis_error", "在发送邮箱验证码时设置redis值错误")?;
+    }
 
     let client = email_client.clone();
+    let email = req.email.clone();
     tokio::spawn(async move {
+        let start = std::time::Instant::now();
         let html_body = format!(
             r#"
         <p>您的验证码为: <strong>{}</strong></p>
@@ -197,27 +281,59 @@ pub async fn send_email_code(
         if let Err(e) = client.send_html(
             "no-reply@memory-seek.ink",
             "寻忆",
-            &req.email,
+            &email,
             "寻忆邮箱验证码",
             html_body
         ).await {
-            tracing::error!("后台发送邮件失败: {:?}", e);
+            error!(status="error", "后台发送邮件失败: {:?}", e);
+        } else {
+            let duration = start.elapsed();
+            #[cfg(feature = "metrics")]
+            counter!("send_email_code_success").increment(1);
+            
+            info!(status = "success", email = %email, duration_ms = %duration.as_millis(), "验证码发送成功");
         }
     });
 
     Ok(())
 }
 
+#[tracing::instrument(
+    name = "auth_refresh_access_token",
+    skip_all
+)]
 pub async fn refresh_access_token(
     db: &DatabaseConnection,
     redis: &Pool,
     user_id: i64,
     refresh_token: String
 ) -> Result<AccessTokenResponse, AppError> {
-    verify_refresh_token(db, user_id, &refresh_token).await?;
+    #[cfg(feature = "metrics")]
+    let (_timer, _guard, _) = (
+        MetricsTimer::start("refresh_access_token_total_seconds"),
+        MetricsConcurrencyGuard::start("refresh_access_token_concurrency"),
+        counter!("refresh_access_token_attempts").increment(1)
+    );
+    
+    {
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("verify_refresh_token_seconds");
+        
+        verify_refresh_token(db, user_id, &refresh_token).await?;
+    }
 
     let new_access_token = rand_utils::generate_random_str(16);
-    redis.set_ex(&RedisKeys::user::user_access_token(user_id), &new_access_token, 2 * 60 * 60).await?;
+    {
+        #[cfg(feature = "metrics")]
+        let _timer = MetricsTimer::start("set_access_token_seconds");
+        
+        redis.set_ex(&RedisKeys::user::user_access_token(user_id), &new_access_token, 2 * 60 * 60).await?;
+    }
+
+    #[cfg(feature = "metrics")]
+    counter!("refresh_token_success").increment(1);
+    
+    info!(status = "success", user_id = %user_id, "AccessToken刷新成功");
 
     Ok(AccessTokenResponse {
         access_token: new_access_token,
@@ -228,15 +344,15 @@ pub async fn refresh_access_token(
 async fn verify_email_verify_code(redis: &Pool, email: &str, code: &str) -> Result<bool, AppError> {
     let stored_code: Option<String> = redis.get_as(&RedisKeys::user::email_verify_code(email))
         .await
-        .map_internal_err("验证邮箱验证码时 获取redis值错误")?;
+        .trace_internal_err("redis_error", "验证邮箱验证码时 获取redis值错误")?;
     Ok(stored_code.map_or(false, |v| v == code))
 }
 
 async fn verify_inviter_code(redis: &Pool, inviter_code: &str) -> Result<u32, AppError> {
     redis.get_as(&RedisKeys::user::inviter_code(inviter_code))
         .await
-        .map_internal_err("验证邀请码时 获取redis值错误")?
-        .ok_or_else(|| AppError::bad_request("邀请码无效. 不存在或已过期"))
+        .trace_internal_err("redis_error", "验证邀请码时 获取redis值错误")?
+        .ok_or_warn("invalid_inviter_code","邀请码无效" ,"邀请码无效. 不存在或已过期")
 }
 
 #[derive(FromQueryResult)]
@@ -253,8 +369,8 @@ async fn verify_refresh_token(db: &DatabaseConnection, user_id: i64, refresh_tok
         .into_model::<RefreshTokenValidation>()
         .one(db)
         .await
-        .map_internal_err("刷新access_token时 查询 数据库RefreshToken 失败")?
-        .ok_or_else(|| AppError::bad_request("用户不存在"))?;
+        .trace_internal_err("db_error", "刷新access_token时 查询 数据库RefreshToken 失败")?
+        .ok_or_warn("user_not_found", "用户不存在", "用户不存在")?;
     if res.refresh_token.as_deref() != Some(refresh_token) {
         return Err(AppError::Unauthorized);
     }

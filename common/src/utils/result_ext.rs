@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::r::R;
 use std::fmt::{Debug, Display};
-use tracing::{error, warn, Span};
+use tracing::{error, warn};
 
 pub trait ResultExt<T, E> {
     fn map_internal_err(self, context: &'static str) -> Result<T, AppError>;

@@ -3,6 +3,10 @@ name = "auth"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["metrics"]
+metrics = ["common/metrics", "dep:metrics"]
+
 [dependencies]
 common = { path = "../../common" }
 sea-orm = { workspace = true }
@@ -16,5 +20,4 @@ deadpool-redis = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 img_url_generator = { path = "../../libs/img_url_generator" }
-metrics = "0.24.3"
-uuid = { workspace = true }
+metrics = { workspace = true, optional = true }

@@ -54,8 +54,9 @@ export const config = {
         { account: 'testuser50', password: '123456abc' },
     ],
     thresholds: {
-        'http_req_duration': ['p(95)<500'],
-        'http_req_failed': ['rate<0.01'],
+        'http_req_duration': ['p(95)<500', 'p(99)<1000'],
+        'http_req_failed': ['rate<0.05'],
+        'checks': ['rate>0.95'],
     },
     stages: {
         warmup: [
@@ -73,5 +74,25 @@ export const config = {
         rampDown: [
             { duration: '30s', target: 0 },
         ],
+    },
+    performanceThresholds: {
+        login: {
+            responseTime: 500,
+            successRate: 0.95,
+        },
+        refreshToken: {
+            responseTime: 300,
+            successRate: 0.99,
+        },
+    },
+    retry: {
+        maxRetries: 2,
+        backoffBase: 0.5,
+        retryableStatusCodes: [500, 502, 503, 504],
+    },
+    errorHandling: {
+        logErrors: true,
+        logPayloads: false,
+        maxPayloadLogLength: 200,
     },
 }

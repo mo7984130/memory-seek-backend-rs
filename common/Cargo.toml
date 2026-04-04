@@ -3,6 +3,10 @@ name = "common"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["metrics"]
+metrics = ["dep:metrics"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -13,8 +17,8 @@ sea-orm = { workspace = true }
 futures = { workspace = true }
 const_format = { workspace = true }
 rand = { workspace = true }
-redis = { workspace = true }
 deadpool-redis = { workspace = true }
+redis = { workspace = true }
 tracing = { workspace = true }
 image = { workspace = true }
 hex = { workspace = true }
@@ -22,4 +26,4 @@ once_cell = { workspace = true }
 validator = { workspace = true }
 regex = { workspace = true }
 fancy-regex = "0.17.0"
-metrics = { workspace = true }
+metrics = { workspace = true, optional = true }
