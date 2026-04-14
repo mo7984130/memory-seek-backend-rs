@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["metrics"]
+default = ["metrics", "controller"]
 metrics = ["common/metrics", "dep:metrics"]
+controller = []
 
 [dependencies]
 common = { path = "../../common" }
@@ -20,4 +21,5 @@ deadpool-redis = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 img_url_generator = { path = "../../libs/img_url_generator" }
+
 metrics = { workspace = true, optional = true }

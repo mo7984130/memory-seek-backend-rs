@@ -12,8 +12,8 @@ pub struct Model {
     pub photo_count: i64,
     pub cover_image_id: Option<i64>,
     pub is_favorite: bool,
-    pub created_at: DateTimeWithTimeZone,
-    pub updated_at: DateTimeWithTimeZone,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

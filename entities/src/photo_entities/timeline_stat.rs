@@ -1,4 +1,5 @@
-use sea_orm::entity::prelude::*;
+use sea_orm::entity::prelude
+::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
@@ -7,9 +8,9 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub date_str: String,
     pub count: i64,
-    pub anchor_time: DateTimeWithTimeZone,
-    pub created_at: DateTimeWithTimeZone,
-    pub updated_at: DateTimeWithTimeZone,
+    pub anchor_time: DateTimeUtc,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

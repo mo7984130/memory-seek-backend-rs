@@ -11,11 +11,11 @@ use tracing::{error, warn};
 pub trait RedisExt {
     fn get_conn(&self) -> impl Future<Output = Result<Connection, AppError>> + Send;
 
-    fn get_as<T: FromRedisValue + Send + Sync>(&self, key: &str) -> impl Future<Output = Result<Option<T>, AppError>> + Send;
+    fn get_as<T: FromRedisValue + Send + Sync>(&self, key: impl AsRef<str> + Send + Sync) -> impl Future<Output = Result<Option<T>, AppError>> + Send;
 
-    fn set_ex<T: ToSingleRedisArg + Send + Sync>(&self, key: &str, value: T, ttl: u64) -> impl Future<Output = Result<(), AppError>> + Send;
+    fn set_ex<T: ToSingleRedisArg + Send + Sync>(&self, key: impl AsRef<str> + Send + Sync, value: T, ttl: u64) -> impl Future<Output = Result<(), AppError>> + Send;
 
-    fn delete(&self, key: &str) -> impl Future<Output = Result<(), AppError>> + Send;
+    fn delete(&self, key: impl AsRef<str> + Send + Sync) -> impl Future<Output = Result<(), AppError>> + Send;
 }
 
 impl RedisExt for Pool {
@@ -25,22 +25,22 @@ impl RedisExt for Pool {
     }
 
     #[inline]
-    async fn get_as<T: FromRedisValue + Send + Sync>(&self, key: &str) -> Result<Option<T>, AppError> {
+    async fn get_as<T: FromRedisValue + Send + Sync>(&self, key: impl AsRef<str> + Send + Sync) -> Result<Option<T>, AppError> {
         let mut conn = self.get_conn().await?;
-        let result: Option<T> = conn.get(key).await.map_internal_err("redis 获取错误")?;
+        let result: Option<T> = conn.get(key.as_ref()).await.map_internal_err("redis 获取错误")?;
         Ok(result)
     }
 
     #[inline]
-    async fn set_ex<T: ToSingleRedisArg + Send + Sync>(&self, key: &str, value: T, ttl: u64) -> Result<(), AppError> {
+    async fn set_ex<T: ToSingleRedisArg + Send + Sync>(&self, key: impl AsRef<str> + Send + Sync, value: T, ttl: u64) -> Result<(), AppError> {
         let mut conn = self.get_conn().await?;
-        conn.set_ex(key, value, ttl).await.map_internal_err("Redis 写入失败")
+        conn.set_ex(key.as_ref(), value, ttl).await.map_internal_err("Redis 写入失败")
     }
 
     #[inline]
-    async fn delete(&self, key: &str) -> Result<(), AppError> {
+    async fn delete(&self, key: impl AsRef<str> + Send + Sync) -> Result<(), AppError> {
         let mut conn = self.get_conn().await?;
-        let _: () = conn.del(key).await.map_internal_err("redis删除key错误")?;
+        let _: () = conn.del(key.as_ref()).await.map_internal_err("redis删除key错误")?;
         Ok(())
     }
 }
@@ -60,7 +60,7 @@ pub trait CacheExtension {
 
     fn get_or_load_batch<K, V, F, Fut, M>(
         &self,
-        params: Vec<K>,
+        params: &[K],
         key_provider: impl Fn(&K) -> String + Send + Sync,
         ttl: u64,
         loader: F,
@@ -109,7 +109,7 @@ impl CacheExtension for Pool {
 
     async fn get_or_load_batch<K, V, F, Fut, M>(
         &self,
-        params: Vec<K>,
+        params: &[K],
         key_provider: impl Fn(&K) -> String + Send + Sync,
         ttl: u64,
         loader: F,

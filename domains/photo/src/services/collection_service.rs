@@ -343,7 +343,7 @@ impl CollectionService {
         let photo_map = PhotoMapper::find_by_ids_map(db, photo_ids.clone()).await?;
 
         let favorite_collection_id = Self::get_favorite_collection_id(db, redis, user_id).await?;
-        let favorited_photo_ids = CollectionPhotoMapper::exists_in_collection(db, favorite_collection_id, photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
+        let favorited_photo_ids = CollectionPhotoMapper::exists_in_collection(db, favorite_collection_id, &photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
 
         let next_cursor = relations.last().map(|r| {
             CollectionPhotoCursor {
@@ -521,7 +521,7 @@ impl CollectionService {
         let already_exists_ids = CollectionPhotoMapper::exists_in_collection(
             db,
             collection_id,
-            unique_photo_ids.clone(),
+            &unique_photo_ids.clone(),
         )
         .await?;
         let already_exists_set: std::collections::HashSet<i64> =

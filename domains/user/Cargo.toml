@@ -3,6 +3,11 @@ name = "user"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["metrics"]
+metrics = ["common/metrics", "dep:metrics"]
+controller = []
+
 [dependencies]
 common = { path = "../../common" }
 entities = { path = "../../entities" }
@@ -16,3 +21,6 @@ redis = { workspace = true }
 uuid = { workspace = true }
 bcrypt = { workspace = true }
 deadpool-redis = { workspace = true }
+tracing = { workspace = true }
+metrics = { workspace = true, optional = true }
+tokio = { workspace = true }

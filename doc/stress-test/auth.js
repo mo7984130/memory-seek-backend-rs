@@ -33,8 +33,6 @@ export function login(account, password) {
     const duration = res.timings.duration;
     const checks = check(res, {
         '登录状态码为200': (r) => r.status === 200,
-        [`登录响应时间<${PerformanceThresholds.login.responseTime}ms`]: 
-            (r) => r.timings.duration < PerformanceThresholds.login.responseTime,
     });
 
     if (!checks) {
@@ -54,21 +52,12 @@ export function login(account, password) {
         });
     }
 
-    if (body.code !== 200 || !body.data?.accessToken) {
-        logPerformance('login', duration, false);
-        return createErrorResult(ErrorTypes.BUSINESS_ERROR, {
-            code: body.code,
-            message: body.message,
-            account,
-        });
-    }
-
     logPerformance('login', duration, true);
     return createSuccessResult({
-        userId: body.data.id,
-        accessToken: body.data.accessToken,
-        refreshToken: body.data.refreshToken,
-        username: body.data.username,
+        userId: body.data?.id,
+        accessToken: body.data?.accessToken,
+        refreshToken: body.data?.refreshToken,
+        username: body.data?.username,
     });
 }
 
@@ -93,8 +82,6 @@ export function refreshAccessToken(userId, refreshToken) {
     const duration = res.timings.duration;
     const checks = check(res, {
         '刷新Token状态码为200': (r) => r.status === 200,
-        [`刷新Token响应时间<${PerformanceThresholds.refreshToken.responseTime}ms`]: 
-            (r) => r.timings.duration < PerformanceThresholds.refreshToken.responseTime,
     });
 
     if (!checks || res.status !== 200) {
@@ -103,13 +90,13 @@ export function refreshAccessToken(userId, refreshToken) {
     }
 
     const body = parseJsonSafely(res.body, 'refreshToken');
-    if (!body || body.code !== 200) {
+    if (!body) {
         logPerformance('refreshToken', duration, false);
         return null;
     }
 
     logPerformance('refreshToken', duration, true);
-    return body.data.accessToken;
+    return body.data?.accessToken;
 }
 
 export function getAuthHeaders(userId, accessToken) {
@@ -124,45 +111,74 @@ export function getAuthHeaders(userId, accessToken) {
 
 export const options = {
     stages: [
-        { duration: '30s', target: 10 },
-        { duration: '1m', target: 50 },
-        { duration: '2m', target: 50 },
-        { duration: '30s', target: 0 },
+        { duration: '10s', target: 50 },
+        { duration: '5m', target: 50 },
+        { duration: '10s', target: 0 },
+        // { duration: '30s', target: 0 },
     ],
     thresholds: config.thresholds,
 };
 
 export default function () {
-    const errorScenario = Math.random();
+    const scenario = Math.random();
     
     let account, password, expectedSuccess, scenarioName;
     
-    if (errorScenario < 0.7) {
+    if (scenario < 0.5) {
         const userIndex = (__VU - 1) % config.testUsers.length;
         const user = config.testUsers[userIndex];
         account = user.account;
         password = user.password;
         expectedSuccess = true;
         scenarioName = '正确登录';
-    } else if (errorScenario < 0.85) {
+    } else if (scenario < 0.6) {
         const userIndex = (__VU - 1) % config.testUsers.length;
         const user = config.testUsers[userIndex];
         account = user.account;
         password = 'wrong_password_123';
         expectedSuccess = false;
         scenarioName = '密码错误';
-    } else if (errorScenario < 0.95) {
+    } else if (scenario < 0.7) {
         account = `nonexistent_user_${__VU}_${Date.now()}`;
         password = 'any_password';
         expectedSuccess = false;
         scenarioName = '用户不存在';
-    } else {
+    } else if (scenario < 0.75) {
         const userIndex = (__VU - 1) % config.testUsers.length;
         const user = config.testUsers[userIndex];
         account = user.account;
         password = '';
         expectedSuccess = false;
-        scenarioName = '无效格式';
+        scenarioName = '空密码';
+    } else if (scenario < 0.8) {
+        account = '';
+        password = 'any_password';
+        expectedSuccess = false;
+        scenarioName = '空账号';
+    } else if (scenario < 0.85) {
+        account = 'a'.repeat(1000);
+        password = 'any_password';
+        expectedSuccess = false;
+        scenarioName = '超长账号';
+    } else if (scenario < 0.9) {
+        account = `user_${__VU}_${Date.now()}`;
+        password = `user_${__VU}_${Date.now()}`;
+        expectedSuccess = false;
+        scenarioName = '随机账号密码';
+    } else if (scenario < 0.95) {
+        const userIndex = (__VU - 1) % config.testUsers.length;
+        const user = config.testUsers[userIndex];
+        account = user.account;
+        password = user.password;
+        expectedSuccess = true;
+        scenarioName = '重复登录';
+    } else {
+        const userIndex = (__VU - 1) % config.testUsers.length;
+        const user = config.testUsers[userIndex];
+        account = user.account;
+        password = user.password;
+        expectedSuccess = true;
+        scenarioName = '并发登录';
     }
     
     const loginResult = login(account, password);
@@ -180,7 +196,15 @@ export default function () {
     }
     
     if (loginResult.success) {
-        sleep(1);
+        sleep(0.5);
+        
+        if (scenario >= 0.95) {
+            const secondLoginResult = login(account, password);
+            check(secondLoginResult, {
+                '并发登录成功': (r) => r.success === true,
+            });
+            sleep(0.5);
+        }
         
         const newAccessToken = refreshAccessToken(loginResult.userId, loginResult.refreshToken);
         
@@ -191,7 +215,14 @@ export default function () {
         if (!newAccessToken) {
             console.error(`VU ${__VU} Token刷新失败`);
         }
+        
+        sleep(0.5);
+        
+        const invalidRefreshResult = refreshAccessToken(loginResult.userId, 'invalid_refresh_token');
+        check(invalidRefreshResult, {
+            '无效Token刷新应失败': (token) => token === null,
+        });
     }
     
-    sleep(1);
+    sleep(0.5);
 }

@@ -5,7 +5,8 @@ edition = "2024"
 
 [dependencies]
 common = { path = "../../common" }
+reqwest = { workspace = true }
+bytes = { workspace = true }
+s3 = { package = "rust-s3", workspace = true }
 serde = { workspace = true }
-
-aws-config = "1.8.14"
-aws-sdk-s3 = "1.124.0"
+tokio = { workspace = true }

@@ -2,11 +2,13 @@ use std::future::Future;
 use crate::utils::MetricsTimer;
 
 pub trait MetricsTimerExt: Future + Sized {
+    #[inline]
     fn timed(self, name: &'static str) -> impl Future<Output = Self::Output> + Send
     where
         Self: Send
     {
         async move {
+            #[cfg(feature = "metrics")]
             let _timer = MetricsTimer::start(name);
             self.await
         }

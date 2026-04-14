@@ -2,7 +2,10 @@ use chrono::Utc;
 use common::error::AppError;
 use common::utils::ResultExt;
 use entities::collection_photo;
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+};
 
 use crate::models::collection::CollectionPhotoCursor;
 use std::collections::HashMap;
@@ -11,13 +14,13 @@ pub struct CollectionPhotoMapper;
 
 impl CollectionPhotoMapper {
     /// 游标分页查询收藏夹中的照片关系
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `collection_id`: 收藏夹ID
     /// - `cursor`: 复合游标（base64编码）
     /// - `size`: 每页数量
-    /// 
+    ///
     /// # 返回
     /// 返回收藏夹-照片关系列表，按添加时间倒序、ID倒序
     pub async fn find_by_collection_id(
@@ -39,8 +42,8 @@ impl CollectionPhotoMapper {
                     .add(
                         sea_orm::Condition::all()
                             .add(collection_photo::Column::CreatedAt.eq(c.created_at))
-                            .add(collection_photo::Column::Id.lt(c.id))
-                    )
+                            .add(collection_photo::Column::Id.lt(c.id)),
+                    ),
             );
         }
 
@@ -48,11 +51,11 @@ impl CollectionPhotoMapper {
     }
 
     /// 批量查询多个收藏夹中的照片关系
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `collection_ids`: 收藏夹ID列表
-    /// 
+    ///
     /// # 返回
     /// 返回所有匹配的收藏夹-照片关系
     pub async fn find_by_collection_ids(
@@ -71,12 +74,12 @@ impl CollectionPhotoMapper {
     }
 
     /// 查询照片所在的收藏夹ID列表
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
     /// - `photo_id`: 照片ID
-    /// 
+    ///
     /// # 返回
     /// 返回该照片所在的所有收藏夹ID列表
     pub async fn find_collection_ids_by_photo(
@@ -95,11 +98,11 @@ impl CollectionPhotoMapper {
     }
 
     /// 查询每个收藏夹的最新照片ID
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `collection_ids`: 收藏夹ID列表
-    /// 
+    ///
     /// # 返回
     /// 返回以收藏夹ID为键、最新照片ID为值的HashMap
     pub async fn find_latest_photo_ids_by_collections(
@@ -127,18 +130,18 @@ impl CollectionPhotoMapper {
     }
 
     /// 检查照片是否在收藏夹中
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `collection_id`: 收藏夹ID
     /// - `photo_ids`: 照片ID列表
-    /// 
+    ///
     /// # 返回
     /// 返回在收藏夹中的照片ID列表
     pub async fn exists_in_collection<C: ConnectionTrait>(
         db: &C,
         collection_id: i64,
-        photo_ids: Vec<i64>,
+        photo_ids: &[i64],
     ) -> Result<Vec<i64>, AppError> {
         if photo_ids.is_empty() {
             return Ok(vec![]);
@@ -146,21 +149,24 @@ impl CollectionPhotoMapper {
 
         let relations = collection_photo::Entity::find()
             .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .filter(collection_photo::Column::PhotoId.is_in(photo_ids))
+            .filter(collection_photo::Column::PhotoId.is_in(photo_ids.iter().copied()))
+            .select_only()
+            .column(collection_photo::Column::PhotoId)
+            .into_tuple()
             .all(db)
             .await
             .map_internal_err("查询失败")?;
 
-        Ok(relations.iter().map(|r| r.photo_id).collect())
+        Ok(relations)
     }
 
     /// 检查单张照片是否在收藏夹中
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `collection_id`: 收藏夹ID
     /// - `photo_id`: 照片ID
-    /// 
+    ///
     /// # 返回
     /// 存在返回true，否则返回false
     pub async fn exists_photo_in_collection(
@@ -179,13 +185,13 @@ impl CollectionPhotoMapper {
     }
 
     /// 添加照片到收藏夹
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `collection_id`: 收藏夹ID
     /// - `photo_id`: 照片ID
     /// - `user_id`: 用户ID
-    /// 
+    ///
     /// # 返回
     /// 返回创建的收藏夹-照片关系模型
     pub async fn insert<C: ConnectionTrait>(
@@ -204,17 +210,20 @@ impl CollectionPhotoMapper {
             ..Default::default()
         };
 
-        relation.insert(db).await.map_internal_err("添加到收藏夹失败")
+        relation
+            .insert(db)
+            .await
+            .map_internal_err("添加到收藏夹失败")
     }
 
     /// 从收藏夹移除照片
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `collection_id`: 收藏夹ID
     /// - `photo_id`: 照片ID
     /// - `user_id`: 用户ID
-    /// 
+    ///
     /// # 返回
     /// 成功移除返回true，未找到关系返回false
     pub async fn delete<C: ConnectionTrait>(
@@ -235,14 +244,17 @@ impl CollectionPhotoMapper {
     }
 
     /// 删除收藏夹中的所有照片关系
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `collection_id`: 收藏夹ID
-    /// 
+    ///
     /// # 返回
     /// 成功返回空元组
-    pub async fn delete_by_collection_id<C: ConnectionTrait>(db: &C, collection_id: i64) -> Result<(), AppError> {
+    pub async fn delete_by_collection_id<C: ConnectionTrait>(
+        db: &C,
+        collection_id: i64,
+    ) -> Result<(), AppError> {
         collection_photo::Entity::delete_many()
             .filter(collection_photo::Column::CollectionId.eq(collection_id))
             .exec(db)
@@ -252,14 +264,17 @@ impl CollectionPhotoMapper {
     }
 
     /// 删除照片的所有收藏关联
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `photo_id`: 照片ID
-    /// 
+    ///
     /// # 返回
     /// 返回受影响的收藏夹ID列表
-    pub async fn delete_by_photo_id<C: ConnectionTrait>(db: &C, photo_id: i64) -> Result<Vec<i64>, AppError> {
+    pub async fn delete_by_photo_id<C: ConnectionTrait>(
+        db: &C,
+        photo_id: i64,
+    ) -> Result<Vec<i64>, AppError> {
         let relations = collection_photo::Entity::find()
             .filter(collection_photo::Column::PhotoId.eq(photo_id))
             .all(db)
@@ -280,15 +295,15 @@ impl CollectionPhotoMapper {
     }
 
     /// 批量添加照片到收藏夹
-    /// 
+    ///
     /// 注意：调用方需确保照片ID有效且不在收藏夹中
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `collection_id`: 收藏夹ID
     /// - `photo_ids`: 照片ID列表（应确保不存在重复和已存在）
     /// - `user_id`: 用户ID
-    /// 
+    ///
     /// # 返回
     /// 返回成功插入的数量
     pub async fn batch_insert<C: ConnectionTrait>(
@@ -324,13 +339,13 @@ impl CollectionPhotoMapper {
     }
 
     /// 批量从收藏夹移除照片
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `collection_id`: 收藏夹ID
     /// - `photo_ids`: 照片ID列表
     /// - `user_id`: 用户ID
-    /// 
+    ///
     /// # 返回
     /// 返回成功删除的数量
     pub async fn batch_delete<C: ConnectionTrait>(

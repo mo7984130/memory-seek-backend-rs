@@ -10,8 +10,8 @@ pub struct Model {
     pub user_id: i64,
     pub content: String,
     pub like_count: i32,
-    pub created_at: DateTimeWithTimeZone,
-    pub updated_at: DateTimeWithTimeZone,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

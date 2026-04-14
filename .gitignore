@@ -1,2 +1,6 @@
 /target
 /Cargo.lock
+/.trae
+/.idea
+/models
+**/.DS_Store

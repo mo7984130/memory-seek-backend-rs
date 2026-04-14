@@ -546,7 +546,7 @@ impl FaceService {
         let photo_map = PhotoMapper::find_by_ids_map(db, photo_ids.clone()).await?;
 
         let favorite_collection_id = crate::services::CollectionService::get_favorite_collection_id(db, redis, user_id).await?;
-        let favorited_photo_ids = crate::mappers::CollectionPhotoMapper::exists_in_collection(db, favorite_collection_id, photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
+        let favorited_photo_ids = crate::mappers::CollectionPhotoMapper::exists_in_collection(db, favorite_collection_id, &photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
 
         let next_cursor = features.last().map(|f| f.id);
 

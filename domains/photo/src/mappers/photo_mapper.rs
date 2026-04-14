@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use common::error::AppError;
 use common::utils::ResultExt;
 use entities::photo::{Column, Entity, Model};
-use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect,
+};
 
 use crate::models::photo::PhotoCursor;
 use std::collections::HashMap;
@@ -11,11 +14,11 @@ pub struct PhotoMapper;
 
 impl PhotoMapper {
     /// 根据ID查询单张照片
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `id`: 照片ID
-    /// 
+    ///
     /// # 返回
     /// - 成功: 返回照片模型
     /// - 失败: 照片不存在返回404错误，数据库错误返回500错误
@@ -28,14 +31,17 @@ impl PhotoMapper {
     }
 
     /// 根据ID列表批量查询照片
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `ids`: 照片ID列表
-    /// 
+    ///
     /// # 返回
     /// 返回匹配的照片列表，空ID列表返回空列表
-    pub async fn find_by_ids(db: &DatabaseConnection, ids: Vec<i64>) -> Result<Vec<Model>, AppError> {
+    pub async fn find_by_ids(
+        db: &DatabaseConnection,
+        ids: Vec<i64>,
+    ) -> Result<Vec<Model>, AppError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -47,24 +53,27 @@ impl PhotoMapper {
     }
 
     /// 根据ID列表批量查询照片，返回Map结构
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `ids`: 照片ID列表
-    /// 
+    ///
     /// # 返回
     /// 返回以照片ID为键的HashMap
-    pub async fn find_by_ids_map(db: &DatabaseConnection, ids: Vec<i64>) -> Result<HashMap<i64, Model>, AppError> {
+    pub async fn find_by_ids_map(
+        db: &DatabaseConnection,
+        ids: Vec<i64>,
+    ) -> Result<HashMap<i64, Model>, AppError> {
         let photos = Self::find_by_ids(db, ids).await?;
         Ok(photos.into_iter().map(|p| (p.id, p)).collect())
     }
 
     /// 检查MD5是否已存在
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `md5`: 文件MD5哈希值
-    /// 
+    ///
     /// # 返回
     /// 返回该MD5是否存在
     pub async fn exists_by_md5(db: &DatabaseConnection, md5: &str) -> Result<bool, AppError> {
@@ -77,13 +86,15 @@ impl PhotoMapper {
     }
 
     /// 查询所有照片的时间范围
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
-    /// 
+    ///
     /// # 返回
     /// 返回最早和最晚照片的创建时间元组，无照片时返回当前时间
-    pub async fn find_time_range(db: &DatabaseConnection) -> Result<(DateTime<Utc>, DateTime<Utc>), AppError> {
+    pub async fn find_time_range(
+        db: &DatabaseConnection,
+    ) -> Result<(DateTime<Utc>, DateTime<Utc>), AppError> {
         let min = Entity::find()
             .order_by_asc(Column::CreatedAt)
             .one(db)
@@ -107,13 +118,13 @@ impl PhotoMapper {
     }
 
     /// 游标分页查询照片列表
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `cursor`: 复合游标
     /// - `size`: 每页数量
     /// - `direction`: 分页方向，"next"为下一页，其他为上一页
-    /// 
+    ///
     /// # 返回
     /// 返回照片列表，按创建时间倒序、ID倒序排列
     pub async fn find_cursor_page(
@@ -135,8 +146,8 @@ impl PhotoMapper {
                         .add(
                             sea_orm::Condition::all()
                                 .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.lt(c.id))
-                        )
+                                .add(Column::Id.lt(c.id)),
+                        ),
                 );
             } else {
                 query = query.filter(
@@ -145,8 +156,8 @@ impl PhotoMapper {
                         .add(
                             sea_orm::Condition::all()
                                 .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.gt(c.id))
-                        )
+                                .add(Column::Id.gt(c.id)),
+                        ),
                 );
             }
         }
@@ -155,14 +166,17 @@ impl PhotoMapper {
     }
 
     /// 根据文件ID查询照片
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `file_id`: 文件路径
-    /// 
+    ///
     /// # 返回
     /// 返回匹配的照片模型，不存在返回404错误
-    pub async fn find_by_file_id(db: &DatabaseConnection, file_id: &str) -> Result<Model, AppError> {
+    pub async fn find_by_file_id(
+        db: &DatabaseConnection,
+        file_id: &str,
+    ) -> Result<Model, AppError> {
         Entity::find()
             .filter(Column::FileId.eq(file_id))
             .one(db)
@@ -183,7 +197,7 @@ impl PhotoMapper {
     /// 返回照片id，按创建时间倒序、ID倒序排列
     pub async fn find_cursor_page_ids(
         db: &DatabaseConnection,
-        cursor: Option<&PhotoCursor>,
+        cursor: Option<PhotoCursor>,
         size: u64,
         direction: &str,
     ) -> Result<Vec<i64>, AppError> {
@@ -202,8 +216,8 @@ impl PhotoMapper {
                         .add(
                             sea_orm::Condition::all()
                                 .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.lt(c.id))
-                        )
+                                .add(Column::Id.lt(c.id)),
+                        ),
                 );
             } else {
                 query = query.filter(
@@ -212,24 +226,25 @@ impl PhotoMapper {
                         .add(
                             sea_orm::Condition::all()
                                 .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.gt(c.id))
-                        )
+                                .add(Column::Id.gt(c.id)),
+                        ),
                 );
             }
         }
 
-        query.into_tuple::<i64>()
+        query
+            .into_tuple::<i64>()
             .all(db)
             .await
             .map_internal_err("查询 ID 列表失败")
     }
 
     /// 删除照片
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `id`: 照片ID
-    /// 
+    ///
     /// # 返回
     /// 成功返回空元组
     pub async fn delete_by_id<C: ConnectionTrait>(db: &C, id: i64) -> Result<(), AppError> {

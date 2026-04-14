@@ -3,12 +3,16 @@ name = "photo"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+face_recognition = ["dep:face_engine", "dep:ndarray", "dep:rayon"]
+
 [dependencies]
 common = { path = "../../common" }
 entities = { path = "../../entities" }
 oss = { path = "../../libs/oss" }
 img_url_generator = { path = "../../libs/img_url_generator" }
-face_engine = { path = "../../libs/face_engine" }
+face_engine = { path = "../../libs/face_engine", optional = true }
 
 axum = { workspace = true }
 tokio = { workspace = true }
@@ -24,7 +28,7 @@ uuid = { workspace = true }
 futures = { workspace = true }
 deadpool-redis = { workspace = true }
 num_cpus = { workspace = true }
-rayon = "1.11.0"
-ndarray = { version = "0.16", features = ["rayon"] }
+rayon = { version = "1.11.0", optional = true }
+ndarray = { version = "0.16", features = ["rayon"], optional = true }
 pinyin = { workspace = true }
 base64 = { workspace = true }

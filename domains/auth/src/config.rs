@@ -1,0 +1,2 @@
+pub const ACCESS_TOKEN_EXPIRE_SECONDS: i64 = 2 * 60 * 60;
+pub const REFRESH_TOKEN_EXPIRE_DAYS: i64 = 30;

@@ -1,6 +1,6 @@
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
-use img_url_generator::{encrypt_image_token, ImageToken};
+use img_url_generator::{ImageToken, encrypt_image_token};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -29,10 +29,13 @@ impl PhotoVO {
         file_id: &str,
         encryption_key: &[u8; 32],
     ) -> (Option<String>, Option<String>, Option<String>) {
-        let thumbnail_token = encrypt_image_token(&ImageToken::thumbnail(file_id.to_string()), encryption_key).ok();
-        let preview_token = encrypt_image_token(&ImageToken::preview(file_id.to_string()), encryption_key).ok();
-        let original_token = encrypt_image_token(&ImageToken::original(file_id.to_string()), encryption_key).ok();
-        
+        let thumbnail_token =
+            encrypt_image_token(&ImageToken::thumbnail(file_id.to_string()), encryption_key).ok();
+        let preview_token =
+            encrypt_image_token(&ImageToken::preview(file_id.to_string()), encryption_key).ok();
+        let original_token =
+            encrypt_image_token(&ImageToken::original(file_id.to_string()), encryption_key).ok();
+
         (thumbnail_token, preview_token, original_token)
     }
 }
@@ -68,7 +71,7 @@ impl PhotoCursor {
         URL_SAFE_NO_PAD.encode(json.as_bytes())
     }
 
-    pub fn decode(s: &str) -> Option<Self> {
+    pub fn decode(s: impl AsRef<[u8]>) -> Option<Self> {
         let bytes = URL_SAFE_NO_PAD.decode(s).ok()?;
         let json = String::from_utf8(bytes).ok()?;
         serde_json::from_str(&json).ok()

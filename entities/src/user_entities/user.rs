@@ -15,9 +15,9 @@ pub struct Model {
     pub avatar_file_id: Option<String>,
     pub inviter: i64,
     pub refresh_token: Option<String>,
-    pub refresh_token_expire_at: Option<DateTimeWithTimeZone>,
-    pub updated_at: DateTimeWithTimeZone,
-    pub created_at: DateTimeWithTimeZone,
+    pub refresh_token_expire_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

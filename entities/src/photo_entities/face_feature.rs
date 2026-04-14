@@ -13,8 +13,8 @@ pub struct Model {
     #[sea_orm(column_type = "Json")]
     pub bbox: Json,
     pub score: f32,
-    pub created_at: DateTimeWithTimeZone,
-    pub updated_at: DateTimeWithTimeZone,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -9,8 +9,8 @@ pub struct Model {
     pub collection_id: i64,
     pub photo_id: i64,
     pub user_id: i64,
-    pub created_at: DateTimeWithTimeZone,
-    pub updated_at: DateTimeWithTimeZone,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

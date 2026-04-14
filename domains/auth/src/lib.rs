@@ -1,2 +1,7 @@
 pub mod models;
-pub mod service;
+pub mod services;
+
+#[cfg(feature = "controller")]
+pub mod controller;
+
+mod config;
