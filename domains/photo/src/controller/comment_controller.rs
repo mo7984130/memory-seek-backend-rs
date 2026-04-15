@@ -9,9 +9,9 @@ use std::sync::Arc;
 
 use crate::middlewares::auth::UserId;
 use crate::state::AppState;
-use photo::models::comment::{CommentPageQuery, PhotoCommentVO, PublishCommentDTO};
-use photo::models::photo::CursorPageVO;
-use photo::services::comment_service::CommentService;
+use crate::models::comment::{CommentPageQuery, PhotoCommentVO, PublishCommentDTO};
+use crate::models::photo::CursorPageVO;
+use crate::services::comment_service::CommentService;
 
 pub struct CommentController;
 

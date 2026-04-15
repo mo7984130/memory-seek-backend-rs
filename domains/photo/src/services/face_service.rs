@@ -1,3 +1,4 @@
+use axum::body::Bytes;
 use chrono::Utc;
 use common::constants::redis_keys::photo::face_person_name;
 use common::error::AppError;
@@ -5,7 +6,7 @@ use common::utils::{RedisExt, ResultExt};
 use deadpool_redis::Pool;
 use entities::{face_feature, face_person, DrVector};
 use face_engine::{FaceAligner, FaceEngine, LazyFaceEngine};
-use img_url_generator::{encrypt_face_cover_token, FaceBBoxPixels};
+use img_url_generator::{encrypt_face_cover_token, EncryptionKey, FaceBBoxPixels};
 use sea_orm::{EntityTrait, Set, TransactionTrait};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Semaphore};
@@ -43,7 +44,7 @@ impl FaceService {
         db: &sea_orm::DatabaseConnection,
         face_engine: &FaceEngine,
         photo_id: i64,
-        image_bytes: Vec<u8>,
+        image_bytes: Bytes,
         img_width: u32,
         img_height: u32,
     ) -> Result<(), AppError> {
@@ -252,7 +253,7 @@ impl FaceService {
         db: &sea_orm::DatabaseConnection,
         _redis: &Pool,
         query: crate::models::face::PersonPageQuery,
-        encryption_key: &[u8; 32],
+        encryption_key: &EncryptionKey,
     ) -> Result<CursorPageVO<FacePersonVO, String>, AppError> {
         let size = query.size.unwrap_or(20) as u64;
         let decoded_cursor = query.cursor.as_ref().and_then(|s| PersonCursor::decode(s));
@@ -479,7 +480,7 @@ impl FaceService {
     pub async fn get_person_info(
         db: &sea_orm::DatabaseConnection,
         person_id: i64,
-        encryption_key: &[u8; 32],
+        encryption_key: &EncryptionKey,
     ) -> Result<FacePersonVO, AppError> {
         let person = FacePersonMapper::find_by_id(db, person_id).await?;
 
@@ -535,7 +536,7 @@ impl FaceService {
         person_id: i64,
         cursor: Option<i64>,
         size: u32,
-        encryption_key: &[u8; 32],
+        encryption_key: &EncryptionKey,
     ) -> Result<CursorPageVO<crate::models::photo::PhotoVO, i64>, AppError> {
         let features = FaceFeatureMapper::find_cursor_page(db, person_id, cursor, (size + 1) as u64).await?;
 
@@ -628,7 +629,7 @@ impl FaceService {
     pub async fn search_person(
         db: &sea_orm::DatabaseConnection,
         query: crate::models::face::PersonSearchQuery,
-        encryption_key: &[u8; 32],
+        encryption_key: &EncryptionKey,
     ) -> Result<CursorPageVO<FacePersonVO, String>, AppError> {
         let size = query.size.unwrap_or(20) as u64;
         let decoded_cursor = query.cursor.as_ref().and_then(|s| PersonCursor::decode(s));

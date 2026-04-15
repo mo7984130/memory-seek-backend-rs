@@ -8,11 +8,11 @@ pub struct CollectionMapper;
 
 impl CollectionMapper {
     /// 根据ID查询单个收藏夹
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `id`: 收藏夹ID
-    /// 
+    ///
     /// # 返回
     /// - 成功: 返回收藏夹模型
     /// - 失败: 收藏夹不存在返回404错误
@@ -25,11 +25,11 @@ impl CollectionMapper {
     }
 
     /// 查询用户的所有收藏夹
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
-    /// 
+    ///
     /// # 返回
     /// 返回用户的收藏夹列表，按是否收藏排序，再按创建时间倒序
     pub async fn find_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Vec<collection::Model>, AppError> {
@@ -43,11 +43,11 @@ impl CollectionMapper {
     }
 
     /// 查询用户的"我喜欢"收藏夹
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
-    /// 
+    ///
     /// # 返回
     /// 返回用户的"我喜欢"收藏夹，不存在返回None
     pub async fn find_favorite_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Option<collection::Model>, AppError> {
@@ -60,11 +60,11 @@ impl CollectionMapper {
     }
 
     /// 查询用户"我喜欢"收藏夹的ID
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
-    /// 
+    ///
     /// # 返回
     /// 返回"我喜欢"收藏夹的ID，不存在返回None
     pub async fn find_favorite_collection_id(db: &DatabaseConnection, user_id: i64) -> Result<Option<i64>, AppError> {
@@ -81,14 +81,14 @@ impl CollectionMapper {
     }
 
     /// 创建新收藏夹
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
     /// - `name`: 收藏夹名称
     /// - `description`: 收藏夹描述
     /// - `is_favorite`: 是否为"我喜欢"收藏夹
-    /// 
+    ///
     /// # 返回
     /// 返回创建的收藏夹模型
     pub async fn insert(
@@ -115,7 +115,7 @@ impl CollectionMapper {
     }
 
     /// 更新收藏夹信息
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `id`: 收藏夹ID
@@ -123,7 +123,7 @@ impl CollectionMapper {
     /// - `description`: 新描述（可选）
     /// - `photo_count`: 新照片数量（可选）
     /// - `cover_image_id`: 新封面图片ID（可选，传None清除封面）
-    /// 
+    ///
     /// # 返回
     /// 返回更新后的收藏夹模型
     pub async fn update(
@@ -155,11 +155,11 @@ impl CollectionMapper {
     }
 
     /// 删除收藏夹
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `id`: 收藏夹ID
-    /// 
+    ///
     /// # 返回
     /// 成功返回空元组
     pub async fn delete_by_id<C: ConnectionTrait>(db: &C, id: i64) -> Result<(), AppError> {
@@ -171,14 +171,14 @@ impl CollectionMapper {
     }
 
     /// 原子递增/递减照片数量
-    /// 
+    ///
     /// 使用查询+更新方式
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接或事务
     /// - `id`: 收藏夹ID
     /// - `delta`: 变化量（正数递增，负数递减）
-    /// 
+    ///
     /// # 返回
     /// 成功返回空元组
     pub async fn increment_photo_count<C: ConnectionTrait>(db: &C, id: i64, delta: i32) -> Result<(), AppError> {
@@ -195,4 +195,34 @@ impl CollectionMapper {
         active.update(db).await.map_internal_err("更新照片数量失败")?;
         Ok(())
     }
+
+    pub async fn increment_photo_counts<C: ConnectionTrait>(
+        txn: &C,
+        collection_ids: Vec<i64>,
+        change: i32,
+    ) -> Result<(), AppError> {
+        if collection_ids.is_empty() {
+            return Ok(());
+        }
+
+        use sea_orm::sea_query::Expr;
+
+        // 构建更新表达式
+        // 逻辑：photo_count = GREATEST(0, photo_count + change)
+        let new_count_expr = Expr::cust_with_exprs(
+            "GREATEST(0, photo_count + ?)",
+            vec![change.into()]
+        );
+
+        collection::Entity::update_many()
+            .col_expr(collection::Column::PhotoCount, new_count_expr)
+            .col_expr(collection::Column::UpdatedAt, Expr::value(Utc::now().naive_utc()))
+            .filter(collection::Column::Id.is_in(collection_ids))
+            .exec(txn)
+            .await
+            .map_internal_err("批量更新收藏夹计数失败")?;
+
+        Ok(())
+    }
+
 }

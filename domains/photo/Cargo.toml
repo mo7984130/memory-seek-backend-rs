@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = []
+default = ["metrics"]
+metrics = ["common/metrics"]
 face_recognition = ["dep:face_engine", "dep:ndarray", "dep:rayon"]
 
 [dependencies]
@@ -32,3 +33,6 @@ rayon = { version = "1.11.0", optional = true }
 ndarray = { version = "0.16", features = ["rayon"], optional = true }
 pinyin = { workspace = true }
 base64 = { workspace = true }
+tokio-util = { workspace = true }
+moka = { workspace = true }
+once_cell = { workspace = true }

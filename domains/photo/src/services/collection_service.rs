@@ -1,35 +1,47 @@
 use crate::mappers::{CollectionMapper, CollectionPhotoMapper, PhotoMapper};
 use crate::models::collection::{BatchOperationResultVO, CollectionPhotoCursor, CollectionPhotoVO, CollectionVO};
 use crate::models::photo::CursorPageVO;
-use chrono::Utc;
+use chrono::{Utc};
 use common::constants::RedisKeys;
 use common::error::AppError;
 use common::utils::CacheExtension;
 use deadpool_redis::Pool;
+use once_cell::sync::Lazy;
+use img_url_generator::EncryptionKey;
+use moka::future::Cache;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::collections::HashMap;
 
 pub struct CollectionService;
 
+// 定义全局缓存：Key 为 user_id (i64), Value 为 collection_id (i64)
+// 设置最大容量 10000 条，过期时间 24 小时
+static LOCAL_FAVORITE_ID_CACHE: Lazy<Cache<i64, i64>> = Lazy::new(|| {
+    Cache::builder()
+        .max_capacity(10000)
+        .time_to_live(std::time::Duration::from_secs(24 * 60 * 60))
+        .build()
+});
+
 impl CollectionService {
     /// 获取用户的收藏夹列表
-    /// 
+    ///
     /// 如果用户没有收藏夹，会自动创建"我喜欢"收藏夹
     /// 为每个收藏夹生成封面图token
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `_redis`: Redis连接池（暂未使用）
     /// - `user_id`: 用户ID
     /// - `encryption_key`: 加密密钥
-    /// 
+    ///
     /// # 返回
     /// 返回收藏夹VO列表
     pub async fn get_collection_list(
         db: &DatabaseConnection,
         _redis: &Pool,
         user_id: i64,
-        encryption_key: &[u8; 32],
+        encryption_key: &EncryptionKey,
     ) -> Result<Vec<CollectionVO>, AppError> {
         let collections = CollectionMapper::find_by_user_id(db, user_id).await?;
 
@@ -86,7 +98,7 @@ impl CollectionService {
                     let (thumbnail_token, _, _) = crate::models::photo::PhotoVO::generate_tokens(fid, encryption_key);
                     thumbnail_token
                 });
-                
+
                 CollectionVO {
                     id: c.id.to_string(),
                     name: c.name,
@@ -103,13 +115,13 @@ impl CollectionService {
     }
 
     /// 创建新收藏夹
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
     /// - `name`: 收藏夹名称
     /// - `description`: 收藏夹描述
-    /// 
+    ///
     /// # 返回
     /// 返回创建的收藏夹VO
     pub async fn create_collection(
@@ -132,17 +144,17 @@ impl CollectionService {
     }
 
     /// 编辑收藏夹信息
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID（用于权限验证）
     /// - `collection_id`: 收藏夹ID
     /// - `name`: 新名称（可选）
     /// - `description`: 新描述（可选）
-    /// 
+    ///
     /// # 返回
     /// 返回更新后的收藏夹VO
-    /// 
+    ///
     /// # 错误
     /// - 无权限返回400错误
     pub async fn edit_collection(
@@ -172,14 +184,14 @@ impl CollectionService {
     }
 
     /// 删除收藏夹
-    /// 
+    ///
     /// 使用事务保证原子性
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID（用于权限验证）
     /// - `collection_id`: 收藏夹ID
-    /// 
+    ///
     /// # 错误
     /// - 无权限返回400错误
     /// - 尝试删除"我喜欢"返回400错误
@@ -215,15 +227,15 @@ impl CollectionService {
     }
 
     /// 添加照片到收藏夹
-    /// 
+    ///
     /// 使用事务保证原子性，使用 ON CONFLICT 检测重复
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID（用于权限验证）
     /// - `collection_id`: 收藏夹ID
     /// - `photo_id`: 照片ID
-    /// 
+    ///
     /// # 错误
     /// - 无权限返回400错误
     /// - 照片已在收藏夹中返回400错误
@@ -260,15 +272,15 @@ impl CollectionService {
     }
 
     /// 从收藏夹移除照片
-    /// 
+    ///
     /// 使用事务保证原子性
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
     /// - `collection_id`: 收藏夹ID
     /// - `photo_id`: 照片ID
-    /// 
+    ///
     /// # 错误
     /// - 未找到收藏关系返回400错误
     pub async fn remove_photo_from_collection(
@@ -303,7 +315,7 @@ impl CollectionService {
     }
 
     /// 获取收藏夹中的照片列表
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `redis`: Redis连接池
@@ -312,10 +324,10 @@ impl CollectionService {
     /// - `cursor`: 复合游标（base64编码的字符串）
     /// - `size`: 每页数量
     /// - `encryption_key`: 加密密钥
-    /// 
+    ///
     /// # 返回
     /// 返回分页的收藏照片列表
-    /// 
+    ///
     /// # 错误
     /// - 无权限返回400错误
     pub async fn get_collection_photos(
@@ -325,7 +337,7 @@ impl CollectionService {
         collection_id: i64,
         cursor: Option<String>,
         size: u32,
-        encryption_key: &[u8; 32],
+        encryption_key: &EncryptionKey,
     ) -> Result<CursorPageVO<CollectionPhotoVO, String>, AppError> {
         let collection = CollectionMapper::find_by_id(db, collection_id).await?;
 
@@ -356,9 +368,9 @@ impl CollectionService {
             .into_iter()
             .filter_map(|r| {
                 let p = photo_map.get(&r.photo_id)?;
-                let (thumbnail_token, preview_token, original_token) = 
+                let (thumbnail_token, preview_token, original_token) =
                     crate::models::photo::PhotoVO::generate_tokens(&p.file_id, encryption_key);
-                
+
                 Some(CollectionPhotoVO {
                     photo: crate::models::photo::PhotoVO {
                         id: p.id.to_string(),
@@ -386,12 +398,12 @@ impl CollectionService {
     }
 
     /// 查询照片所在的收藏夹ID列表
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
     /// - `photo_id`: 照片ID
-    /// 
+    ///
     /// # 返回
     /// 返回收藏夹ID字符串列表
     pub async fn find_collection_ids_by_photo(
@@ -404,13 +416,13 @@ impl CollectionService {
     }
 
     /// 创建"我喜欢"收藏夹
-    /// 
+    ///
     /// 如果已存在则返回现有收藏夹
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
-    /// 
+    ///
     /// # 返回
     /// 返回"我喜欢"收藏夹VO
     pub async fn create_favorite_collection(
@@ -445,17 +457,18 @@ impl CollectionService {
     }
 
     /// 获取用户"我喜欢"收藏夹ID
-    /// 
+    ///
+    /// 因为 喜欢收藏夹的id是不会改变的, 所以加上本地缓存
     /// 使用Redis缓存，缓存时间24小时
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `redis`: Redis连接池
     /// - `user_id`: 用户ID
-    /// 
+    ///
     /// # 返回
     /// 返回"我喜欢"收藏夹ID
-    /// 
+    ///
     /// # 错误
     /// - 未找到收藏夹返回404错误
     pub async fn get_favorite_collection_id(
@@ -463,33 +476,45 @@ impl CollectionService {
         redis: &Pool,
         user_id: i64,
     ) -> Result<i64, AppError> {
-        redis.get_or_load(
+        // 先从本地缓存获取
+        if let Some(id) = LOCAL_FAVORITE_ID_CACHE.get(&user_id).await {
+            return Ok(id);
+        }
+
+        // 从redis中获取
+        let id = redis.get_or_load(
             RedisKeys::photo::favorite_collection_id(user_id),
             24 * 60 * 60,
             || async move {
+                // 从数据库中获取
                 CollectionMapper::find_favorite_collection_id(db, user_id)
                     .await?
                     .ok_or_else(|| AppError::not_found("未找到收藏夹"))
             }
-        ).await
+        ).await?;
+
+        // 回填本地缓存
+        LOCAL_FAVORITE_ID_CACHE.insert(user_id, id).await;
+
+        Ok(id)
     }
 
     /// 批量添加照片到收藏夹
-    /// 
+    ///
     /// 使用事务保证原子性
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID（用于权限验证）
     /// - `collection_id`: 收藏夹ID
     /// - `photo_ids`: 照片ID列表
-    /// 
+    ///
     /// # 返回
     /// 返回批量操作结果
     /// - success_count: 成功添加数量
     /// - already_exists_count/count: 已存在于收藏夹的数量
     /// - failed_count: 失败数量（照片不存在等原因）
-    /// 
+    ///
     /// # 错误
     /// - 无权限返回400错误
     /// - 数据库错误返回500错误（事务会回滚）
@@ -586,15 +611,15 @@ impl CollectionService {
     }
 
     /// 批量从收藏夹移除照片
-    /// 
+    ///
     /// 使用事务保证原子性
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `user_id`: 用户ID
     /// - `collection_id`: 收藏夹ID
     /// - `photo_ids`: 照片ID列表
-    /// 
+    ///
     /// # 返回
     /// 返回批量操作结果
     /// - success_count: 成功移除数量

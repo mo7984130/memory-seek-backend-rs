@@ -6,8 +6,8 @@ use common::r::R;
 use std::sync::Arc;
 
 use crate::state::AppState;
-use photo::models::common::PhotoTimelineStatVO;
-use photo::services::timeline_stat_service::TimelineStatService;
+use crate::models::common::PhotoTimelineStatVO;
+use crate::services::timeline_stat_service::TimelineStatService;
 
 pub struct TimelineController;
 

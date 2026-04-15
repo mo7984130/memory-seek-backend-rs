@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use common::utils::validators::validate_normal_char;
 use common::utils::validators::validate_password;
-use img_url_generator::{encrypt_image_token, ImageToken};
+use img_url_generator::{encrypt_image_token, EncryptionKey, ImageToken};
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -25,7 +25,7 @@ pub struct ChangeNicknameRequest {
     pub new_nickname: String
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct GetUserInfoBatchRequest {
     pub user_ids: Vec<String>
@@ -55,7 +55,7 @@ pub struct UserInfoVO {
 }
 
 impl UserInfoVO {
-    pub fn from_dto(dto: UserInfoDTO, encryption_key: &[u8; 32]) -> Self {
+    pub fn from_dto(dto: UserInfoDTO, encryption_key: &EncryptionKey) -> Self {
         let avatar_token = dto.avatar_file_id
             .as_ref()
             .and_then(|key| encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok());

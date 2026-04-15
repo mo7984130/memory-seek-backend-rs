@@ -10,12 +10,11 @@ use common::r::R;
 use common::utils::ResultExt;
 use img_url_generator::{decrypt_image_token, ImageToken, ImageTokenType};
 use std::sync::Arc;
-use tokio_util::io::ReaderStream;
 use tracing::debug;
 use crate::middlewares::auth::UserId;
 use crate::state::AppState;
-use photo::models::photo::{CursorPageVO, Md5Query, PhotoCursorQuery, PhotoVO, TimeRangeVO, UploadWithCreatedAtQuery};
-use photo::services::photo_service::PhotoService;
+use crate::models::photo::{CursorPageVO, Md5Query, PhotoCursorQuery, PhotoVO, TimeRangeVO, UploadWithCreatedAtQuery};
+use crate::services::photo_service::PhotoService;
 
 pub struct PhotoController;
 
@@ -55,13 +54,13 @@ impl PhotoController {
         let file_data = field
             .bytes()
             .await
-            .map_internal_err("读取文件失败")?
-            .to_vec();
+            .map_internal_err("读取文件失败")?;
 
         let photo = PhotoService::upload_photo(
             &state.db,
             &state.redis,
             &state.s3_client,
+            #[cfg(feature = "face_recognition")]
             &state.face_tx,
             user_id.0,
             file_data,
@@ -96,13 +95,13 @@ impl PhotoController {
         let file_data = field
             .bytes()
             .await
-            .map_internal_err("读取文件失败")?
-            .to_vec();
+            .map_internal_err("读取文件失败")?;
 
         let photo = PhotoService::upload_photo(
             &state.db,
             &state.redis,
             &state.s3_client,
+            #[cfg(feature = "face_recognition")]
             &state.face_tx,
             user_id.0,
             file_data,
@@ -148,7 +147,7 @@ impl PhotoController {
         Path(id): Path<String>,
     ) -> Result<R<()>, AppError> {
         let photo_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的照片ID"))?;
-        
+
         PhotoService::delete_photo(
             &state.db,
             &state.redis,
@@ -157,13 +156,10 @@ impl PhotoController {
             photo_id,
         )
         .await?;
-        
+
         Ok(R::ok(()))
     }
 
-    /// 统一图片接口
-    /// 
-    /// 根据 token 中的 type 字段自动返回对应类型的图片
     async fn get_image(
         State(state): State<Arc<AppState>>,
         Path(token): Path<String>,
@@ -171,13 +167,13 @@ impl PhotoController {
         let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
             .map_err(|_| AppError::bad_request("无效的token"))?;
         debug!("解密出图片token: {:?}", &image_token);
-        
+
         match image_token.token_type {
             ImageTokenType::Thumbnail => {
-                let stream = state.s3_client
+                let bytes = state.s3_client
                     .download_with_process(&image_token.file_id, "image/resize,w_300/format,webp")
                     .await?;
-                let body = Body::from_stream(ReaderStream::new(stream.into_async_read()));
+                let body = Body::from(bytes);
                 Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "image/webp")
@@ -186,10 +182,10 @@ impl PhotoController {
                     .unwrap())
             }
             ImageTokenType::Preview => {
-                let stream = state.s3_client
+                let bytes = state.s3_client
                     .download_with_process(&image_token.file_id, "image/resize,w_1920/format,webp")
                     .await?;
-                let body = Body::from_stream(ReaderStream::new(stream.into_async_read()));
+                let body = Body::from(bytes);
                 Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "image/webp")
@@ -198,9 +194,9 @@ impl PhotoController {
                     .unwrap())
             }
             ImageTokenType::Original => {
-                let stream = state.s3_client.download(&image_token.file_id).await?;
+                let bytes = state.s3_client.download(&image_token.file_id).await?;
                 let content_type = get_content_type(&image_token.file_id);
-                let body = Body::from_stream(ReaderStream::new(stream.into_async_read()));
+                let body = Body::from(bytes);
                 Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, content_type)
@@ -212,10 +208,10 @@ impl PhotoController {
                 let bbox = image_token.bbox.ok_or_else(|| AppError::bad_request("token不包含裁剪信息"))?;
                 let size = 200;
                 let process = format!("image/crop,x_{},y_{},w_{},h_{}/resize,w_{}/format,webp", bbox.x, bbox.y, bbox.w, bbox.h, size);
-                let stream = state.s3_client
+                let bytes = state.s3_client
                     .download_with_process(&image_token.file_id, &process)
                     .await?;
-                let body = Body::from_stream(ReaderStream::new(stream.into_async_read()));
+                let body = Body::from(bytes);
                 Ok(Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "image/webp")
@@ -232,13 +228,13 @@ impl PhotoController {
     ) -> Result<Response<Body>, AppError> {
         let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
             .map_err(|_| AppError::bad_request("无效的token"))?;
-        
-        let stream = state.s3_client
+
+        let bytes = state.s3_client
             .download_with_process(&image_token.file_id, "image/resize,w_300/format,webp")
             .await?;
-        
-        let body = Body::from_stream(ReaderStream::new(stream.into_async_read()));
-        
+
+        let body = Body::from(bytes);
+
         Ok(Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "image/webp")
@@ -253,13 +249,13 @@ impl PhotoController {
     ) -> Result<Response<Body>, AppError> {
         let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
             .map_err(|_| AppError::bad_request("无效的token"))?;
-        
-        let stream = state.s3_client
+
+        let bytes = state.s3_client
             .download_with_process(&image_token.file_id, "image/resize,w_1920/format,webp")
             .await?;
-        
-        let body = Body::from_stream(ReaderStream::new(stream.into_async_read()));
-        
+
+        let body = Body::from(bytes);
+
         Ok(Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "image/webp")
@@ -274,12 +270,12 @@ impl PhotoController {
     ) -> Result<Response<Body>, AppError> {
         let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
             .map_err(|_| AppError::bad_request("无效的token"))?;
-        
-        let stream = state.s3_client.download(&image_token.file_id).await?;
-        
+
+        let bytes = state.s3_client.download(&image_token.file_id).await?;
+
         let content_type = get_content_type(&image_token.file_id);
-        let body = Body::from_stream(ReaderStream::new(stream.into_async_read()));
-        
+        let body = Body::from(bytes);
+
         Ok(Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, content_type)
@@ -294,17 +290,17 @@ impl PhotoController {
     ) -> Result<Response<Body>, AppError> {
         let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
             .map_err(|_| AppError::bad_request("无效的token"))?;
-        
+
         let bbox = image_token.bbox.ok_or_else(|| AppError::bad_request("token不包含裁剪信息"))?;
         let size = 200;
         let process = format!("image/crop,x_{},y_{},w_{},h_{}/resize,w_{}/format,webp", bbox.x, bbox.y, bbox.w, bbox.h, size);
-        
-        let stream = state.s3_client
+
+        let bytes = state.s3_client
             .download_with_process(&image_token.file_id, &process)
             .await?;
-        
-        let body = Body::from_stream(ReaderStream::new(stream.into_async_read()));
-        
+
+        let body = Body::from(bytes);
+
         Ok(Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "image/webp")

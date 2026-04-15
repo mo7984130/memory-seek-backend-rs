@@ -11,7 +11,7 @@ use deadpool_redis::Pool;
 use email::EmailClient;
 use entities::user;
 use entities::user::UserDTO;
-use img_url_generator::{ImageToken, encrypt_image_token};
+use img_url_generator::{EncryptionKey, ImageToken, encrypt_image_token};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     QueryFilter, QuerySelect, Set,
@@ -33,7 +33,7 @@ pub async fn login(
     db: &DatabaseConnection,
     redis: &Pool,
     req: LoginRequest,
-    encryption_key: &[u8; 32],
+    encryption_key: &EncryptionKey,
 ) -> Result<UserDTO, AppError> {
     metrics_group!("login");
 

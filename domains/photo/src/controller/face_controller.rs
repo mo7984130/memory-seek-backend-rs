@@ -9,13 +9,13 @@ use std::sync::Arc;
 
 use crate::middlewares::auth::UserId;
 use crate::state::AppState;
-use photo::models::face::{
+use crate::models::face::{
     FaceFeatureVO, FacePersonSimpleVO, FacePersonVO, MergePersonRequest, PersonPageQuery,
     PersonSearchQuery, RenamePersonRequest,
 };
-use photo::models::photo::{CursorPageVO, PhotoVO};
-use photo::services::face_service::FaceService;
-use photo::services::feature_service::FeatureService;
+use crate::models::photo::{CursorPageVO, PhotoVO};
+use crate::services::face_service::FaceService;
+use crate::services::feature_service::FeatureService;
 
 pub struct FaceController;
 

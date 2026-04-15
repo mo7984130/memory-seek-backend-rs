@@ -1,6 +1,7 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
-use img_url_generator::{ImageToken, encrypt_image_token};
+use common::{error::AppError, utils::ResultExt};
+use img_url_generator::{EncryptionKey, ImageToken, encrypt_image_token};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -27,7 +28,7 @@ pub struct PhotoVO {
 impl PhotoVO {
     pub fn generate_tokens(
         file_id: &str,
-        encryption_key: &[u8; 32],
+        encryption_key: &EncryptionKey,
     ) -> (Option<String>, Option<String>, Option<String>) {
         let thumbnail_token =
             encrypt_image_token(&ImageToken::thumbnail(file_id.to_string()), encryption_key).ok();
@@ -71,10 +72,13 @@ impl PhotoCursor {
         URL_SAFE_NO_PAD.encode(json.as_bytes())
     }
 
-    pub fn decode(s: impl AsRef<[u8]>) -> Option<Self> {
-        let bytes = URL_SAFE_NO_PAD.decode(s).ok()?;
-        let json = String::from_utf8(bytes).ok()?;
-        serde_json::from_str(&json).ok()
+    pub fn decode(s: impl AsRef<[u8]>) -> Result<Self, AppError> {
+        let bytes = URL_SAFE_NO_PAD.decode(s)
+            .trace_bad_request_err("photo::photo_cursor:decode_err", "解码photo_curosr错误")?;
+        let json = String::from_utf8(bytes)
+            .trace_bad_request_err("photo::photo_cursor:from_utf8_err", "解码photo_curosr错误")?;
+        serde_json::from_str(&json)
+            .trace_bad_request_err("photo::photo_cursor:from_str_err", "解码photo_curosr错误")
     }
 }
 

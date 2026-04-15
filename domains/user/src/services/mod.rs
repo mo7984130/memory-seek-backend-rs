@@ -3,19 +3,14 @@ use common::constants::RedisKeys;
 use common::{metrics_group, metrics_success, timed};
 use deadpool_redis::Pool;
 use entities::user;
-use img_url_generator::{encrypt_image_token, ImageToken};
+use img_url_generator::{encrypt_image_token, EncryptionKey, ImageToken};
 use sea_orm::sea_query::Expr;
 use sea_orm::sqlx::types::uuid;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
 use tracing::{info, warn};
 use tokio::task::spawn_blocking;
 
-#[cfg(feature = "metrics")]
-use common::utils::{MetricsConcurrencyGuard, MetricsTimer};
-
-#[cfg(feature = "metrics")]
-use metrics::counter;
-
+use crate::config::GET_USER_INFO_BATCH_MAX_LEN;
 use crate::models::{ChangePasswordRequest, InviterCodeDTO, UserInfoDTO, UserInfoVO};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use common::error::AppError;
@@ -35,7 +30,7 @@ use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_C
 pub async fn get_user_info(
     db: &DatabaseConnection,
     user_id: i64,
-    encryption_key: &[u8; 32],
+    encryption_key: &EncryptionKey,
 ) -> Result<user::UserDTO, AppError> {
     metrics_group!("get_user_info");
 
@@ -74,7 +69,7 @@ pub async fn get_user_info(
     })
 }
 
-/// 生产邀请码
+/// 生成邀请码
 #[tracing::instrument(
     name = "user_generate_inviter_code",
     skip_all,
@@ -100,7 +95,7 @@ pub async fn generate_inviter_code(
             .arg(INVITER_CODE_TTL_SECONDS)
             .arg("NX")
             .query_async(&mut conn)
-            .timed("generate_inviter_code_redis_seconds")
+            .timed("generate_inviter_code_redis")
             .await
             .trace_internal_err("redis_set_error", "生成邀请码时 redis错误")?;
 
@@ -139,7 +134,7 @@ pub async fn change_nickname(
         .col_expr(user::Column::Nickname, Expr::value(new_nickname.clone()))
         .filter(user::Column::Id.eq(user_id))
         .exec(db)
-        .timed("change_nickname_db_update_seconds")
+        .timed("change_nickname_db_update")
         .await
         .trace_internal_err("db_update_error", "数据库更新昵称失败")?;
 
@@ -149,7 +144,7 @@ pub async fn change_nickname(
 
     // 删除用户缓存
     // 错误不返回
-    redis.delete(&RedisKeys::user::user_info_cache(user_id)).timed("change_nickname_redis_delete_seconds").await
+    let _ = redis.delete(&RedisKeys::user::user_info_cache(user_id)).timed("change_nickname_redis_delete_seconds").await
         .trace_internal_err("redis_delete_error", "删除用户缓存失败");
 
 
@@ -173,12 +168,12 @@ pub async fn update_avatar(
     file_name: String,
     file_data: Vec<u8>,
     content_type: String,
-    encryption_key: &[u8; 32],
+    encryption_key: &EncryptionKey,
 ) -> Result<String, AppError> {
     metrics_group!("update_avatar");
 
     // 效验图片
-    let img_metadata = timed!("update_avatar_validate_seconds",
+    let img_metadata = timed!("update_avatar_validate",
         FileValidator::validate_image(&file_data, file_name, content_type)
             .trace_bad_request_err("invalid_image", "文件验证失败")?
     ) ;
@@ -186,7 +181,7 @@ pub async fn update_avatar(
     // 上传图片
     let new_key = format!("avatars/{}/{}.{}", user_id, uuid::Uuid::new_v4(), &img_metadata.format);
     s3_client.upload(&new_key, file_data, &img_metadata.mime_type)
-        .timed("update_avatar_s3_upload_seconds").await
+        .timed("update_avatar_s3_upload").await
         .trace_internal_err("s3_upload_error", "上传头像到S3失败")?;
 
     // 获取旧头像key并更新数据库
@@ -214,28 +209,28 @@ pub async fn update_avatar(
             Ok(old_key)
         })
     })
-    .timed("update_avatar_db_transaction_seconds")
+    .timed("update_avatar_db_transaction")
     .await
     // 如果更新数据库失败的话, 删除刚才上传的文件
     .inspect_err(|_| {
         let client = s3_client.clone();
         let key = new_key.clone();
         tokio::spawn(async move {
-            client.delete(&key).await
+            let _ = client.delete(&key).await
                 .trace_internal_err("s3_delete_error", "删除上传的头像失败");
         });
     })?;
 
     // 删除用户信息缓存
     redis.delete(&RedisKeys::user::user_info_cache(user_id))
-        .timed("update_avatar_redis_delete_seconds").await
+        .timed("update_avatar_redis_delete").await
         .trace_internal_err("redis_delete_error", "删除用户信息缓存失败")?;
 
     // 删除旧头像
     // 删除失败, 不返回错误
     if let Some(old_key) = old_key {
-        s3_client.delete(&old_key)
-            .timed("update_avatar_s3_delete_seconds").await
+        let _ = s3_client.delete(&old_key)
+            .timed("update_avatar_s3_delete").await
             .trace_internal_err("s3_delete_error", "删除旧头像失败");
     }
 
@@ -372,7 +367,7 @@ pub async fn get_user_info_batch(
     db: &DatabaseConnection,
     redis: &Pool,
     user_ids: Vec<i64>,
-    encryption_key: &[u8; 32],
+    encryption_key: &EncryptionKey,
 ) -> Result<Vec<Option<UserInfoVO>>, AppError> {
     metrics_group!("get_user_info_batch");
 

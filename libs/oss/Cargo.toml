@@ -5,8 +5,8 @@ edition = "2024"
 
 [dependencies]
 common = { path = "../../common" }
-reqwest = { workspace = true }
-bytes = { workspace = true }
-s3 = { package = "rust-s3", workspace = true }
 serde = { workspace = true }
-tokio = { workspace = true }
+bytes = "1.10"
+
+rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

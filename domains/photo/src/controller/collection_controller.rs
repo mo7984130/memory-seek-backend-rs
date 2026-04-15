@@ -9,12 +9,12 @@ use std::sync::Arc;
 
 use crate::middlewares::auth::UserId;
 use crate::state::AppState;
-use photo::models::collection::{
+use crate::models::collection::{
     BatchOperationResultVO, BatchPhotosDTO, CollectionCreateDTO, CollectionEditDTO,
     CollectionPhotoQuery, CollectionPhotoVO, CollectionVO,
 };
-use photo::models::photo::CursorPageVO;
-use photo::services::collection_service::CollectionService;
+use crate::models::photo::CursorPageVO;
+use crate::services::collection_service::CollectionService;
 
 pub struct CollectionController;
 

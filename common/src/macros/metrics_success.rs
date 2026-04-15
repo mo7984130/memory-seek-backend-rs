@@ -2,6 +2,6 @@
 macro_rules! metrics_success {
     ($name:literal) => {
         #[cfg(feature = "metrics")]
-        metrics::counter!(concat!($name, "_success")).increment(1);
+        $crate::metrics::counter!(concat!($name, ":success")).increment(1);
     };
 }

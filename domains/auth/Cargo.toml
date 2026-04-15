@@ -6,7 +6,7 @@ edition = "2024"
 [features]
 default = ["metrics", "controller"]
 metrics = ["common/metrics", "dep:metrics"]
-controller = []
+controller = ["dep:axum", "dep:serde_json"]
 
 [dependencies]
 common = { path = "../../common" }
@@ -22,4 +22,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 img_url_generator = { path = "../../libs/img_url_generator" }
 
+axum = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 metrics = { workspace = true, optional = true }

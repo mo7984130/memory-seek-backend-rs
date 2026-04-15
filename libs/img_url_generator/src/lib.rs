@@ -4,6 +4,7 @@ mod imgproxy_generator;
 
 use async_trait::async_trait;
 use serde::Deserialize;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::alioss_generator::AliyunOssGenerator;
@@ -16,6 +17,49 @@ pub use crypto::{
     encrypt_file_id, encrypt_image_token,
     CryptoError, FaceBBoxPixels, ImageToken, ImageTokenType,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EncryptionKey([u8; 32]);
+
+impl EncryptionKey {
+    pub fn new(key: [u8; 32]) -> Self {
+        Self(key)
+    }
+
+    pub fn from_str(key: &str) -> Self {
+        let key_bytes = key.as_bytes();
+        let mut result = [0u8; 32];
+        let len = key_bytes.len().min(32);
+        result[..len].copy_from_slice(&key_bytes[..len]);
+        Self(result)
+    }
+}
+
+impl Deref for EncryptionKey {
+    type Target = [u8; 32];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<[u8; 32]> for EncryptionKey {
+    fn as_ref(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+impl From<[u8; 32]> for EncryptionKey {
+    fn from(key: [u8; 32]) -> Self {
+        Self(key)
+    }
+}
+
+impl From<EncryptionKey> for [u8; 32] {
+    fn from(key: EncryptionKey) -> Self {
+        key.0
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -83,18 +127,11 @@ impl ImageUrlProvider {
     /// 
     /// # 返回
     /// 加密后的 token 字符串
-    pub fn generate_token(&self, file_id: &str, encryption_key: &[u8; 32]) -> String {
+    pub fn generate_token(&self, file_id: &str, encryption_key: &EncryptionKey) -> String {
         encrypt_file_id(file_id, encryption_key).unwrap_or_default()
     }
     
-    /// 解密 token 获取 file_id
-    /// 
-    /// # 参数
-    /// - `token`: 加密的 token
-    /// 
-    /// # 返回
-    /// 解密后的文件路径
-    pub fn decrypt_token(&self, token: &str, encryption_key: &[u8; 32]) -> Result<String, CryptoError> {
+    pub fn decrypt_token(&self, token: &str, encryption_key: &EncryptionKey) -> Result<String, CryptoError> {
         decrypt_file_id(token, encryption_key)
     }
 }

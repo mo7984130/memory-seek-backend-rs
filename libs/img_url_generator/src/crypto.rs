@@ -6,6 +6,8 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::EncryptionKey;
+
 const NONCE: &[u8; 12] = b"img_token_12";
 
 #[derive(Error, Debug)]
@@ -89,8 +91,8 @@ impl ImageToken {
 }
 
 /// 加密图片 Token
-pub fn encrypt_image_token(token: &ImageToken, key: &[u8; 32]) -> Result<String, CryptoError> {
-    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| CryptoError::EncryptError)?;
+pub fn encrypt_image_token(token: &ImageToken, key: &EncryptionKey) -> Result<String, CryptoError> {
+    let cipher = Aes256Gcm::new_from_slice(key.as_slice()).map_err(|_| CryptoError::EncryptError)?;
     
     let nonce = Nonce::from_slice(NONCE);
     
@@ -104,8 +106,8 @@ pub fn encrypt_image_token(token: &ImageToken, key: &[u8; 32]) -> Result<String,
 }
 
 /// 解密图片 Token
-pub fn decrypt_image_token(token: &str, key: &[u8; 32]) -> Result<ImageToken, CryptoError> {
-    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| CryptoError::DecryptError)?;
+pub fn decrypt_image_token(token: &str, key: &EncryptionKey) -> Result<ImageToken, CryptoError> {
+    let cipher = Aes256Gcm::new_from_slice(key.as_slice()).map_err(|_| CryptoError::DecryptError)?;
     
     let nonce = Nonce::from_slice(NONCE);
     
@@ -123,13 +125,13 @@ pub fn decrypt_image_token(token: &str, key: &[u8; 32]) -> Result<ImageToken, Cr
 }
 
 /// 使用 AES-256-GCM 加密 file_id（兼容旧接口）
-pub fn encrypt_file_id(file_id: &str, key: &[u8; 32]) -> Result<String, CryptoError> {
+pub fn encrypt_file_id(file_id: &str, key: &EncryptionKey) -> Result<String, CryptoError> {
     let token = ImageToken::thumbnail(file_id.to_string());
     encrypt_image_token(&token, key)
 }
 
 /// 解密 token 获取 file_id（兼容旧接口）
-pub fn decrypt_file_id(token: &str, key: &[u8; 32]) -> Result<String, CryptoError> {
+pub fn decrypt_file_id(token: &str, key: &EncryptionKey) -> Result<String, CryptoError> {
     let image_token = decrypt_image_token(token, key)?;
     Ok(image_token.file_id)
 }
@@ -138,14 +140,14 @@ pub fn decrypt_file_id(token: &str, key: &[u8; 32]) -> Result<String, CryptoErro
 pub fn encrypt_face_cover_token(
     file_id: &str,
     bbox: &FaceBBoxPixels,
-    key: &[u8; 32],
+    key: &EncryptionKey,
 ) -> Result<String, CryptoError> {
     let token = ImageToken::crop(file_id.to_string(), *bbox);
     encrypt_image_token(&token, key)
 }
 
 /// 解密人脸封面 Token（兼容旧接口）
-pub fn decrypt_face_cover_token(token: &str, key: &[u8; 32]) -> Result<ImageToken, CryptoError> {
+pub fn decrypt_face_cover_token(token: &str, key: &EncryptionKey) -> Result<ImageToken, CryptoError> {
     decrypt_image_token(token, key)
 }
 
@@ -155,11 +157,11 @@ mod tests {
 
     #[test]
     fn test_image_token_thumbnail() {
-        let key = b"01234567890123456789012345678901";
+        let key = EncryptionKey::new(*b"01234567890123456789012345678901");
         let token = ImageToken::thumbnail("photos/2024/01/abc.jpg".to_string());
         
-        let encrypted = encrypt_image_token(&token, key).unwrap();
-        let decrypted = decrypt_image_token(&encrypted, key).unwrap();
+        let encrypted = encrypt_image_token(&token, &key).unwrap();
+        let decrypted = decrypt_image_token(&encrypted, &key).unwrap();
         
         assert_eq!(token.file_id, decrypted.file_id);
         assert_eq!(ImageTokenType::Thumbnail, decrypted.token_type);
@@ -168,12 +170,12 @@ mod tests {
 
     #[test]
     fn test_image_token_crop() {
-        let key = b"01234567890123456789012345678901";
+        let key = EncryptionKey::new(*b"01234567890123456789012345678901");
         let bbox = FaceBBoxPixels { x: 100, y: 200, w: 300, h: 400 };
         let token = ImageToken::crop("photos/2024/01/abc.jpg".to_string(), bbox);
         
-        let encrypted = encrypt_image_token(&token, key).unwrap();
-        let decrypted = decrypt_image_token(&encrypted, key).unwrap();
+        let encrypted = encrypt_image_token(&token, &key).unwrap();
+        let decrypted = decrypt_image_token(&encrypted, &key).unwrap();
         
         assert_eq!(token.file_id, decrypted.file_id);
         assert_eq!(ImageTokenType::Crop, decrypted.token_type);

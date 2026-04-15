@@ -34,7 +34,7 @@ impl S3Client {
 
         let access_key = s3_config.access_key.clone();
         let secret_key = s3_config.secret_key.clone();
-        
+
         let credentials = Credentials::new(
             Some(access_key.as_str()),
             Some(secret_key.as_str()),
@@ -54,14 +54,14 @@ impl S3Client {
         };
 
         Self {
-            bucket: Arc::new(*bucket),
+            bucket: Arc::from(bucket),
             public_url: s3_config.public_url.trim_end_matches('/').to_string(),
         }
     }
 
-    pub async fn upload(&self, key: &str, data: Vec<u8>, content_type: &str) -> Result<(), AppError> {
+    pub async fn upload(&self, key: &str, data: impl AsRef<[u8]>, content_type: &str) -> Result<(), AppError> {
         self.bucket
-            .put_object_with_content_type(key, &data, content_type)
+            .put_object_with_content_type(key, data.as_ref(), content_type)
             .await
             .map_internal_err("OSS文件存储失败")?;
         Ok(())
@@ -106,6 +106,13 @@ impl S3Client {
         Ok(url)
     }
 
+    /// 下载文件
+    ///
+    /// # 参数
+    /// - `key`: 文件路径
+    ///
+    /// # 返回
+    /// 返回 Bytes，可直接用于 HTTP 响应
     pub async fn download(&self, key: &str) -> Result<Bytes, AppError> {
         let response_data = self
             .bucket
@@ -116,14 +123,32 @@ impl S3Client {
         Ok(Bytes::from(response_data.bytes().to_vec()))
     }
 
+    /// 下载文件并应用图片处理参数
+    ///
+    /// # 参数
+    /// - `key`: 文件路径
+    /// - `process`: OSS图片处理参数，如 "image/resize,w_300"
+    ///
+    /// # 返回
+    /// 返回 Bytes，可直接用于 HTTP 响应
     pub async fn download_with_process(&self, key: &str, process: &str) -> Result<Bytes, AppError> {
-        let url = format!("{}?x-oss-process={}", self.get_url(key), process);
-        
+        let mut custom_queries = HashMap::new();
+        custom_queries.insert("x-oss-process".to_string(), process.to_string());
+
+        let url = self
+            .bucket
+            .presign_get(key, 3600, Some(custom_queries))
+            .await
+            .map_internal_err("OSS签名失败")?;
+
         let response = reqwest::get(&url)
             .await
             .map_internal_err("OSS下载失败")?;
-        
-        let bytes = response.bytes().await.map_internal_err("读取响应失败")?;
+
+        let bytes = response
+            .bytes()
+            .await
+            .map_internal_err("OSS读取数据失败")?;
 
         Ok(bytes)
     }
