@@ -9,3 +9,5 @@ pub use photo_controller::PhotoController;
 pub use collection_controller::CollectionController;
 pub use comment_controller::CommentController;
 pub use timeline_controller::TimelineController;
+#[cfg(feature = "face_recognition")]
+pub use face_controller::FaceController;

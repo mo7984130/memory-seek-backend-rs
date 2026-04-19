@@ -20,13 +20,13 @@ where
         let bytes = axum::body::to_bytes(req.into_body(), usize::MAX)
             .await
             .map_err(|err| {
-                tracing::error!("Failed to read body: {}", err);
+                tracing::warn!("读取body错误: {}", err);
                 StatusCode::BAD_REQUEST.into_response()
             })?;
 
         let value: T = serde_json::from_slice(&bytes).map_err(|err| {
-            tracing::error!("Failed to parse JSON: {}", err);
-            let msg = format!("JSON parse error: {}", err);
+            tracing::warn!("解析JSON错误: {}", err);
+            let msg = format!("解析JSON错误: {}", err);
             (
                 StatusCode::BAD_REQUEST,
                 axum::Json(serde_json::json!({ "error": msg })),
@@ -35,7 +35,7 @@ where
         })?;
 
         value.validate().map_err(|err: ValidationErrors| {
-            tracing::error!("Validation failed: {}", err);
+            tracing::warn!("效验失败: {}", err);
             let msg = err
                 .field_errors()
                 .into_iter()

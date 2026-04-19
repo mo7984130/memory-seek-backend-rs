@@ -150,6 +150,7 @@ impl PhotoController {
 
         PhotoService::delete_photo(
             &state.db,
+            #[cfg(feature = "face_recognition")]
             &state.redis,
             &state.s3_client,
             user_id.0,

@@ -1,4 +1,4 @@
-use crate::controller::AuthState;
+use crate::AuthState;
 use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest, SendEmailCodeRequest};
 use crate::services as auth_service;
 use axum::extract::State;
@@ -27,14 +27,14 @@ impl AuthController {
         State(state): State<Arc<AuthState>>,
         ValidatedJson(req): ValidatedJson<LoginRequest>
     ) -> Result<R<UserDTO>, AppError> {
-        auth_service::login(&state.db, &state.redis, req, &state.encryption_key).await.into_ok_res()
+        auth_service::login(&state.db, &state.redis, &state.hasher, req, &state.encryption_key, &state.password_verify_semaphore).await.into_ok_res()
     }
 
     async fn register(
         State(state): State<Arc<AuthState>>,
         ValidatedJson(payload): ValidatedJson<RegisterRequest>
     ) -> Result<R<UserDTO>, AppError> {
-        auth_service::register(&state.db, &state.redis, payload).await.into_ok_res()
+        auth_service::register(&state.db, &state.redis, &state.hasher, payload).await.into_ok_res()
     }
 
     async fn send_email_code(

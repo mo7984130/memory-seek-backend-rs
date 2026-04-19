@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import {check, sleep} from 'k6';
-import {config} from './config.js';
-import {getAuthHeaders, login} from './auth.js';
+import {config} from './common/config.js';
+import {getAuthHeaders, login} from './common/auth.js';
 
 export const options = {
     stages: [

@@ -14,11 +14,7 @@ impl BoolExt for bool {
         if self {
             Ok(())
         } else {
-            let span = Span::current();
-            span.record("status", "failed");
-            span.record("reason", reason);
-
-            warn!(%reason, "{msg}");
+            warn!(%reason, status="failed", "{msg}");
             Err(AppError::bad_request(msg))
         }
     }

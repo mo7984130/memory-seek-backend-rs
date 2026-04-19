@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import {check, sleep} from 'k6';
-import {config} from './config.js';
-import {getAuthHeaders, login} from './auth.js';
+import {config} from './common/config.js';
+import {getAuthHeaders, login} from './common/auth.js';
 import {
     addPhotoToCollection,
     createCollection,
@@ -9,9 +9,9 @@ import {
     getCollectionList,
     getCollectionPhotos,
     removePhotoFromCollection
-} from './collections.js';
-import {deleteComment, getCommentList, publishComment, toggleLikeComment} from './comments.js';
-import {getPersonDetail, getPersonPage, getPersonPhotos, searchPerson} from './face.js';
+} from './photo/collection_service.js';
+import {deleteComment, getCommentList, publishComment, toggleLikeComment} from './photo/comment_service.js';
+import {getPersonDetail, getPersonPage, getPersonPhotos, searchPerson} from './photo/face_service.js';
 
 export const options = {
     scenarios: {

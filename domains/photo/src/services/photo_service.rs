@@ -376,48 +376,59 @@ impl PhotoService {
     ) -> Result<(), AppError> {
         metrics_group!("photo::delete_photo");
 
-        // 只有管理员可以删除
-        // 默认id为1
         if user_id != 1 {
             return Err(AppError::forbidden("只有管理员可以删除照片"));
         }
 
-        // 获取照片信息
         let photo = PhotoMapper::find_by_id(db, photo_id)
             .timed("photo::delete_photo:find_photo").await?;
-        // 获取照片里面的人脸数据
+
+        #[cfg(feature = "face_recognition")]
         let features = FaceFeatureMapper::find_by_photo_id(db, photo_id)
             .timed("photo::delete_photo:find_features")
             .await?;
-        // 找出对应的人物
+
+        #[cfg(feature = "face_recognition")]
         let person_ids: std::collections::HashSet<i64> =
             features.iter().filter_map(|f| f.person_id).collect();
 
-        db.transaction::<_, (), AppError>(|txn| {
-            Box::pin(async move {
-                // 删除人脸
-                let feature_ids: Vec<i64> = features.iter().map(|f| f.id).collect();
-                if !feature_ids.is_empty() {
-                    FaceFeatureMapper::delete_by_ids(txn, feature_ids)
-                        .timed("photo::delete_photo:delete_features")
-                        .await?;
-                }
+        #[cfg(feature = "face_recognition")]
+        {
+            db.transaction::<_, (), AppError>(|txn| {
+                Box::pin(async move {
+                    let feature_ids: Vec<i64> = features.iter().map(|f| f.id).collect();
+                    if !feature_ids.is_empty() {
+                        FaceFeatureMapper::delete_by_ids(txn, feature_ids)
+                            .timed("photo::delete_photo:delete_features")
+                            .await?;
+                    }
 
-                // 删除
-                Self::delete_photo_transaction_body(txn, photo_id).await
+                    Self::delete_photo_transaction_body(txn, photo_id).await
+                })
             })
-        })
-        .await
-        .trace_internal_err("photo::delete_photo:db_err", "数据库出错")?;
+            .await
+            .trace_internal_err("photo::delete_photo:db_err", "数据库出错")?;
+        }
 
-        // 删除人脸后, 重新计算对应的人物
-        let futs = person_ids.iter().map(|&pid| {
-            FeatureService::recalculate_person_stats(db, redis, pid)
-        });
-        let _ = futures::future::join_all(futs).await;
+        #[cfg(not(feature = "face_recognition"))]
+        {
+            db.transaction::<_, (), AppError>(|txn| {
+                Box::pin(async move {
+                    Self::delete_photo_transaction_body(txn, photo_id).await
+                })
+            })
+            .await
+            .trace_internal_err("photo::delete_photo:db_err", "数据库出错")?;
+        }
 
-        // 删除图片文件
-        // 错误不返回
+        #[cfg(feature = "face_recognition")]
+        {
+            let futs = person_ids.iter().map(|&pid| {
+                FeatureService::recalculate_person_stats(db, redis, pid)
+            });
+            let _ = futures::future::join_all(futs).await;
+        }
+
         let _ = s3.delete(&photo.file_id)
             .timed("photo::delete_photo:delete_photo").await
             .trace_internal_err("photo::delete_photo:s3_delete_err", "删除图片文件失败");

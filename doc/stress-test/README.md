@@ -1,5 +1,26 @@
 # k6 压力测试脚本
 
+## 目录结构
+
+```
+stress-test/
+├── common/                         # 公共模块
+│   ├── config.js                  # 配置文件
+│   ├── auth.js                    # 认证工具函数
+│   └── utils.js                   # 工具函数
+├── photo/                          # Photo模块压测脚本
+│   ├── photo_service.js           # 照片服务压测
+│   ├── collection_service.js      # 收藏夹服务压测
+│   ├── comment_service.js         # 评论服务压测
+│   ├── face_service.js            # 人脸服务压测
+│   ├── feature_service.js         # 人脸特征服务压测
+│   ├── timeline_stat_service.js   # 时间线统计服务压测
+│   └── photos.js                  # 照片浏览综合测试
+├── main.js                         # 主测试套件
+├── mixed.js                        # 混合场景测试
+└── README.md                       # 文档
+```
+
 ## 安装 k6
 
 ### Windows
@@ -31,7 +52,7 @@ sudo apt install k6
 
 ## 配置测试账号
 
-编辑 `config.js` 文件，添加你的测试账号：
+编辑 `common/config.js` 文件，添加你的测试账号：
 
 ```javascript
 testUsers: [
@@ -43,53 +64,113 @@ testUsers: [
 
 ## 运行测试
 
-### 单场景测试
+### Photo模块Service压测
 
+#### 1. Photo Service - 照片核心服务
 ```bash
-# 登录压测
-k6 run auth.js
-
-# 照片浏览压测
-k6 run photos.js
-
-# 收藏夹管理压测（包含创建、删除、添加/移除照片）
-k6 run collections.js
-
-# 评论系统压测（包含发布、点赞、删除）
-k6 run comments.js
-
-# 人物浏览压测（包含列表、搜索、详情）
-k6 run face.js
-
-# 混合业务压测
-k6 run mixed.js
+# 照片游标分页、MD5检查、时间范围查询
+k6 run photo/photo_service.js
 ```
 
-### 完整测试套件
+**测试接口：**
+- GET /photo/photo/cursor - 游标分页查询照片列表
+- GET /photo/photo/md5-exist - 检查MD5是否存在
+- GET /photo/photo/time-range - 获取照片时间范围
+
+#### 2. Collection Service - 收藏夹服务
+```bash
+# 收藏夹CRUD操作、照片收藏管理
+k6 run photo/collection_service.js
+```
+
+**测试接口：**
+- GET /photo/collection - 获取收藏夹列表
+- POST /photo/collection - 创建收藏夹
+- PUT /photo/collection/{id} - 编辑收藏夹
+- DELETE /photo/collection/{id} - 删除收藏夹
+- POST /photo/collection/{id}/photo - 添加照片到收藏夹
+- DELETE /photo/collection/{id}/photo - 从收藏夹移除照片
+- GET /photo/collection/{id}/photos - 获取收藏夹照片列表
+
+#### 3. Comment Service - 评论服务
+```bash
+# 评论发布、点赞、删除
+k6 run photo/comment_service.js
+```
+
+**测试接口：**
+- GET /photo/comment/photo/{photoId} - 获取照片评论列表
+- POST /photo/comment - 发布评论
+- DELETE /photo/comment/{id} - 删除评论
+- POST /photo/comment/{id}/like - 切换点赞状态
+
+#### 4. Face Service - 人脸识别服务
+```bash
+# 人物列表、搜索、详情、照片浏览
+k6 run photo/face_service.js
+```
+
+**测试接口：**
+- GET /photo/face/person - 获取人物列表
+- GET /photo/face/person/all - 获取所有人物简单列表
+- GET /photo/face/person/{id} - 获取人物详情
+- PUT /photo/face/person/{id} - 重命名人物
+- POST /photo/face/person/merge - 合并人物
+- DELETE /photo/face/person/{id} - 删除人物
+- GET /photo/face/person/{id}/photos - 获取人物照片
+- GET /photo/face/person/search - 搜索人物
+
+#### 5. Feature Service - 人脸特征服务
+```bash
+# 人脸特征查询、删除、归属更改
+k6 run photo/feature_service.js
+```
+
+**测试接口：**
+- GET /photo/feature/photo/{photoId} - 获取照片人脸特征
+- DELETE /photo/feature/{id} - 删除人脸特征
+- PUT /photo/feature/{id}/person - 更改人脸归属
+
+#### 6. Timeline Stat Service - 时间线统计服务
+```bash
+# 时间线统计查询
+k6 run photo/timeline_stat_service.js
+```
+
+**测试接口：**
+- GET /photo/timeline-stat - 获取时间线统计
+
+### 综合测试场景
 
 ```bash
-# 运行所有场景（约 22 分钟）
+# 照片浏览综合测试
+k6 run photo/photos.js
+
+# 混合业务场景测试
+k6 run mixed.js
+
+# 完整测试套件（约 22 分钟）
 k6 run main.js
 ```
 
 ### 输出 JSON 报告
 
 ```bash
-k6 run --out json=report.json main.js
+k6 run --out json=report.json photo/photo_service.js
 ```
 
 ## 测试场景说明
 
-### 单场景脚本
+### Photo模块Service压测脚本
 
-| 脚本 | 说明 | 包含操作 | 并发数 | 持续时间 |
-|------|------|---------|--------|----------|
-| auth.js | 用户登录压测 | 登录、Token 刷新 | 50 | ~4 分钟 |
-| photos.js | 照片浏览压测 | 瀑布流、时间线统计 | 50 | ~5 分钟 |
-| collections.js | 收藏夹管理压测 | **创建、浏览、添加照片、删除** | 30 | ~4 分钟 |
-| comments.js | 评论系统压测 | **发布、点赞、删除评论** | 20 | ~4 分钟 |
-| face.js | 人物浏览压测 | **列表、搜索、详情** | 20 | ~4 分钟 |
-| mixed.js | 混合业务压测 | 登录 + 浏览 + 收藏夹 + 人物 | 50 | ~12 分钟 |
+| 脚本 | Service | 包含操作 | 并发数 | 持续时间 |
+|------|---------|---------|--------|----------|
+| photo_service.js | PhotoService | 游标分页、MD5检查、时间范围 | 50 | ~5 分钟 |
+| collection_service.js | CollectionService | 收藏夹CRUD、照片收藏管理 | 30 | ~4 分钟 |
+| comment_service.js | CommentService | 评论发布、点赞、删除 | 20 | ~4 分钟 |
+| face_service.js | FaceService | 人物列表、搜索、详情、照片 | 20 | ~4 分钟 |
+| feature_service.js | FeatureService | 人脸特征查询、删除、归属更改 | 20 | ~4 分钟 |
+| timeline_stat_service.js | TimelineStatService | 时间线统计查询 | 50 | ~5 分钟 |
 
 ### 完整测试套件（main.js）
 
@@ -109,8 +190,9 @@ k6 run --out json=report.json main.js
 ### ✅ 读操作
 - [x] 用户登录
 - [x] Token 刷新
-- [x] 照片瀑布流分页
-- [x] 照片时间线统计
+- [x] 照片游标分页查询
+- [x] MD5存在性检查
+- [x] 照片时间范围查询
 - [x] 收藏夹列表
 - [x] 收藏夹内照片
 - [x] 人物列表分页
@@ -118,6 +200,8 @@ k6 run --out json=report.json main.js
 - [x] 人物详情
 - [x] 人物的照片
 - [x] 评论列表
+- [x] 照片人脸特征
+- [x] 时间线统计
 
 ### ✅ 写操作
 - [x] **创建收藏夹**
@@ -127,12 +211,14 @@ k6 run --out json=report.json main.js
 - [x] **发布评论**
 - [x] **删除评论**
 - [x] **点赞/取消点赞评论**
+- [x] **删除人脸特征**
+- [x] **更改人脸归属**
 
 ### ❌ 未包含的功能
 - [ ] 照片上传（需要实际图片文件）
-- [ ] 人脸合并（需要预置人脸数据）
+- [ ] 人脸检测和聚类（后台任务）
 - [ ] 人物重命名（非核心场景）
-- [ ] 批量操作（依赖具体数据）
+- [ ] 人物合并（需要预置数据）
 
 ## 验收标准
 
@@ -190,7 +276,7 @@ A: 检查以下几点：
 A: 编辑对应脚本的 `options.stages` 配置，修改 `target` 值
 
 ### Q: 如何只测试某个场景？
-A: 使用 `k6 run <脚本名>.js` 运行单个场景
+A: 使用 `k6 run photo/<脚本名>.js` 运行单个场景
 
 ### Q: 测试数据会残留吗？
 A: 不会。每个场景都会在测试完成后清理自己创建的数据

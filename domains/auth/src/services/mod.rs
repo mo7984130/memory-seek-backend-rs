@@ -1,22 +1,22 @@
 use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest, SendEmailCodeRequest};
-use bcrypt::verify;
-use chrono::{Duration, DateTime, Utc};
-use common::constants::{RedisKeys, redis_keys};
+use crate::utils::password::HashAlgorithm;
+use chrono::{DateTime, Duration, Utc};
+use common::constants::{redis_keys, RedisKeys};
 use common::error::AppError;
 use common::{metrics_group, metrics_success, timed};
-use common::utils::{MetricsTimerExt, ResultExt};
-use common::utils::rand_utils;
-use common::utils::{BoolExt, OptionExt, RedisExt, ToOkExt};
+use common::utils::{BoolExt, MetricsTimerExt, OptionExt, rand_utils, RedisExt, ResultExt, ToOkExt};
 use deadpool_redis::Pool;
 use email::EmailClient;
 use entities::user;
 use entities::user::UserDTO;
-use img_url_generator::{EncryptionKey, ImageToken, encrypt_image_token};
+use img_url_generator::{encrypt_image_token, EncryptionKey, ImageToken};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     QueryFilter, QuerySelect, Set,
 };
-use sea_orm::{RuntimeErr, error::DbErr};
+use sea_orm::{error::DbErr, RuntimeErr};
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 use tokio::task;
 use tracing::{error, info, warn};
 use crate::config::{ACCESS_TOKEN_EXPIRE_SECONDS, REFRESH_TOKEN_EXPIRE_DAYS};
@@ -32,8 +32,10 @@ use crate::config::{ACCESS_TOKEN_EXPIRE_SECONDS, REFRESH_TOKEN_EXPIRE_DAYS};
 pub async fn login(
     db: &DatabaseConnection,
     redis: &Pool,
+    hasher: &HashAlgorithm,
     req: LoginRequest,
     encryption_key: &EncryptionKey,
+    password_verify_semaphore: &Arc<Semaphore>,
 ) -> Result<UserDTO, AppError> {
     metrics_group!("login");
 
@@ -43,7 +45,7 @@ pub async fn login(
     struct TempUser {
         id: i64,
         password: String,
-        avatar_file_id: Option<String>
+        avatar_file_id: Option<String>,
     }
     let qury_result = user::Entity::find()
         .select_only()
@@ -57,28 +59,70 @@ pub async fn login(
         )
         .into_model::<TempUser>()
         .one(db)
-        .timed("login_db_query_duration_seconds")
+        .timed("auth::login:db_query")
         .await
         .trace_internal_err("db_query_error", "查询用户时数据库错误")?
         .ok_or_warn("user_not_found", "登录失败：账号不存在", "账号或者密码错误");
 
     // 即使账号不存在, 也进行一次dummy密码效验, 保证两者时长差不多
-    let user = match qury_result {
-        Ok(u) => u,
-        Err(e) => {
-            let _ = task::spawn_blocking(|| verify("dummy", "$2b$12$QIgiYYcKC7dCwqhEmAX.duD4QA1t5Hgr9HAsmiawNdkXCdxZ8Dvea")).await;
-            return Err(e);
-        }
-    };
+    // TODO
+    // let user = match qury_result {
+    //     Ok(u) => u,
+    //     Err(e) => {
+    //         let _ = task::spawn_blocking(|| {
+    //             let _ = verify_password("dummy", "$2b$12$QIgiYYcKC7dCwqhEmAX.duD4QA1t5Hgr9HAsmiawNdkXCdxZ8Dvea");
+    //         })
+    //         .await;
+    //         return Err(e);
+    //     }
+    // };
 
     // TODO 尝试次数限制
-    // 效验密码
-    task::spawn_blocking(move || verify(&req.password, &user.password))
-        .timed("login_verify_seconds")
-        .await
-        .trace_internal_err("tokio_error", "线程调度错误")?
-        .trace_internal_err("verify_error", "验证密码时发生错误")?
-        .ok_or_warn("invalid_password", "账号或者密码错误")?;
+    let old_alg = {
+        // 效验密码
+        // 使用信号量限制同时效验的数量
+        let _permit = password_verify_semaphore
+            .acquire()
+            .await
+            .trace_internal_err("semaphore_error", "获取密码验证信号量失败")?;
+
+        // 在 spawn_blocking 中验证密码，避免阻塞 async runtime
+        let password_clone = req.password.clone();
+        let stored_hash = user.password.clone();
+        let verify_result = task::spawn_blocking(move || HashAlgorithm::verify_and_detect(&password_clone, &stored_hash))
+            .timed("auth::login:verify_password")
+            .await
+            .trace_internal_err("spawn_blocking_error", "密码验证任务执行失败")?
+            .trace_internal_err("verify_password_error", "密码验证内部错误")?;
+
+        if !verify_result.0 {
+            return Err(AppError::bad_request("账号或者密码错误"));
+        }
+
+        verify_result.1
+    };
+
+    // 检查是否需要迁移哈希算法（bcrypt -> argon2id）
+    // 登录成功后异步迁移，不影响登录响应时间
+    if *hasher != old_alg {
+        let user_id_clone = user.id;
+        let password_for_migration = req.password.clone();
+        let db_clone = db.clone();
+        tokio::spawn(async move {
+            let _: Result<(), AppError> = async {
+                user::ActiveModel {
+                    id: Set(user_id_clone),
+                    password: Set(hasher.hash(&password_for_migration)?),
+                    ..Default::default()
+                }
+                .update(&db_clone)
+                .await
+                .trace_internal_err("db_update_error", "数据库更新密码哈希失败")?;
+
+                Ok(())
+            }.await;
+        });
+    }
 
     // 更新access_token和refresh_token
     let new_access_token = rand_utils::generate_random_str(16);
@@ -91,7 +135,7 @@ pub async fn login(
                 &new_access_token,
                 ACCESS_TOKEN_EXPIRE_SECONDS as u64,
             )
-            .timed("login_redis_seconds"),
+            .timed("auth::login:redis_set"),
         user::ActiveModel {
                 id: Set(user.id),
                 refresh_token: Set(Some(new_refresh_token.clone())),
@@ -99,13 +143,14 @@ pub async fn login(
                 ..Default::default()
             }
             .update(db)
-            .timed("login_refresh_token_cost_seconds")
+            .timed("auth::login:update_refresh_token")
     );
     access_token_result.trace_internal_err("redis_error", "向Redis存入access_token失败")?;
-    let updated_user = refresh_token_result.trace_internal_err("db_error", "向数据库更新refresh_token错误")?;
+    let updated_user =
+        refresh_token_result.trace_internal_err("db_error", "向数据库更新refresh_token错误")?;
 
     // 加密头像file_id
-    let avatar_token = timed!("login_crypto_avatar_token_seconds",
+    let avatar_token = timed!("auth::login:encrypt_avatar",
         user.avatar_file_id.as_ref().and_then(|key| {
             encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok()
         })
@@ -144,24 +189,25 @@ pub async fn login(
 pub async fn register(
     db: &DatabaseConnection,
     redis: &Pool,
+    hasher: &HashAlgorithm,
     req: RegisterRequest,
 ) -> Result<UserDTO, AppError> {
     metrics_group!("register");
 
     // 效验邮箱验证码
     verify_email_verify_code(redis, &req.email, &req.email_verify_code)
-        .timed("verify_email_code_seconds")
+        .timed("auth::register:verify_email_code")
         .await?
         .ok_or_warn("invalid_email_code", "邮箱验证码错误")?;
 
     // 效验邀请码
     let inviter_id = verify_inviter_code(redis, &req.inviter_code)
-        .timed("verify_inviter_code_seconds")
+        .timed("auth::register:verify_inviter_code")
         .await?;
 
     // 加密密码
-    let hashed_pw = timed!("hash_password_seconds",
-        bcrypt::hash(&req.password, bcrypt::DEFAULT_COST).trace_internal_err("hash_error", "密码加密失败")?
+    let hashed_pw = timed!("auth::register:hash_password",
+        hasher.hash(&req.password)?
     );
 
     // 插入用户
@@ -174,7 +220,7 @@ pub async fn register(
         ..Default::default()
     }
     .insert(db)
-    .timed("db_insert_seconds")
+    .timed("auth::register:db_insert")
     .await;
 
     // 结果匹配
@@ -251,7 +297,7 @@ pub async fn send_email_code(
             &code,
             10 * 60,
         )
-        .timed("redis_set_seconds")
+        .timed("auth::send_email_code:redis_set")
         .await
         .trace_internal_err("redis_error", "在发送邮箱验证码时设置redis值错误")?;
 
@@ -293,7 +339,7 @@ pub async fn send_email_code(
 }
 
 /// 刷新access_token
-#[tracing::instrument(name = "auth_refresh_access_token", skip_all)]
+#[tracing::instrument(name = "auth_refresh_access_token", skip_all, fields(user_id = %user_id))]
 pub async fn refresh_access_token(
     db: &DatabaseConnection,
     redis: &Pool,
@@ -303,7 +349,9 @@ pub async fn refresh_access_token(
     metrics_group!("refresh_access_token");
 
     // 效验refresh_token
-    verify_refresh_token(db, user_id, &refresh_token).timed("verify_refresh_token_seconds").await?;
+    verify_refresh_token(db, user_id, &refresh_token)
+        .timed("auth::refresh_access_token:verify_token")
+        .await?;
 
     // 设置新的access_token到redis
     let new_access_token = rand_utils::generate_random_str(16);
@@ -313,12 +361,12 @@ pub async fn refresh_access_token(
             &new_access_token,
             2 * 60 * 60,
         )
-        .timed("set_access_token_seconds")
+        .timed("auth::refresh_access_token:set_token")
         .await?;
 
     metrics_success!("refresh_token");
 
-    info!(status = "success", user_id = %user_id, "AccessToken刷新成功");
+    info!(status = "success", "AccessToken刷新成功");
 
     Ok(AccessTokenResponse {
         access_token: new_access_token,
@@ -327,7 +375,11 @@ pub async fn refresh_access_token(
 }
 
 /// 效验邮箱验证吗
-async fn verify_email_verify_code(redis: &Pool, email: &str, code: &str) -> Result<bool, AppError> {
+async fn verify_email_verify_code(
+    redis: &Pool,
+    email: &str,
+    code: &str,
+) -> Result<bool, AppError> {
     let stored_code: Option<String> = redis
         .get_as(&RedisKeys::user::email_verify_code(email))
         .await
@@ -374,13 +426,16 @@ async fn verify_refresh_token(
         )?
         .ok_or_warn("user_not_found", "用户不存在", "用户不存在")?;
     if res.refresh_token.as_deref() != Some(refresh_token) {
+        warn!("refresh_token不匹配");
         return Err(AppError::Unauthorized);
     }
     if let Some(expire_at) = res.refresh_token_expire_at {
         if Utc::now() > expire_at {
+            warn!("refresh_token已过期");
             return Err(AppError::Unauthorized);
         }
     } else {
+        error!("refresh_token过期时间不存在");
         return Err(AppError::Unauthorized);
     }
 
