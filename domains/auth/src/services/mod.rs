@@ -47,7 +47,7 @@ pub async fn login(
         password: String,
         avatar_file_id: Option<String>,
     }
-    let qury_result = user::Entity::find()
+    let user = user::Entity::find()
         .select_only()
         .column(user::Column::Id)
         .column(user::Column::Password)
@@ -62,7 +62,7 @@ pub async fn login(
         .timed("auth::login:db_query")
         .await
         .trace_internal_err("db_query_error", "查询用户时数据库错误")?
-        .ok_or_warn("user_not_found", "登录失败：账号不存在", "账号或者密码错误");
+        .ok_or_warn("user_not_found", "登录失败：账号不存在", "账号或者密码错误")?;
 
     // 即使账号不存在, 也进行一次dummy密码效验, 保证两者时长差不多
     // TODO
@@ -105,14 +105,16 @@ pub async fn login(
     // 检查是否需要迁移哈希算法（bcrypt -> argon2id）
     // 登录成功后异步迁移，不影响登录响应时间
     if *hasher != old_alg {
+        info!("更新用户密码哈希算法");
         let user_id_clone = user.id;
         let password_for_migration = req.password.clone();
         let db_clone = db.clone();
+        let hasher_clone = hasher.clone();
         tokio::spawn(async move {
             let _: Result<(), AppError> = async {
                 user::ActiveModel {
                     id: Set(user_id_clone),
-                    password: Set(hasher.hash(&password_for_migration)?),
+                    password: Set(hasher_clone.hash(&password_for_migration)?),
                     ..Default::default()
                 }
                 .update(&db_clone)
@@ -151,7 +153,7 @@ pub async fn login(
 
     // 加密头像file_id
     let avatar_token = timed!("auth::login:encrypt_avatar",
-        user.avatar_file_id.as_ref().and_then(|key| {
+        user.avatar_file_id.as_ref().and_then(|key: &String| {
             encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok()
         })
     );

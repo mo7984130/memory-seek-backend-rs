@@ -11,16 +11,16 @@ use password_hash::SaltString;
 use tracing::error;
 
 /// 哈希算法类型枚举
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum HashAlgorithm {
     Bcrypt(BcryptConfig),
     Argon2id(Argon2idConfig),
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BcryptConfig {
     pub cost: u32
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 
 pub struct Argon2idConfig {
     pub m_cost: u32,
