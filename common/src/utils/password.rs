@@ -4,8 +4,8 @@ use argon2::{
     Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version,
 };
 use bcrypt;
-use common::error::AppError;
-use common::utils::ResultExt;
+use crate::error::AppError;
+use crate::utils::ResultExt;
 use password_hash::rand_core::OsRng;
 use password_hash::SaltString;
 use tracing::error;
@@ -16,12 +16,13 @@ pub enum HashAlgorithm {
     Bcrypt(BcryptConfig),
     Argon2id(Argon2idConfig),
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct BcryptConfig {
     pub cost: u32
 }
-#[derive(Debug, Clone, PartialEq)]
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Argon2idConfig {
     pub m_cost: u32,
     pub t_cost: u32,
@@ -54,7 +55,7 @@ impl HashAlgorithm {
                 Self::argon2_hasher(&cfg)?
                     .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
                     .trace_internal_err("argon2id hash error", "Argon2id 计算失败")
-                    .map(|h| h.to_string())
+                    .map(|h: PasswordHash| h.to_string())
             }
         }
     }

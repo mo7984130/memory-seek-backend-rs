@@ -28,3 +28,7 @@ regex = { workspace = true }
 fancy-regex = "0.17.0"
 axum-client-ip = { workspace = true }
 metrics = { workspace = true, optional = true }
+bcrypt = { workspace = true }
+argon2 = { workspace = true }
+password-hash = { workspace = true }
+num_cpus = { workspace = true }

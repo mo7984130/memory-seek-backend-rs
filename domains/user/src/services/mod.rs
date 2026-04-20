@@ -1,18 +1,20 @@
 use chrono::{Duration, Utc};
 use common::constants::RedisKeys;
 use common::{metrics_group, metrics_success, timed};
+use common::utils::HashAlgorithm;
 use deadpool_redis::Pool;
 use entities::user;
 use img_url_generator::{encrypt_image_token, EncryptionKey, ImageToken};
 use sea_orm::sea_query::Expr;
 use sea_orm::sqlx::types::uuid;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 use tracing::{info, warn};
 use tokio::task::spawn_blocking;
 
 use crate::config::GET_USER_INFO_BATCH_MAX_LEN;
 use crate::models::{ChangePasswordRequest, InviterCodeDTO, UserInfoDTO, UserInfoVO};
-use bcrypt::{hash, verify, DEFAULT_COST};
 use common::error::AppError;
 use common::utils::{DbUtils, MetricsTimerExt};
 use common::utils::{rand_utils, FileValidator};
@@ -257,7 +259,9 @@ pub async fn change_password(
     db: &DatabaseConnection,
     redis: &Pool,
     user_id: i64,
-    req: ChangePasswordRequest
+    req: ChangePasswordRequest,
+    hasher: &HashAlgorithm,
+    password_verify_semaphore: &Arc<Semaphore>,
 ) -> Result<(), AppError> {
     metrics_group!("change_password");
 
@@ -279,12 +283,17 @@ pub async fn change_password(
 
     // 效验旧密码
     let is_valid = {
-        spawn_blocking(move || {
-            verify(&req.old_password, &old_password)
-        })
-        .timed("user::change_password:verify_password").await
-        .map_err(|_| AppError::InternalServerError)?
-        .trace_bad_request_err("verify_error", "密码效验错误")?
+        let _permit = password_verify_semaphore
+            .acquire()
+            .await
+            .trace_internal_err("semaphore_error", "获取密码验证信号量失败")?;
+
+        let password_clone = req.old_password.clone();
+        let stored_hash = old_password.clone();
+        let result: Result<(bool, HashAlgorithm), AppError> = spawn_blocking(move || HashAlgorithm::verify_and_detect(&password_clone, &stored_hash))
+            .await
+            .trace_internal_err("spawn_blocking_error", "密码验证任务执行失败")?;
+        result.trace_internal_err("verify_password_error", "密码验证内部错误")?.0
     };
     if !is_valid {
         return Err(AppError::bad_request("原密码错误"));
@@ -292,13 +301,17 @@ pub async fn change_password(
 
     // 加密新密码
     let new_password_hash = {
+        let _permit = password_verify_semaphore
+            .acquire()
+            .await
+            .trace_internal_err("semaphore_error", "获取密码验证信号量失败")?;
+
         let password = req.new_password.clone();
-        spawn_blocking(move || {
-            hash(password, DEFAULT_COST)
-        })
-        .timed("user::change_password:hash_password").await
-        .map_err(|_| AppError::InternalServerError)?
-        .trace_bad_request_err("hash_error", "加密新密码失败")?
+        let hasher_clone = hasher.clone();
+        let result: Result<String, AppError> = spawn_blocking(move || hasher_clone.hash(&password))
+            .await
+            .trace_internal_err("spawn_blocking_error", "密码哈希任务执行失败")?;
+        result.trace_internal_err("hash_error", "加密新密码失败")?
     };
 
     // 更新数据库

@@ -1,6 +1,5 @@
 pub mod models;
 pub mod services;
-pub mod utils;
 mod state;
 
 #[cfg(feature = "controller")]

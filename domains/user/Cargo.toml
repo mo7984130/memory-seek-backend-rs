@@ -25,3 +25,4 @@ tracing = { workspace = true }
 metrics = { workspace = true, optional = true }
 tokio = { workspace = true }
 axum = { workspace = true, optional = true }
+num_cpus = { workspace = true }

@@ -1,5 +1,5 @@
 use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest, SendEmailCodeRequest};
-use crate::utils::password::HashAlgorithm;
+use common::utils::HashAlgorithm;
 use chrono::{DateTime, Duration, Utc};
 use common::constants::{redis_keys, RedisKeys};
 use common::error::AppError;
@@ -89,11 +89,10 @@ pub async fn login(
         // 在 spawn_blocking 中验证密码，避免阻塞 async runtime
         let password_clone = req.password.clone();
         let stored_hash = user.password.clone();
-        let verify_result = task::spawn_blocking(move || HashAlgorithm::verify_and_detect(&password_clone, &stored_hash))
-            .timed("auth::login:verify_password")
+        let result: Result<(bool, HashAlgorithm), AppError> = task::spawn_blocking(move || HashAlgorithm::verify_and_detect(&password_clone, &stored_hash))
             .await
-            .trace_internal_err("spawn_blocking_error", "密码验证任务执行失败")?
-            .trace_internal_err("verify_password_error", "密码验证内部错误")?;
+            .trace_internal_err("spawn_blocking_error", "密码验证任务执行失败")?;
+        let verify_result = result.trace_internal_err("verify_password_error", "密码验证内部错误")?;
 
         if !verify_result.0 {
             return Err(AppError::bad_request("账号或者密码错误"));

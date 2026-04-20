@@ -6,6 +6,7 @@ pub mod validators;
 mod file_validator;
 mod option_ext;
 mod bool_ext;
+mod password;
 
 pub use bool_ext::BoolExt;
 pub use db_utils::DbUtils;
@@ -15,6 +16,7 @@ pub use redis_ext::CacheExtension;
 pub use redis_ext::RedisExt;
 pub use result_ext::ResultExt;
 pub use result_ext::ToOkExt;
+pub use password::{HashAlgorithm, Argon2idConfig, BcryptConfig};
 
 #[cfg(feature = "metrics")]
 mod metrics_ext;

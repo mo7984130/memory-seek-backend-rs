@@ -1,5 +1,4 @@
 use deadpool_redis::Pool;
-use email::EmailClient;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -8,24 +7,19 @@ use img_url_generator::EncryptionKey;
 use common::utils::HashAlgorithm;
 use common::constants::get_password_verify_max_concurrency;
 
-/// 认证服务状态
-pub struct AuthState {
+pub struct UserState {
     pub db: DatabaseConnection,
     pub redis: Pool,
-    pub email_client: EmailClient,
     pub encryption_key: EncryptionKey,
-    /// 密码验证并发信号量
-    /// 用于限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
     pub password_verify_semaphore: Arc<Semaphore>,
-    pub hasher: HashAlgorithm
+    pub hasher: HashAlgorithm,
 }
 
-impl AuthState {
+impl UserState {
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,
-        email_client: EmailClient,
-        encryption_key: EncryptionKey
+        encryption_key: EncryptionKey,
     ) -> Self {
         let max_concurrency = get_password_verify_max_concurrency();
         let hasher = common::constants::HASHER;
@@ -33,10 +27,9 @@ impl AuthState {
         Self {
             db,
             redis,
-            email_client,
             encryption_key,
             password_verify_semaphore: Arc::new(Semaphore::new(max_concurrency)),
-            hasher
+            hasher,
         }
     }
 }

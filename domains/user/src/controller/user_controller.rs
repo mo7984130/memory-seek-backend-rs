@@ -9,7 +9,7 @@ use common::utils::ResultExt;
 use entities::user::UserDTO;
 use std::sync::Arc;
 
-use crate::controller::UserState;
+use crate::UserState;
 use crate::models::{ChangeNicknameRequest, ChangePasswordRequest, GetUserInfoBatchRequest, InviterCodeDTO, UserInfoVO};
 use crate::services as user_service;
 
@@ -53,7 +53,7 @@ impl UserController {
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<ChangePasswordRequest>
     ) -> Result<R<()>, AppError> {
-        user_service::change_password(&state.db, &state.redis, user_id.0, req).await.into_ok_res()
+        user_service::change_password(&state.db, &state.redis, user_id.0, req, &state.hasher, &state.password_verify_semaphore).await.into_ok_res()
     }
 
     async fn logout(
