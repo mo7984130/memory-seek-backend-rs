@@ -13,4 +13,4 @@ pub const HASHER: HashAlgorithm = HashAlgorithm::Argon2id(
 
 // 密码验证并发限制
 // 0 表示自动检测 (CPU 核心数的一半)
-pub const PASSWORD_VERIFY_MAX_CONCURRENCY: usize = 16;
+pub const PASSWORD_VERIFY_MAX_CONCURRENCY: usize = 0;
