@@ -4,7 +4,6 @@ mod imgproxy_generator;
 
 use async_trait::async_trait;
 use serde::Deserialize;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::alioss_generator::AliyunOssGenerator;

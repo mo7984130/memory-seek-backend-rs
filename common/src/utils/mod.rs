@@ -18,7 +18,7 @@ pub use redis_ext::RedisExt;
 pub use result_ext::ResultExt;
 pub use result_ext::ToOkExt;
 pub use password::{HashAlgorithm, Argon2idConfig, BcryptConfig};
-pub use token_cipher::TokenCipher;
+pub use token_cipher::{TokenCipher, TokenCipherConfig};
 
 #[cfg(feature = "metrics")]
 mod metrics_ext;

@@ -32,7 +32,7 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>
     ) -> Result<R<UserDTO>, AppError> {
-        user_service::get_user_info(&state.db, user_id.0, &state.encryption_key).await.into_ok_res()
+        user_service::get_user_info(&state.db, user_id.0, &state.token_cipher).await.into_ok_res()
     }
 
     async fn generate_inviter_code(
@@ -97,6 +97,6 @@ impl UserController {
             .collect::<Result<Vec<i64>, _>>()
             .map_bad_request_err("id格式错误")?;
 
-        user_service::get_user_info_batch(&state.db, &state.redis, user_ids, &state.encryption_key).await.into_ok_res()
+        user_service::get_user_info_batch(&state.db, &state.redis, user_ids, &state.token_cipher).await.into_ok_res()
     }
 }

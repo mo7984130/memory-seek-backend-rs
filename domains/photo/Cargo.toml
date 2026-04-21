@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["metrics"]
+default = []
 metrics = ["common/metrics"]
+controller = ["dep:axum", "dep:serde_json"]
 face_recognition = ["dep:face_engine", "dep:ndarray", "dep:rayon"]
 
 [dependencies]
@@ -15,10 +16,10 @@ oss = { path = "../../libs/oss" }
 img_url_generator = { path = "../../libs/img_url_generator" }
 face_engine = { path = "../../libs/face_engine", optional = true }
 
-axum = { workspace = true }
+axum = { workspace = true, optional = true }
 tokio = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, optional = true }
 sea-orm = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }

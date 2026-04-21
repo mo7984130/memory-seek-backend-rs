@@ -14,7 +14,7 @@ pub struct S3Client {
     public_url: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct S3Config {
     pub endpoint: String,
     pub access_key: String,
@@ -26,10 +26,10 @@ pub struct S3Config {
 }
 
 impl S3Client {
-    pub async fn new(s3_config: S3Config) -> Self {
+    pub fn new(s3_config: &S3Config) -> Self {
         let region = Region::Custom {
-            region: s3_config.region,
-            endpoint: s3_config.endpoint,
+            region: s3_config.region.clone(),
+            endpoint: s3_config.endpoint.clone(),
         };
 
         let access_key = s3_config.access_key.clone();

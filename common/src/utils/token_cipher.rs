@@ -3,7 +3,7 @@ use aes_gcm::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hkdf::Hkdf;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 
 use crate::error::AppError;
@@ -18,10 +18,20 @@ pub struct TokenCipher {
     cipher: Aes256Gcm,
 }
 
+#[derive(Clone, Deserialize)]
+pub struct TokenCipherConfig {
+    pub key: String,
+    pub salt: String,
+}
+
 impl TokenCipher {
     pub fn new(raw_key: impl AsRef<[u8]>, salt: impl AsRef<[u8]>) -> Self {
         let cipher = Self::build_cipher(raw_key.as_ref(), salt.as_ref());
         Self { cipher }
+    }
+
+    pub fn from_config(config: &TokenCipherConfig) -> Self {
+        Self::new(&config.key, &config.salt)
     }
 
     /// 加密任意可序列化的 Payload，nonce_seed 决定确定性

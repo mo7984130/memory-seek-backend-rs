@@ -75,7 +75,7 @@ impl PhotoService {
         _redis: &Pool,
         s3: &S3Client,
         #[cfg(feature = "face_recognition")]
-        face_tx: &Option<mpsc::Sender<FaceTask>>,
+        face_tx: &mpsc::Sender<FaceTask>,
         user_id: i64,
         file_data: Bytes,
         file_name: String,
@@ -146,17 +146,15 @@ impl PhotoService {
         // 发送人脸识别任务
         // 错误不返回
         #[cfg(feature = "face_recognition")]
-        if let Some(tx) = face_tx {
-            let _ = tx
-                .send(FaceTask {
-                    photo_id: photo.id,
-                    image_bytes: file_data.clone(),
-                    img_width: metadata.width,
-                    img_height: metadata.height,
-                })
-                .await
-                .trace_internal_err("photo::upload:send_face_task_err", "发送人脸识别任务错误");
-        }
+        let _ = face_tx
+            .send(FaceTask {
+                photo_id: photo.id,
+                image_bytes: file_data.clone(),
+                img_width: metadata.width,
+                img_height: metadata.height,
+            })
+            .await
+            .trace_internal_err("photo::upload:send_face_task_err", "发送人脸识别任务错误");
 
         // 生成token
         let (thumbnail_token, preview_token, original_token) =

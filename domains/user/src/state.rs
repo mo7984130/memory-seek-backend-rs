@@ -10,8 +10,8 @@ use common::constants::get_password_verify_max_concurrency;
 pub struct UserState {
     pub db: DatabaseConnection,
     pub redis: Pool,
-    pub token_cipher: TokenCipher,
-    pub s3_client: S3Client,
+    pub token_cipher: Arc<TokenCipher>,
+    pub s3_client: Arc<S3Client>,
     pub password_verify_semaphore: Arc<Semaphore>,
     pub hasher: HashAlgorithm,
 }
@@ -20,8 +20,8 @@ impl UserState {
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,
-        s3_client: S3Client,
-        token_cipher: TokenCipher,
+        s3_client: Arc<S3Client>,
+        token_cipher: Arc<TokenCipher>,
     ) -> Self {
         let max_concurrency = get_password_verify_max_concurrency();
         let hasher = common::constants::HASHER;

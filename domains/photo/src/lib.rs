@@ -4,6 +4,7 @@ pub mod services;
 pub mod clustering;
 pub mod mappers;
 pub mod utils;
+#[cfg(feature = "controller")]
 pub mod controller;
 pub mod state;
 pub mod middlewares;
