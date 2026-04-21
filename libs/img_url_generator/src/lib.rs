@@ -11,55 +11,9 @@ use crate::alioss_generator::AliyunOssGenerator;
 use crate::imgproxy_generator::ImgProxyGenerator;
 use oss::S3Client;
 
-pub use crypto::{
-    decrypt_face_cover_token, decrypt_file_id,
-    decrypt_image_token, encrypt_face_cover_token,
-    encrypt_file_id, encrypt_image_token,
-    CryptoError, FaceBBoxPixels, ImageToken, ImageTokenType,
-};
+pub use crypto::CryptoError;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EncryptionKey([u8; 32]);
-
-impl EncryptionKey {
-    pub fn new(key: [u8; 32]) -> Self {
-        Self(key)
-    }
-
-    pub fn from_str(key: &str) -> Self {
-        let key_bytes = key.as_bytes();
-        let mut result = [0u8; 32];
-        let len = key_bytes.len().min(32);
-        result[..len].copy_from_slice(&key_bytes[..len]);
-        Self(result)
-    }
-}
-
-impl Deref for EncryptionKey {
-    type Target = [u8; 32];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl AsRef<[u8; 32]> for EncryptionKey {
-    fn as_ref(&self) -> &[u8; 32] {
-        &self.0
-    }
-}
-
-impl From<[u8; 32]> for EncryptionKey {
-    fn from(key: [u8; 32]) -> Self {
-        Self(key)
-    }
-}
-
-impl From<EncryptionKey> for [u8; 32] {
-    fn from(key: EncryptionKey) -> Self {
-        key.0
-    }
-}
+pub use common::utils::TokenCipher;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -75,7 +29,6 @@ pub struct ImageUrlGeneratorConfig {
     pub key: Option<String>,
     pub salt: Option<String>,
     pub bucket: String,
-    pub encryption_key: String,
 }
 
 #[derive(Clone)]
@@ -118,21 +71,6 @@ impl ImageUrlProvider {
                 })
             }
         }
-    }
-    
-    /// 生成加密的图片 token
-    /// 
-    /// # 参数
-    /// - `file_id`: 文件路径
-    /// 
-    /// # 返回
-    /// 加密后的 token 字符串
-    pub fn generate_token(&self, file_id: &str, encryption_key: &EncryptionKey) -> String {
-        encrypt_file_id(file_id, encryption_key).unwrap_or_default()
-    }
-    
-    pub fn decrypt_token(&self, token: &str, encryption_key: &EncryptionKey) -> Result<String, CryptoError> {
-        decrypt_file_id(token, encryption_key)
     }
 }
 

@@ -1,10 +1,12 @@
+use axum::body::Bytes;
 use chrono::{Duration, Utc};
 use common::constants::RedisKeys;
 use common::{metrics_group, metrics_success, timed};
 use common::utils::HashAlgorithm;
 use deadpool_redis::Pool;
 use entities::user;
-use img_url_generator::{encrypt_image_token, EncryptionKey, ImageToken};
+use common::models::ImageToken;
+use common::utils::TokenCipher;
 use sea_orm::sea_query::Expr;
 use sea_orm::sqlx::types::uuid;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
@@ -32,7 +34,7 @@ use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_C
 pub async fn get_user_info(
     db: &DatabaseConnection,
     user_id: i64,
-    encryption_key: &EncryptionKey,
+    token_cipher: &TokenCipher,
 ) -> Result<user::UserDTO, AppError> {
     metrics_group!("get_user_info");
 
@@ -48,7 +50,7 @@ pub async fn get_user_info(
     let avatar_token = timed!("user::get_user_info:encrypt_avatar",
         user.avatar_file_id.as_ref()
             .and_then(|key|
-                encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key)
+                token_cipher.encrypt(&ImageToken::thumbnail(key.clone()), Some(key))
                 .inspect_err(|e| warn!(error = %e, "加密头像失败"))
                 .ok()
             )
@@ -168,9 +170,9 @@ pub async fn update_avatar(
     s3_client: &S3Client,
     user_id: i64,
     file_name: String,
-    file_data: Vec<u8>,
+    file_data: Bytes,
     content_type: String,
-    encryption_key: &EncryptionKey,
+    token_cipher: &TokenCipher,
 ) -> Result<String, AppError> {
     metrics_group!("update_avatar");
 
@@ -238,7 +240,7 @@ pub async fn update_avatar(
 
     // 生成头像Token
     let avatar_token = timed!("user::update_avatar:encrypt_token",
-        encrypt_image_token(&ImageToken::thumbnail(new_key), encryption_key)
+        token_cipher.encrypt(&ImageToken::thumbnail(new_key.clone()), Some(&new_key))
             .trace_internal_err("encrypt_token_error", "生成头像token失败")?
     );
 
@@ -380,7 +382,7 @@ pub async fn get_user_info_batch(
     db: &DatabaseConnection,
     redis: &Pool,
     user_ids: Vec<i64>,
-    encryption_key: &EncryptionKey,
+    token_cipher: &TokenCipher,
 ) -> Result<Vec<Option<UserInfoVO>>, AppError> {
     metrics_group!("get_user_info_batch");
 
@@ -424,6 +426,6 @@ pub async fn get_user_info_batch(
     info!(status = "success", "批量获取用户信息成功");
 
     Ok(result.into_iter().map(|opt| {
-        opt.map(|dto| UserInfoVO::from_dto(dto, encryption_key))
+        opt.map(|dto| UserInfoVO::from_dto(dto, token_cipher))
     }).collect())
 }

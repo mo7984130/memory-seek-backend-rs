@@ -13,5 +13,5 @@ pub use services::photo_service::FaceTask;
 pub use models::*;
 pub use services::*;
 pub use controller::*;
-pub use state::AppState;
+pub use state::PhotoState;
 pub use middlewares::UserId;

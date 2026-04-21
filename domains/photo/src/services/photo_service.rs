@@ -16,7 +16,7 @@ use common::{metrics_group, metrics_success, timed};
 use common::utils::{CacheExtension, FileValidator, MetricsTimerExt, ResultExt};
 use deadpool_redis::Pool;
 use entities::photo::{Model};
-use img_url_generator::EncryptionKey;
+use common::utils::TokenCipher;
 use oss::S3Client;
 use sea_orm::prelude::DateTimeUtc;
 use sea_orm::{ActiveModelTrait, Set, TransactionTrait};
@@ -58,7 +58,7 @@ impl PhotoService {
     /// - `file_name`: 原始文件名
     /// - `content_type`: 文件MIME类型
     /// - `created_at`: 自定义创建时间（可选）
-    /// - `encryption_key`: 加密密钥
+    /// - `token_cipher`: 加密密钥
     ///
     /// # 返回
     /// 返回上传成功的照片VO
@@ -81,7 +81,7 @@ impl PhotoService {
         file_name: String,
         content_type: String,
         created_at: Option<DateTimeUtc>,
-        encryption_key: &EncryptionKey,
+        token_cipher: &TokenCipher,
     ) -> Result<PhotoVO, AppError> {
         metrics_group!("photo_upload");
 
@@ -160,7 +160,7 @@ impl PhotoService {
 
         // 生成token
         let (thumbnail_token, preview_token, original_token) =
-            PhotoVO::generate_tokens(&file_id, encryption_key);
+            PhotoVO::generate_tokens(&file_id, token_cipher);
 
         metrics_success!("photo::upload:");
 
@@ -186,7 +186,7 @@ impl PhotoService {
     /// - `redis`: Redis连接池
     /// - `user_id`: 用户ID
     /// - `query`: 分页查询参数
-    /// - `encryption_key`: 加密密钥
+    /// - `token_cipher`: 加密密钥
     ///
     /// # 返回
     /// 返回分页照片列表，包含是否有更多数据的标识
@@ -195,7 +195,7 @@ impl PhotoService {
         redis: &Pool,
         user_id: i64,
         query: PhotoCursorQuery,
-        encryption_key: &EncryptionKey,
+        token_cipher: &TokenCipher,
     ) -> Result<CursorPageVO<PhotoVO, String>, AppError> {
         metrics_group!("photo::get_photo_cursor_page");
 
@@ -258,7 +258,7 @@ impl PhotoService {
                 .flatten()
                 .map(|p| {
                     let (thumbnail_token, preview_token, original_token) =
-                        PhotoVO::generate_tokens(&p.file_id, encryption_key);
+                        PhotoVO::generate_tokens(&p.file_id, token_cipher);
 
                     PhotoVO {
                         id: p.id.to_string(),

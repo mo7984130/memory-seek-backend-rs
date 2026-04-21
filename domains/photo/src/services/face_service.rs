@@ -2,11 +2,11 @@ use axum::body::Bytes;
 use chrono::Utc;
 use common::constants::redis_keys::photo::face_person_name;
 use common::error::AppError;
-use common::utils::{RedisExt, ResultExt};
+use common::models::{FaceBBoxPixels, ImageToken};
+use common::utils::{RedisExt, ResultExt, TokenCipher};
 use deadpool_redis::Pool;
 use entities::{face_feature, face_person, DrVector};
 use face_engine::{FaceAligner, FaceEngine, LazyFaceEngine};
-use img_url_generator::{encrypt_face_cover_token, EncryptionKey, FaceBBoxPixels};
 use sea_orm::{EntityTrait, Set, TransactionTrait};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Semaphore};
@@ -245,7 +245,7 @@ impl FaceService {
     /// - `db`: 数据库连接
     /// - `redis`: Redis连接池
     /// - `query`: 分页查询参数
-    /// - `encryption_key`: 加密密钥
+    /// - `token_cipher`: 加密密钥
     /// 
     /// # 返回
     /// 返回分页人物列表
@@ -253,7 +253,7 @@ impl FaceService {
         db: &sea_orm::DatabaseConnection,
         _redis: &Pool,
         query: crate::models::face::PersonPageQuery,
-        encryption_key: &EncryptionKey,
+        token_cipher: &TokenCipher,
     ) -> Result<CursorPageVO<FacePersonVO, String>, AppError> {
         let size = query.size.unwrap_or(20) as u64;
         let decoded_cursor = query.cursor.as_ref().and_then(|s| PersonCursor::decode(s));
@@ -280,11 +280,9 @@ impl FaceService {
                 let y = (bbox.y * photo.height as f32) as i32;
                 let w = (bbox.w * photo.width as f32) as i32;
                 let h = (bbox.h * photo.height as f32) as i32;
-                let cover_token = encrypt_face_cover_token(
-                    &photo.file_id,
-                    &FaceBBoxPixels { x, y, w, h },
-                    encryption_key,
-                ).ok()?;
+                let cover_token = token_cipher
+                    .encrypt(&ImageToken::crop(photo.file_id.clone(), FaceBBoxPixels { x, y, w, h }), Some(&photo.file_id))
+                    .ok()?;
 
                 Some(FacePersonVO {
                     id: p.id.to_string(),
@@ -473,14 +471,14 @@ impl FaceService {
     /// # 参数
     /// - `db`: 数据库连接
     /// - `person_id`: 人物ID
-    /// - `encryption_key`: 加密密钥
+    /// - `token_cipher`: 加密密钥
     /// 
     /// # 返回
     /// 返回人物VO，包含封面图token
     pub async fn get_person_info(
         db: &sea_orm::DatabaseConnection,
         person_id: i64,
-        encryption_key: &EncryptionKey,
+        token_cipher: &TokenCipher,
     ) -> Result<FacePersonVO, AppError> {
         let person = FacePersonMapper::find_by_id(db, person_id).await?;
 
@@ -496,11 +494,9 @@ impl FaceService {
                 let y = (bbox.y * p.height as f32) as i32;
                 let w = (bbox.w * p.width as f32) as i32;
                 let h = (bbox.h * p.height as f32) as i32;
-                encrypt_face_cover_token(
-                    &p.file_id,
-                    &FaceBBoxPixels { x, y, w, h },
-                    encryption_key,
-                ).ok()
+                token_cipher
+                    .encrypt(&ImageToken::crop(p.file_id.clone(), FaceBBoxPixels { x, y, w, h }), Some(&p.file_id))
+                    .ok()
             } else {
                 None
             }
@@ -525,7 +521,7 @@ impl FaceService {
     /// - `person_id`: 人物ID
     /// - `cursor`: 游标值（特征ID）
     /// - `size`: 每页数量
-    /// - `encryption_key`: 加密密钥
+    /// - `token_cipher`: 加密密钥
     /// 
     /// # 返回
     /// 返回分页的照片列表
@@ -536,7 +532,7 @@ impl FaceService {
         person_id: i64,
         cursor: Option<i64>,
         size: u32,
-        encryption_key: &EncryptionKey,
+        token_cipher: &TokenCipher,
     ) -> Result<CursorPageVO<crate::models::photo::PhotoVO, i64>, AppError> {
         let features = FaceFeatureMapper::find_cursor_page(db, person_id, cursor, (size + 1) as u64).await?;
 
@@ -556,7 +552,7 @@ impl FaceService {
             .filter_map(|f| {
                 let p = photo_map.get(&f.photo_id)?;
                 let (thumbnail_token, preview_token, original_token) = 
-                    crate::models::photo::PhotoVO::generate_tokens(&p.file_id, encryption_key);
+                    crate::models::photo::PhotoVO::generate_tokens(&p.file_id, token_cipher);
                 
                 Some(crate::models::photo::PhotoVO {
                     id: p.id.to_string(),
@@ -622,14 +618,14 @@ impl FaceService {
     /// # 参数
     /// - `db`: 数据库连接
     /// - `query`: 搜索查询参数
-    /// - `encryption_key`: 加密密钥
+    /// - `token_cipher`: 加密密钥
     /// 
     /// # 返回
     /// 返回匹配的人物列表
     pub async fn search_person(
         db: &sea_orm::DatabaseConnection,
         query: crate::models::face::PersonSearchQuery,
-        encryption_key: &EncryptionKey,
+        token_cipher: &TokenCipher,
     ) -> Result<CursorPageVO<FacePersonVO, String>, AppError> {
         let size = query.size.unwrap_or(20) as u64;
         let decoded_cursor = query.cursor.as_ref().and_then(|s| PersonCursor::decode(s));
@@ -657,11 +653,9 @@ impl FaceService {
                     let y = (bbox.y * photo.height as f32) as i32;
                     let w = (bbox.w * photo.width as f32) as i32;
                     let h = (bbox.h * photo.height as f32) as i32;
-                    let cover_token = encrypt_face_cover_token(
-                        &photo.file_id,
-                        &FaceBBoxPixels { x, y, w, h },
-                        encryption_key,
-                    ).ok()?;
+                    let cover_token = token_cipher
+                        .encrypt(&ImageToken::crop(photo.file_id.clone(), FaceBBoxPixels { x, y, w, h }), Some(&photo.file_id))
+                        .ok()?;
 
                     Some(FacePersonVO {
                         id: p.id.to_string(),

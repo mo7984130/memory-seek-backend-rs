@@ -8,7 +8,7 @@ use common::r::R;
 use std::sync::Arc;
 
 use crate::middlewares::auth::UserId;
-use crate::state::AppState;
+use crate::state::PhotoState;
 use crate::models::collection::{
     BatchOperationResultVO, BatchPhotosDTO, CollectionCreateDTO, CollectionEditDTO,
     CollectionPhotoQuery, CollectionPhotoVO, CollectionVO,
@@ -19,7 +19,7 @@ use crate::services::collection_service::CollectionService;
 pub struct CollectionController;
 
 impl CollectionController {
-    pub fn routes() -> Router<Arc<AppState>> {
+    pub fn routes() -> Router<Arc<PhotoState>> {
         Router::new()
             .route("/", get(Self::get_list).post(Self::create))
             .route("/{id}", patch(Self::edit).delete(Self::delete))
@@ -30,21 +30,21 @@ impl CollectionController {
     }
 
     async fn get_list(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<Vec<CollectionVO>>, AppError> {
         let result = CollectionService::get_collection_list(
             &state.db,
             &state.redis,
             user_id.0,
-            &state.encryption_key,
+            &state.token_cipher,
         )
         .await?;
         Ok(R::ok(result))
     }
 
     async fn create(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Json(dto): Json<CollectionCreateDTO>,
     ) -> Result<R<CollectionVO>, AppError> {
@@ -55,7 +55,7 @@ impl CollectionController {
     }
 
     async fn edit(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(id): Path<String>,
         Json(dto): Json<CollectionEditDTO>,
@@ -73,7 +73,7 @@ impl CollectionController {
     }
 
     async fn delete(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(id): Path<String>,
     ) -> Result<R<()>, AppError> {
@@ -83,7 +83,7 @@ impl CollectionController {
     }
 
     async fn get_photos(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(id): Path<String>,
         Query(query): Query<CollectionPhotoQuery>,
@@ -96,14 +96,14 @@ impl CollectionController {
             collection_id,
             query.cursor,
             query.size.unwrap_or(20),
-            &state.encryption_key,
+            &state.token_cipher,
         )
         .await?;
         Ok(R::ok(result))
     }
 
     async fn add_photo(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path((collection_id, photo_id)): Path<(String, String)>,
     ) -> Result<R<()>, AppError> {
@@ -119,7 +119,7 @@ impl CollectionController {
     }
 
     async fn remove_photo(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path((collection_id, photo_id)): Path<(String, String)>,
     ) -> Result<R<()>, AppError> {
@@ -140,7 +140,7 @@ impl CollectionController {
     }
 
     async fn batch_add_photos(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(collection_id): Path<String>,
         Json(dto): Json<BatchPhotosDTO>,
@@ -164,7 +164,7 @@ impl CollectionController {
     }
 
     async fn batch_remove_photos(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(collection_id): Path<String>,
         Json(dto): Json<BatchPhotosDTO>,
@@ -188,7 +188,7 @@ impl CollectionController {
     }
 
     async fn get_by_photo_id(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(photo_id): Path<String>,
     ) -> Result<R<Vec<String>>, AppError> {

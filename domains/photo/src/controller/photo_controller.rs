@@ -8,18 +8,18 @@ use axum::Router;
 use common::error::AppError;
 use common::r::R;
 use common::utils::ResultExt;
-use img_url_generator::{decrypt_image_token, ImageToken, ImageTokenType};
+use crate::models::{ImageToken, ImageTokenType};
 use std::sync::Arc;
 use tracing::debug;
 use crate::middlewares::auth::UserId;
-use crate::state::AppState;
+use crate::state::PhotoState;
 use crate::models::photo::{CursorPageVO, Md5Query, PhotoCursorQuery, PhotoVO, TimeRangeVO, UploadWithCreatedAtQuery};
 use crate::services::photo_service::PhotoService;
 
 pub struct PhotoController;
 
 impl PhotoController {
-    pub fn routes() -> Router<Arc<AppState>> {
+    pub fn routes() -> Router<Arc<PhotoState>> {
         Router::new()
             .route("/upload", post(Self::upload))
             .route("/upload/with-created-at", post(Self::upload_with_created_at))
@@ -29,7 +29,7 @@ impl PhotoController {
             .route("/{id}", delete(Self::delete_photo))
     }
 
-    pub fn public_routes() -> Router<Arc<AppState>> {
+    pub fn public_routes() -> Router<Arc<PhotoState>> {
         Router::new()
             .route("/{token}", get(Self::get_image))
             .route("/{token}/thumbnail", get(Self::get_thumbnail))
@@ -39,7 +39,7 @@ impl PhotoController {
     }
 
     async fn upload(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         mut multipart: Multipart,
     ) -> Result<R<PhotoVO>, AppError> {
@@ -50,7 +50,7 @@ impl PhotoController {
             .ok_or_else(|| AppError::bad_request("未找到上传文件"))?;
 
         let file_name = field.file_name().unwrap_or("photo_entities.jpg").to_string();
-        let content_type = field.content_type().unwrap_or("image/jpeg").to_string();
+        let content_type = field.content_type().unwrap_or("image/jpg").to_string();
         let file_data = field
             .bytes()
             .await
@@ -67,7 +67,7 @@ impl PhotoController {
             file_name,
             content_type,
             None,
-            &state.encryption_key,
+            &state.token_cipher,
         )
         .await?;
 
@@ -75,7 +75,7 @@ impl PhotoController {
     }
 
     async fn upload_with_created_at(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Query(query): Query<UploadWithCreatedAtQuery>,
         mut multipart: Multipart,
@@ -108,7 +108,7 @@ impl PhotoController {
             file_name,
             content_type,
             Some(query.created_at),
-            &state.encryption_key,
+            &state.token_cipher,
         )
         .await?;
 
@@ -116,18 +116,18 @@ impl PhotoController {
     }
 
     async fn get_photos_cursor(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Query(query): Query<PhotoCursorQuery>,
     ) -> Result<R<CursorPageVO<PhotoVO, String>>, AppError> {
         let result =
-            PhotoService::get_photo_cursor_page(&state.db, &state.redis, user_id.0, query, &state.encryption_key)
+            PhotoService::get_photo_cursor_page(&state.db, &state.redis, user_id.0, query, &state.token_cipher)
                 .await?;
         Ok(R::ok(result))
     }
 
     async fn md5_exist(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Query(params): Query<Md5Query>,
     ) -> Result<R<bool>, AppError> {
         let exists = PhotoService::md5_exists(&state.db, &params.md5).await?;
@@ -135,14 +135,14 @@ impl PhotoController {
     }
 
     async fn get_time_range(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
     ) -> Result<R<TimeRangeVO>, AppError> {
         let (min, max) = PhotoService::get_time_range(&state.db).await?;
         Ok(R::ok(TimeRangeVO { min, max }))
     }
 
     async fn delete_photo(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(id): Path<String>,
     ) -> Result<R<()>, AppError> {
@@ -162,10 +162,10 @@ impl PhotoController {
     }
 
     async fn get_image(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
+        let image_token: ImageToken = state.token_cipher.decrypt(&token)
             .map_err(|_| AppError::bad_request("无效的token"))?;
         debug!("解密出图片token: {:?}", &image_token);
 
@@ -224,10 +224,10 @@ impl PhotoController {
     }
 
     async fn get_thumbnail(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
+        let image_token: ImageToken = state.token_cipher.decrypt(&token)
             .map_err(|_| AppError::bad_request("无效的token"))?;
 
         let bytes = state.s3_client
@@ -245,10 +245,10 @@ impl PhotoController {
     }
 
     async fn get_preview(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
+        let image_token: ImageToken = state.token_cipher.decrypt(&token)
             .map_err(|_| AppError::bad_request("无效的token"))?;
 
         let bytes = state.s3_client
@@ -266,10 +266,10 @@ impl PhotoController {
     }
 
     async fn get_original(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
+        let image_token: ImageToken = state.token_cipher.decrypt(&token)
             .map_err(|_| AppError::bad_request("无效的token"))?;
 
         let bytes = state.s3_client.download(&image_token.file_id).await?;
@@ -286,10 +286,10 @@ impl PhotoController {
     }
 
     async fn get_crop(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = decrypt_image_token(&token, &state.encryption_key)
+        let image_token: ImageToken = state.token_cipher.decrypt(&token)
             .map_err(|_| AppError::bad_request("无效的token"))?;
 
         let bbox = image_token.bbox.ok_or_else(|| AppError::bad_request("token不包含裁剪信息"))?;

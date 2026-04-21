@@ -4,8 +4,7 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
-use img_url_generator::EncryptionKey;
-use common::utils::HashAlgorithm;
+use common::utils::{HashAlgorithm, TokenCipher};
 use common::constants::get_password_verify_max_concurrency;
 
 /// 认证服务状态
@@ -13,7 +12,7 @@ pub struct AuthState {
     pub db: DatabaseConnection,
     pub redis: Pool,
     pub email_client: EmailClient,
-    pub encryption_key: EncryptionKey,
+    pub token_cipher: TokenCipher,
     /// 密码验证并发信号量
     /// 用于限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
     pub password_verify_semaphore: Arc<Semaphore>,
@@ -25,7 +24,7 @@ impl AuthState {
         db: DatabaseConnection,
         redis: Pool,
         email_client: EmailClient,
-        encryption_key: EncryptionKey
+        token_cipher: TokenCipher
     ) -> Self {
         let max_concurrency = get_password_verify_max_concurrency();
         let hasher = common::constants::HASHER;
@@ -34,7 +33,7 @@ impl AuthState {
             db,
             redis,
             email_client,
-            encryption_key,
+            token_cipher,
             password_verify_semaphore: Arc::new(Semaphore::new(max_concurrency)),
             hasher
         }

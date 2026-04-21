@@ -1,7 +1,8 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use common::{error::AppError, utils::ResultExt};
-use img_url_generator::{EncryptionKey, ImageToken, encrypt_image_token};
+use common::models::ImageToken;
+use common::utils::TokenCipher;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -28,14 +29,14 @@ pub struct PhotoVO {
 impl PhotoVO {
     pub fn generate_tokens(
         file_id: &str,
-        encryption_key: &EncryptionKey,
+        token_cipher: &TokenCipher,
     ) -> (Option<String>, Option<String>, Option<String>) {
         let thumbnail_token =
-            encrypt_image_token(&ImageToken::thumbnail(file_id.to_string()), encryption_key).ok();
+            token_cipher.encrypt(&ImageToken::thumbnail(file_id.to_string()), Some(file_id)).ok();
         let preview_token =
-            encrypt_image_token(&ImageToken::preview(file_id.to_string()), encryption_key).ok();
+            token_cipher.encrypt(&ImageToken::preview(file_id.to_string()), Some(file_id)).ok();
         let original_token =
-            encrypt_image_token(&ImageToken::original(file_id.to_string()), encryption_key).ok();
+            token_cipher.encrypt(&ImageToken::original(file_id.to_string()), Some(file_id)).ok();
 
         (thumbnail_token, preview_token, original_token)
     }

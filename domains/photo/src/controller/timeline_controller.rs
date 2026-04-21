@@ -5,19 +5,19 @@ use common::error::AppError;
 use common::r::R;
 use std::sync::Arc;
 
-use crate::state::AppState;
+use crate::state::PhotoState;
 use crate::models::common::PhotoTimelineStatVO;
 use crate::services::timeline_stat_service::TimelineStatService;
 
 pub struct TimelineController;
 
 impl TimelineController {
-    pub fn routes() -> Router<Arc<AppState>> {
+    pub fn routes() -> Router<Arc<PhotoState>> {
         Router::new().route("/stats", get(Self::get_stats))
     }
 
     async fn get_stats(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
     ) -> Result<R<Vec<PhotoTimelineStatVO>>, AppError> {
         let stats = TimelineStatService::get_stats(&state.db).await?;
         Ok(R::ok(stats))

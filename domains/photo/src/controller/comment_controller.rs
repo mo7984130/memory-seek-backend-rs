@@ -8,7 +8,7 @@ use common::r::R;
 use std::sync::Arc;
 
 use crate::middlewares::auth::UserId;
-use crate::state::AppState;
+use crate::state::PhotoState;
 use crate::models::comment::{CommentPageQuery, PhotoCommentVO, PublishCommentDTO};
 use crate::models::photo::CursorPageVO;
 use crate::services::comment_service::CommentService;
@@ -16,14 +16,14 @@ use crate::services::comment_service::CommentService;
 pub struct CommentController;
 
 impl CommentController {
-    pub fn routes() -> Router<Arc<AppState>> {
+    pub fn routes() -> Router<Arc<PhotoState>> {
         Router::new()
             .route("/{comment_id}/like/toggle", post(Self::toggle_like))
             .route("/{id}", get(Self::get_list).post(Self::publish).delete(Self::delete))
     }
 
     async fn get_list(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(id): Path<String>,
         Query(query): Query<CommentPageQuery>,
@@ -41,7 +41,7 @@ impl CommentController {
     }
 
     async fn publish(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(id): Path<String>,
         Json(dto): Json<PublishCommentDTO>,
@@ -53,7 +53,7 @@ impl CommentController {
     }
 
     async fn delete(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(id): Path<String>,
     ) -> Result<R<()>, AppError> {
@@ -65,7 +65,7 @@ impl CommentController {
     }
 
     async fn toggle_like(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(comment_id): Path<String>,
     ) -> Result<R<bool>, AppError> {

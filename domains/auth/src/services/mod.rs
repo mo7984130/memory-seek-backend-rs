@@ -9,7 +9,8 @@ use deadpool_redis::Pool;
 use email::EmailClient;
 use entities::user;
 use entities::user::UserDTO;
-use img_url_generator::{encrypt_image_token, EncryptionKey, ImageToken};
+use common::models::ImageToken;
+use common::utils::TokenCipher;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     QueryFilter, QuerySelect, Set,
@@ -34,7 +35,7 @@ pub async fn login(
     redis: &Pool,
     hasher: &HashAlgorithm,
     req: LoginRequest,
-    encryption_key: &EncryptionKey,
+    token_cipher: &TokenCipher,
     password_verify_semaphore: &Arc<Semaphore>,
 ) -> Result<UserDTO, AppError> {
     metrics_group!("login");
@@ -153,7 +154,7 @@ pub async fn login(
     // 加密头像file_id
     let avatar_token = timed!("auth::login:encrypt_avatar",
         user.avatar_file_id.as_ref().and_then(|key: &String| {
-            encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok()
+            token_cipher.encrypt(&ImageToken::thumbnail(key.clone()), Some(key)).ok()
         })
     );
 

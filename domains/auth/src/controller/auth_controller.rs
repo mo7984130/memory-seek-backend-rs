@@ -27,7 +27,7 @@ impl AuthController {
         State(state): State<Arc<AuthState>>,
         ValidatedJson(req): ValidatedJson<LoginRequest>
     ) -> Result<R<UserDTO>, AppError> {
-        auth_service::login(&state.db, &state.redis, &state.hasher, req, &state.encryption_key, &state.password_verify_semaphore).await.into_ok_res()
+        auth_service::login(&state.db, &state.redis, &state.hasher, req, &state.token_cipher, &state.password_verify_semaphore).await.into_ok_res()
     }
 
     async fn register(

@@ -7,7 +7,7 @@ use common::error::AppError;
 use common::utils::CacheExtension;
 use deadpool_redis::Pool;
 use once_cell::sync::Lazy;
-use img_url_generator::EncryptionKey;
+use common::utils::TokenCipher;
 use moka::future::Cache;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use std::collections::HashMap;
@@ -33,7 +33,7 @@ impl CollectionService {
     /// - `db`: 数据库连接
     /// - `_redis`: Redis连接池（暂未使用）
     /// - `user_id`: 用户ID
-    /// - `encryption_key`: 加密密钥
+    /// - `token_cipher`: 加密密钥
     ///
     /// # 返回
     /// 返回收藏夹VO列表
@@ -41,7 +41,7 @@ impl CollectionService {
         db: &DatabaseConnection,
         _redis: &Pool,
         user_id: i64,
-        encryption_key: &EncryptionKey,
+        token_cipher: &TokenCipher,
     ) -> Result<Vec<CollectionVO>, AppError> {
         let collections = CollectionMapper::find_by_user_id(db, user_id).await?;
 
@@ -95,7 +95,7 @@ impl CollectionService {
                     .map(|p| p.file_id.clone());
 
                 let cover_token = cover_file_id.as_ref().and_then(|fid| {
-                    let (thumbnail_token, _, _) = crate::models::photo::PhotoVO::generate_tokens(fid, encryption_key);
+                    let (thumbnail_token, _, _) = crate::models::photo::PhotoVO::generate_tokens(fid, token_cipher);
                     thumbnail_token
                 });
 
@@ -323,7 +323,7 @@ impl CollectionService {
     /// - `collection_id`: 收藏夹ID
     /// - `cursor`: 复合游标（base64编码的字符串）
     /// - `size`: 每页数量
-    /// - `encryption_key`: 加密密钥
+    /// - `token_cipher`: 加密密钥
     ///
     /// # 返回
     /// 返回分页的收藏照片列表
@@ -337,7 +337,7 @@ impl CollectionService {
         collection_id: i64,
         cursor: Option<String>,
         size: u32,
-        encryption_key: &EncryptionKey,
+        token_cipher: &TokenCipher,
     ) -> Result<CursorPageVO<CollectionPhotoVO, String>, AppError> {
         let collection = CollectionMapper::find_by_id(db, collection_id).await?;
 
@@ -369,7 +369,7 @@ impl CollectionService {
             .filter_map(|r| {
                 let p = photo_map.get(&r.photo_id)?;
                 let (thumbnail_token, preview_token, original_token) =
-                    crate::models::photo::PhotoVO::generate_tokens(&p.file_id, encryption_key);
+                    crate::models::photo::PhotoVO::generate_tokens(&p.file_id, token_cipher);
 
                 Some(CollectionPhotoVO {
                     photo: crate::models::photo::PhotoVO {

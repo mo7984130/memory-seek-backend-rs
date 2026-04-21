@@ -1,20 +1,27 @@
 use deadpool_redis::Pool;
 use sea_orm::DatabaseConnection;
-
-use img_url_generator::EncryptionKey;
+use common::utils::TokenCipher;
 use oss::S3Client;
 
-#[cfg(feature = "face_recognition")]
-use crate::services::photo_service::FaceTask;
-
-#[cfg(feature = "face_recognition")]
-use tokio::sync::mpsc;
-
-pub struct AppState {
+pub struct PhotoState {
     pub db: DatabaseConnection,
     pub redis: Pool,
     pub s3_client: S3Client,
-    #[cfg(feature = "face_recognition")]
-    pub face_tx: Option<mpsc::Sender<FaceTask>>,
-    pub encryption_key: EncryptionKey,
+    pub token_cipher: TokenCipher,
+}
+
+impl PhotoState {
+    pub fn new(
+        db: DatabaseConnection,
+        redis: Pool,
+        s3_client: S3Client,
+        token_cipher: TokenCipher,
+    ) -> Self {
+        Self {
+            db,
+            redis,
+            s3_client,
+            token_cipher,
+        }
+    }
 }

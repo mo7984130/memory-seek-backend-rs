@@ -8,7 +8,7 @@ use common::r::R;
 use std::sync::Arc;
 
 use crate::middlewares::auth::UserId;
-use crate::state::AppState;
+use crate::state::PhotoState;
 use crate::models::face::{
     FaceFeatureVO, FacePersonSimpleVO, FacePersonVO, MergePersonRequest, PersonPageQuery,
     PersonSearchQuery, RenamePersonRequest,
@@ -20,7 +20,7 @@ use crate::services::feature_service::FeatureService;
 pub struct FaceController;
 
 impl FaceController {
-    pub fn routes() -> Router<Arc<AppState>> {
+    pub fn routes() -> Router<Arc<PhotoState>> {
         Router::new()
             .route("/person", get(Self::get_person_page))
             .route("/person/all", get(Self::get_all_person))
@@ -35,46 +35,46 @@ impl FaceController {
     }
 
     async fn get_person_page(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Query(query): Query<PersonPageQuery>,
     ) -> Result<R<CursorPageVO<FacePersonVO, String>>, AppError> {
         let result =
-            FaceService::get_person_page(&state.db, &state.redis, query, &state.encryption_key)
+            FaceService::get_person_page(&state.db, &state.redis, query, &state.token_cipher)
                 .await?;
         Ok(R::ok(result))
     }
 
     async fn get_all_person(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
     ) -> Result<R<Vec<FacePersonSimpleVO>>, AppError> {
         let result = FaceService::get_all_person(&state.db).await?;
         Ok(R::ok(result))
     }
 
     async fn search_person(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Query(query): Query<PersonSearchQuery>,
     ) -> Result<R<CursorPageVO<FacePersonVO, String>>, AppError> {
         let result = FaceService::search_person(
             &state.db,
             query,
-            &state.encryption_key,
+            &state.token_cipher,
         )
         .await?;
         Ok(R::ok(result))
     }
 
     async fn get_person_info(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path(id): Path<String>,
     ) -> Result<R<FacePersonVO>, AppError> {
         let person_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的ID"))?;
-        let result = FaceService::get_person_info(&state.db, person_id, &state.encryption_key).await?;
+        let result = FaceService::get_person_info(&state.db, person_id, &state.token_cipher).await?;
         Ok(R::ok(result))
     }
 
     async fn rename_person(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path(id): Path<String>,
         Json(req): Json<RenamePersonRequest>,
     ) -> Result<R<FacePersonVO>, AppError> {
@@ -85,7 +85,7 @@ impl FaceController {
     }
 
     async fn get_person_photo(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(id): Path<String>,
         Query(query): Query<PersonPageQuery>,
@@ -99,14 +99,14 @@ impl FaceController {
             person_id,
             cursor,
             query.size.unwrap_or(20),
-            &state.encryption_key,
+            &state.token_cipher,
         )
         .await?;
         Ok(R::ok(result))
     }
 
     async fn merge_person(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Json(req): Json<MergePersonRequest>,
     ) -> Result<R<FacePersonVO>, AppError> {
         let source_id: i64 = req
@@ -123,7 +123,7 @@ impl FaceController {
     }
 
     async fn delete_person(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path(id): Path<String>,
     ) -> Result<R<bool>, AppError> {
         let person_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的ID"))?;
@@ -132,7 +132,7 @@ impl FaceController {
     }
 
     async fn get_photo_features(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path(photo_id): Path<String>,
     ) -> Result<R<Vec<FaceFeatureVO>>, AppError> {
         let photo_id: i64 = photo_id.parse().map_err(|_| AppError::bad_request("无效的照片ID"))?;
@@ -141,7 +141,7 @@ impl FaceController {
     }
 
     async fn change_face_belonging(
-        State(state): State<Arc<AppState>>,
+        State(state): State<Arc<PhotoState>>,
         Path((feature_id, person_id)): Path<(String, String)>,
     ) -> Result<R<()>, AppError> {
         let feature_id: i64 = feature_id

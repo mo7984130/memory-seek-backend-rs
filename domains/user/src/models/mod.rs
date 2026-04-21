@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
+use common::models::ImageToken;
 use common::utils::validators::validate_normal_char;
 use common::utils::validators::validate_password;
-use img_url_generator::{encrypt_image_token, EncryptionKey, ImageToken};
+use common::utils::TokenCipher;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -55,10 +56,10 @@ pub struct UserInfoVO {
 }
 
 impl UserInfoVO {
-    pub fn from_dto(dto: UserInfoDTO, encryption_key: &EncryptionKey) -> Self {
+    pub fn from_dto(dto: UserInfoDTO, token_cipher: &TokenCipher) -> Self {
         let avatar_token = dto.avatar_file_id
             .as_ref()
-            .and_then(|key| encrypt_image_token(&ImageToken::thumbnail(key.clone()), encryption_key).ok());
+            .and_then(|key| token_cipher.encrypt(&ImageToken::thumbnail(key.clone()), Some(key)).ok());
         
         Self {
             user_id: dto.user_id.to_string(),

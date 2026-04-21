@@ -1,16 +1,17 @@
 use deadpool_redis::Pool;
+use oss::S3Client;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
-use img_url_generator::EncryptionKey;
-use common::utils::HashAlgorithm;
+use common::utils::{HashAlgorithm, TokenCipher};
 use common::constants::get_password_verify_max_concurrency;
 
 pub struct UserState {
     pub db: DatabaseConnection,
     pub redis: Pool,
-    pub encryption_key: EncryptionKey,
+    pub token_cipher: TokenCipher,
+    pub s3_client: S3Client,
     pub password_verify_semaphore: Arc<Semaphore>,
     pub hasher: HashAlgorithm,
 }
@@ -19,7 +20,8 @@ impl UserState {
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,
-        encryption_key: EncryptionKey,
+        s3_client: S3Client,
+        token_cipher: TokenCipher,
     ) -> Self {
         let max_concurrency = get_password_verify_max_concurrency();
         let hasher = common::constants::HASHER;
@@ -27,7 +29,8 @@ impl UserState {
         Self {
             db,
             redis,
-            encryption_key,
+            token_cipher,
+            s3_client,
             password_verify_semaphore: Arc::new(Semaphore::new(max_concurrency)),
             hasher,
         }
