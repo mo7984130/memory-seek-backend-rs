@@ -309,7 +309,51 @@ import {
  *   - VU1 -> testuser77
  *   - VU2 -> testuser78
  *   - ...
- *   - VU5 -> testuser81
+ * - VU5 -> testuser81
+ * 
+ * 【问题9】k6 VU编号全局导致场景间用户重叠
+ * 
+ * 现象：
+ * - 测试日志：[change_password] VU22 -> testuser37
+ * - 测试日志：[password_change_token_invalid] VU61 -> testuser37
+ * - 不同场景使用了同一个用户，导致密码冲突
+ * - 报错：❌ 修改密码失败(预期成功): status=400, "原密码错误"
+ * 
+ * 原因：
+ * - k6 的 VU 编号是全局的，所有场景共享同一个 VU 编号空间
+ * - VU 编号不是从 1 开始，而是根据场景启动顺序分配
+ * - 多个场景并发运行时，VU 编号会重叠
+ * - 错误代码：`userIndex = (targetRange.start + vu - 1) % config.testUsers.length`
+ * - 这会导致不同场景的 VU 编号映射到同一个用户
+ * 
+ * 错误代码：
+ * ```javascript
+ * // ❌ 错误：直接使用全局 VU 编号
+ * const userIndex = (targetRange.start + vu - 1) % config.testUsers.length;
+ * ```
+ * 
+ * 正确代码：
+ * ```javascript
+ * // ✅ 正确：使用场景内的 VU 索引
+ * const vuIndexInScenario = (vu - 1) % targetRange.vus;
+ * const userIndex = targetRange.start + vuIndexInScenario;
+ * ```
+ * 
+ * 用户分配示例：
+ * - change_password 场景（8 VUs，起始偏移量 15）：
+ *   - VU1 -> vuIndexInScenario=0 -> userIndex=15 -> testuser16
+ *   - VU2 -> vuIndexInScenario=1 -> userIndex=16 -> testuser17
+ *   - ...
+ *   - VU9 -> vuIndexInScenario=0 -> userIndex=15 -> testuser16（循环）
+ * - password_change_token_invalid 场景（5 VUs，起始偏移量 76）：
+ *   - VU1 -> vuIndexInScenario=0 -> userIndex=76 -> testuser77
+ *   - VU2 -> vuIndexInScenario=1 -> userIndex=77 -> testuser78
+ *   - ...
+ * 
+ * 关键点：
+ * - 每个场景的用户范围是固定的，不会重叠
+ * - 使用场景的用户数量取模，得到场景内的 VU 索引
+ * - 加上场景的起始偏移量，得到最终的用户索引
  * 
  * ==================== 并发用户分配规则 ====================
  * 
@@ -538,9 +582,16 @@ export function getUserByVUAndScenario(vu, scenarioName, scenarioVus = null) {
         return getUserByVU(vu);
     }
     
-    // 修复：直接使用 VU 编号作为用户索引，避免循环复用
-    // k6 的 VU 编号是全局的，每个 VU 应该使用不同的用户
-    const userIndex = (targetRange.start + vu - 1) % config.testUsers.length;
+    // 修复：使用场景内的 VU 索引，确保场景间用户不重叠
+    // k6 的 VU 编号是全局的，需要对场景的用户数量取模
+    const vuIndexInScenario = (vu - 1) % targetRange.vus;
+    const userIndex = targetRange.start + vuIndexInScenario;
+    
+    // 检查是否超出测试用户范围
+    if (userIndex >= config.testUsers.length) {
+        console.warn(`⚠️  用户索引超出范围: scenario=${scenarioName}, VU=${vu}, userIndex=${userIndex}, max=${config.testUsers.length - 1}`);
+        return config.testUsers[config.testUsers.length - 1];
+    }
     
     return config.testUsers[userIndex];
 }
