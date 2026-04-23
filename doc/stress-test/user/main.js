@@ -218,7 +218,6 @@ export function generateInviterCodeScenario() {
 
 export function changePasswordScenario() {
     const user = getUserByVUAndScenario(__VU, 'change_password', scenarioVus);
-    console.log(`[change_password] VU${__VU} -> ${user.account}`);
     const loginResult = login(user.account, user.password, true);
 
     check(loginResult, {
@@ -265,7 +264,6 @@ export function changePasswordScenario() {
 
 export function passwordChangeTokenInvalidScenario() {
     const user = getUserByVUAndScenario(__VU, 'password_change_token_invalid', scenarioVus);
-    console.log(`[password_change_token_invalid] VU${__VU} -> ${user.account}`);
     const loginResult = login(user.account, user.password, true);
 
     check(loginResult, {
