@@ -52,7 +52,7 @@ impl HashAlgorithm {
                     .trace_internal_err("bcrypt hash error", "Bcrypt 计算失败")
             },
             Self::Argon2id(cfg) => {
-                Self::argon2_hasher(&cfg)?
+                Self::argon2_hasher(cfg)?
                     .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
                     .trace_internal_err("argon2id hash error", "Argon2id 计算失败")
                     .map(|h: PasswordHash| h.to_string())

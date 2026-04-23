@@ -14,7 +14,7 @@ pub static USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(UsernameValidCo
 
 pub fn validate_username(username: &str) -> Result<(), ValidationError> {
     let len = username.chars().count();
-    if len < UsernameValidConfig::MIN_LENGTH || len > UsernameValidConfig::MAX_LENGTH {
+    if !(UsernameValidConfig::MIN_LENGTH..=UsernameValidConfig::MAX_LENGTH).contains(&len) {
         return Err(ValidationError::new("invalid_length").with_message(UsernameValidConfig::LEN_ERROR_MSG.into()))
     }
     if !USERNAME_REGEX.is_match(username) {

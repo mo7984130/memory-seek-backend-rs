@@ -12,7 +12,7 @@ pub fn validate_account(value: &str) -> Result<(), ValidationError> {
             return Err(ValidationError::new("invalid_username").with_message(UsernameValidConfig::CHAR_ERROR_MSG.into()));
         }
         let len = value.chars().count();
-        if len < UsernameValidConfig::MIN_LENGTH || len > UsernameValidConfig::MAX_LENGTH {
+        if !(UsernameValidConfig::MIN_LENGTH..=UsernameValidConfig::MAX_LENGTH).contains(&len) {
             return Err(ValidationError::new("invalid_length").with_message(UsernameValidConfig::LEN_ERROR_MSG.into()));
         }
     }

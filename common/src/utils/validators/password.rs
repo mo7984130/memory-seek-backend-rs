@@ -24,7 +24,7 @@ pub fn validate_password(password: &str) -> Result<(), ValidationError> {
 
     // 2. 长度检查 (Length)
     let len = password.chars().count();
-    if len < PasswordValidConfig::MIN || len > PasswordValidConfig::MAX {
+    if !(PasswordValidConfig::MIN..=PasswordValidConfig::MAX).contains(&len) {
         return Err(ValidationError::new("invalid_length")
             .with_message(PasswordValidConfig::LEN_MSG.into()));
     }
