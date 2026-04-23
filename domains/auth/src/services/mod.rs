@@ -140,7 +140,7 @@ pub async fn login(
         user::ActiveModel {
                 id: Set(user.id),
                 refresh_token: Set(Some(new_refresh_token.clone())),
-                refresh_token_expire_at: Set(Some(new_refresh_token_expire.into())),
+                refresh_token_expire_at: Set(Some(new_refresh_token_expire)),
                 ..Default::default()
             }
             .update(db)
@@ -167,7 +167,7 @@ pub async fn login(
         nickname: updated_user.nickname,
         email: updated_user.email,
         avatar_token,
-        created_at: updated_user.created_at.into(),
+        created_at: updated_user.created_at,
         refresh_token: Some(new_refresh_token),
         refresh_token_expire_at: Some(new_refresh_token_expire),
         access_token: Some(new_access_token),
@@ -237,7 +237,7 @@ pub async fn register(
                 nickname: user_model.nickname,
                 email: user_model.email,
                 avatar_token: None,
-                created_at: user_model.created_at.into(),
+                created_at: user_model.created_at,
                 refresh_token: None,
                 refresh_token_expire_at: None,
                 access_token: None,
@@ -249,9 +249,9 @@ pub async fn register(
             // 根据postgres的错误码, 来分辨错误的原因.
             // 不使用先查询后插入, 而是使用这种方式的话
             // 可以节约一次数据库查询和冲突的风险
-            if let DbErr::Query(RuntimeErr::SqlxError(ref sqlx_err)) = e {
-                if let Some(pg_err) = sqlx_err.as_database_error() {
-                    if pg_err.code() == Some("23505".into()) {
+            if let DbErr::Query(RuntimeErr::SqlxError(ref sqlx_err)) = e
+                && let Some(pg_err) = sqlx_err.as_database_error()
+                    && pg_err.code() == Some("23505".into()) {
                         let detail = pg_err.to_string().to_lowercase();
 
                         let (reason, msg) = if detail.contains("username") {
@@ -265,8 +265,6 @@ pub async fn register(
                         warn!(reason = %reason, status = "failed", "用户注册冲突");
                         return Err(AppError::bad_request(msg));
                     }
-                }
-            }
 
             error!(error = ?e, status = "error", "用户注册时发生数据库异常");
             Err(AppError::InternalServerError)
@@ -385,7 +383,7 @@ async fn verify_email_verify_code(
         .get_as(&RedisKeys::user::email_verify_code(email))
         .await
         .trace_internal_err("redis_error", "验证邮箱验证码时 获取redis值错误")?;
-    Ok(stored_code.map_or(false, |v| v == code))
+    Ok(stored_code.is_some_and(|v| v == code))
 }
 
 /// 效验邀请码
