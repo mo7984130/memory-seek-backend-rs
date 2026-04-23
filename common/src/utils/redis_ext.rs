@@ -132,7 +132,7 @@ impl CacheExtension for Pool {
         let mut keys = Vec::with_capacity(params.len());
 
         for (i, p) in params.iter().enumerate() {
-            keys.push(key_provider(&p));
+            keys.push(key_provider(p));
 
             param_to_index.insert(p.clone(), i);
         }
@@ -179,7 +179,6 @@ impl CacheExtension for Pool {
             if has_update {
                 let _ : () = pipe.query_async(&mut conn).await.unwrap_or_else(|e| {
                     warn!("get_or_load_batch中 Redis Pipeline 批量回写失败: {:?}", e);
-                    ()
                 });
             }
         }

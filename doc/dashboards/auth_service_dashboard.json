@@ -118,8 +118,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "login:attempts",
-          "legendFormat": "登录尝试",
+          "expr": "auth::login:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -129,8 +129,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "login:success",
-          "legendFormat": "登录成功",
+          "expr": "auth::login:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -223,9 +223,13 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "auth::login:db_query_sum / auth::login:db_query_count",
-          "legendFormat": "数据库查询",
+          "expr": "irate(auth::login:db_query_sum[1m]) / irate(auth::login:db_query_count[1m])",
+          "legendFormat": "db_query",
           "range": true,
           "refId": "A"
         },
@@ -235,8 +239,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "auth::login:verify_password_sum / auth::login:verify_password_count",
-          "legendFormat": "密码验证",
+          "expr": "irate(auth::login:verify_password_sum[1m]) / irate(auth::login:verify_password_count[1m])",
+          "legendFormat": "verify_password",
           "range": true,
           "refId": "B"
         },
@@ -246,8 +250,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "auth::login:redis_set_sum / auth::login:redis_set_count",
-          "legendFormat": "Redis操作",
+          "expr": "irate(auth::login:redis_set_sum[1m]) / irate(auth::login:redis_set_count[1m])",
+          "legendFormat": "redis_set",
           "range": true,
           "refId": "C"
         },
@@ -257,8 +261,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "auth::login:update_refresh_token_sum / auth::login:update_refresh_token_count",
-          "legendFormat": "更新Token",
+          "expr": "irate(auth::login:update_refresh_token_sum[1m]) / irate(auth::login:update_refresh_token_count[1m])",
+          "legendFormat": "update_refresh_token",
           "range": true,
           "refId": "D"
         },
@@ -268,8 +272,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "auth::login:encrypt_avatar_sum / auth::login:encrypt_avatar_count",
-          "legendFormat": "加密头像",
+          "expr": "irate(auth::login:encrypt_avatar_sum[1m]) / irate(auth::login:encrypt_avatar_count[1m])",
+          "legendFormat": "encrypt_avatar",
           "range": true,
           "refId": "E"
         }
@@ -334,7 +338,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -362,13 +367,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "login:concurrency",
-          "legendFormat": "登录并发数",
+          "expr": "irate(auth::login:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "登录并发数",
+      "title": "登录平均延迟",
       "type": "timeseries"
     },
     {
@@ -469,8 +474,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "register:attempts",
-          "legendFormat": "注册尝试",
+          "expr": "auth::register:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -480,8 +485,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "register:success",
-          "legendFormat": "注册成功",
+          "expr": "auth::register:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -574,9 +579,13 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "auth::register:verify_email_code_sum / auth::register:verify_email_code_count",
-          "legendFormat": "验证邮箱",
+          "expr": "irate(auth::register:verify_email_code_sum[1m]) / irate(auth::register:verify_email_code_count[1m])",
+          "legendFormat": "verify_email_code",
           "range": true,
           "refId": "A"
         },
@@ -586,8 +595,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "auth::register:verify_inviter_code_sum / auth::register:verify_inviter_code_count",
-          "legendFormat": "验证邀请码",
+          "expr": "irate(auth::register:verify_inviter_code_sum[1m]) / irate(auth::register:verify_inviter_code_count[1m])",
+          "legendFormat": "verify_inviter_code",
           "range": true,
           "refId": "B"
         },
@@ -597,8 +606,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "auth::register:hash_password_sum / auth::register:hash_password_count",
-          "legendFormat": "密码加密",
+          "expr": "irate(auth::register:hash_password_sum[1m]) / irate(auth::register:hash_password_count[1m])",
+          "legendFormat": "hash_password",
           "range": true,
           "refId": "C"
         },
@@ -608,8 +617,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "auth::register:db_insert_sum / auth::register:db_insert_count",
-          "legendFormat": "数据库插入",
+          "expr": "irate(auth::register:db_insert_sum[1m]) / irate(auth::register:db_insert_count[1m])",
+          "legendFormat": "db_insert",
           "range": true,
           "refId": "D"
         }
@@ -674,7 +683,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -702,13 +712,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "register:concurrency",
-          "legendFormat": "注册并发数",
+          "expr": "irate(auth::register:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "注册并发数",
+      "title": "注册平均延迟",
       "type": "timeseries"
     },
     {
@@ -809,8 +819,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "send_email_code:attempts",
-          "legendFormat": "发送尝试",
+          "expr": "auth::send_email_code:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -820,8 +830,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "send_email_code:success",
-          "legendFormat": "发送成功",
+          "expr": "auth::send_email_code:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -914,9 +924,13 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "auth::send_email_code:redis_set_sum / auth::send_email_code:redis_set_count",
-          "legendFormat": "Redis存储",
+          "expr": "irate(auth::send_email_code:redis_set_sum[1m]) / irate(auth::send_email_code:redis_set_count[1m])",
+          "legendFormat": "redis_set",
           "range": true,
           "refId": "A"
         }
@@ -981,7 +995,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -1009,13 +1024,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "send_email_code:concurrency",
-          "legendFormat": "发送并发数",
+          "expr": "irate(auth::send_email_code:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "发送验证码并发数",
+      "title": "发送验证码平均延迟",
       "type": "timeseries"
     },
     {
@@ -1028,7 +1043,7 @@
       },
       "id": 13,
       "panels": [],
-      "title": "Token 刷新监控",
+      "title": "刷新Token监控",
       "type": "row"
     },
     {
@@ -1116,8 +1131,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "refresh_access_token:attempts",
-          "legendFormat": "刷新尝试",
+          "expr": "auth::refresh_access_token:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -1127,13 +1142,13 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "refresh_token:success",
-          "legendFormat": "刷新成功",
+          "expr": "auth::refresh_access_token:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
       ],
-      "title": "Token 刷新统计",
+      "title": "刷新Token统计",
       "type": "timeseries"
     },
     {
@@ -1221,9 +1236,13 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "auth::refresh_access_token:verify_token_sum / auth::refresh_access_token:verify_token_count",
-          "legendFormat": "验证Token",
+          "expr": "irate(auth::refresh_access_token:verify_token_sum[1m]) / irate(auth::refresh_access_token:verify_token_count[1m])",
+          "legendFormat": "verify_token",
           "range": true,
           "refId": "A"
         },
@@ -1233,13 +1252,13 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "auth::refresh_access_token:set_token_sum / auth::refresh_access_token:set_token_count",
-          "legendFormat": "设置Token",
+          "expr": "irate(auth::refresh_access_token:set_token_sum[1m]) / irate(auth::refresh_access_token:set_token_count[1m])",
+          "legendFormat": "set_token",
           "range": true,
           "refId": "B"
         }
       ],
-      "title": "Token 刷新耗时拆解",
+      "title": "刷新Token耗时拆解",
       "type": "timeseries"
     },
     {
@@ -1299,7 +1318,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -1327,20 +1347,24 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "refresh_access_token:concurrency",
-          "legendFormat": "刷新并发数",
+          "expr": "irate(auth::refresh_access_token:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Token 刷新并发数",
+      "title": "刷新Token平均延迟",
       "type": "timeseries"
     }
   ],
   "preload": false,
   "refresh": "5s",
   "schemaVersion": 42,
-  "tags": ["auth", "service", "monitoring"],
+  "tags": [
+    "auth-service-dashboard",
+    "service",
+    "monitoring"
+  ],
   "templating": {
     "list": []
   },

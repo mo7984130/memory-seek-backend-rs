@@ -91,13 +91,12 @@ pub async fn login(
         let password_clone = req.password.clone();
         let stored_hash = user.password.clone();
         let result: Result<(bool, HashAlgorithm), AppError> = task::spawn_blocking(move || HashAlgorithm::verify_and_detect(&password_clone, &stored_hash))
+            .timed("auth::login:verify_password")
             .await
             .trace_internal_err("spawn_blocking_error", "密码验证任务执行失败")?;
         let verify_result = result.trace_internal_err("verify_password_error", "密码验证内部错误")?;
 
-        if !verify_result.0 {
-            return Err(AppError::bad_request("账号或者密码错误"));
-        }
+        verify_result.0.ok_or_warn("invalid_password", "账号或者密码错误")?;
 
         verify_result.1
     };

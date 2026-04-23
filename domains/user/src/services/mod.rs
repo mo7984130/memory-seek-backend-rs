@@ -36,7 +36,7 @@ pub async fn get_user_info(
     user_id: i64,
     token_cipher: &TokenCipher,
 ) -> Result<user::UserDTO, AppError> {
-    metrics_group!("get_user_info");
+    metrics_group!("user::get_user_info");
 
     // 获取用户
     let user = user::Entity::find()
@@ -56,7 +56,7 @@ pub async fn get_user_info(
             )
     );
 
-    metrics_success!("get_user_info");
+    metrics_success!("user::get_user_info");
     info!(status = "success", user_id = %user_id, "获取用户信息成功");
 
     Ok(user::UserDTO {
@@ -83,7 +83,7 @@ pub async fn generate_inviter_code(
     redis: &Pool,
     user_id: i64
 ) -> Result<InviterCodeDTO, AppError> {
-    metrics_group!("generate_inviter_code");
+    metrics_group!("user::generate_inviter_code");
 
     // 循环生成邀请码, 防止冲突
     // 最大生成次数为3
@@ -104,7 +104,7 @@ pub async fn generate_inviter_code(
             .trace_internal_err("redis_set_error", "生成邀请码时 redis错误")?;
 
         if success {
-            metrics_success!("generate_inviter_code");
+            metrics_success!("user::generate_inviter_code");
 
             info!(status = "success", "生成邀请码成功");
 
@@ -131,7 +131,7 @@ pub async fn change_nickname(
     user_id: i64,
     new_nickname: String
 ) -> Result<String, AppError> {
-    metrics_group!("change_nickname");
+    metrics_group!("user::change_nickname");
 
     // 更新昵称
     let update_res = user::Entity::update_many()
@@ -148,11 +148,12 @@ pub async fn change_nickname(
 
     // 删除用户缓存
     // 错误不返回
-    let _ = redis.delete(&RedisKeys::user::user_info_cache(user_id)).timed("user::change_nickname:redis_delete").await
+    let _ = redis.delete(&RedisKeys::user::user_info_cache(user_id))
+        .timed("user::change_nickname:redis_delete").await
         .trace_internal_err("redis_delete_error", "删除用户缓存失败");
 
 
-    metrics_success!("change_nickname");
+    metrics_success!("user::change_nickname");
     info!(status = "success", user_id = %user_id, "修改昵称成功");
 
     Ok(new_nickname)
@@ -174,7 +175,7 @@ pub async fn update_avatar(
     content_type: String,
     token_cipher: &TokenCipher,
 ) -> Result<String, AppError> {
-    metrics_group!("update_avatar");
+    metrics_group!("user::update_avatar");
 
     // 效验图片
     let img_metadata = timed!("user::update_avatar:validate_image",
@@ -207,7 +208,9 @@ pub async fn update_avatar(
                 id: Set(user_id),
                 avatar_file_id: Set(Some(new_key_inner)),
                 ..Default::default()
-            }.update(txn).await
+            }
+                .update(txn)
+                .await
                 .trace_internal_err("db_update_error", "在上传头像时 更新头像url发送错误")?;
 
             Ok(old_key)
@@ -244,7 +247,7 @@ pub async fn update_avatar(
             .trace_internal_err("encrypt_token_error", "生成头像token失败")?
     );
 
-    metrics_success!("update_avatar");
+    metrics_success!("user::update_avatar");
 
     info!(status = "success", user_id = %user_id, "更新头像成功");
 
@@ -265,7 +268,7 @@ pub async fn change_password(
     hasher: &HashAlgorithm,
     password_verify_semaphore: &Arc<Semaphore>,
 ) -> Result<(), AppError> {
-    metrics_group!("change_password");
+    metrics_group!("user::change_password");
 
     // 新旧密码不可相同
     if req.old_password == req.new_password {
@@ -330,7 +333,7 @@ pub async fn change_password(
     // 登出. 清除token
     logout(db, redis, user_id).await?;
 
-    metrics_success!("change_password");
+    metrics_success!("user::change_password");
     info!(status = "success", user_id = %user_id, "修改密码成功");
 
     Ok(())
@@ -347,7 +350,7 @@ pub async fn logout(
     redis: &Pool,
     user_id: i64
 ) -> Result<(), AppError> {
-    metrics_group!("logout");
+    metrics_group!("user::logout");
 
     // 清除refresh_token
     // 清除access_token
@@ -366,7 +369,7 @@ pub async fn logout(
     refresh_token_result.trace_internal_err("db_update_error", "登出时 清除refresh_token失败")?;
     access_token_result.trace_internal_err("redis_delete_error", "删除访问令牌失败")?;
 
-    metrics_success!("logout");
+    metrics_success!("user::logout");
     info!(status = "success", user_id = %user_id, "登出成功");
 
     Ok(())
@@ -384,7 +387,7 @@ pub async fn get_user_info_batch(
     user_ids: Vec<i64>,
     token_cipher: &TokenCipher,
 ) -> Result<Vec<Option<UserInfoVO>>, AppError> {
-    metrics_group!("get_user_info_batch");
+    metrics_group!("user::get_user_info_batch");
 
     // 空列表直接返回
     if user_ids.is_empty() {
@@ -422,7 +425,7 @@ pub async fn get_user_info_batch(
     .timed("user::get_user_info_batch:redis_cache")
     .await?;
 
-    metrics_success!("get_user_info_batch");
+    metrics_success!("user::get_user_info_batch");
     info!(status = "success", "批量获取用户信息成功");
 
     Ok(result.into_iter().map(|opt| {

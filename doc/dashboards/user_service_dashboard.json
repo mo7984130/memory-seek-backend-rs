@@ -118,8 +118,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "get_user_info:attempts",
-          "legendFormat": "查询尝试",
+          "expr": "user::get_user_info:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -129,8 +129,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "get_user_info:success",
-          "legendFormat": "查询成功",
+          "expr": "user::get_user_info:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -223,9 +223,13 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "user::get_user_info:db_query_sum / user::get_user_info:db_query_count",
-          "legendFormat": "数据库查询",
+          "expr": "irate(user::get_user_info:db_query_sum[1m]) / irate(user::get_user_info:db_query_count[1m])",
+          "legendFormat": "db_query",
           "range": true,
           "refId": "A"
         },
@@ -235,8 +239,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "user::get_user_info:encrypt_avatar_sum / user::get_user_info:encrypt_avatar_count",
-          "legendFormat": "加密头像",
+          "expr": "irate(user::get_user_info:encrypt_avatar_sum[1m]) / irate(user::get_user_info:encrypt_avatar_count[1m])",
+          "legendFormat": "encrypt_avatar",
           "range": true,
           "refId": "B"
         }
@@ -301,7 +305,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -329,13 +334,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "get_user_info:concurrency",
-          "legendFormat": "查询并发数",
+          "expr": "irate(user::get_user_info:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "获取用户信息并发数",
+      "title": "获取用户信息平均延迟",
       "type": "timeseries"
     },
     {
@@ -436,8 +441,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "generate_inviter_code:attempts",
-          "legendFormat": "生成尝试",
+          "expr": "user::generate_inviter_code:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -447,8 +452,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "generate_inviter_code:success",
-          "legendFormat": "生成成功",
+          "expr": "user::generate_inviter_code:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -541,11 +546,26 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "user::generate_inviter_code:redis_set_sum / user::generate_inviter_code:redis_set_count",
-          "legendFormat": "Redis存储",
+          "expr": "irate(user::generate_inviter_code:db_query_sum[1m]) / irate(user::generate_inviter_code:db_query_count[1m])",
+          "legendFormat": "db_query",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
+          "editorMode": "code",
+          "expr": "irate(user::generate_inviter_code:db_update_sum[1m]) / irate(user::generate_inviter_code:db_update_count[1m])",
+          "legendFormat": "db_update",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "生成邀请码耗时拆解",
@@ -608,7 +628,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -636,13 +657,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "generate_inviter_code:concurrency",
-          "legendFormat": "生成并发数",
+          "expr": "irate(user::generate_inviter_code:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "生成邀请码并发数",
+      "title": "生成邀请码平均延迟",
       "type": "timeseries"
     },
     {
@@ -743,8 +764,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "change_nickname:attempts",
-          "legendFormat": "修改尝试",
+          "expr": "user::change_nickname:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -754,8 +775,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "change_nickname:success",
-          "legendFormat": "修改成功",
+          "expr": "user::change_nickname:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -848,9 +869,13 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "user::change_nickname:db_update_sum / user::change_nickname:db_update_count",
-          "legendFormat": "数据库更新",
+          "expr": "irate(user::change_nickname:db_update_sum[1m]) / irate(user::change_nickname:db_update_count[1m])",
+          "legendFormat": "db_update",
           "range": true,
           "refId": "A"
         },
@@ -860,8 +885,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "user::change_nickname:redis_delete_sum / user::change_nickname:redis_delete_count",
-          "legendFormat": "Redis删除",
+          "expr": "irate(user::change_nickname:redis_delete_sum[1m]) / irate(user::change_nickname:redis_delete_count[1m])",
+          "legendFormat": "redis_delete",
           "range": true,
           "refId": "B"
         }
@@ -926,7 +951,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -954,13 +980,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "change_nickname:concurrency",
-          "legendFormat": "修改并发数",
+          "expr": "irate(user::change_nickname:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "修改昵称并发数",
+      "title": "修改昵称平均延迟",
       "type": "timeseries"
     },
     {
@@ -1061,8 +1087,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "update_avatar:attempts",
-          "legendFormat": "上传尝试",
+          "expr": "user::upload_avatar:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -1072,8 +1098,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "update_avatar:success",
-          "legendFormat": "上传成功",
+          "expr": "user::upload_avatar:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -1166,9 +1192,13 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "user::update_avatar:validate_image_sum / user::update_avatar:validate_image_count",
-          "legendFormat": "图片验证",
+          "expr": "irate(user::upload_avatar:s3_upload_sum[1m]) / irate(user::upload_avatar:s3_upload_count[1m])",
+          "legendFormat": "s3_upload",
           "range": true,
           "refId": "A"
         },
@@ -1178,32 +1208,10 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "user::update_avatar:s3_upload_sum / user::update_avatar:s3_upload_count",
-          "legendFormat": "S3上传",
+          "expr": "irate(user::upload_avatar:db_update_sum[1m]) / irate(user::upload_avatar:db_update_count[1m])",
+          "legendFormat": "db_update",
           "range": true,
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "afgkqlgg7670gb"
-          },
-          "editorMode": "code",
-          "expr": "user::update_avatar:db_transaction_sum / user::update_avatar:db_transaction_count",
-          "legendFormat": "数据库事务",
-          "range": true,
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "afgkqlgg7670gb"
-          },
-          "editorMode": "code",
-          "expr": "user::update_avatar:encrypt_token_sum / user::update_avatar:encrypt_token_count",
-          "legendFormat": "加密Token",
-          "range": true,
-          "refId": "D"
         }
       ],
       "title": "上传头像耗时拆解",
@@ -1266,7 +1274,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -1294,13 +1303,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "update_avatar:concurrency",
-          "legendFormat": "上传并发数",
+          "expr": "irate(user::upload_avatar:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "上传头像并发数",
+      "title": "上传头像平均延迟",
       "type": "timeseries"
     },
     {
@@ -1401,8 +1410,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "change_password:attempts",
-          "legendFormat": "修改尝试",
+          "expr": "user::change_password:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -1412,8 +1421,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "change_password:success",
-          "legendFormat": "修改成功",
+          "expr": "user::change_password:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -1506,9 +1515,13 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "user::change_password:db_query_sum / user::change_password:db_query_count",
-          "legendFormat": "数据库查询",
+          "expr": "irate(user::change_password:verify_password_sum[1m]) / irate(user::change_password:verify_password_count[1m])",
+          "legendFormat": "verify_password",
           "range": true,
           "refId": "A"
         },
@@ -1518,8 +1531,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "user::change_password:verify_password_sum / user::change_password:verify_password_count",
-          "legendFormat": "密码验证",
+          "expr": "irate(user::change_password:hash_password_sum[1m]) / irate(user::change_password:hash_password_count[1m])",
+          "legendFormat": "hash_password",
           "range": true,
           "refId": "B"
         },
@@ -1529,8 +1542,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "user::change_password:hash_password_sum / user::change_password:hash_password_count",
-          "legendFormat": "密码加密",
+          "expr": "irate(user::change_password:db_update_sum[1m]) / irate(user::change_password:db_update_count[1m])",
+          "legendFormat": "db_update",
           "range": true,
           "refId": "C"
         },
@@ -1540,8 +1553,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "user::change_password:db_update_sum / user::change_password:db_update_count",
-          "legendFormat": "数据库更新",
+          "expr": "irate(user::change_password:redis_delete_sum[1m]) / irate(user::change_password:redis_delete_count[1m])",
+          "legendFormat": "redis_delete",
           "range": true,
           "refId": "D"
         }
@@ -1606,7 +1619,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -1634,13 +1648,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "change_password:concurrency",
-          "legendFormat": "修改并发数",
+          "expr": "irate(user::change_password:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "修改密码并发数",
+      "title": "修改密码平均延迟",
       "type": "timeseries"
     },
     {
@@ -1741,8 +1755,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "logout:attempts",
-          "legendFormat": "登出尝试",
+          "expr": "user::logout:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -1752,8 +1766,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "logout:success",
-          "legendFormat": "登出成功",
+          "expr": "user::logout:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -1846,22 +1860,15 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "editorMode": "code",
-          "expr": "user::logout:db_update_sum / user::logout:db_update_count",
-          "legendFormat": "数据库更新",
-          "range": true,
-          "refId": "A"
-        },
-        {
           "datasource": {
             "type": "prometheus",
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "user::logout:redis_delete_sum / user::logout:redis_delete_count",
-          "legendFormat": "Redis删除",
+          "expr": "irate(user::logout:redis_delete_sum[1m]) / irate(user::logout:redis_delete_count[1m])",
+          "legendFormat": "redis_delete",
           "range": true,
-          "refId": "B"
+          "refId": "A"
         }
       ],
       "title": "登出耗时拆解",
@@ -1924,7 +1931,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -1952,13 +1960,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "logout:concurrency",
-          "legendFormat": "登出并发数",
+          "expr": "irate(user::logout:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "登出并发数",
+      "title": "登出平均延迟",
       "type": "timeseries"
     },
     {
@@ -2059,8 +2067,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "get_user_info_batch:attempts",
-          "legendFormat": "批量查询尝试",
+          "expr": "user::get_user_info_batch:attempts",
+          "legendFormat": "尝试次数",
           "range": true,
           "refId": "A"
         },
@@ -2070,8 +2078,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "get_user_info_batch:success",
-          "legendFormat": "批量查询成功",
+          "expr": "user::get_user_info_batch:success",
+          "legendFormat": "成功次数",
           "range": true,
           "refId": "B"
         }
@@ -2164,9 +2172,13 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "afgkqlgg7670gb"
+          },
           "editorMode": "code",
-          "expr": "user::get_user_info_batch:db_query_sum / user::get_user_info_batch:db_query_count",
-          "legendFormat": "数据库查询",
+          "expr": "irate(user::get_user_info_batch:db_query_sum[1m]) / irate(user::get_user_info_batch:db_query_count[1m])",
+          "legendFormat": "db_query",
           "range": true,
           "refId": "A"
         },
@@ -2176,8 +2188,8 @@
             "uid": "afgkqlgg7670gb"
           },
           "editorMode": "code",
-          "expr": "user::get_user_info_batch:redis_cache_sum / user::get_user_info_batch:redis_cache_count",
-          "legendFormat": "Redis缓存",
+          "expr": "irate(user::get_user_info_batch:encrypt_avatar_sum[1m]) / irate(user::get_user_info_batch:encrypt_avatar_count[1m])",
+          "legendFormat": "encrypt_avatar",
           "range": true,
           "refId": "B"
         }
@@ -2242,7 +2254,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "ms"
         },
         "overrides": []
       },
@@ -2270,20 +2283,24 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "get_user_info_batch:concurrency",
-          "legendFormat": "批量查询并发数",
+          "expr": "irate(user::get_user_info_batch:duration[1m]) * 1000",
+          "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "批量获取用户信息并发数",
+      "title": "批量获取用户信息平均延迟",
       "type": "timeseries"
     }
   ],
   "preload": false,
   "refresh": "5s",
   "schemaVersion": 42,
-  "tags": ["user", "service", "monitoring"],
+  "tags": [
+    "user-service-dashboard",
+    "service",
+    "monitoring"
+  ],
   "templating": {
     "list": []
   },

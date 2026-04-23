@@ -18,6 +18,14 @@ use crate::services::photo_service::PhotoService;
 
 pub struct PhotoController;
 
+#[derive(Clone, Copy)]
+enum ImageDownloadType {
+    Thumbnail,
+    Preview,
+    Original,
+    Crop,
+}
+
 impl PhotoController {
     pub fn routes() -> Router<Arc<PhotoState>> {
         Router::new()
@@ -161,120 +169,44 @@ impl PhotoController {
         Ok(R::ok(()))
     }
 
-    async fn get_image(
-        State(state): State<Arc<PhotoState>>,
-        Path(token): Path<String>,
+    async fn handle_image_download(
+        state: &Arc<PhotoState>,
+        token: &str,
+        download_type: ImageDownloadType,
     ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = state.token_cipher.decrypt(&token)
+        let image_token: ImageToken = state.token_cipher.decrypt(token)
             .map_err(|_| AppError::bad_request("无效的token"))?;
-        debug!("解密出图片token: {:?}", &image_token);
 
-        match image_token.token_type {
-            ImageTokenType::Thumbnail => {
+        let (bytes, content_type) = match download_type {
+            ImageDownloadType::Thumbnail => {
                 let bytes = state.s3_client
                     .download_with_process(&image_token.file_id, "image/resize,w_300/format,webp")
                     .await?;
-                let body = Body::from(bytes);
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header(header::CONTENT_TYPE, "image/webp")
-                    .header(header::CACHE_CONTROL, "public, max-age=604800")
-                    .body(body)
-                    .unwrap())
+                (bytes, "image/webp")
             }
-            ImageTokenType::Preview => {
+            ImageDownloadType::Preview => {
                 let bytes = state.s3_client
                     .download_with_process(&image_token.file_id, "image/resize,w_1920/format,webp")
                     .await?;
-                let body = Body::from(bytes);
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header(header::CONTENT_TYPE, "image/webp")
-                    .header(header::CACHE_CONTROL, "public, max-age=604800")
-                    .body(body)
-                    .unwrap())
+                (bytes, "image/webp")
             }
-            ImageTokenType::Original => {
+            ImageDownloadType::Original => {
                 let bytes = state.s3_client.download(&image_token.file_id).await?;
                 let content_type = get_content_type(&image_token.file_id);
-                let body = Body::from(bytes);
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header(header::CONTENT_TYPE, content_type)
-                    .header(header::CACHE_CONTROL, "public, max-age=604800")
-                    .body(body)
-                    .unwrap())
+                (bytes, content_type)
             }
-            ImageTokenType::Crop => {
+            ImageDownloadType::Crop => {
                 let bbox = image_token.bbox.ok_or_else(|| AppError::bad_request("token不包含裁剪信息"))?;
                 let size = 200;
-                let process = format!("image/crop,x_{},y_{},w_{},h_{}/resize,w_{}/format,webp", bbox.x, bbox.y, bbox.w, bbox.h, size);
+                let process = format!("image/crop,x_{},y_{},w_{},h_{}/resize,w_{}/format,webp", 
+                                     bbox.x, bbox.y, bbox.w, bbox.h, size);
                 let bytes = state.s3_client
                     .download_with_process(&image_token.file_id, &process)
                     .await?;
-                let body = Body::from(bytes);
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header(header::CONTENT_TYPE, "image/webp")
-                    .header(header::CACHE_CONTROL, "public, max-age=604800")
-                    .body(body)
-                    .unwrap())
+                (bytes, "image/webp")
             }
-        }
-    }
+        };
 
-    async fn get_thumbnail(
-        State(state): State<Arc<PhotoState>>,
-        Path(token): Path<String>,
-    ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = state.token_cipher.decrypt(&token)
-            .map_err(|_| AppError::bad_request("无效的token"))?;
-
-        let bytes = state.s3_client
-            .download_with_process(&image_token.file_id, "image/resize,w_300/format,webp")
-            .await?;
-
-        let body = Body::from(bytes);
-
-        Ok(Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "image/webp")
-            .header(header::CACHE_CONTROL, "public, max-age=604800")
-            .body(body)
-            .unwrap())
-    }
-
-    async fn get_preview(
-        State(state): State<Arc<PhotoState>>,
-        Path(token): Path<String>,
-    ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = state.token_cipher.decrypt(&token)
-            .map_err(|_| AppError::bad_request("无效的token"))?;
-
-        let bytes = state.s3_client
-            .download_with_process(&image_token.file_id, "image/resize,w_1920/format,webp")
-            .await?;
-
-        let body = Body::from(bytes);
-
-        Ok(Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "image/webp")
-            .header(header::CACHE_CONTROL, "public, max-age=604800")
-            .body(body)
-            .unwrap())
-    }
-
-    async fn get_original(
-        State(state): State<Arc<PhotoState>>,
-        Path(token): Path<String>,
-    ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = state.token_cipher.decrypt(&token)
-            .map_err(|_| AppError::bad_request("无效的token"))?;
-
-        let bytes = state.s3_client.download(&image_token.file_id).await?;
-
-        let content_type = get_content_type(&image_token.file_id);
         let body = Body::from(bytes);
 
         Ok(Response::builder()
@@ -285,29 +217,50 @@ impl PhotoController {
             .unwrap())
     }
 
-    async fn get_crop(
+    async fn get_image(
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>, AppError> {
         let image_token: ImageToken = state.token_cipher.decrypt(&token)
             .map_err(|_| AppError::bad_request("无效的token"))?;
+        debug!("解密出图片token: {:?}", &image_token);
 
-        let bbox = image_token.bbox.ok_or_else(|| AppError::bad_request("token不包含裁剪信息"))?;
-        let size = 200;
-        let process = format!("image/crop,x_{},y_{},w_{},h_{}/resize,w_{}/format,webp", bbox.x, bbox.y, bbox.w, bbox.h, size);
+        let download_type = match image_token.token_type {
+            ImageTokenType::Thumbnail => ImageDownloadType::Thumbnail,
+            ImageTokenType::Preview => ImageDownloadType::Preview,
+            ImageTokenType::Original => ImageDownloadType::Original,
+            ImageTokenType::Crop => ImageDownloadType::Crop,
+        };
 
-        let bytes = state.s3_client
-            .download_with_process(&image_token.file_id, &process)
-            .await?;
+        Self::handle_image_download(&state, &token, download_type).await
+    }
 
-        let body = Body::from(bytes);
+    async fn get_thumbnail(
+        State(state): State<Arc<PhotoState>>,
+        Path(token): Path<String>,
+    ) -> Result<Response<Body>, AppError> {
+        Self::handle_image_download(&state, &token, ImageDownloadType::Thumbnail).await
+    }
 
-        Ok(Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "image/webp")
-            .header(header::CACHE_CONTROL, "public, max-age=604800")
-            .body(body)
-            .unwrap())
+    async fn get_preview(
+        State(state): State<Arc<PhotoState>>,
+        Path(token): Path<String>,
+    ) -> Result<Response<Body>, AppError> {
+        Self::handle_image_download(&state, &token, ImageDownloadType::Preview).await
+    }
+
+    async fn get_original(
+        State(state): State<Arc<PhotoState>>,
+        Path(token): Path<String>,
+    ) -> Result<Response<Body>, AppError> {
+        Self::handle_image_download(&state, &token, ImageDownloadType::Original).await
+    }
+
+    async fn get_crop(
+        State(state): State<Arc<PhotoState>>,
+        Path(token): Path<String>,
+    ) -> Result<Response<Body>, AppError> {
+        Self::handle_image_download(&state, &token, ImageDownloadType::Crop).await
     }
 }
 
