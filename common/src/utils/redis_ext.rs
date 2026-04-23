@@ -148,12 +148,11 @@ impl CacheExtension for Pool {
 
         // 解析缓存
         for (i, json_opt) in cached_jsons.into_iter().enumerate() {
-            if let Some(json) = json_opt {
-                if let Ok(val) = serde_json::from_str::<V>(&json) {
+            if let Some(json) = json_opt
+                && let Ok(val) = serde_json::from_str::<V>(&json) {
                     final_results[i] = Some(val);
                     continue;
                 }
-            }
             miss_params.push(params[i].clone());
         }
 
