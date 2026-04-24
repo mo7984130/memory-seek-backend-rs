@@ -65,7 +65,7 @@ pub async fn get_user_info(
         nickname: user.nickname,
         email: user.email,
         avatar_token,
-        created_at: user.created_at.into(),
+        created_at: user.created_at,
         refresh_token: user.refresh_token,
         refresh_token_expire_at: user.refresh_token_expire_at.map(|dt| dt.with_timezone(&Utc)),
         access_token: None,
@@ -159,6 +159,11 @@ pub async fn change_nickname(
     Ok(new_nickname)
 }
 
+pub struct UploadAvatarFile {
+    pub file_name: String,
+    pub file_data: Bytes,
+    pub content_type: String
+}
 /// 上传头像
 #[tracing::instrument(
     name = "user_update_avatar",
@@ -169,23 +174,21 @@ pub async fn update_avatar(
     db: &DatabaseConnection,
     redis: &Pool,
     s3_client: &S3Client,
-    user_id: i64,
-    file_name: String,
-    file_data: Bytes,
-    content_type: String,
     token_cipher: &TokenCipher,
+    user_id: i64,
+    file: UploadAvatarFile,
 ) -> Result<String, AppError> {
     metrics_group!("user::update_avatar");
 
     // 效验图片
     let img_metadata = timed!("user::update_avatar:validate_image",
-        FileValidator::validate_image(&file_data, file_name, content_type)
+        FileValidator::validate_image(&file.file_data, file.file_name, file.content_type)
             .trace_bad_request_err("invalid_image", "文件验证失败")?
     ) ;
 
     // 上传图片
     let new_key = format!("avatars/{}/{}.{}", user_id, uuid::Uuid::new_v4(), &img_metadata.format);
-    s3_client.upload(&new_key, file_data, &img_metadata.mime_type)
+    s3_client.upload(&new_key, file.file_data, &img_metadata.mime_type)
         .timed("user::update_avatar:s3_upload").await
         .trace_internal_err("s3_upload_error", "上传头像到S3失败")?;
 

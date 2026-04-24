@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::UserState;
 use crate::models::{ChangeNicknameRequest, ChangePasswordRequest, GetUserInfoBatchRequest, InviterCodeDTO, UserInfoVO};
-use crate::services as user_service;
+use crate::services::{self as user_service, UploadAvatarFile};
 
 pub struct UserController;
 
@@ -68,7 +68,15 @@ impl UserController {
             .await
             .map_bad_request_err("读取文件失败")?;
 
-        let res = user_service::update_avatar(&state.db, &state.redis, &state.s3_client, user_id.0, file_name, file_data, content_type, &state.token_cipher)
+        let res = user_service::update_avatar(
+            &state.db, &state.redis, &state.s3_client, &state.token_cipher,
+            user_id.0,
+            UploadAvatarFile {
+                file_name,
+                file_data,
+                content_type
+            },
+        )
             .await?;
         Ok(R::ok(res))
     }

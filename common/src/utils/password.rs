@@ -72,7 +72,7 @@ impl HashAlgorithm {
                     .trace_internal_err("argon2 parse error", "解析 Argon2 哈希失败")?;
                 match hasher.verify_password(password.as_bytes(), &parsed) {
                     Ok(()) => Ok(true),
-                    Err(e) if matches!(e, password_hash::Error::Password) => Ok(false),
+                    Err(password_hash::Error::Password) => Ok(false),
                     Err(e) => {
                         error!(reason = "argon2_verify_error", error = %e);
                         Err(AppError::InternalServerError)
