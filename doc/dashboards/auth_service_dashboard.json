@@ -367,7 +367,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(auth::login:duration[1m]) * 1000",
+          "expr": "irate(auth::login:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -712,7 +712,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(auth::register:duration[1m]) * 1000",
+          "expr": "irate(auth::register:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -1024,7 +1024,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(auth::send_email_code:duration[1m]) * 1000",
+          "expr": "irate(auth::send_email_code:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -1347,7 +1347,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(auth::refresh_access_token:duration[1m]) * 1000",
+          "expr": "irate(auth::refresh_access_token:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"

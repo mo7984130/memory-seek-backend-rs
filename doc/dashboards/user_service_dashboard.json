@@ -334,7 +334,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(user::get_user_info:duration[1m]) * 1000",
+          "expr": "irate(user::get_user_info:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -657,7 +657,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(user::generate_inviter_code:duration[1m]) * 1000",
+          "expr": "irate(user::generate_inviter_code:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -980,7 +980,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(user::change_nickname:duration[1m]) * 1000",
+          "expr": "irate(user::change_nickname:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -1303,7 +1303,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(user::upload_avatar:duration[1m]) * 1000",
+          "expr": "irate(user::upload_avatar:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -1648,7 +1648,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(user::change_password:duration[1m]) * 1000",
+          "expr": "irate(user::change_password:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -1960,7 +1960,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(user::logout:duration[1m]) * 1000",
+          "expr": "irate(user::logout:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -2283,7 +2283,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(user::get_user_info_batch:duration[1m]) * 1000",
+          "expr": "irate(user::get_user_info_batch:duration{quantile=\"0.95\"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"

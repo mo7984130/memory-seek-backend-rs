@@ -334,7 +334,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(photo::upload:duration[1m]) * 1000",
+          "expr": "irate(photo::upload:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -657,7 +657,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(photo::upload_with_created_at:duration[1m]) * 1000",
+          "expr": "irate(photo::upload_with_created_at:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -969,7 +969,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(photo::get_photos_cursor:duration[1m]) * 1000",
+          "expr": "irate(photo::get_photos_cursor:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -1281,7 +1281,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(photo::md5_exist:duration[1m]) * 1000",
+          "expr": "irate(photo::md5_exist:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -1593,7 +1593,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(photo::get_time_range:duration[1m]) * 1000",
+          "expr": "irate(photo::get_time_range:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -1916,7 +1916,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(photo::delete_photo:duration[1m]) * 1000",
+          "expr": "irate(photo::delete_photo:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -2228,7 +2228,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::get_list:duration[1m]) * 1000",
+          "expr": "irate(collection::get_list:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -2540,7 +2540,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::create:duration[1m]) * 1000",
+          "expr": "irate(collection::create:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -2852,7 +2852,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::edit:duration[1m]) * 1000",
+          "expr": "irate(collection::edit:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -3164,7 +3164,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::delete:duration[1m]) * 1000",
+          "expr": "irate(collection::delete:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -3476,7 +3476,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::get_photos:duration[1m]) * 1000",
+          "expr": "irate(collection::get_photos:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -3788,7 +3788,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::add_photo:duration[1m]) * 1000",
+          "expr": "irate(collection::add_photo:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -4100,7 +4100,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::remove_photo:duration[1m]) * 1000",
+          "expr": "irate(collection::remove_photo:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -4412,7 +4412,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::batch_add_photos:duration[1m]) * 1000",
+          "expr": "irate(collection::batch_add_photos:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -4724,7 +4724,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::batch_remove_photos:duration[1m]) * 1000",
+          "expr": "irate(collection::batch_remove_photos:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -5036,7 +5036,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(collection::get_by_photo_id:duration[1m]) * 1000",
+          "expr": "irate(collection::get_by_photo_id:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -5348,7 +5348,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(comment::get_list:duration[1m]) * 1000",
+          "expr": "irate(comment::get_list:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -5660,7 +5660,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(comment::publish:duration[1m]) * 1000",
+          "expr": "irate(comment::publish:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -5972,7 +5972,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(comment::delete:duration[1m]) * 1000",
+          "expr": "irate(comment::delete:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -6284,7 +6284,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(comment::toggle_like:duration[1m]) * 1000",
+          "expr": "irate(comment::toggle_like:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -6596,7 +6596,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(timeline::get_stats:duration[1m]) * 1000",
+          "expr": "irate(timeline::get_stats:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -6908,7 +6908,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::get_person_page:duration[1m]) * 1000",
+          "expr": "irate(face::get_person_page:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -7220,7 +7220,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::get_all_person:duration[1m]) * 1000",
+          "expr": "irate(face::get_all_person:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -7532,7 +7532,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::search_person:duration[1m]) * 1000",
+          "expr": "irate(face::search_person:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -7844,7 +7844,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::get_person_info:duration[1m]) * 1000",
+          "expr": "irate(face::get_person_info:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -8156,7 +8156,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::rename_person:duration[1m]) * 1000",
+          "expr": "irate(face::rename_person:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -8468,7 +8468,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::get_person_photo:duration[1m]) * 1000",
+          "expr": "irate(face::get_person_photo:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -8780,7 +8780,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::merge_person:duration[1m]) * 1000",
+          "expr": "irate(face::merge_person:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -9092,7 +9092,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::delete_person:duration[1m]) * 1000",
+          "expr": "irate(face::delete_person:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -9404,7 +9404,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::get_photo_features:duration[1m]) * 1000",
+          "expr": "irate(face::get_photo_features:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
@@ -9716,7 +9716,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "irate(face::change_face_belonging:duration[1m]) * 1000",
+          "expr": "irate(face::change_face_belonging:duration{quantile="0.95"}[1m]) * 1000",
           "legendFormat": "平均延迟",
           "range": true,
           "refId": "A"
