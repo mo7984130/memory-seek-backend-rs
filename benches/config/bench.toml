@@ -1,0 +1,49 @@
+[server]
+base_url = "http://localhost:3000"
+
+[auth]
+refresh_before_expiry_secs = 60
+
+[[user_patterns]]
+pattern = "testuser{0..100}"
+password = "123456abc"
+
+[bench]
+mode = "staircase"
+duration_secs = 30
+warmup_secs = 5
+
+[bench.staircase]
+stage_duration_secs = 30
+cooldown_secs = 3
+
+[[bench.staircase.stages]]
+concurrency = 10
+
+[[bench.staircase.stages]]
+concurrency = 25
+
+[[bench.staircase.stages]]
+concurrency = 50
+
+[[bench.staircase.stages]]
+concurrency = 100
+
+[[scenarios]]
+name = "auth/login"
+weight = 60
+needs_credentials = true
+
+[[scenarios]]
+name = "auth/token_refresh"
+weight = 30
+needs_credentials = true
+
+[[scenarios]]
+name = "auth/register"
+weight = 10
+
+[[scenarios]]
+name = "user/get_profile"
+weight = 20
+needs_credentials = true
