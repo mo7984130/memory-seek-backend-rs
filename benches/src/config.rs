@@ -36,7 +36,7 @@ pub struct UserPattern {
     pub password: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct RunConfig {
     #[serde(default)]
     pub mode: RunMode,
@@ -119,7 +119,7 @@ impl BenchConfig {
     }
 
     /// Distribute users proportionally to scenario weights.
-    /// Only scenarios with `needs_credentials = true` participate.
+    /// Only scenarios with `needs_credentials = true` AND `enabled = true` participate.
     pub fn allocate_users(&self) -> HashMap<String, Vec<UserCredential>> {
         let participating: Vec<&ScenarioWeight> = self
             .scenarios
