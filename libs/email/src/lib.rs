@@ -6,11 +6,13 @@ use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
 #[derive(Clone)]
 pub struct EmailClient {
-    transport: AsyncSmtpTransport<Tokio1Executor>
+    transport: AsyncSmtpTransport<Tokio1Executor>,
+    from_email: String,
+    from_name: String,
 }
 
 impl EmailClient {
-    pub fn new(server: &str, port: u16, user: &str, pass: &str) -> Self {
+    pub fn new(server: &str, port: u16, user: &str, pass: &str, from_email: &str, from_name: &str) -> Self {
         let creds = Credentials::new(user.to_string(), pass.to_string());
 
         // 根据端口判断加密方式：
@@ -29,24 +31,24 @@ impl EmailClient {
         };
 
         Self {
-            transport
+            transport,
+            from_email: from_email.to_string(),
+            from_name: from_name.to_string(),
         }
     }
 
-    pub async fn send_html(
+    pub async fn send_message(
         &self,
-        from: &str,
-        nickname: &str,
         to: &str,
         subject: &str,
-        html_body: String,
+        body: String,
     ) -> Result<(), AppError> {
         let email = Message::builder()
-            .from(format!("{} <{}>", nickname, from).parse().map_internal_err("发件人地址格式错误")?)
+            .from(format!("{} <{}>", self.from_name, self.from_email).parse().map_internal_err("发件人地址格式错误")?)
             .to(to.parse().map_bad_request_err("目标邮箱格式错误")?)
             .subject(subject)
             .header(ContentType::TEXT_HTML)
-            .body(html_body)
+            .body(body)
             .map_internal_err("构建邮件消息失败")?;
 
         self.transport
