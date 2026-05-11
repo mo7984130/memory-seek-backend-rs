@@ -1,7 +1,9 @@
 #[macro_export]
 macro_rules! metrics_success {
-    ($name:literal) => {
+    ($func:literal) => {
         #[cfg(feature = "metrics")]
-        $crate::metrics::counter!(concat!($name, ":success")).increment(1);
+        $crate::metrics::counter!(
+            concat!(env!("CARGO_PKG_NAME"), ":", $func, ":success")
+        ).increment(1);
     };
 }

@@ -100,4 +100,13 @@ impl HashAlgorithm {
             .trace_internal_err("argon2_params_error", "创建 Argon2 参数失败")?;
         Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
     }
+
+    /// 执行恒定时间的 dummy 验证，防止基于时序的用户枚举攻击
+    /// 当用户不存在时调用，使响应时间与密码错误时一致
+    pub fn dummy_verify() {
+        let _ = bcrypt::verify(
+            "dummy",
+            "$2b$12$QIgiYYcKC7dCwqhEmAX.duD4QA1t5Hgr9HAsmiawNdkXCdxZ8Dvea",
+        );
+    }
 }

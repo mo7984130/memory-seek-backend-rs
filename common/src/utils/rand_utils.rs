@@ -1,10 +1,19 @@
-use rand::{rng, Rng};
+use rand::{rng, Rng, RngExt};
 
+/// 生成随机十六进制小写字符串
 #[inline]
 pub fn generate_random_str(len: usize) -> String {
     let mut key = vec![0u8; len / 2];
     rng().fill_bytes(&mut key);
     hex::encode(key)
+}
+
+/// 生成随机大写字母+数字字符串（A-Z + 0-9），适用于验证码、邀请码等场景
+pub fn generate_random_uppercase_str(len: usize) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    (0..len)
+        .map(|_| CHARSET[rng().random_range(0..CHARSET.len())] as char)
+        .collect()
 }
 
 #[cfg(test)]
@@ -64,5 +73,26 @@ mod tests {
         let unique_chars: std::collections::HashSet<_> = random_str.chars().collect();
         // 十六进制字符最多 16 个，但至少应该有多个不同的字符
         assert!(unique_chars.len() > 3);
+    }
+
+    #[test]
+    fn test_generate_random_uppercase_str_length() {
+        assert_eq!(generate_random_uppercase_str(6).len(), 6);
+        assert_eq!(generate_random_uppercase_str(8).len(), 8);
+        assert_eq!(generate_random_uppercase_str(0).len(), 0);
+    }
+
+    #[test]
+    fn test_generate_random_uppercase_str_format() {
+        let s = generate_random_uppercase_str(100);
+        assert!(s.chars().all(|c| c.is_ascii_alphanumeric()));
+        assert!(s.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn test_generate_random_uppercase_str_uniqueness() {
+        let s1 = generate_random_uppercase_str(32);
+        let s2 = generate_random_uppercase_str(32);
+        assert_ne!(s1, s2);
     }
 }

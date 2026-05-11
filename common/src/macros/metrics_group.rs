@@ -1,11 +1,17 @@
 #[macro_export]
 macro_rules! metrics_group {
-    ($name:literal) => {
+    ($func:literal) => {
         #[cfg(feature = "metrics")]
         let _metrics_bundle = (
-            $crate::utils::MetricsTimer::start(concat!($name, ":duration")),
-            $crate::utils::MetricsConcurrencyGuard::start(concat!($name, ":concurrency")),
-            $crate::metrics::counter!(concat!($name, ":attempts")).increment(1),
+            $crate::utils::MetricsTimer::start(
+                concat!(env!("CARGO_PKG_NAME"), ":", $func, ":duration")
+            ),
+            $crate::utils::MetricsConcurrencyGuard::start(
+                concat!(env!("CARGO_PKG_NAME"), ":", $func, ":concurrency")
+            ),
+            $crate::metrics::counter!(
+                concat!(env!("CARGO_PKG_NAME"), ":", $func, ":attempts")
+            ).increment(1),
         );
     };
 }

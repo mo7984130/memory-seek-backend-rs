@@ -1,14 +1,17 @@
 #[macro_export]
 macro_rules! timed {
-    ($metric:expr, $block:block) => {{
+    ($func:literal, $name:expr, $block:block) => {{
         #[cfg(feature = "metrics")]
-        let _t = $crate::utils::MetricsTimer::start($metric);
+        let _t = $crate::utils::MetricsTimer::start(
+            concat!(env!("CARGO_PKG_NAME"), ":", $func, ":", $name, ":duration")
+        );
         $block
     }};
-    // 这种模式可以支持 timed!("name", expr) 这种简写
-    ($metric:expr, $entry:expr) => {{
+    ($func:literal, $name:expr, $entry:expr) => {{
         #[cfg(feature = "metrics")]
-        let _t = $crate::utils::MetricsTimer::start($metric);
+        let _t = $crate::utils::MetricsTimer::start(
+            concat!(env!("CARGO_PKG_NAME"), ":", $func, ":", $name, ":duration")
+        );
         $entry
     }};
 }
