@@ -7,6 +7,7 @@ mod file_validator;
 mod option_ext;
 mod bool_ext;
 mod password;
+mod avatar;
 mod token_cipher;
 
 pub use bool_ext::BoolExt;
@@ -18,6 +19,7 @@ pub use redis_ext::RedisExt;
 pub use result_ext::ResultExt;
 pub use result_ext::ToOkExt;
 pub use password::{HashAlgorithm, Argon2idConfig, BcryptConfig};
+pub use avatar::encrypt_avatar_token;
 pub use token_cipher::{TokenCipher, TokenCipherConfig};
 
 #[cfg(feature = "metrics")]
