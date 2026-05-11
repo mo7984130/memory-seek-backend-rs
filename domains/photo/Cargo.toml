@@ -6,7 +6,7 @@ edition = "2024"
 [features]
 default = []
 metrics = ["common/metrics"]
-controller = ["dep:axum", "dep:serde_json"]
+controller = ["dep:axum"]
 face_recognition = ["dep:face_engine", "dep:ndarray", "dep:rayon"]
 
 [dependencies]
@@ -19,7 +19,7 @@ face_engine = { path = "../../libs/face_engine", optional = true }
 axum = { workspace = true, optional = true }
 tokio = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 sea-orm = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
@@ -36,4 +36,5 @@ pinyin = { workspace = true }
 base64 = { workspace = true }
 tokio-util = { workspace = true }
 moka = { workspace = true }
+bytes = { workspace = true }
 once_cell = { workspace = true }

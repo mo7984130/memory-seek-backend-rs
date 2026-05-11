@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "auth_user")]
@@ -25,7 +25,7 @@ pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct UserDTO {
     pub id: String,

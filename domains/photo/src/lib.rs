@@ -13,6 +13,7 @@ pub mod middlewares;
 pub use services::photo_service::FaceTask;
 pub use models::*;
 pub use services::*;
+#[cfg(feature = "controller")]
 pub use controller::*;
 pub use state::PhotoState;
 pub use middlewares::UserId;

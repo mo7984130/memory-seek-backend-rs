@@ -8,11 +8,11 @@ use crate::services::CollectionService;
 #[cfg(feature = "face_recognition")]
 use crate::services::feature_service::FeatureService;
 use crate::services::timeline_stat_service::TimelineStatService;
-use axum::body::Bytes;
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use common::constants::RedisKeys;
 use common::error::AppError;
-use common::{metrics_group, metrics_success, timed};
+use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use common::utils::{CacheExtension, FileValidator, MetricsTimerExt, ResultExt};
 use deadpool_redis::Pool;
 use entities::photo::{Model};
@@ -83,10 +83,10 @@ impl PhotoService {
         created_at: Option<DateTimeUtc>,
         token_cipher: &TokenCipher,
     ) -> Result<PhotoVO, AppError> {
-        metrics_group!("photo_upload");
+        metrics_group!("upload_photo");
 
         // 计算md5
-        let md5_hash = timed!("photo::upload:md5_hash",
+        let md5_hash = timed!("upload_photo", "md5_hash",
             format!("{:x}", md5::compute(&file_data))
         );
         if PhotoMapper::exists_by_md5(db, &md5_hash).await? {
@@ -95,7 +95,7 @@ impl PhotoService {
         }
 
         // 效验文件
-        let metadata = timed!("photo::upload:validate_photo",
+        let metadata = timed!("upload_photo", "validate_photo",
             FileValidator::validate_image(&file_data, file_name, content_type)
                 .trace_bad_request_err("photo::upload:invaild_photo", "图片效验不通过")?
         );
@@ -105,7 +105,7 @@ impl PhotoService {
         let uuid = Uuid::new_v4();
         let file_id = format!("photos/{}/{}.{}", date_path, uuid, metadata.format);
         s3.upload(&file_id, &file_data, &metadata.mime_type)
-            .timed("photo::upload:s3_upload")
+            .timed(metrics_timer_name!("upload_photo", "s3_upload"))
             .await
             .trace_internal_err("photo::upload:s3_upload_err", "s3上传失败")?;
 
@@ -125,7 +125,7 @@ impl PhotoService {
             ..Default::default()
         }
         .insert(db)
-        .timed("photo::upload:db_insert")
+        .timed(metrics_timer_name!("upload_photo", "db_insert"))
         .await
         .trace_internal_err("photo::upload:db_insert_err", "保存照片失败");
         // 删除文件
@@ -160,7 +160,7 @@ impl PhotoService {
         let (thumbnail_token, preview_token, original_token) =
             PhotoVO::generate_tokens(&file_id, token_cipher);
 
-        metrics_success!("photo::upload:");
+        metrics_success!("upload_photo");
 
         Ok(PhotoVO {
             id: photo.id.to_string(),
@@ -195,7 +195,7 @@ impl PhotoService {
         query: PhotoCursorQuery,
         token_cipher: &TokenCipher,
     ) -> Result<CursorPageVO<PhotoVO, String>, AppError> {
-        metrics_group!("photo::get_photo_cursor_page");
+        metrics_group!("get_photo_cursor_page");
 
         let size = query.size as usize;
         // 解码cursor
@@ -205,7 +205,7 @@ impl PhotoService {
 
         // 获取photo_ids
         let mut photo_ids = PhotoMapper::find_cursor_page_ids(db, decoded_cursor, (size + 1) as u64, &query.direction)
-                    .timed("photo::get_photo_cursor_page:find_cursor_page_ids").await?;
+                    .timed(metrics_timer_name!("get_photo_cursor_page", "find_cursor_page_ids")).await?;
         // 空返回
         if photo_ids.is_empty() {
             return Ok(CursorPageVO::empty());
@@ -218,7 +218,7 @@ impl PhotoService {
         // 获取喜欢收藏夹的id
         let favorite_collection_id =
             CollectionService::get_favorite_collection_id(db, redis, user_id)
-                .timed("photo::get_photo_cursor_page:get_favorite_collection_id").await?;
+                .timed(metrics_timer_name!("get_photo_cursor_page", "get_favorite_collection_id")).await?;
 
         // 带redis缓存的获取照片信息
         // 获取照片是否被喜欢
@@ -231,10 +231,10 @@ impl PhotoService {
                     |miss_ids| async move { Ok(PhotoMapper::find_by_ids(db, miss_ids).await?) },
                     |photo| photo.id,
                 )
-                .timed("photo::get_photo_cursor_page:get_photos")
+                .timed(metrics_timer_name!("get_photo_cursor_page", "get_photos"))
             ,
             CollectionPhotoMapper::exists_in_collection(db, favorite_collection_id, &photo_ids)
-                .timed("photo::get_photo_cursor_page:exists_in_collection")
+                .timed(metrics_timer_name!("get_photo_cursor_page", "exists_in_collection"))
         );
         let photos = photos_result?;
         let favorited_photo_ids = favorited_photo_ids_result?
@@ -250,7 +250,7 @@ impl PhotoService {
             None
         };
         // 组装records
-        let records: Vec<PhotoVO> = timed!("photo::get_photo_cursor_page:records",
+        let records: Vec<PhotoVO> = timed!("get_photo_cursor_page", "records",
             photos
                 .into_iter()
                 .flatten()
@@ -275,7 +275,7 @@ impl PhotoService {
                 .collect()
         );
 
-        metrics_success!("photo::get_photo_cursor_page");
+        metrics_success!("get_photo_cursor_page");
 
         Ok(CursorPageVO {
             records,
@@ -296,11 +296,11 @@ impl PhotoService {
         db: &sea_orm::DatabaseConnection,
         photo_id: i64,
     ) -> Result<Model, AppError> {
-        metrics_group!("photo::get_photo_by_id");
+        metrics_group!("get_photo_by_id");
 
         let res = PhotoMapper::find_by_id(db, photo_id).await;
 
-        metrics_success!("photo::get_photo_by_id");
+        metrics_success!("get_photo_by_id");
         return res;
     }
 
@@ -313,11 +313,11 @@ impl PhotoService {
     /// # 返回
     /// 存在返回true，否则返回false
     pub async fn md5_exists(db: &sea_orm::DatabaseConnection, md5: &str) -> Result<bool, AppError> {
-        metrics_group!("photo::md5_exists");
+        metrics_group!("md5_exists");
 
         let res = PhotoMapper::exists_by_md5(db, md5).await;
 
-        metrics_success!("photo::md5_exists");
+        metrics_success!("md5_exists");
         return res;
     }
 
@@ -331,11 +331,11 @@ impl PhotoService {
     pub async fn get_time_range(
         db: &sea_orm::DatabaseConnection,
     ) -> Result<(DateTime<Utc>, DateTime<Utc>), AppError> {
-        metrics_group!("photo::get_time_range");
+        metrics_group!("get_time_range");
 
         let res = PhotoMapper::find_time_range(db).await;
 
-        metrics_success!("photo::get_time_range");
+        metrics_success!("get_time_range");
         return res;
     }
 
@@ -372,18 +372,18 @@ impl PhotoService {
         user_id: i64,
         photo_id: i64,
     ) -> Result<(), AppError> {
-        metrics_group!("photo::delete_photo");
+        metrics_group!("delete_photo");
 
         if user_id != 1 {
             return Err(AppError::forbidden("只有管理员可以删除照片"));
         }
 
         let photo = PhotoMapper::find_by_id(db, photo_id)
-            .timed("photo::delete_photo:find_photo").await?;
+            .timed(metrics_timer_name!("delete_photo", "find_photo")).await?;
 
         #[cfg(feature = "face_recognition")]
         let features = FaceFeatureMapper::find_by_photo_id(db, photo_id)
-            .timed("photo::delete_photo:find_features")
+            .timed(metrics_timer_name!("delete_photo", "find_features"))
             .await?;
 
         #[cfg(feature = "face_recognition")]
@@ -397,7 +397,7 @@ impl PhotoService {
                     let feature_ids: Vec<i64> = features.iter().map(|f| f.id).collect();
                     if !feature_ids.is_empty() {
                         FaceFeatureMapper::delete_by_ids(txn, feature_ids)
-                            .timed("photo::delete_photo:delete_features")
+                            .timed(metrics_timer_name!("delete_photo", "delete_features"))
                             .await?;
                     }
 
@@ -428,11 +428,11 @@ impl PhotoService {
         }
 
         let _ = s3.delete(&photo.file_id)
-            .timed("photo::delete_photo:delete_photo").await
+            .timed(metrics_timer_name!("delete_photo", "s3_delete")).await
             .trace_internal_err("photo::delete_photo:s3_delete_err", "删除图片文件失败");
 
         let _ = TimelineStatService::decr_stat(db, photo.created_at)
-            .timed("photo::delete_photo:decr_timeline").await
+            .timed(metrics_timer_name!("delete_photo", "decr_timeline")).await
             .trace_internal_err("photo::delete_photo:decr_timeline_err", "减量时间线错误");
 
         Ok(())
@@ -452,14 +452,14 @@ impl PhotoService {
         // --- 1. 处理收藏夹关联 ---
         // 从 collection_photo 表中删除该图片的所有收藏记录，并返回受影响的收藏夹 ID 列表
         let collection_ids = CollectionPhotoMapper::delete_by_photo_id(txn, photo_id)
-            .timed("photo::delete_photo:collection_photo")
+            .timed(metrics_timer_name!("delete_photo", "collection_photo"))
             .await
             .trace_internal_err("photo::delete_photo:delete_collection_photo", "删除收藏夹关联失败")?;
 
         // 针对每一个包含该图片的收藏夹，将其图片总数减 1
         if !collection_ids.is_empty() {
             CollectionMapper::increment_photo_counts(txn, collection_ids, -1)
-                .timed("photo::delete_photo:decrement_photo_count")
+                .timed(metrics_timer_name!("delete_photo", "decrement_photo_count"))
                 .await
                 .trace_internal_err("photo::delete_photo:decrement_photo_count", "更新收藏夹图片计数失败")?;
         }
@@ -467,28 +467,28 @@ impl PhotoService {
         // --- 2. 处理评论及评论点赞 ---
         // 首先找出该图片下的所有评论 ID（为了后续删除这些评论收到的点赞）
         let comment_ids = CommentMapper::find_ids_by_photo_id(txn, photo_id)
-            .timed("photo::delete_photo:find_comment_ids")
+            .timed(metrics_timer_name!("delete_photo", "find_comment_ids"))
             .await
             .trace_internal_err("photo::delete_photo:find_comment_ids_err", "查找评论失败")?;
 
         // 如果该图片有评论，则先删除这些评论对应的所有点赞记录（清理从表）
         if !comment_ids.is_empty() {
             CommentLikeMapper::delete_by_comment_ids(txn, comment_ids)
-                .timed("photo::delete_photo:delete_comment_like")
+                .timed(metrics_timer_name!("delete_photo", "delete_comment_like"))
                 .await
                 .trace_internal_err("photo::delete_photo:delete_comment_like", "删除评论点赞失败")?;
         }
 
         // 删除该图片下的所有评论主体
         CommentMapper::delete_by_photo_id(txn, photo_id)
-            .timed("photo::delete_photo:delete_comment")
+            .timed(metrics_timer_name!("delete_photo", "delete_comment"))
             .await
             .trace_internal_err("photo::delete_photo:delete_comment", "删除评论失败")?;
 
         // --- 3. 处理图片主体 ---
         // 最后一步：删除图片主表记录
         PhotoMapper::delete_by_id(txn, photo_id)
-            .timed("photo::delete_photo:delete_photo")
+            .timed(metrics_timer_name!("delete_photo", "delete_photo"))
             .await
             .trace_internal_err("photo::delete_photo:delete_photo", "删除照片失败")?;
 
