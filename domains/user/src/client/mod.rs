@@ -50,7 +50,10 @@ pub struct UserClient {
 impl UserClient {
     pub fn new(base_url: &str, auth_client: Arc<AuthClient>) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("Failed to build HTTP client"),
             auth_client,
             base_url: base_url.to_string(),
         }
@@ -208,24 +211,29 @@ impl UserClient {
         Ok(users)
     }
 
-    /// 并发获取多个用户信息
+    /// 并发获取多个用户信息（使用批量接口）
     pub async fn get_user_info_batch_concurrent(
         &self,
         user_ids: &[i64],
         concurrency: usize,
     ) -> Vec<Option<UserInfoVO>> {
-        use futures::stream::{self, StreamExt};
+        match self.get_user_info_batch(user_ids).await {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::warn!(error = %e, "批量获取用户信息失败，回退到逐个请求");
+                use futures::stream::{self, StreamExt};
+                let results: Vec<Option<UserDTO>> = stream::iter(user_ids.iter())
+                    .map(|&user_id| async move { self.get_user_info(user_id).await.ok() })
+                    .buffer_unordered(concurrency)
+                    .collect()
+                    .await;
 
-        let results: Vec<Option<UserDTO>> = stream::iter(user_ids.iter())
-            .map(|&user_id| async move { self.get_user_info(user_id).await.ok() })
-            .buffer_unordered(concurrency)
-            .collect()
-            .await;
-
-        results.into_iter().map(|opt| opt.map(|user| UserInfoVO {
-            user_id: user.id,
-            nickname: user.nickname,
-            avatar_token: user.avatar_token,
-        })).collect()
+                results.into_iter().map(|opt| opt.map(|user| UserInfoVO {
+                    user_id: user.id,
+                    nickname: user.nickname,
+                    avatar_token: user.avatar_token,
+                })).collect()
+            }
+        }
     }
 }
