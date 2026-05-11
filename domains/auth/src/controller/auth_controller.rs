@@ -1,5 +1,6 @@
 use crate::AuthState;
-use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest, SendEmailCodeRequest};
+use crate::models::SendEmailCodeRequest;
+use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest};
 use crate::services as auth_service;
 use axum::extract::State;
 use axum::http::HeaderMap;
@@ -19,29 +20,29 @@ impl AuthController {
         Router::new()
             .route("/login", post(Self::login))
             .route("/register", post(Self::register))
-            .route("/email-verify-code", post(Self::send_email_code))
             .route("/access-token", get(Self::refresh_access_token))
+            .route("/email-verify-code", post(Self::send_email_code))
     }
 
     async fn login(
         State(state): State<Arc<AuthState>>,
         ValidatedJson(req): ValidatedJson<LoginRequest>
     ) -> Result<R<UserDTO>, AppError> {
-        auth_service::login(&state.db, &state.redis, &state.hasher, req, &state.token_cipher, &state.password_verify_semaphore).await.into_ok_res()
+        auth_service::login(&state, req).await.into_ok_res()
     }
 
     async fn register(
         State(state): State<Arc<AuthState>>,
         ValidatedJson(payload): ValidatedJson<RegisterRequest>
     ) -> Result<R<UserDTO>, AppError> {
-        auth_service::register(&state.db, &state.redis, &state.hasher, payload).await.into_ok_res()
+        auth_service::register(&state, payload).await.into_ok_res()
     }
 
     async fn send_email_code(
         State(state): State<Arc<AuthState>>,
         ValidatedJson(payload): ValidatedJson<SendEmailCodeRequest>
     ) -> Result<R<()>, AppError> {
-        auth_service::send_email_code(&state.redis, &state.email_client, payload).await.into_ok_res()
+        auth_service::send_email_code(&state, payload).await.into_ok_res()
     }
 
     async fn refresh_access_token(
@@ -62,8 +63,6 @@ impl AuthController {
             .to_str()
             .map_err(|_| AppError::bad_request("x-refresh-token 格式非法"))?
             .to_string();
-        auth_service::refresh_access_token(
-            &state.db, &state.redis, user_id, refresh_token_str
-        ).await.into_ok_res()
+        auth_service::refresh_access_token(&state, user_id, refresh_token_str).await.into_ok_res()
     }
 }

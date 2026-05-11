@@ -7,7 +7,7 @@ use common::utils::validators::validate_username;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-#[derive(Debug, Validate, Deserialize)]
+#[derive(Debug, Validate, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     #[validate(custom(function = "validate_account"))]
@@ -16,7 +16,7 @@ pub struct LoginRequest {
     pub password: String
 }
 
-#[derive(Debug, Validate, Deserialize)]
+#[derive(Debug, Validate, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
     #[validate(custom(function = "validate_username"))]
@@ -36,14 +36,14 @@ pub struct RegisterRequest {
     pub email_verify_code: String
 }
 
-#[derive(Debug, Validate, Deserialize)]
+#[derive(Debug, Validate, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendEmailCodeRequest {
     #[validate(custom(function = "validate_email"))]
     pub email: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccessTokenResponse {
     pub access_token: String,
