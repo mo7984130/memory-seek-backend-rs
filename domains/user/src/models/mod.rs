@@ -68,3 +68,101 @@ impl UserInfoVO {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::utils::TokenCipher;
+    use validator::Validate;
+
+    fn create_test_cipher() -> TokenCipher {
+        TokenCipher::new("test-secret-key-32bytes!xxxxxx", "test-salt")
+    }
+
+    #[test]
+    fn test_user_info_vo_from_dto_with_avatar() {
+        let cipher = create_test_cipher();
+        let dto = UserInfoDTO {
+            user_id: 42,
+            nickname: "Alice".to_string(),
+            avatar_file_id: Some("file123".to_string()),
+        };
+        let vo = UserInfoVO::from_dto(dto, &cipher);
+        assert_eq!(vo.user_id, "42");
+        assert_eq!(vo.nickname, "Alice");
+        assert!(vo.avatar_token.is_some());
+    }
+
+    #[test]
+    fn test_user_info_vo_from_dto_without_avatar() {
+        let cipher = create_test_cipher();
+        let dto = UserInfoDTO {
+            user_id: 1,
+            nickname: "Bob".to_string(),
+            avatar_file_id: None,
+        };
+        let vo = UserInfoVO::from_dto(dto, &cipher);
+        assert_eq!(vo.user_id, "1");
+        assert_eq!(vo.nickname, "Bob");
+        assert!(vo.avatar_token.is_none());
+    }
+
+    #[test]
+    fn test_change_nickname_request_valid() {
+        let req = ChangeNicknameRequest {
+            new_nickname: "Alice".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_change_nickname_request_empty() {
+        let req = ChangeNicknameRequest {
+            new_nickname: "".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn test_change_nickname_request_too_long() {
+        let req = ChangeNicknameRequest {
+            new_nickname: "a".repeat(21),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn test_change_nickname_request_special_chars() {
+        let req = ChangeNicknameRequest {
+            new_nickname: "test<script>".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn test_change_password_request_valid() {
+        let req = ChangePasswordRequest {
+            old_password: "oldPass123".to_string(),
+            new_password: "newPass456".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_change_password_request_no_number() {
+        let req = ChangePasswordRequest {
+            old_password: "oldPassword".to_string(),
+            new_password: "onlyLetters".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn test_change_password_request_too_short() {
+        let req = ChangePasswordRequest {
+            old_password: "oldPass123".to_string(),
+            new_password: "a1".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+}
