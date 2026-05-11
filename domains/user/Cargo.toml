@@ -7,13 +7,16 @@ edition = "2024"
 default = []
 metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum"]
+client = ["dep:reqwest", "dep:anyhow", "dep:futures", "dep:serde_json", "auth/client"]
 
 [dependencies]
 common = { path = "../../common" }
 entities = { path = "../../entities" }
 oss = { path = "../../libs/oss" }
 img_url_generator = { path = "../../libs/img_url_generator" }
+auth = { path = "../auth", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { workspace = true, optional = true }
 validator = { workspace = true }
 chrono = { workspace = true }
 sea-orm = { workspace = true }
@@ -26,3 +29,11 @@ metrics = { workspace = true, optional = true }
 tokio = { workspace = true }
 axum = { workspace = true, optional = true }
 num_cpus = { workspace = true }
+reqwest = { workspace = true, optional = true }
+anyhow = { version = "1", optional = true }
+futures = { workspace = true, optional = true }
+
+[dev-dependencies]
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+tokio-test = { workspace = true }

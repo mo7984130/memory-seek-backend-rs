@@ -7,7 +7,7 @@ use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangePasswordRequest {
     #[validate(custom(function = "validate_password"))]
@@ -16,7 +16,7 @@ pub struct ChangePasswordRequest {
     pub new_password: String
 }
 
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangeNicknameRequest {
     #[validate(
@@ -26,7 +26,7 @@ pub struct ChangeNicknameRequest {
     pub new_nickname: String
 }
 
-#[derive(Deserialize, Validate)]
+#[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct GetUserInfoBatchRequest {
     pub user_ids: Vec<String>

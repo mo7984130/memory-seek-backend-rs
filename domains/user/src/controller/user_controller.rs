@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::UserState;
 use crate::models::{ChangeNicknameRequest, ChangePasswordRequest, GetUserInfoBatchRequest, InviterCodeDTO, UserInfoVO};
-use crate::services::{self as user_service, UploadAvatarFile};
+use crate::services as user_service;
 
 pub struct UserController;
 
@@ -69,13 +69,10 @@ impl UserController {
             .map_bad_request_err("读取文件失败")?;
 
         let res = user_service::update_avatar(
-            &state.db, &state.redis, &state.s3_client, &state.token_cipher,
+            &state.db, &state.redis, &state.s3_client,
             user_id.0,
-            UploadAvatarFile {
-                file_name,
-                file_data,
-                content_type
-            },
+            file_name, file_data.to_vec(), content_type,
+            &state.token_cipher,
         )
             .await?;
         Ok(R::ok(res))
@@ -86,7 +83,7 @@ impl UserController {
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<ChangePasswordRequest>
     ) -> Result<R<()>, AppError> {
-        user_service::change_password(&state.db, &state.redis, user_id.0, req, &state.hasher, &state.password_verify_semaphore).await.into_ok_res()
+        user_service::change_password(&state.db, &state.redis, user_id.0, req).await.into_ok_res()
     }
 
     async fn logout(
