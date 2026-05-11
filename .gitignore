@@ -5,3 +5,7 @@
 /models
 **/.DS_Store
 **/logs
+config.json
+config.test.json
+.env
+.env.test
