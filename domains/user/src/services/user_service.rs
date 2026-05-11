@@ -3,24 +3,29 @@ use common::constants::RedisKeys;
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use deadpool_redis::Pool;
 use entities::user;
-use common::models::ImageToken;
 use common::utils::TokenCipher;
 use sea_orm::sea_query::Expr;
 use sea_orm::sqlx::types::uuid;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
 use tracing::{info, warn};
 use tokio::task::spawn_blocking;
+use std::sync::LazyLock;
+use tokio::sync::Semaphore;
 
 use crate::config::GET_USER_INFO_BATCH_MAX_LEN;
 use crate::models::{ChangePasswordRequest, InviterCodeDTO, UserInfoDTO, UserInfoVO};
-use bcrypt::{hash, verify, DEFAULT_COST};
+use common::constants::HASHER;
 use common::error::AppError;
 use common::utils::{DbUtils, MetricsTimerExt};
-use common::utils::{rand_utils, FileValidator};
+use common::utils::{rand_utils, FileValidator, encrypt_avatar_token};
 use common::utils::{CacheExtension, RedisExt, ResultExt, OptionExt};
 use oss::S3Client;
 
 use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL_SECONDS, USER_INFO_CACHE_TTL_SECS};
+
+/// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
+static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> =
+    LazyLock::new(|| Semaphore::new(common::constants::get_password_verify_max_concurrency()));
 
 /// 获取用户个人信息
 #[tracing::instrument(
@@ -45,12 +50,7 @@ pub async fn get_user_info(
         .ok_or_warn("user_not_found", "获取用户信息时用户不存在", "用户不存在")?;
     // 加密头像
     let avatar_token = timed!("get_user_info", "encrypt_avatar",
-        user.avatar_file_id.as_ref()
-            .and_then(|key|
-                token_cipher.encrypt(&ImageToken::thumbnail(key.clone()), Some(key))
-                .inspect_err(|e| warn!(error = %e, "加密头像失败"))
-                .ok()
-            )
+        encrypt_avatar_token(user.avatar_file_id.as_deref(), token_cipher)
     );
 
     metrics_success!("get_user_info");
@@ -63,8 +63,8 @@ pub async fn get_user_info(
         email: user.email,
         avatar_token,
         created_at: user.created_at.into(),
-        refresh_token: user.refresh_token,
-        refresh_token_expire_at: user.refresh_token_expire_at.map(|dt| dt.with_timezone(&Utc)),
+        refresh_token: None,
+        refresh_token_expire_at: None,
         access_token: None,
         access_token_expire_at: None,
     })
@@ -107,7 +107,7 @@ pub async fn generate_inviter_code(
 
             return Ok(InviterCodeDTO {
                 inviter_code: code,
-                expire_at: Utc::now() + Duration::seconds(INVITER_CODE_TTL_SECONDS)
+                expire_at: Utc::now() + Duration::try_seconds(INVITER_CODE_TTL_SECONDS).unwrap()
             });
         }
     }
@@ -145,9 +145,9 @@ pub async fn change_nickname(
 
     // 删除用户缓存
     // 错误不返回
-    let _ = redis.delete(&RedisKeys::user::user_info_cache(user_id)).timed(metrics_timer_name!("change_nickname", "redis_delete")).await
-        .trace_internal_err("redis_delete_error", "删除用户缓存失败");
-
+    let _ = redis.delete(&RedisKeys::user::user_info_cache(user_id))
+        .timed(metrics_timer_name!("change_nickname", "redis_delete")).await
+        .trace_internal_err("redis_delete_error", "删除用户信息缓存失败");
 
     metrics_success!("change_nickname");
     info!(status = "success", user_id = %user_id, "修改昵称成功");
@@ -189,7 +189,6 @@ pub async fn update_avatar(
     let new_key_for_db = new_key.clone();
     let old_key = DbUtils::write(db, move |txn| {
         let new_key_inner = new_key_for_db;
-
         Box::pin(async move {
             let old_key: Option<String> = user::Entity::find_by_id(user_id)
                 .select_only()
@@ -236,10 +235,8 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token = timed!("update_avatar", "encrypt_token",
-        token_cipher.encrypt(&ImageToken::thumbnail(new_key.clone()), Some(&new_key))
-            .trace_internal_err("encrypt_token_error", "生成头像token失败")?
-    );
+    let avatar_token = encrypt_avatar_token(Some(&new_key), token_cipher)
+        .ok_or_else(|| AppError::InternalServerError)?;
 
     metrics_success!("update_avatar");
 
@@ -278,10 +275,14 @@ pub async fn change_password(
         .trace_internal_err("db_query_error", "更改密码: 数据库查询用户失败")?
         .ok_or_warn("user_not_found", "更改密码", "用户不存在")?;
 
+    // 获取信号量许可，限制并发密码验证
+    let _permit = PASSWORD_VERIFY_SEM.acquire().await
+        .map_err(|_| AppError::InternalServerError)?;
+
     // 效验旧密码
     let is_valid = {
         spawn_blocking(move || {
-            verify(&req.old_password, &old_password)
+            HASHER.verify(&req.old_password, &old_password)
         })
         .timed(metrics_timer_name!("change_password", "verify_password")).await
         .map_err(|_| AppError::InternalServerError)?
@@ -295,7 +296,7 @@ pub async fn change_password(
     let new_password_hash = {
         let password = req.new_password.clone();
         spawn_blocking(move || {
-            hash(password, DEFAULT_COST)
+            HASHER.hash(&password)
         })
         .timed(metrics_timer_name!("change_password", "hash_password")).await
         .map_err(|_| AppError::InternalServerError)?
@@ -337,7 +338,9 @@ pub async fn logout(
 
     // 清除refresh_token
     // 清除access_token
-    let (refresh_token_result, access_token_result) = tokio::join!(
+    // 清除用户信息缓存
+    let cache_key = RedisKeys::user::user_info_cache(user_id);
+    let (refresh_token_result, access_token_result, _) = tokio::join!(
         user::ActiveModel {
             id: Set(user_id),
             refresh_token: Set(None),
@@ -347,7 +350,9 @@ pub async fn logout(
             .update(db)
             .timed(metrics_timer_name!("logout", "db_update")),
         redis.delete(RedisKeys::user::user_access_token(user_id))
-            .timed(metrics_timer_name!("logout", "redis_delete"))
+            .timed(metrics_timer_name!("logout", "redis_delete")),
+        redis.delete(&cache_key)
+            .timed(metrics_timer_name!("logout", "redis_delete_cache"))
     );
     refresh_token_result.trace_internal_err("db_update_error", "登出时 清除refresh_token失败")?;
     access_token_result.trace_internal_err("redis_delete_error", "删除访问令牌失败")?;
