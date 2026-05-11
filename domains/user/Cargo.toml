@@ -22,7 +22,6 @@ chrono = { workspace = true }
 sea-orm = { workspace = true }
 redis = { workspace = true }
 uuid = { workspace = true }
-bcrypt = { workspace = true }
 deadpool-redis = { workspace = true }
 tracing = { workspace = true }
 metrics = { workspace = true, optional = true }
