@@ -32,14 +32,14 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>
     ) -> Result<R<UserDTO>, AppError> {
-        user_service::get_user_info(&state.db, user_id.0, &state.token_cipher).await.into_ok_res()
+        user_service::get_user_info(&state, user_id.0).await.into_ok_res()
     }
 
     async fn generate_inviter_code(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>
     ) -> Result<R<InviterCodeDTO>, AppError> {
-        user_service::generate_inviter_code(&state.redis, user_id.0).await.into_ok_res()
+        user_service::generate_inviter_code(&state, user_id.0).await.into_ok_res()
     }
 
     async fn change_nickname(
@@ -47,7 +47,7 @@ impl UserController {
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<ChangeNicknameRequest>
     ) -> Result<R<String>, AppError> {
-        user_service::change_nickname(&state.db, &state.redis, user_id.0, req.new_nickname).await.into_ok_res()
+        user_service::change_nickname(&state, user_id.0, req.new_nickname).await.into_ok_res()
     }
 
     async fn upload_avatar(
@@ -69,10 +69,9 @@ impl UserController {
             .map_bad_request_err("读取文件失败")?;
 
         let res = user_service::update_avatar(
-            &state.db, &state.redis, &state.s3_client,
+            &state,
             user_id.0,
             file_name, file_data.to_vec(), content_type,
-            &state.token_cipher,
         )
             .await?;
         Ok(R::ok(res))
@@ -83,14 +82,14 @@ impl UserController {
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<ChangePasswordRequest>
     ) -> Result<R<()>, AppError> {
-        user_service::change_password(&state.db, &state.redis, user_id.0, req).await.into_ok_res()
+        user_service::change_password(&state, user_id.0, req).await.into_ok_res()
     }
 
     async fn logout(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>
     ) -> Result<R<()>, AppError> {
-        user_service::logout(&state.db, &state.redis, user_id.0).await.into_ok_res()
+        user_service::logout(&state, user_id.0).await.into_ok_res()
     }
 
     async fn get_user_info_batch(
@@ -102,6 +101,6 @@ impl UserController {
             .collect::<Result<Vec<i64>, _>>()
             .map_bad_request_err("id格式错误")?;
 
-        user_service::get_user_info_batch(&state.db, &state.redis, user_ids, &state.token_cipher).await.into_ok_res()
+        user_service::get_user_info_batch(&state, user_ids).await.into_ok_res()
     }
 }

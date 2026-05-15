@@ -3,4 +3,4 @@ pub const INVITER_CODE_LEN: usize = 6;
 pub const INVITER_CODE_TTL_SECONDS: i64 = 600;
 
 pub const USER_INFO_CACHE_TTL_SECS: i64 = 24 * 60 * 60;
-pub const GET_USER_INFO_BATCH_MAX_LEN: usize = 1000;
+pub const GET_USER_INFO_BATCH_MAX_LEN: usize = 1024;

@@ -7,8 +7,7 @@ use common::constants::redis_keys;
 use common::error::AppError;
 use common::models::ImageToken;
 use common::utils::{
-    BoolExt, HashAlgorithm, MetricsTimerExt, OptionExt, RedisExt, ResultExt, ToOkExt,
-    rand_utils,
+    BoolExt, HashAlgorithm, MetricsTimerExt, OptionExt, RedisExt, ResultExt, ToOkExt, rand_utils,
 };
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use deadpool_redis::Pool;
@@ -38,10 +37,7 @@ static EMAIL_SEND_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(16)
         account = %req.account
     )
 )]
-pub async fn login(
-    state: &AuthState,
-    req: LoginRequest,
-) -> Result<UserDTO, AppError> {
+pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppError> {
     metrics_group!("login");
 
     // 获取用户Id, 密码, 头像FileId
@@ -133,7 +129,8 @@ pub async fn login(
     let new_refresh_token = rand_utils::generate_random_str(32);
     let new_refresh_token_expire = Utc::now() + Duration::days(REFRESH_TOKEN_EXPIRE_DAYS);
     let (access_token_result, refresh_token_result) = tokio::join!(
-        state.redis
+        state
+            .redis
             .set_ex(
                 RedisKeys::user::user_access_token(user.id),
                 &new_access_token,
@@ -154,10 +151,12 @@ pub async fn login(
         refresh_token_result.trace_internal_err("db_error", "向数据库更新refresh_token错误")?;
 
     // 加密头像file_id
-    let avatar_token = timed!("login",
+    let avatar_token = timed!(
+        "login",
         "encrypt_avatar",
         user.avatar_file_id.as_ref().and_then(|key: &String| {
-            state.token_cipher
+            state
+                .token_cipher
                 .encrypt(&ImageToken::thumbnail(key.clone()), Some(key))
                 .ok()
         })
@@ -193,10 +192,7 @@ pub async fn login(
         email_code_prefix = %&req.email_verify_code[..2]
     )
 )]
-pub async fn register(
-    state: &AuthState,
-    req: RegisterRequest,
-) -> Result<UserDTO, AppError> {
+pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO, AppError> {
     metrics_group!("register");
 
     // 效验邮箱验证码
@@ -234,7 +230,8 @@ pub async fn register(
     match insert_result {
         Ok(user_model) => {
             // 删除已使用的邮箱验证码，防止重放
-            let _ = state.redis
+            let _ = state
+                .redis
                 .delete(&redis_keys::user::email_verify_code(&user_model.email))
                 .await
                 .trace_internal_err("redis_error", "删除已使用邮箱验证码失败");
@@ -291,17 +288,15 @@ pub async fn register(
         email = %req.email
     )
 )]
-pub async fn send_email_code(
-    state: &AuthState,
-    req: SendEmailCodeRequest,
-) -> Result<(), AppError> {
+pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Result<(), AppError> {
     metrics_group!("send_email_code");
 
     // 生成大写字母+数字验证码
     let code = rand_utils::generate_random_uppercase_str(6);
 
     // 设置code到redis中
-    state.redis
+    state
+        .redis
         .set_ex(
             &redis_keys::user::email_verify_code(&req.email),
             &code,
@@ -323,7 +318,8 @@ pub async fn send_email_code(
             code
         );
 
-        state.email_client
+        state
+            .email_client
             .send_message(&req.email, "寻忆邮箱验证码", html_body)
             .timed(metrics_timer_name!("send_email_code", "send_message"))
             .await
@@ -353,7 +349,8 @@ pub async fn refresh_access_token(
 
     // 设置新的access_token到redis
     let new_access_token = rand_utils::generate_random_str(32);
-    state.redis
+    state
+        .redis
         .set_ex(
             &RedisKeys::user::user_access_token(user_id),
             &new_access_token,
@@ -387,10 +384,11 @@ async fn verify_email_verify_code(redis: &Pool, email: &str, code: &str) -> Resu
 
 /// 效验邀请码（大小写不敏感）
 async fn verify_inviter_code(redis: &Pool, inviter_code: &str) -> Result<u32, AppError> {
-    // 统一转大写后查找 Redis key
     if inviter_code == "DriftC" {
         return Ok(1);
     }
+
+    // 统一转大写后查找 Redis key
     let code_upper = inviter_code.to_uppercase();
     redis
         .get_as(&RedisKeys::user::inviter_code(&code_upper))
