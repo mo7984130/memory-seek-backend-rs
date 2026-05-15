@@ -149,7 +149,7 @@ impl CollectionPhotoMapper {
 
         let relations = collection_photo::Entity::find()
             .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .filter(collection_photo::Column::PhotoId.is_in(photo_ids))
+            .filter(collection_photo::Column::PhotoId.is_in(photo_ids.iter().copied()))
             .select_only()
             .column(collection_photo::Column::PhotoId)
             .into_tuple()
@@ -360,7 +360,7 @@ impl CollectionPhotoMapper {
 
         let result = collection_photo::Entity::delete_many()
             .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .filter(collection_photo::Column::PhotoId.is_in(photo_ids))
+            .filter(collection_photo::Column::PhotoId.is_in(photo_ids.iter().copied()))
             .filter(collection_photo::Column::UserId.eq(user_id))
             .exec(db)
             .await

@@ -37,15 +37,12 @@ impl PhotoMapper {
     ///
     /// # 返回
     /// 返回匹配的照片列表，空ID列表返回空列表
-    pub async fn find_by_ids(
-        db: &DatabaseConnection,
-        ids: Vec<i64>,
-    ) -> Result<Vec<Model>, AppError> {
+    pub async fn find_by_ids(db: &DatabaseConnection, ids: &[i64]) -> Result<Vec<Model>, AppError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
         Entity::find()
-            .filter(Column::Id.is_in(ids))
+            .filter(Column::Id.is_in(ids.iter().copied()))
             .all(db)
             .await
             .map_internal_err("查询照片失败")
@@ -96,6 +93,58 @@ impl PhotoMapper {
         Ok(result.unwrap_or_default())
     }
 
+    /// 构建游标分页的基础查询
+    fn build_cursor_query(
+        cursor: Option<&PhotoCursor>,
+        size: u64,
+        direction: PageDirection,
+    ) -> sea_orm::Select<Entity> {
+        let (order_by_desc, filter) = match direction {
+            PageDirection::Next => (true, true),   // 倒序，向前翻
+            PageDirection::Prev => (false, false), // 正序，向后翻
+        };
+
+        let mut query = if order_by_desc {
+            Entity::find()
+                .order_by_desc(Column::CreatedAt)
+                .order_by_desc(Column::Id)
+        } else {
+            Entity::find()
+                .order_by_asc(Column::CreatedAt)
+                .order_by_asc(Column::Id)
+        };
+
+        query = query.limit(size);
+
+        if let Some(c) = cursor {
+            if filter {
+                // Next: 倒序遍历，找比游标小的
+                query = query.filter(
+                    sea_orm::Condition::any()
+                        .add(Column::CreatedAt.lt(c.created_at))
+                        .add(
+                            sea_orm::Condition::all()
+                                .add(Column::CreatedAt.eq(c.created_at))
+                                .add(Column::Id.lt(c.id)),
+                        ),
+                );
+            } else {
+                // Prev: 正序遍历，找比游标大的
+                query = query.filter(
+                    sea_orm::Condition::any()
+                        .add(Column::CreatedAt.gt(c.created_at))
+                        .add(
+                            sea_orm::Condition::all()
+                                .add(Column::CreatedAt.eq(c.created_at))
+                                .add(Column::Id.gt(c.id)),
+                        ),
+                );
+            }
+        }
+
+        query
+    }
+
     /// 游标分页查询照片列表
     ///
     /// # 参数
@@ -110,58 +159,12 @@ impl PhotoMapper {
         db: &DatabaseConnection,
         cursor: Option<&PhotoCursor>,
         size: u64,
-        direction: &str,
+        direction: PageDirection,
     ) -> Result<Vec<Model>, AppError> {
-        let mut query = Entity::find()
-            .order_by_desc(Column::CreatedAt)
-            .order_by_desc(Column::Id)
-            .limit(size);
-
-        if let Some(c) = cursor {
-            if direction == "next" {
-                query = query.filter(
-                    sea_orm::Condition::any()
-                        .add(Column::CreatedAt.lt(c.created_at))
-                        .add(
-                            sea_orm::Condition::all()
-                                .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.lt(c.id)),
-                        ),
-                );
-            } else {
-                query = query.filter(
-                    sea_orm::Condition::any()
-                        .add(Column::CreatedAt.gt(c.created_at))
-                        .add(
-                            sea_orm::Condition::all()
-                                .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.gt(c.id)),
-                        ),
-                );
-            }
-        }
-
-        query.all(db).await.map_internal_err("查询失败")
-    }
-
-    /// 根据文件ID查询照片
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `file_id`: 文件路径
-    ///
-    /// # 返回
-    /// 返回匹配的照片模型，不存在返回404错误
-    pub async fn find_by_file_id(
-        db: &DatabaseConnection,
-        file_id: &str,
-    ) -> Result<Model, AppError> {
-        Entity::find()
-            .filter(Column::FileId.eq(file_id))
-            .one(db)
+        Self::build_cursor_query(cursor, size, direction)
+            .all(db)
             .await
-            .map_internal_err("查询照片失败")?
-            .ok_or_else(|| AppError::not_found("照片不存在"))
+            .trace_internal_err("db_query_err", "查询失败")
     }
 
     /// 游标分页查询照片id
@@ -180,49 +183,33 @@ impl PhotoMapper {
         size: u64,
         direction: PageDirection,
     ) -> Result<Vec<i64>, AppError> {
-        let mut query = Entity::find()
-            .order_by_desc(Column::CreatedAt)
-            .order_by_desc(Column::Id)
+        Self::build_cursor_query(cursor.as_ref(), size, direction)
             .select_only()
             .column(Column::Id)
-            .limit(size);
-
-        if let Some(c) = cursor {
-            if direction == PageDirection::Next {
-                query = query.filter(
-                    sea_orm::Condition::any()
-                        .add(Column::CreatedAt.lt(c.created_at))
-                        .add(
-                            sea_orm::Condition::all()
-                                .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.lt(c.id)),
-                        ),
-                );
-            } else if direction == PageDirection::Prev {
-                query = query.filter(
-                    sea_orm::Condition::any()
-                        .add(Column::CreatedAt.gt(c.created_at))
-                        .add(
-                            sea_orm::Condition::all()
-                                .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.gt(c.id)),
-                        ),
-                );
-            }
-        }
-
-        let mut ids = query
             .into_tuple::<i64>()
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询 ID 列表失败")?;
+            .trace_internal_err("db_query_err", "查询 ID 列表失败")
+    }
 
-        // Prev 方向：DB 用 asc 查出来后反转，还原为倒序
-        if direction == PageDirection::Prev {
-            ids.reverse();
-        }
-
-        Ok(ids)
+    /// 根据文件ID查询照片
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `file_id`: 文件路径
+    ///
+    /// # 返回
+    /// 返回匹配的照片模型，不存在返回404错误
+    pub async fn find_by_file_id(
+        db: &DatabaseConnection,
+        file_id: &str,
+    ) -> Result<Model, AppError> {
+        Entity::find()
+            .filter(Column::FileId.eq(file_id))
+            .one(db)
+            .await
+            .trace_internal_err("db_query_err", "查询照片失败")?
+            .ok_or_else(|| AppError::not_found("照片不存在"))
     }
 
     /// 删除照片
@@ -237,7 +224,7 @@ impl PhotoMapper {
         Entity::delete_by_id(id)
             .exec(db)
             .await
-            .map_internal_err("删除照片失败")?;
+            .trace_internal_err("db_del_err", "删除照片失败")?;
         Ok(())
     }
 }

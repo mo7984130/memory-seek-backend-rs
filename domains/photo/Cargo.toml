@@ -40,3 +40,4 @@ bytes = { workspace = true }
 once_cell = { workspace = true }
 
 indexmap = { workspace = true }
+const_format = { workspace = true }

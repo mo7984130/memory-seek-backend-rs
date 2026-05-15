@@ -4,7 +4,7 @@ use crate::mappers::{
     CollectionMapper, CollectionPhotoMapper, CommentLikeMapper, CommentMapper, PhotoMapper,
 };
 use crate::models::photo::{CursorPageVO, PhotoCursor, PhotoCursorQuery, PhotoVO};
-use crate::photo::PhotoInfo;
+use crate::photo::{PhotoInfo, TimeRange};
 use crate::services::CollectionService;
 #[cfg(feature = "face_recognition")]
 use crate::services::feature_service::FeatureService;
@@ -14,12 +14,13 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use common::constants::RedisKeys;
 use common::error::AppError;
+use common::models::UserId;
 use common::utils::{CacheExtension, FileValidator, MetricsTimerExt, ResultExt};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
-use entities::photo::Model;
+use const_format::formatcp;
 use sea_orm::prelude::DateTimeUtc;
-use serde::Deserialize;
 use sea_orm::{ActiveModelTrait, Set, TransactionTrait};
+use serde::Deserialize;
 use std::collections::HashSet;
 use tracing::{instrument, warn};
 use uuid::Uuid;
@@ -39,6 +40,14 @@ pub enum PageDirection {
     Next,
     Prev,
 }
+
+/// 数据库 IN 子句单批最大条数
+const DB_BATCH_SIZE: usize = 512;
+
+/// S3 单次批量删除最大条数
+const S3_BATCH_SIZE: usize = 1024;
+
+const HIT_MAX_SIZE_MSG: &str = formatcp!("查询参数长度不可以超过 {}", DB_BATCH_SIZE);
 
 pub struct PhotoService;
 
@@ -225,7 +234,13 @@ impl PhotoService {
 
         let size =
             usize::try_from(query.size).trace_bad_request_err("invalid_size", "size 必须为正数")?;
+        if size > DB_BATCH_SIZE {
+            warn!(user_id=%user_id, "size超过最大值");
+            return Err(AppError::bad_request(HIT_MAX_SIZE_MSG));
+        }
+
         let decoded_cursor = query.cursor.map(|s| PhotoCursor::decode(s)).transpose()?;
+
         // 获取photo_ids
         let mut photo_ids = PhotoMapper::find_cursor_page_ids(
             &state.db,
@@ -267,7 +282,7 @@ impl PhotoService {
                         |id| RedisKeys::photo::photo_info(*id),
                         24 * 60 * 60,
                         |miss_ids| async move {
-                            Ok(PhotoMapper::find_by_ids(&state.db, miss_ids).await?)
+                            Ok(PhotoMapper::find_by_ids(&state.db, &miss_ids).await?)
                         },
                         |photo| photo.id,
                     )
@@ -360,9 +375,15 @@ impl PhotoService {
 
     pub async fn exists_by_md5_batch(
         state: &PhotoState,
+        user_id: UserId,
         md5s: &[String],
     ) -> Result<Vec<bool>, AppError> {
         metrics_group!("exists_by_md5_batch");
+
+        if md5s.len() > DB_BATCH_SIZE {
+            warn!(user_id=%user_id.0, "md5s 数量超过最大值，当前为 {} 个", md5s.len());
+            return Err(AppError::bad_request(HIT_MAX_SIZE_MSG));
+        }
 
         let existing = PhotoMapper::exists_by_md5_batch(&state.db, md5s).await?;
         let res = md5s.iter().map(|md5| existing.contains(md5)).collect();
@@ -378,9 +399,7 @@ impl PhotoService {
     ///
     /// # 返回
     /// 返回最早和最晚照片的创建时间元组
-    pub async fn get_time_range(
-        state: &PhotoState,
-    ) -> Result<(DateTime<Utc>, DateTime<Utc>), AppError> {
+    pub async fn get_time_range(state: &PhotoState) -> Result<TimeRange, AppError> {
         metrics_group!("get_time_range");
 
         let res = PhotoMapper::find_time_range(&state.db).await;
@@ -389,175 +408,223 @@ impl PhotoService {
         return res;
     }
 
-    /// 删除照片
+    /// 批量删除照片
     ///
-    /// 执行以下步骤：
-    /// 1. 验证权限（仅管理员可删除）
-    /// 2. 获取照片的所有人脸特征，逐个删除（减量计算更新人物统计）（仅face_recognition feature）
-    /// 3. 删除照片的所有收藏关联，更新收藏夹照片数量
-    /// 4. 删除照片的所有评论及其点赞记录
-    /// 5. 删除照片记录
-    /// 6. 删除 OSS 文件
-    /// 7. 更新时间线统计
+    /// 执行步骤：
+    /// 1. 鉴权（仅管理员）
+    /// 2. 查询所有照片元数据（file_id、created_at）
+    /// 3. [face_recognition] 查询并分批删除人脸特征，收集涉及的 person_id
+    /// 4. 分批事务：删除收藏关联 → 更新收藏计数 → 删除评论点赞 → 删除评论 → 删除照片记录
+    /// 5. [face_recognition] 并发重新计算受影响人物的统计
+    /// 6. 分批删除 S3 文件
+    /// 7. 批量递减时间线统计
     ///
-    /// 使用事务保证数据库操作的原子性
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池
-    /// - `s3`: OSS客户端
-    /// - `user_id`: 用户ID
-    /// - `photo_id`: 照片ID
-    ///
-    /// # 返回
-    /// 成功返回空元组
-    ///
-    /// # 错误
-    /// - 非管理员返回403错误
-    /// - 照片不存在返回404错误
-    pub async fn delete_photo(
+    /// # 注意
+    /// - 数据库操作按 `DB_BATCH_SIZE` 分批，避免单次事务过大
+    /// - S3 删除按 `S3_BATCH_SIZE` 分批（AWS 硬限 1000）
+    /// - S3 / 时间线 / 人脸统计失败仅记录警告，不回滚已提交的数据库事务；
+    pub async fn delete_photos(
         state: &PhotoState,
-        user_id: i64,
-        photo_id: i64,
+        user_id: UserId,
+        photo_ids: Vec<i64>,
     ) -> Result<(), AppError> {
-        metrics_group!("delete_photo");
+        metrics_group!("delete_photos");
 
-        if user_id != 1 {
-            return Err(AppError::forbidden("只有管理员可以删除照片"));
+        // 鉴权
+        if user_id.0 != 1 {
+            return Err(AppError::forbidden("只有管理员可以删除图片"));
         }
 
-        let photo = PhotoMapper::find_by_id(&state.db, photo_id)
-            .timed(metrics_timer_name!("delete_photo", "find_photo"))
+        if photo_ids.is_empty() {
+            return Ok(());
+        }
+
+        // 查询照片数据
+        let photos = PhotoMapper::find_by_ids(&state.db, &photo_ids)
+            .timed(metrics_timer_name!("delete_photos", "find_photos"))
             .await?;
 
-        #[cfg(feature = "face_recognition")]
-        let features = FaceFeatureMapper::find_by_photo_id(&state.db, photo_id)
-            .timed(metrics_timer_name!("delete_photo", "find_features"))
-            .await?;
-
-        #[cfg(feature = "face_recognition")]
-        let person_ids: std::collections::HashSet<i64> =
-            features.iter().filter_map(|f| f.person_id).collect();
-
-        #[cfg(feature = "face_recognition")]
-        {
-            state
-                .db
-                .transaction::<_, (), AppError>(|txn| {
-                    Box::pin(async move {
-                        let feature_ids: Vec<i64> = features.iter().map(|f| f.id).collect();
-                        if !feature_ids.is_empty() {
-                            FaceFeatureMapper::delete_by_ids(txn, feature_ids)
-                                .timed(metrics_timer_name!("delete_photo", "delete_features"))
-                                .await?;
-                        }
-
-                        Self::delete_photo_transaction_body(txn, photo_id).await
-                    })
-                })
-                .await
-                .trace_internal_err("photo::delete_photo:db_err", "数据库出错")?;
-        }
-
-        #[cfg(not(feature = "face_recognition"))]
-        {
-            state
-                .db
-                .transaction::<_, (), AppError>(|txn| {
-                    Box::pin(
-                        async move { Self::delete_photo_transaction_body(txn, photo_id).await },
-                    )
-                })
-                .await
-                .trace_internal_err("photo::delete_photo:db_err", "数据库出错")?;
-        }
-
-        #[cfg(feature = "face_recognition")]
-        {
-            let futs = person_ids
+        // 处理缺失的ID
+        if photos.len() != photo_ids.len() {
+            let found_ids: HashSet<i64> = photos.iter().map(|p| p.id).collect();
+            let missing_ids: Vec<i64> = photo_ids
                 .iter()
-                .map(|&pid| FeatureService::recalculate_person_stats(state, pid));
-            let _ = futures::future::join_all(futs).await;
+                .filter(|id| !found_ids.contains(id))
+                .copied()
+                .collect();
+            return Err(AppError::NotFound(
+                format!("以下照片不存在: {:?}", missing_ids).into(),
+            ));
         }
-
-        let _ = state
-            .s3_client
-            .delete(&photo.file_id)
-            .timed(metrics_timer_name!("delete_photo", "s3_delete"))
-            .await
-            .trace_internal_err("photo::delete_photo:s3_delete_err", "删除图片文件失败");
-
-        let _ = TimelineStatService::decr_stat(state, photo.created_at)
-            .timed(metrics_timer_name!("delete_photo", "decr_timeline"))
-            .await
-            .trace_internal_err("photo::delete_photo:decr_timeline_err", "减量时间线错误");
 
         Ok(())
     }
 
-    /// 删除图片的事务具体执行逻辑
-    ///
-    /// 按照数据库外键约束和业务逻辑顺序，依次清理关联数据：
-    /// 1. 移除收藏关系并更新收藏夹图片计数
-    /// 2. 清理评论相关的点赞数据
-    /// 3. 删除图片下的所有评论
-    /// 4. 最后删除图片元数据
-    async fn delete_photo_transaction_body(
-        txn: &sea_orm::DatabaseTransaction,
-        photo_id: i64,
-    ) -> Result<(), AppError> {
-        // --- 1. 处理收藏夹关联 ---
-        // 从 collection_photo 表中删除该图片的所有收藏记录，并返回受影响的收藏夹 ID 列表
-        let collection_ids = CollectionPhotoMapper::delete_by_photo_id(txn, photo_id)
-            .timed(metrics_timer_name!("delete_photo", "collection_photo"))
-            .await
-            .trace_internal_err(
-                "photo::delete_photo:delete_collection_photo",
-                "删除收藏夹关联失败",
-            )?;
+    // /// 删除照片
+    // ///
+    // /// 执行以下步骤：
+    // /// 1. 验证权限（仅管理员可删除）
+    // /// 2. 获取照片的所有人脸特征，逐个删除（减量计算更新人物统计）（仅face_recognition feature）
+    // /// 3. 删除照片的所有收藏关联，更新收藏夹照片数量
+    // /// 4. 删除照片的所有评论及其点赞记录
+    // /// 5. 删除照片记录
+    // /// 6. 删除 OSS 文件
+    // /// 7. 更新时间线统计
+    // ///
+    // /// 使用事务保证数据库操作的原子性
+    // ///
+    // /// # 参数
+    // /// - `db`: 数据库连接
+    // /// - `redis`: Redis连接池
+    // /// - `s3`: OSS客户端
+    // /// - `user_id`: 用户ID
+    // /// - `photo_id`: 照片ID
+    // ///
+    // /// # 返回
+    // /// 成功返回空元组
+    // ///
+    // /// # 错误
+    // /// - 非管理员返回403错误
+    // /// - 照片不存在返回404错误
+    // pub async fn delete_photo(
+    //     state: &PhotoState,
+    //     user_id: i64,
+    //     photo_id: i64,
+    // ) -> Result<(), AppError> {
+    //     metrics_group!("delete_photo");
 
-        // 针对每一个包含该图片的收藏夹，将其图片总数减 1
-        if !collection_ids.is_empty() {
-            CollectionMapper::increment_photo_counts(txn, collection_ids, -1)
-                .timed(metrics_timer_name!("delete_photo", "decrement_photo_count"))
-                .await
-                .trace_internal_err(
-                    "photo::delete_photo:decrement_photo_count",
-                    "更新收藏夹图片计数失败",
-                )?;
-        }
+    //     if user_id != 1 {
+    //         return Err(AppError::forbidden("只有管理员可以删除照片"));
+    //     }
 
-        // --- 2. 处理评论及评论点赞 ---
-        // 首先找出该图片下的所有评论 ID（为了后续删除这些评论收到的点赞）
-        let comment_ids = CommentMapper::find_ids_by_photo_id(txn, photo_id)
-            .timed(metrics_timer_name!("delete_photo", "find_comment_ids"))
-            .await
-            .trace_internal_err("photo::delete_photo:find_comment_ids_err", "查找评论失败")?;
+    //     let photo = PhotoMapper::find_by_id(&state.db, photo_id)
+    //         .timed(metrics_timer_name!("delete_photo", "find_photo"))
+    //         .await?;
 
-        // 如果该图片有评论，则先删除这些评论对应的所有点赞记录（清理从表）
-        if !comment_ids.is_empty() {
-            CommentLikeMapper::delete_by_comment_ids(txn, comment_ids)
-                .timed(metrics_timer_name!("delete_photo", "delete_comment_like"))
-                .await
-                .trace_internal_err(
-                    "photo::delete_photo:delete_comment_like",
-                    "删除评论点赞失败",
-                )?;
-        }
+    //     #[cfg(feature = "face_recognition")]
+    //     {
+    //         let features = FaceFeatureMapper::find_by_photo_id(&state.db, photo_id)
+    //             .timed(metrics_timer_name!("delete_photo", "find_features"))
+    //             .await?;
+    //         let person_ids: std::collections::HashSet<i64> =
+    //             features.iter().filter_map(|f| f.person_id).collect();
+    //         state
+    //             .db
+    //             .transaction::<_, (), AppError>(|txn| {
+    //                 Box::pin(async move {
+    //                     let feature_ids: Vec<i64> = features.iter().map(|f| f.id).collect();
+    //                     if !feature_ids.is_empty() {
+    //                         FaceFeatureMapper::delete_by_ids(txn, feature_ids)
+    //                             .timed(metrics_timer_name!("delete_photo", "delete_features"))
+    //                             .await?;
+    //                     }
 
-        // 删除该图片下的所有评论主体
-        CommentMapper::delete_by_photo_id(txn, photo_id)
-            .timed(metrics_timer_name!("delete_photo", "delete_comment"))
-            .await
-            .trace_internal_err("photo::delete_photo:delete_comment", "删除评论失败")?;
+    //                     Self::delete_photo_transaction_body(txn, photo_id).await
+    //                 })
+    //             })
+    //             .await
+    //             .trace_internal_err("photo::delete_photo:db_err", "数据库出错")?;
+    //     }
 
-        // --- 3. 处理图片主体 ---
-        // 最后一步：删除图片主表记录
-        PhotoMapper::delete_by_id(txn, photo_id)
-            .timed(metrics_timer_name!("delete_photo", "delete_photo"))
-            .await
-            .trace_internal_err("photo::delete_photo:delete_photo", "删除照片失败")?;
+    //     #[cfg(not(feature = "face_recognition"))]
+    //     {
+    //         state
+    //             .db
+    //             .transaction::<_, (), AppError>(|txn| {
+    //                 Box::pin(
+    //                     async move { Self::delete_photo_transaction_body(txn, photo_id).await },
+    //                 )
+    //             })
+    //             .await
+    //             .trace_internal_err("photo::delete_photo:db_err", "数据库出错")?;
+    //     }
 
-        Ok(())
-    }
+    //     #[cfg(feature = "face_recognition")]
+    //     {
+    //         let futs = person_ids
+    //             .iter()
+    //             .map(|&pid| FeatureService::recalculate_person_stats(state, pid));
+    //         let _ = futures::future::join_all(futs).await;
+    //     }
+
+    //     let _ = state
+    //         .s3_client
+    //         .delete(&photo.file_id)
+    //         .timed(metrics_timer_name!("delete_photo", "s3_delete"))
+    //         .await
+    //         .trace_internal_err("photo::delete_photo:s3_delete_err", "删除图片文件失败");
+
+    //     let _ = TimelineStatService::decr_stat(state, photo.created_at)
+    //         .timed(metrics_timer_name!("delete_photo", "decr_timeline"))
+    //         .await
+    //         .trace_internal_err("photo::delete_photo:decr_timeline_err", "减量时间线错误");
+
+    //     Ok(())
+    // }
+
+    // /// 删除图片的事务具体执行逻辑
+    // ///
+    // /// 按照数据库外键约束和业务逻辑顺序，依次清理关联数据：
+    // /// 1. 移除收藏关系并更新收藏夹图片计数
+    // /// 2. 清理评论相关的点赞数据
+    // /// 3. 删除图片下的所有评论
+    // /// 4. 最后删除图片元数据
+    // async fn delete_photo_transaction_body(
+    //     txn: &sea_orm::DatabaseTransaction,
+    //     photo_id: i64,
+    // ) -> Result<(), AppError> {
+    //     // --- 1. 处理收藏夹关联 ---
+    //     // 从 collection_photo 表中删除该图片的所有收藏记录，并返回受影响的收藏夹 ID 列表
+    //     let collection_ids = CollectionPhotoMapper::delete_by_photo_id(txn, photo_id)
+    //         .timed(metrics_timer_name!("delete_photo", "collection_photo"))
+    //         .await
+    //         .trace_internal_err(
+    //             "photo::delete_photo:delete_collection_photo",
+    //             "删除收藏夹关联失败",
+    //         )?;
+
+    //     // 针对每一个包含该图片的收藏夹，将其图片总数减 1
+    //     if !collection_ids.is_empty() {
+    //         CollectionMapper::increment_photo_counts(txn, collection_ids, -1)
+    //             .timed(metrics_timer_name!("delete_photo", "decrement_photo_count"))
+    //             .await
+    //             .trace_internal_err(
+    //                 "photo::delete_photo:decrement_photo_count",
+    //                 "更新收藏夹图片计数失败",
+    //             )?;
+    //     }
+
+    //     // --- 2. 处理评论及评论点赞 ---
+    //     // 首先找出该图片下的所有评论 ID（为了后续删除这些评论收到的点赞）
+    //     let comment_ids = CommentMapper::find_ids_by_photo_id(txn, photo_id)
+    //         .timed(metrics_timer_name!("delete_photo", "find_comment_ids"))
+    //         .await
+    //         .trace_internal_err("photo::delete_photo:find_comment_ids_err", "查找评论失败")?;
+
+    //     // 如果该图片有评论，则先删除这些评论对应的所有点赞记录（清理从表）
+    //     if !comment_ids.is_empty() {
+    //         CommentLikeMapper::delete_by_comment_ids(txn, comment_ids)
+    //             .timed(metrics_timer_name!("delete_photo", "delete_comment_like"))
+    //             .await
+    //             .trace_internal_err(
+    //                 "photo::delete_photo:delete_comment_like",
+    //                 "删除评论点赞失败",
+    //             )?;
+    //     }
+
+    //     // 删除该图片下的所有评论主体
+    //     CommentMapper::delete_by_photo_id(txn, photo_id)
+    //         .timed(metrics_timer_name!("delete_photo", "delete_comment"))
+    //         .await
+    //         .trace_internal_err("photo::delete_photo:delete_comment", "删除评论失败")?;
+
+    //     // --- 3. 处理图片主体 ---
+    //     // 最后一步：删除图片主表记录
+    //     PhotoMapper::delete_by_id(txn, photo_id)
+    //         .timed(metrics_timer_name!("delete_photo", "delete_photo"))
+    //         .await
+    //         .trace_internal_err("photo::delete_photo:delete_photo", "删除照片失败")?;
+
+    //     Ok(())
+    // }
 }

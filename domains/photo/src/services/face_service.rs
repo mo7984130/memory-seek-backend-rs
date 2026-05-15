@@ -266,7 +266,7 @@ impl FaceService {
         let feature_ids: Vec<i64> = persons.iter().map(|p| p.max_score_feature_id).collect();
         let features = FaceFeatureMapper::find_by_ids(&state.db, feature_ids).await?;
         let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-        let photos = PhotoMapper::find_by_ids(&state.db, photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
+        let photos = PhotoMapper::find_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
 
         let records: Vec<FacePersonVO> = persons
             .into_iter()
@@ -535,7 +535,7 @@ impl FaceService {
         let features: Vec<_> = features.into_iter().take(size as usize).collect();
 
         let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-        let photo_map = PhotoMapper::find_by_ids(&state.db, photo_ids.clone()).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
+        let photo_map = PhotoMapper::find_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
 
         let favorite_collection_id = crate::services::CollectionService::get_favorite_collection_id(state, user_id).await?;
         let favorited_photo_ids = crate::mappers::CollectionPhotoMapper::exists_in_collection(&state.db, favorite_collection_id, &photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
@@ -633,7 +633,7 @@ impl FaceService {
             let feature_ids: Vec<i64> = persons.iter().map(|p| p.max_score_feature_id).collect();
             let features = FaceFeatureMapper::find_by_ids(&state.db, feature_ids).await?;
             let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-            let photos = PhotoMapper::find_by_ids(&state.db, photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
+            let photos = PhotoMapper::find_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
 
             let records: Vec<FacePersonVO> = persons
                 .into_iter()
