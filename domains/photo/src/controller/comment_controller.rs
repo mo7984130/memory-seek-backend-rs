@@ -7,7 +7,7 @@ use common::error::AppError;
 use common::r::R;
 use std::sync::Arc;
 
-use crate::middlewares::auth::UserId;
+use common::models::UserId;
 use crate::state::PhotoState;
 use crate::models::comment::{CommentPageQuery, PhotoCommentVO, PublishCommentDTO};
 use crate::models::photo::CursorPageVO;

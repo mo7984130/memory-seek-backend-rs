@@ -1,20 +1,22 @@
-use axum::body::Body;
-use axum::extract::{Multipart, Path, Query, State};
-use axum::http::{header, StatusCode};
-use axum::response::Response;
-use axum::routing::{delete, get, post};
+use common::models::UserId;
+use crate::models::photo::{
+    CursorPageVO, Md5Query, PhotoCursorQuery, PhotoVO, TimeRangeVO, UploadWithCreatedAtQuery,
+};
+use crate::services::photo_service::PhotoService;
+use crate::state::PhotoState;
 use axum::Extension;
 use axum::Router;
+use axum::body::Body;
+use axum::extract::{Multipart, Path, Query, State};
+use axum::http::{StatusCode, header};
+use axum::response::Response;
+use axum::routing::{delete, get, post};
 use common::error::AppError;
 use common::models::{ImageToken, ImageTokenType};
 use common::r::R;
 use common::utils::ResultExt;
 use std::sync::Arc;
 use tracing::debug;
-use crate::middlewares::auth::UserId;
-use crate::state::PhotoState;
-use crate::models::photo::{CursorPageVO, Md5Query, PhotoCursorQuery, PhotoVO, TimeRangeVO, UploadWithCreatedAtQuery};
-use crate::services::photo_service::PhotoService;
 
 pub struct PhotoController;
 
@@ -30,7 +32,10 @@ impl PhotoController {
     pub fn routes() -> Router<Arc<PhotoState>> {
         Router::new()
             .route("/upload", post(Self::upload))
-            .route("/upload/with-created-at", post(Self::upload_with_created_at))
+            .route(
+                "/upload/with-created-at",
+                post(Self::upload_with_created_at),
+            )
             .route("/cursor", get(Self::get_photos_cursor))
             .route("/md5-exist", get(Self::md5_exist))
             .route("/time-range", get(Self::get_time_range))
@@ -57,22 +62,16 @@ impl PhotoController {
             .map_err(|_| AppError::bad_request("无效的表单数据"))?
             .ok_or_else(|| AppError::bad_request("未找到上传文件"))?;
 
-        let file_name = field.file_name().unwrap_or("photo_entities.jpg").to_string();
+        let file_name = field
+            .file_name()
+            .unwrap_or("photo_entities.jpg")
+            .to_string();
         let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field
-            .bytes()
-            .await
-            .map_internal_err("读取文件失败")?;
+        let file_data = field.bytes().await.map_internal_err("读取文件失败")?;
 
-        let photo = PhotoService::upload_photo(
-            &state,
-            user_id.0,
-            file_data,
-            file_name,
-            content_type,
-            None,
-        )
-        .await?;
+        let photo =
+            PhotoService::upload_photo(&state, user_id.0, file_data, file_name, content_type, None)
+                .await?;
 
         Ok(R::ok(photo))
     }
@@ -93,12 +92,12 @@ impl PhotoController {
             .map_err(|_| AppError::bad_request("无效的表单数据"))?
             .ok_or_else(|| AppError::bad_request("未找到上传文件"))?;
 
-        let file_name = field.file_name().unwrap_or("photo_entities.jpg").to_string();
+        let file_name = field
+            .file_name()
+            .unwrap_or("photo_entities.jpg")
+            .to_string();
         let content_type = field.content_type().unwrap_or("image/jpeg").to_string();
-        let file_data = field
-            .bytes()
-            .await
-            .map_internal_err("读取文件失败")?;
+        let file_data = field.bytes().await.map_internal_err("读取文件失败")?;
 
         let photo = PhotoService::upload_photo(
             &state,
@@ -118,17 +117,16 @@ impl PhotoController {
         Extension(user_id): Extension<UserId>,
         Query(query): Query<PhotoCursorQuery>,
     ) -> Result<R<CursorPageVO<PhotoVO, String>>, AppError> {
-        let result =
-            PhotoService::get_photo_cursor_page(&state, user_id.0, query)
-                .await?;
+        let result = PhotoService::get_photo_cursor_page(&state, user_id.0, query).await?;
         Ok(R::ok(result))
     }
 
     async fn md5_exist(
         State(state): State<Arc<PhotoState>>,
         Query(params): Query<Md5Query>,
+        Extension(user_id): Extension<UserId>,
     ) -> Result<R<Vec<bool>>, AppError> {
-        let exists = PhotoService::exists_by_md5_batch(&state, &params.md5).await?;
+        let exists = PhotoService::exists_by_md5_batch(&state, user_id, &params.md5).await?;
         Ok(R::ok(exists))
     }
 
@@ -144,14 +142,11 @@ impl PhotoController {
         Extension(user_id): Extension<UserId>,
         Path(id): Path<String>,
     ) -> Result<R<()>, AppError> {
-        let photo_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的照片ID"))?;
+        let photo_id: i64 = id
+            .parse()
+            .map_err(|_| AppError::bad_request("无效的照片ID"))?;
 
-        PhotoService::delete_photo(
-            &state,
-            user_id.0,
-            photo_id,
-        )
-        .await?;
+        PhotoService::delete_photo(&state, user_id.0, photo_id).await?;
 
         Ok(R::ok(()))
     }
@@ -161,18 +156,22 @@ impl PhotoController {
         token: &str,
         download_type: ImageDownloadType,
     ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = state.token_cipher.decrypt(token)
+        let image_token: ImageToken = state
+            .token_cipher
+            .decrypt(token)
             .map_err(|_| AppError::bad_request("无效的token"))?;
 
         let (bytes, content_type) = match download_type {
             ImageDownloadType::Thumbnail => {
-                let bytes = state.s3_client
+                let bytes = state
+                    .s3_client
                     .download_with_process(&image_token.file_id, "image/resize,w_300/format,webp")
                     .await?;
                 (bytes, "image/webp")
             }
             ImageDownloadType::Preview => {
-                let bytes = state.s3_client
+                let bytes = state
+                    .s3_client
                     .download_with_process(&image_token.file_id, "image/resize,w_1920/format,webp")
                     .await?;
                 (bytes, "image/webp")
@@ -183,11 +182,16 @@ impl PhotoController {
                 (bytes, content_type)
             }
             ImageDownloadType::Crop => {
-                let bbox = image_token.bbox.ok_or_else(|| AppError::bad_request("token不包含裁剪信息"))?;
+                let bbox = image_token
+                    .bbox
+                    .ok_or_else(|| AppError::bad_request("token不包含裁剪信息"))?;
                 let size = 200;
-                let process = format!("image/crop,x_{},y_{},w_{},h_{}/resize,w_{}/format,webp", 
-                                     bbox.x, bbox.y, bbox.w, bbox.h, size);
-                let bytes = state.s3_client
+                let process = format!(
+                    "image/crop,x_{},y_{},w_{},h_{}/resize,w_{}/format,webp",
+                    bbox.x, bbox.y, bbox.w, bbox.h, size
+                );
+                let bytes = state
+                    .s3_client
                     .download_with_process(&image_token.file_id, &process)
                     .await?;
                 (bytes, "image/webp")
@@ -208,7 +212,9 @@ impl PhotoController {
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>, AppError> {
-        let image_token: ImageToken = state.token_cipher.decrypt(&token)
+        let image_token: ImageToken = state
+            .token_cipher
+            .decrypt(&token)
             .map_err(|_| AppError::bad_request("无效的token"))?;
         debug!("解密出图片token: {:?}", &image_token);
 

@@ -7,7 +7,7 @@ use common::error::AppError;
 use common::r::R;
 use std::sync::Arc;
 
-use crate::middlewares::auth::UserId;
+use common::models::UserId;
 use crate::state::PhotoState;
 use crate::models::face::{
     FaceFeatureVO, FacePersonSimpleVO, FacePersonVO, MergePersonRequest, PersonPageQuery,
