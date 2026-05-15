@@ -18,6 +18,7 @@ use common::utils::{CacheExtension, FileValidator, MetricsTimerExt, ResultExt};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use entities::photo::Model;
 use sea_orm::prelude::DateTimeUtc;
+use serde::Deserialize;
 use sea_orm::{ActiveModelTrait, Set, TransactionTrait};
 use std::collections::HashSet;
 use tracing::{instrument, warn};
@@ -32,7 +33,8 @@ pub struct FaceTask {
     pub img_height: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PageDirection {
     Next,
     Prev,
@@ -224,18 +226,12 @@ impl PhotoService {
         let size =
             usize::try_from(query.size).trace_bad_request_err("invalid_size", "size 必须为正数")?;
         let decoded_cursor = query.cursor.map(|s| PhotoCursor::decode(s)).transpose()?;
-        let direction = if query.direction == "prev" {
-            PageDirection::Prev
-        } else {
-            PageDirection::Next
-        };
-
         // 获取photo_ids
         let mut photo_ids = PhotoMapper::find_cursor_page_ids(
             &state.db,
             decoded_cursor,
             (size + 1) as u64,
-            direction,
+            query.direction,
         )
         .timed(metrics_timer_name!(
             "get_photo_cursor_page",

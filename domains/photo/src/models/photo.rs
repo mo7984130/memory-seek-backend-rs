@@ -3,8 +3,10 @@ use chrono::{DateTime, Utc};
 use common::models::ImageToken;
 use common::utils::TokenCipher;
 use common::{error::AppError, utils::ResultExt};
+use sea_orm::FromQueryResult;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
+use crate::services::photo_service::PageDirection;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +55,7 @@ pub struct PhotoCursorQuery {
     #[serde(default = "default_size")]
     pub size: u32,
     #[serde(default = "default_direction")]
-    pub direction: String,
+    pub direction: PageDirection,
     pub default_collection_id: Option<String>,
 }
 
@@ -61,8 +63,8 @@ fn default_size() -> u32 {
     100
 }
 
-fn default_direction() -> String {
-    "next".to_string()
+fn default_direction() -> PageDirection {
+    PageDirection::Next
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,11 +120,19 @@ pub struct Md5Query {
     pub md5: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, FromQueryResult)]
 #[serde(rename_all = "camelCase")]
-pub struct TimeRangeVO {
-    pub min: DateTime<Utc>,
-    pub max: DateTime<Utc>,
+pub struct TimeRange {
+    pub min_time: Option<DateTimeUtc>,
+    pub max_time: Option<DateTimeUtc>,
+}
+impl Default for TimeRange {
+    fn default() -> Self {
+        Self {
+            min_time: None,
+            max_time: None,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
