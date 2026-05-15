@@ -4,7 +4,6 @@ use entities::{face_person, DrVector};
 use sea_orm::{ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 
 use crate::models::face::PersonCursor;
-use std::collections::HashMap;
 
 pub struct FacePersonMapper;
 
@@ -108,19 +107,6 @@ impl FacePersonMapper {
             .all(db)
             .await
             .map_internal_err("查询失败")
-    }
-
-    /// 根据ID列表批量查询人物，返回Map结构
-    /// 
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `ids`: 人物ID列表
-    /// 
-    /// # 返回
-    /// 返回以人物ID为键的HashMap
-    pub async fn find_by_ids_map(db: &DatabaseConnection, ids: Vec<i64>) -> Result<HashMap<i64, face_person::Model>, AppError> {
-        let persons = Self::find_by_ids(db, ids).await?;
-        Ok(persons.into_iter().map(|p| (p.id, p)).collect())
     }
 
     /// 创建人物

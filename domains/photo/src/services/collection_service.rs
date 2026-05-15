@@ -77,7 +77,7 @@ impl CollectionService {
             .chain(latest_photo_map.values().cloned())
             .collect();
 
-        let all_photo_map = PhotoMapper::find_by_ids_map(&state.db, all_photo_ids).await?;
+        let all_photo_map = PhotoMapper::find_by_ids(&state.db, all_photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
 
         let result: Vec<CollectionVO> = collections
             .into_iter()
@@ -348,7 +348,7 @@ impl CollectionService {
         let relations: Vec<_> = relations.into_iter().take(size as usize).collect();
 
         let photo_ids: Vec<i64> = relations.iter().map(|r| r.photo_id).collect();
-        let photo_map = PhotoMapper::find_by_ids_map(&state.db, photo_ids.clone()).await?;
+        let photo_map = PhotoMapper::find_by_ids(&state.db, photo_ids.clone()).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
 
         let favorite_collection_id = Self::get_favorite_collection_id(state, user_id).await?;
         let favorited_photo_ids = CollectionPhotoMapper::exists_in_collection(&state.db, favorite_collection_id, &photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();

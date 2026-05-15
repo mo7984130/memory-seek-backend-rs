@@ -1,15 +1,13 @@
-use chrono::{DateTime, Utc};
 use common::error::AppError;
 use common::utils::ResultExt;
 use entities::photo::{Column, Entity, Model};
-use indexmap::IndexMap;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect,
 };
 
-use crate::{models::photo::PhotoCursor, photo_service::PageDirection};
-use std::collections::{HashMap, HashSet};
+use crate::{models::photo::PhotoCursor, photo::TimeRange, photo_service::PageDirection};
+use std::collections::HashSet;
 
 pub struct PhotoMapper;
 
@@ -53,22 +51,6 @@ impl PhotoMapper {
             .map_internal_err("查询照片失败")
     }
 
-    /// 根据ID列表批量查询照片，返回Map结构
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `ids`: 照片ID列表
-    ///
-    /// # 返回
-    /// 返回以照片ID为键的HashMap
-    pub async fn find_by_ids_map(
-        db: &DatabaseConnection,
-        ids: Vec<i64>,
-    ) -> Result<HashMap<i64, Model>, AppError> {
-        let photos = Self::find_by_ids(db, ids).await?;
-        Ok(photos.into_iter().map(|p| (p.id, p)).collect())
-    }
-
     /// 批量检查MD5是否已存在
     ///
     /// # 参数
@@ -102,29 +84,16 @@ impl PhotoMapper {
     ///
     /// # 返回
     /// 返回最早和最晚照片的创建时间元组，无照片时返回当前时间
-    pub async fn find_time_range(
-        db: &DatabaseConnection,
-    ) -> Result<(DateTime<Utc>, DateTime<Utc>), AppError> {
-        let min = Entity::find()
-            .order_by_asc(Column::CreatedAt)
+    pub async fn find_time_range(db: &DatabaseConnection) -> Result<TimeRange, AppError> {
+        let result = Entity::find()
+            .select_only()
+            .column_as(Column::CreatedAt.min(), "min_time")
+            .column_as(Column::CreatedAt.max(), "max_time")
+            .into_model::<TimeRange>()
             .one(db)
             .await
-            .map_internal_err("查询失败")?;
-
-        let max = Entity::find()
-            .order_by_desc(Column::CreatedAt)
-            .one(db)
-            .await
-            .map_internal_err("查询失败")?;
-
-        let min_time = min
-            .map(|p| p.created_at.with_timezone(&Utc))
-            .unwrap_or_else(Utc::now);
-        let max_time = max
-            .map(|p| p.created_at.with_timezone(&Utc))
-            .unwrap_or_else(Utc::now);
-
-        Ok((min_time, max_time))
+            .trace_internal_err("db_query_err", "查询时间范围失败")?;
+        Ok(result.unwrap_or_default())
     }
 
     /// 游标分页查询照片列表
