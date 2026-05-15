@@ -149,7 +149,7 @@ impl CollectionPhotoMapper {
 
         let relations = collection_photo::Entity::find()
             .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .filter(collection_photo::Column::PhotoId.is_in(photo_ids.iter().copied()))
+            .filter(collection_photo::Column::PhotoId.is_in(photo_ids))
             .select_only()
             .column(collection_photo::Column::PhotoId)
             .into_tuple()

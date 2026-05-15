@@ -38,3 +38,5 @@ tokio-util = { workspace = true }
 moka = { workspace = true }
 bytes = { workspace = true }
 once_cell = { workspace = true }
+
+indexmap = { workspace = true }

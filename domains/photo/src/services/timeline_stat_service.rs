@@ -2,9 +2,10 @@ use chrono::{DateTime, Utc};
 use common::error::AppError;
 use common::utils::ResultExt;
 use entities::timeline_stat;
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 
 use crate::models::common::PhotoTimelineStatVO;
+use crate::state::PhotoState;
 
 pub struct TimelineStatService;
 
@@ -20,14 +21,14 @@ impl TimelineStatService {
     /// # 返回
     /// 成功返回空元组
     pub async fn incr_stat(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         created_at: DateTime<Utc>,
     ) -> Result<(), AppError> {
         let date_str = created_at.format("%Y-%m").to_string();
 
         let existing = timeline_stat::Entity::find()
             .filter(timeline_stat::Column::DateStr.eq(&date_str))
-            .one(db)
+            .one(&state.db)
             .await
             .map_internal_err("查询失败")?;
 
@@ -36,7 +37,7 @@ impl TimelineStatService {
             active.count = Set(active.count.unwrap() + 1);
             active.anchor_time = Set(created_at.into());
             active.updated_at = Set(Utc::now().into());
-            active.update(db).await.map_internal_err("更新统计失败")?;
+            active.update(&state.db).await.map_internal_err("更新统计失败")?;
         } else {
             let now = Utc::now();
             let stat = timeline_stat::ActiveModel {
@@ -46,7 +47,7 @@ impl TimelineStatService {
                 created_at: Set(now.into()),
                 updated_at: Set(now.into()),
             };
-            stat.insert(db).await.map_internal_err("创建统计失败")?;
+            stat.insert(&state.db).await.map_internal_err("创建统计失败")?;
         }
 
         Ok(())
@@ -63,14 +64,14 @@ impl TimelineStatService {
     /// # 返回
     /// 成功返回空元组
     pub async fn decr_stat(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         created_at: DateTime<Utc>,
     ) -> Result<(), AppError> {
         let date_str = created_at.format("%Y-%m").to_string();
 
         let existing = timeline_stat::Entity::find()
             .filter(timeline_stat::Column::DateStr.eq(&date_str))
-            .one(db)
+            .one(&state.db)
             .await
             .map_internal_err("查询失败")?;
 
@@ -79,10 +80,10 @@ impl TimelineStatService {
                 let mut active: timeline_stat::ActiveModel = stat.into();
                 active.count = Set(active.count.unwrap() - 1);
                 active.updated_at = Set(Utc::now().into());
-                active.update(db).await.map_internal_err("更新统计失败")?;
+                active.update(&state.db).await.map_internal_err("更新统计失败")?;
             } else {
                 timeline_stat::Entity::delete_by_id(stat.date_str)
-                    .exec(db)
+                    .exec(&state.db)
                     .await
                     .map_internal_err("删除统计失败")?;
             }
@@ -177,11 +178,11 @@ impl TimelineStatService {
     /// # 返回
     /// 返回按日期倒序排列的统计列表
     pub async fn get_stats(
-        db: &DatabaseConnection,
+        state: &PhotoState,
     ) -> Result<Vec<PhotoTimelineStatVO>, AppError> {
         let stats = timeline_stat::Entity::find()
             .order_by_desc(timeline_stat::Column::DateStr)
-            .all(db)
+            .all(&state.db)
             .await
             .map_internal_err("查询失败")?;
 

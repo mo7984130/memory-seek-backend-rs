@@ -39,7 +39,7 @@ impl FaceController {
         Query(query): Query<PersonPageQuery>,
     ) -> Result<R<CursorPageVO<FacePersonVO, String>>, AppError> {
         let result =
-            FaceService::get_person_page(&state.db, &state.redis, query, &state.token_cipher)
+            FaceService::get_person_page(&state, query)
                 .await?;
         Ok(R::ok(result))
     }
@@ -47,7 +47,7 @@ impl FaceController {
     async fn get_all_person(
         State(state): State<Arc<PhotoState>>,
     ) -> Result<R<Vec<FacePersonSimpleVO>>, AppError> {
-        let result = FaceService::get_all_person(&state.db).await?;
+        let result = FaceService::get_all_person(&state).await?;
         Ok(R::ok(result))
     }
 
@@ -56,9 +56,8 @@ impl FaceController {
         Query(query): Query<PersonSearchQuery>,
     ) -> Result<R<CursorPageVO<FacePersonVO, String>>, AppError> {
         let result = FaceService::search_person(
-            &state.db,
+            &state,
             query,
-            &state.token_cipher,
         )
         .await?;
         Ok(R::ok(result))
@@ -69,7 +68,7 @@ impl FaceController {
         Path(id): Path<String>,
     ) -> Result<R<FacePersonVO>, AppError> {
         let person_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的ID"))?;
-        let result = FaceService::get_person_info(&state.db, person_id, &state.token_cipher).await?;
+        let result = FaceService::get_person_info(&state, person_id).await?;
         Ok(R::ok(result))
     }
 
@@ -80,7 +79,7 @@ impl FaceController {
     ) -> Result<R<FacePersonVO>, AppError> {
         let person_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的ID"))?;
         let result =
-            FaceService::rename_person(&state.db, &state.redis, person_id, req.new_name).await?;
+            FaceService::rename_person(&state, person_id, req.new_name).await?;
         Ok(R::ok(result))
     }
 
@@ -93,13 +92,11 @@ impl FaceController {
         let person_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的ID"))?;
         let cursor = query.cursor.and_then(|s| s.parse().ok());
         let result = FaceService::get_person_photo(
-            &state.db,
-            &state.redis,
+            &state,
             user_id.0,
             person_id,
             cursor,
             query.size.unwrap_or(20),
-            &state.token_cipher,
         )
         .await?;
         Ok(R::ok(result))
@@ -118,7 +115,7 @@ impl FaceController {
             .parse()
             .map_err(|_| AppError::bad_request("无效的目标人物ID"))?;
         let result =
-            FaceService::merge_person(&state.db, &state.redis, source_id, target_id).await?;
+            FaceService::merge_person(&state, source_id, target_id).await?;
         Ok(R::ok(result))
     }
 
@@ -127,7 +124,7 @@ impl FaceController {
         Path(id): Path<String>,
     ) -> Result<R<bool>, AppError> {
         let person_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的ID"))?;
-        let result = FaceService::delete_person(&state.db, person_id).await?;
+        let result = FaceService::delete_person(&state, person_id).await?;
         Ok(R::ok(result))
     }
 
@@ -136,7 +133,7 @@ impl FaceController {
         Path(photo_id): Path<String>,
     ) -> Result<R<Vec<FaceFeatureVO>>, AppError> {
         let photo_id: i64 = photo_id.parse().map_err(|_| AppError::bad_request("无效的照片ID"))?;
-        let result = FeatureService::get_photo_features(&state.db, &state.redis, photo_id).await?;
+        let result = FeatureService::get_photo_features(&state, photo_id).await?;
         Ok(R::ok(result))
     }
 
@@ -150,7 +147,7 @@ impl FaceController {
         let person_id: i64 = person_id
             .parse()
             .map_err(|_| AppError::bad_request("无效的人物ID"))?;
-        FeatureService::change_face_belonging(&state.db, feature_id, person_id).await?;
+        FeatureService::change_face_belonging(&state, feature_id, person_id).await?;
         Ok(R::ok(()))
     }
 }

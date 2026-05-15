@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
 use common::error::AppError;
-use sea_orm::{DatabaseConnection, TransactionTrait};
+use sea_orm::TransactionTrait;
 
 use crate::mappers::{CommentLikeMapper, CommentMapper};
 use crate::models::comment::PhotoCommentVO;
 use crate::models::photo::CursorPageVO;
+use crate::state::PhotoState;
 
 pub struct CommentService;
 
@@ -24,21 +25,21 @@ impl CommentService {
     /// # 返回
     /// 返回分页评论列表，包含用户点赞状态
     pub async fn get_comment_page(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         photo_id: i64,
         user_id: i64,
         cursor: Option<DateTime<Utc>>,
         limit: i64,
     ) -> Result<CursorPageVO<PhotoCommentVO, DateTime<Utc>>, AppError> {
         let hot_comments = if cursor.is_none() {
-            CommentMapper::find_hot_comments(db, photo_id, 5, 3).await?
+            CommentMapper::find_hot_comments(&state.db, photo_id, 5, 3).await?
         } else {
             vec![]
         };
 
         let hot_ids: Vec<i64> = hot_comments.iter().map(|c| c.id).collect();
 
-        let time_comments = CommentMapper::find_by_photo_id_excluding_ids(db, photo_id, hot_ids, cursor, limit as u64).await?;
+        let time_comments = CommentMapper::find_by_photo_id_excluding_ids(&state.db, photo_id, hot_ids, cursor, limit as u64).await?;
 
         let has_more = time_comments.len() > limit as usize;
         let time_comments: Vec<_> = time_comments.into_iter().take(limit as usize).collect();
@@ -48,7 +49,7 @@ impl CommentService {
 
         let comment_ids: Vec<i64> = all_comments.iter().map(|c| c.id).collect();
 
-        let liked = CommentLikeMapper::find_by_user_and_comments(db, user_id, comment_ids).await?;
+        let liked = CommentLikeMapper::find_by_user_and_comments(&state.db, user_id, comment_ids).await?;
 
         let records: Vec<PhotoCommentVO> = all_comments
             .iter()
@@ -82,12 +83,12 @@ impl CommentService {
     /// # 返回
     /// 返回创建的评论VO
     pub async fn publish_comment(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         photo_id: i64,
         user_id: i64,
         content: String,
     ) -> Result<PhotoCommentVO, AppError> {
-        let comment = CommentMapper::insert(db, photo_id, user_id, content).await?;
+        let comment = CommentMapper::insert(&state.db, photo_id, user_id, content).await?;
 
         Ok(PhotoCommentVO {
             id: comment.id.to_string(),
@@ -113,17 +114,17 @@ impl CommentService {
     /// # 错误
     /// - 无权限删除返回400错误
     pub async fn delete_comment(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         comment_id: i64,
     ) -> Result<(), AppError> {
-        let comment = CommentMapper::find_by_id(db, comment_id).await?;
+        let comment = CommentMapper::find_by_id(&state.db, comment_id).await?;
 
         if comment.user_id != user_id {
             return Err(AppError::bad_request("无权限删除"));
         }
 
-        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
             Box::pin(async move {
                 CommentLikeMapper::delete_by_comment_id(txn, comment_id)
                     .await
@@ -153,14 +154,14 @@ impl CommentService {
     /// # 返回
     /// 返回点赞后的状态（true为已点赞，false为已取消）
     pub async fn toggle_like(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         comment_id: i64,
     ) -> Result<bool, AppError> {
-        let existing = CommentLikeMapper::find_by_user_and_comment(db, user_id, comment_id).await?;
+        let existing = CommentLikeMapper::find_by_user_and_comment(&state.db, user_id, comment_id).await?;
 
         if let Some(like) = existing {
-            db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
                 Box::pin(async move {
                     CommentLikeMapper::delete_by_id(txn, like.id)
                         .await
@@ -176,7 +177,7 @@ impl CommentService {
             })?;
             Ok(false)
         } else {
-            db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+            state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
                 Box::pin(async move {
                     CommentLikeMapper::insert(txn, comment_id, user_id)
                         .await

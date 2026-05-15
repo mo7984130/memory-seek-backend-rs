@@ -5,12 +5,12 @@ use chrono::{Utc};
 use common::constants::RedisKeys;
 use common::error::AppError;
 use common::utils::CacheExtension;
-use deadpool_redis::Pool;
 use once_cell::sync::Lazy;
-use common::utils::TokenCipher;
 use moka::future::Cache;
-use sea_orm::{DatabaseConnection, TransactionTrait};
+use sea_orm::TransactionTrait;
 use std::collections::HashMap;
+
+use crate::state::PhotoState;
 
 pub struct CollectionService;
 
@@ -38,16 +38,14 @@ impl CollectionService {
     /// # 返回
     /// 返回收藏夹VO列表
     pub async fn get_collection_list(
-        db: &DatabaseConnection,
-        _redis: &Pool,
+        state: &PhotoState,
         user_id: i64,
-        token_cipher: &TokenCipher,
     ) -> Result<Vec<CollectionVO>, AppError> {
-        let collections = CollectionMapper::find_by_user_id(db, user_id).await?;
+        let collections = CollectionMapper::find_by_user_id(&state.db, user_id).await?;
 
         let collections = if collections.is_empty() {
-            Self::create_favorite_collection(db, user_id).await?;
-            CollectionMapper::find_by_user_id(db, user_id).await?
+            Self::create_favorite_collection(state, user_id).await?;
+            CollectionMapper::find_by_user_id(&state.db, user_id).await?
         } else {
             collections
         };
@@ -56,7 +54,7 @@ impl CollectionService {
 
         let photos_with_covers = if cover_ids.iter().any(|id| id.is_some()) {
             let cover_ids: Vec<i64> = cover_ids.into_iter().flatten().collect();
-            PhotoMapper::find_by_ids(db, cover_ids).await?
+            PhotoMapper::find_by_ids(&state.db, cover_ids).await?
         } else {
             vec![]
         };
@@ -71,7 +69,7 @@ impl CollectionService {
             .map(|c| c.id)
             .collect();
 
-        let latest_photo_map = CollectionPhotoMapper::find_latest_photo_ids_by_collections(db, no_cover_ids).await?;
+        let latest_photo_map = CollectionPhotoMapper::find_latest_photo_ids_by_collections(&state.db, no_cover_ids).await?;
 
         let all_photo_ids: Vec<i64> = collections
             .iter()
@@ -79,7 +77,7 @@ impl CollectionService {
             .chain(latest_photo_map.values().cloned())
             .collect();
 
-        let all_photo_map = PhotoMapper::find_by_ids_map(db, all_photo_ids).await?;
+        let all_photo_map = PhotoMapper::find_by_ids_map(&state.db, all_photo_ids).await?;
 
         let result: Vec<CollectionVO> = collections
             .into_iter()
@@ -95,7 +93,7 @@ impl CollectionService {
                     .map(|p| p.file_id.clone());
 
                 let cover_token = cover_file_id.as_ref().and_then(|fid| {
-                    let (thumbnail_token, _, _) = crate::models::photo::PhotoVO::generate_tokens(fid, token_cipher);
+                    let (thumbnail_token, _, _) = crate::models::photo::PhotoVO::generate_tokens(fid, &state.token_cipher);
                     thumbnail_token
                 });
 
@@ -125,12 +123,12 @@ impl CollectionService {
     /// # 返回
     /// 返回创建的收藏夹VO
     pub async fn create_collection(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         name: String,
         description: Option<String>,
     ) -> Result<CollectionVO, AppError> {
-        let collection = CollectionMapper::insert(db, user_id, name, description, false).await?;
+        let collection = CollectionMapper::insert(&state.db, user_id, name, description, false).await?;
 
         Ok(CollectionVO {
             id: collection.id.to_string(),
@@ -158,19 +156,19 @@ impl CollectionService {
     /// # 错误
     /// - 无权限返回400错误
     pub async fn edit_collection(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         collection_id: i64,
         name: Option<String>,
         description: Option<String>,
     ) -> Result<CollectionVO, AppError> {
-        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
+        let collection = CollectionMapper::find_by_id(&state.db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
-        let collection = CollectionMapper::update(db, collection_id, name, description, None, None).await?;
+        let collection = CollectionMapper::update(&state.db, collection_id, name, description, None, None).await?;
 
         Ok(CollectionVO {
             id: collection.id.to_string(),
@@ -196,11 +194,11 @@ impl CollectionService {
     /// - 无权限返回400错误
     /// - 尝试删除"我喜欢"返回400错误
     pub async fn delete_collection(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         collection_id: i64,
     ) -> Result<(), AppError> {
-        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
+        let collection = CollectionMapper::find_by_id(&state.db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
@@ -210,7 +208,7 @@ impl CollectionService {
             return Err(AppError::bad_request("我喜欢不可删除"));
         }
 
-        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
             Box::pin(async move {
                 CollectionPhotoMapper::delete_by_collection_id(txn, collection_id)
                     .await
@@ -240,22 +238,22 @@ impl CollectionService {
     /// - 无权限返回400错误
     /// - 照片已在收藏夹中返回400错误
     pub async fn add_photo_to_collection(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         collection_id: i64,
         photo_id: i64,
     ) -> Result<(), AppError> {
-        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
+        let collection = CollectionMapper::find_by_id(&state.db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
-        if CollectionPhotoMapper::exists_photo_in_collection(db, collection_id, photo_id).await? {
+        if CollectionPhotoMapper::exists_photo_in_collection(&state.db, collection_id, photo_id).await? {
             return Err(AppError::bad_request("照片已在收藏夹中"));
         }
 
-        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
             Box::pin(async move {
                 CollectionPhotoMapper::insert(txn, collection_id, photo_id, user_id)
                     .await
@@ -284,12 +282,12 @@ impl CollectionService {
     /// # 错误
     /// - 未找到收藏关系返回400错误
     pub async fn remove_photo_from_collection(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         collection_id: i64,
         photo_id: i64,
     ) -> Result<(), AppError> {
-        db.transaction::<_, (), sea_orm::DbErr>(|txn| {
+        state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
             Box::pin(async move {
                 let removed = CollectionPhotoMapper::delete(txn, collection_id, photo_id, user_id)
                     .await
@@ -331,31 +329,29 @@ impl CollectionService {
     /// # 错误
     /// - 无权限返回400错误
     pub async fn get_collection_photos(
-        db: &DatabaseConnection,
-        redis: &Pool,
+        state: &PhotoState,
         user_id: i64,
         collection_id: i64,
         cursor: Option<String>,
         size: u32,
-        token_cipher: &TokenCipher,
     ) -> Result<CursorPageVO<CollectionPhotoVO, String>, AppError> {
-        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
+        let collection = CollectionMapper::find_by_id(&state.db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
 
         let decoded_cursor = cursor.as_ref().and_then(|s| CollectionPhotoCursor::decode(s));
-        let relations = CollectionPhotoMapper::find_by_collection_id(db, collection_id, decoded_cursor.as_ref(), (size + 1) as u64).await?;
+        let relations = CollectionPhotoMapper::find_by_collection_id(&state.db, collection_id, decoded_cursor.as_ref(), (size + 1) as u64).await?;
 
         let has_more = relations.len() > size as usize;
         let relations: Vec<_> = relations.into_iter().take(size as usize).collect();
 
         let photo_ids: Vec<i64> = relations.iter().map(|r| r.photo_id).collect();
-        let photo_map = PhotoMapper::find_by_ids_map(db, photo_ids.clone()).await?;
+        let photo_map = PhotoMapper::find_by_ids_map(&state.db, photo_ids.clone()).await?;
 
-        let favorite_collection_id = Self::get_favorite_collection_id(db, redis, user_id).await?;
-        let favorited_photo_ids = CollectionPhotoMapper::exists_in_collection(db, favorite_collection_id, &photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
+        let favorite_collection_id = Self::get_favorite_collection_id(state, user_id).await?;
+        let favorited_photo_ids = CollectionPhotoMapper::exists_in_collection(&state.db, favorite_collection_id, &photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
 
         let next_cursor = relations.last().map(|r| {
             CollectionPhotoCursor {
@@ -369,7 +365,7 @@ impl CollectionService {
             .filter_map(|r| {
                 let p = photo_map.get(&r.photo_id)?;
                 let (thumbnail_token, preview_token, original_token) =
-                    crate::models::photo::PhotoVO::generate_tokens(&p.file_id, token_cipher);
+                    crate::models::photo::PhotoVO::generate_tokens(&p.file_id, &state.token_cipher);
 
                 Some(CollectionPhotoVO {
                     photo: crate::models::photo::PhotoVO {
@@ -407,11 +403,11 @@ impl CollectionService {
     /// # 返回
     /// 返回收藏夹ID字符串列表
     pub async fn find_collection_ids_by_photo(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         photo_id: i64,
     ) -> Result<Vec<String>, AppError> {
-        let ids = CollectionPhotoMapper::find_collection_ids_by_photo(db, user_id, photo_id).await?;
+        let ids = CollectionPhotoMapper::find_collection_ids_by_photo(&state.db, user_id, photo_id).await?;
         Ok(ids.iter().map(|id| id.to_string()).collect())
     }
 
@@ -426,10 +422,10 @@ impl CollectionService {
     /// # 返回
     /// 返回"我喜欢"收藏夹VO
     pub async fn create_favorite_collection(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
     ) -> Result<CollectionVO, AppError> {
-        let existing = CollectionMapper::find_favorite_by_user_id(db, user_id).await?;
+        let existing = CollectionMapper::find_favorite_by_user_id(&state.db, user_id).await?;
 
         if let Some(c) = existing {
             return Ok(CollectionVO {
@@ -443,7 +439,7 @@ impl CollectionService {
             });
         }
 
-        let collection = CollectionMapper::insert(db, user_id, "我喜欢".to_string(), Some("喜欢收藏夹".to_string()), true).await?;
+        let collection = CollectionMapper::insert(&state.db, user_id, "我喜欢".to_string(), Some("喜欢收藏夹".to_string()), true).await?;
 
         Ok(CollectionVO {
             id: collection.id.to_string(),
@@ -472,8 +468,7 @@ impl CollectionService {
     /// # 错误
     /// - 未找到收藏夹返回404错误
     pub async fn get_favorite_collection_id(
-        db: &DatabaseConnection,
-        redis: &Pool,
+        state: &PhotoState,
         user_id: i64,
     ) -> Result<i64, AppError> {
         // 先从本地缓存获取
@@ -482,12 +477,12 @@ impl CollectionService {
         }
 
         // 从redis中获取
-        let id = redis.get_or_load(
+        let id = state.redis.get_or_load(
             RedisKeys::photo::favorite_collection_id(user_id),
             24 * 60 * 60,
             || async move {
                 // 从数据库中获取
-                CollectionMapper::find_favorite_collection_id(db, user_id)
+                CollectionMapper::find_favorite_collection_id(&state.db, user_id)
                     .await?
                     .ok_or_else(|| AppError::not_found("未找到收藏夹"))
             }
@@ -519,7 +514,7 @@ impl CollectionService {
     /// - 无权限返回400错误
     /// - 数据库错误返回500错误（事务会回滚）
     pub async fn batch_add_photos_to_collection(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         collection_id: i64,
         photo_ids: Vec<i64>,
@@ -534,7 +529,7 @@ impl CollectionService {
             });
         }
 
-        let collection = CollectionMapper::find_by_id(db, collection_id).await?;
+        let collection = CollectionMapper::find_by_id(&state.db, collection_id).await?;
 
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
@@ -544,7 +539,7 @@ impl CollectionService {
         let unique_photo_ids: Vec<i64> = photo_ids_set.into_iter().collect();
 
         let already_exists_ids = CollectionPhotoMapper::exists_in_collection(
-            db,
+            &state.db,
             collection_id,
             &unique_photo_ids.clone(),
         )
@@ -558,7 +553,7 @@ impl CollectionService {
             .cloned()
             .collect();
 
-        let existing_photos = PhotoMapper::find_by_ids(db, not_exists_in_collection.clone()).await?;
+        let existing_photos = PhotoMapper::find_by_ids(&state.db, not_exists_in_collection.clone()).await?;
         let existing_photo_ids: std::collections::HashSet<i64> =
             existing_photos.iter().map(|p| p.id).collect();
 
@@ -574,7 +569,7 @@ impl CollectionService {
             })
             .collect();
 
-        let success_count = db
+        let success_count = state.db
             .transaction::<_, u32, sea_orm::DbErr>(|txn| {
                 Box::pin(async move {
                     let count = CollectionPhotoMapper::batch_insert(
@@ -625,7 +620,7 @@ impl CollectionService {
     /// - success_count: 成功移除数量
     /// - failed_count: 失败数量（不在收藏夹中）
     pub async fn batch_remove_photos_from_collection(
-        db: &DatabaseConnection,
+        state: &PhotoState,
         user_id: i64,
         collection_id: i64,
         photo_ids: Vec<i64>,
@@ -644,7 +639,7 @@ impl CollectionService {
         let unique_photo_ids: Vec<i64> = photo_ids_set.into_iter().collect();
         let total_count = unique_photo_ids.len() as u32;
 
-        let success_count = db
+        let success_count = state.db
             .transaction::<_, u32, sea_orm::DbErr>(|txn| {
                 Box::pin(async move {
                     let count = CollectionPhotoMapper::batch_delete(

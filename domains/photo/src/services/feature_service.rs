@@ -8,6 +8,8 @@ use deadpool_redis::Pool;
 use entities::{face_feature, DrVector};
 use std::collections::HashMap;
 
+use crate::state::PhotoState;
+
 pub struct FeatureService;
 
 impl FeatureService {
@@ -21,16 +23,15 @@ impl FeatureService {
     /// # 返回
     /// 成功返回空元组
     pub async fn delete_feature_with_decrement(
-        db: &sea_orm::DatabaseConnection,
-        redis: &Pool,
+        state: &PhotoState,
         feature: face_feature::Model,
     ) -> Result<(), AppError> {
         let person_id = feature.person_id;
 
-        FaceFeatureMapper::delete_by_id(db, feature.id).await?;
+        FaceFeatureMapper::delete_by_id(&state.db, feature.id).await?;
 
         if let Some(pid) = person_id {
-            Self::decrement_person_stats(db, redis, pid, &feature).await?;
+            Self::decrement_person_stats(state, pid, &feature).await?;
         }
 
         Ok(())
@@ -44,19 +45,18 @@ impl FeatureService {
     /// - `person_id`: 人物ID
     /// - `feature`: 被删除的特征
     async fn decrement_person_stats(
-        db: &sea_orm::DatabaseConnection,
-        redis: &Pool,
+        state: &PhotoState,
         person_id: i64,
         feature: &face_feature::Model,
     ) -> Result<(), AppError> {
-        let person = match FacePersonMapper::find_by_id(db, person_id).await {
+        let person = match FacePersonMapper::find_by_id(&state.db, person_id).await {
             Ok(p) => p,
             Err(_) => return Ok(()),
         };
 
         if person.total_photo_count <= 1 {
-            FacePersonMapper::delete_by_id(db, person_id).await?;
-            Self::invalidate_person_cache(redis, person_id).await?;
+            FacePersonMapper::delete_by_id(&state.db, person_id).await?;
+            Self::invalidate_person_cache(&state.redis, person_id).await?;
             return Ok(());
         }
 
@@ -69,7 +69,7 @@ impl FeatureService {
         let new_centroid = vector_utils::l2_normalize(&new_centroid);
 
         let (max_feature_id, max_score) = if person.max_score_feature_id == feature.id {
-            let remaining = FaceFeatureMapper::find_by_person_id(db, person_id).await?;
+            let remaining = FaceFeatureMapper::find_by_person_id(&state.db, person_id).await?;
             let best = remaining
                 .iter()
                 .filter(|f| f.id != feature.id)
@@ -77,8 +77,8 @@ impl FeatureService {
             match best {
                 Some(b) => (b.id, b.score),
                 None => {
-                    FacePersonMapper::delete_by_id(db, person_id).await?;
-                    Self::invalidate_person_cache(redis, person_id).await?;
+                    FacePersonMapper::delete_by_id(&state.db, person_id).await?;
+                    Self::invalidate_person_cache(&state.redis, person_id).await?;
                     return Ok(());
                 }
             }
@@ -87,7 +87,7 @@ impl FeatureService {
         };
 
         FacePersonMapper::update(
-            db,
+            &state.db,
             person_id,
             None,
             None,
@@ -98,7 +98,7 @@ impl FeatureService {
             Some(old_weight - 1.0),
         ).await?;
 
-        Self::invalidate_person_cache(redis, person_id).await?;
+        Self::invalidate_person_cache(&state.redis, person_id).await?;
         Ok(())
     }
 
@@ -112,17 +112,16 @@ impl FeatureService {
     /// # 返回
     /// 成功返回空元组
     pub async fn delete_feature(
-        db: &sea_orm::DatabaseConnection,
-        redis: &Pool,
+        state: &PhotoState,
         feature_id: i64,
     ) -> Result<(), AppError> {
-        let feature = FaceFeatureMapper::find_by_id(db, feature_id).await?;
+        let feature = FaceFeatureMapper::find_by_id(&state.db, feature_id).await?;
         let person_id = feature.person_id;
 
-        FaceFeatureMapper::delete_by_id(db, feature_id).await?;
+        FaceFeatureMapper::delete_by_id(&state.db, feature_id).await?;
 
         if let Some(pid) = person_id {
-            Self::recalculate_person_stats(db, redis, pid).await?;
+            Self::recalculate_person_stats(state, pid).await?;
         }
 
         Ok(())
@@ -144,15 +143,14 @@ impl FeatureService {
     /// - `redis`: Redis连接池
     /// - `person_id`: 人物ID
     pub async fn recalculate_person_stats(
-        db: &sea_orm::DatabaseConnection,
-        redis: &Pool,
+        state: &PhotoState,
         person_id: i64,
     ) -> Result<(), AppError> {
-        let features = FaceFeatureMapper::find_by_person_id(db, person_id).await?;
+        let features = FaceFeatureMapper::find_by_person_id(&state.db, person_id).await?;
 
         if features.is_empty() {
-            FacePersonMapper::delete_by_id(db, person_id).await?;
-            Self::invalidate_person_cache(redis, person_id).await?;
+            FacePersonMapper::delete_by_id(&state.db, person_id).await?;
+            Self::invalidate_person_cache(&state.redis, person_id).await?;
             return Ok(());
         }
 
@@ -170,7 +168,7 @@ impl FeatureService {
             .unwrap();
 
         FacePersonMapper::update(
-            db,
+            &state.db,
             person_id,
             None,
             None,
@@ -181,7 +179,7 @@ impl FeatureService {
             Some(total_weight),
         ).await?;
 
-        Self::invalidate_person_cache(redis, person_id).await?;
+        Self::invalidate_person_cache(&state.redis, person_id).await?;
 
         Ok(())
     }
@@ -207,11 +205,10 @@ impl FeatureService {
     /// # 返回
     /// 返回人脸特征VO列表，包含人物名称
     pub async fn get_photo_features(
-        db: &sea_orm::DatabaseConnection,
-        redis: &Pool,
+        state: &PhotoState,
         photo_id: i64,
     ) -> Result<Vec<FaceFeatureVO>, AppError> {
-        let features = FaceFeatureMapper::find_by_photo_id(db, photo_id).await?;
+        let features = FaceFeatureMapper::find_by_photo_id(&state.db, photo_id).await?;
 
         if features.is_empty() {
             return Ok(vec![]);
@@ -220,7 +217,7 @@ impl FeatureService {
         let person_ids: Vec<i64> = features.iter().filter_map(|f| f.person_id).collect();
 
         let person_names = if !person_ids.is_empty() {
-            Self::get_person_names_batch(db, redis, &person_ids).await?
+            Self::get_person_names_batch(&state.db, &person_ids).await?
         } else {
             HashMap::new()
         };
@@ -270,7 +267,6 @@ impl FeatureService {
     /// 返回以人物ID为键、名称为值的HashMap
     async fn get_person_names_batch(
         db: &sea_orm::DatabaseConnection,
-        _redis: &Pool,
         person_ids: &[i64],
     ) -> Result<HashMap<i64, String>, AppError> {
         let persons = FacePersonMapper::find_by_ids(db, person_ids.to_vec()).await?;
@@ -287,14 +283,14 @@ impl FeatureService {
     /// # 返回
     /// 成功返回空元组
     pub async fn change_face_belonging(
-        db: &sea_orm::DatabaseConnection,
+        state: &PhotoState,
         feature_id: i64,
         person_id: i64,
     ) -> Result<(), AppError> {
-        let _feature = FaceFeatureMapper::find_by_id(db, feature_id).await?;
-        let _person = FacePersonMapper::find_by_id(db, person_id).await?;
+        let _feature = FaceFeatureMapper::find_by_id(&state.db, feature_id).await?;
+        let _person = FacePersonMapper::find_by_id(&state.db, person_id).await?;
 
-        FaceFeatureMapper::update_person_id(db, feature_id, Some(person_id)).await?;
+        FaceFeatureMapper::update_person_id(&state.db, feature_id, Some(person_id)).await?;
 
         Ok(())
     }

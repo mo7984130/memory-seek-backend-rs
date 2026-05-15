@@ -19,7 +19,7 @@ impl TimelineController {
     async fn get_stats(
         State(state): State<Arc<PhotoState>>,
     ) -> Result<R<Vec<PhotoTimelineStatVO>>, AppError> {
-        let stats = TimelineStatService::get_stats(&state.db).await?;
+        let stats = TimelineStatService::get_stats(&state).await?;
         Ok(R::ok(stats))
     }
 }

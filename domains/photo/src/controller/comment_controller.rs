@@ -30,7 +30,7 @@ impl CommentController {
     ) -> Result<R<CursorPageVO<PhotoCommentVO, chrono::DateTime<chrono::Utc>>>, AppError> {
         let photo_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的照片ID"))?;
         let result = CommentService::get_comment_page(
-            &state.db,
+            &state,
             photo_id,
             user_id.0,
             query.cursor,
@@ -48,7 +48,7 @@ impl CommentController {
     ) -> Result<R<PhotoCommentVO>, AppError> {
         let photo_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的照片ID"))?;
         let result =
-            CommentService::publish_comment(&state.db, photo_id, user_id.0, dto.content).await?;
+            CommentService::publish_comment(&state, photo_id, user_id.0, dto.content).await?;
         Ok(R::ok(result))
     }
 
@@ -60,7 +60,7 @@ impl CommentController {
         let comment_id: i64 = id
             .parse()
             .map_err(|_| AppError::bad_request("无效的评论ID"))?;
-        CommentService::delete_comment(&state.db, user_id.0, comment_id).await?;
+        CommentService::delete_comment(&state, user_id.0, comment_id).await?;
         Ok(R::ok(()))
     }
 
@@ -72,7 +72,7 @@ impl CommentController {
         let comment_id: i64 = comment_id
             .parse()
             .map_err(|_| AppError::bad_request("无效的评论ID"))?;
-        let result = CommentService::toggle_like(&state.db, user_id.0, comment_id).await?;
+        let result = CommentService::toggle_like(&state, user_id.0, comment_id).await?;
         Ok(R::ok(result))
     }
 }

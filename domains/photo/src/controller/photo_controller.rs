@@ -65,17 +65,12 @@ impl PhotoController {
             .map_internal_err("读取文件失败")?;
 
         let photo = PhotoService::upload_photo(
-            &state.db,
-            &state.redis,
-            &state.s3_client,
-            #[cfg(feature = "face_recognition")]
-            &state.face_tx,
+            &state,
             user_id.0,
             file_data,
             file_name,
             content_type,
             None,
-            &state.token_cipher,
         )
         .await?;
 
@@ -106,17 +101,12 @@ impl PhotoController {
             .map_internal_err("读取文件失败")?;
 
         let photo = PhotoService::upload_photo(
-            &state.db,
-            &state.redis,
-            &state.s3_client,
-            #[cfg(feature = "face_recognition")]
-            &state.face_tx,
+            &state,
             user_id.0,
             file_data,
             file_name,
             content_type,
             Some(query.created_at),
-            &state.token_cipher,
         )
         .await?;
 
@@ -129,7 +119,7 @@ impl PhotoController {
         Query(query): Query<PhotoCursorQuery>,
     ) -> Result<R<CursorPageVO<PhotoVO, String>>, AppError> {
         let result =
-            PhotoService::get_photo_cursor_page(&state.db, &state.redis, user_id.0, query, &state.token_cipher)
+            PhotoService::get_photo_cursor_page(&state, user_id.0, query)
                 .await?;
         Ok(R::ok(result))
     }
@@ -137,15 +127,15 @@ impl PhotoController {
     async fn md5_exist(
         State(state): State<Arc<PhotoState>>,
         Query(params): Query<Md5Query>,
-    ) -> Result<R<bool>, AppError> {
-        let exists = PhotoService::md5_exists(&state.db, &params.md5).await?;
+    ) -> Result<R<Vec<bool>>, AppError> {
+        let exists = PhotoService::exists_by_md5_batch(&state, &params.md5).await?;
         Ok(R::ok(exists))
     }
 
     async fn get_time_range(
         State(state): State<Arc<PhotoState>>,
     ) -> Result<R<TimeRangeVO>, AppError> {
-        let (min, max) = PhotoService::get_time_range(&state.db).await?;
+        let (min, max) = PhotoService::get_time_range(&state).await?;
         Ok(R::ok(TimeRangeVO { min, max }))
     }
 
@@ -157,10 +147,7 @@ impl PhotoController {
         let photo_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的照片ID"))?;
 
         PhotoService::delete_photo(
-            &state.db,
-            #[cfg(feature = "face_recognition")]
-            &state.redis,
-            &state.s3_client,
+            &state,
             user_id.0,
             photo_id,
         )

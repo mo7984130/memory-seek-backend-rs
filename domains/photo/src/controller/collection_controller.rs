@@ -34,10 +34,8 @@ impl CollectionController {
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<Vec<CollectionVO>>, AppError> {
         let result = CollectionService::get_collection_list(
-            &state.db,
-            &state.redis,
+            &state,
             user_id.0,
-            &state.token_cipher,
         )
         .await?;
         Ok(R::ok(result))
@@ -49,7 +47,7 @@ impl CollectionController {
         Json(dto): Json<CollectionCreateDTO>,
     ) -> Result<R<CollectionVO>, AppError> {
         let result =
-            CollectionService::create_collection(&state.db, user_id.0, dto.name, dto.description)
+            CollectionService::create_collection(&state, user_id.0, dto.name, dto.description)
                 .await?;
         Ok(R::ok(result))
     }
@@ -62,7 +60,7 @@ impl CollectionController {
     ) -> Result<R<CollectionVO>, AppError> {
         let collection_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的ID"))?;
         let result = CollectionService::edit_collection(
-            &state.db,
+            &state,
             user_id.0,
             collection_id,
             dto.name,
@@ -78,7 +76,7 @@ impl CollectionController {
         Path(id): Path<String>,
     ) -> Result<R<()>, AppError> {
         let collection_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的ID"))?;
-        CollectionService::delete_collection(&state.db, user_id.0, collection_id).await?;
+        CollectionService::delete_collection(&state, user_id.0, collection_id).await?;
         Ok(R::ok(()))
     }
 
@@ -90,13 +88,11 @@ impl CollectionController {
     ) -> Result<R<CursorPageVO<CollectionPhotoVO, String>>, AppError> {
         let collection_id: i64 = id.parse().map_err(|_| AppError::bad_request("无效的ID"))?;
         let result = CollectionService::get_collection_photos(
-            &state.db,
-            &state.redis,
+            &state,
             user_id.0,
             collection_id,
             query.cursor,
             query.size.unwrap_or(20),
-            &state.token_cipher,
         )
         .await?;
         Ok(R::ok(result))
@@ -113,7 +109,7 @@ impl CollectionController {
         let photo_id: i64 = photo_id
             .parse()
             .map_err(|_| AppError::bad_request("无效的照片ID"))?;
-        CollectionService::add_photo_to_collection(&state.db, user_id.0, collection_id, photo_id)
+        CollectionService::add_photo_to_collection(&state, user_id.0, collection_id, photo_id)
             .await?;
         Ok(R::ok(()))
     }
@@ -130,7 +126,7 @@ impl CollectionController {
             .parse()
             .map_err(|_| AppError::bad_request("无效的照片ID"))?;
         CollectionService::remove_photo_from_collection(
-            &state.db,
+            &state,
             user_id.0,
             collection_id,
             photo_id,
@@ -154,7 +150,7 @@ impl CollectionController {
             .filter_map(|id| id.parse().ok())
             .collect();
         let result = CollectionService::batch_add_photos_to_collection(
-            &state.db,
+            &state,
             user_id.0,
             collection_id,
             photo_ids,
@@ -178,7 +174,7 @@ impl CollectionController {
             .filter_map(|id| id.parse().ok())
             .collect();
         let result = CollectionService::batch_remove_photos_from_collection(
-            &state.db,
+            &state,
             user_id.0,
             collection_id,
             photo_ids,
@@ -196,7 +192,7 @@ impl CollectionController {
             .parse()
             .map_err(|_| AppError::bad_request("无效的照片ID"))?;
         let result =
-            CollectionService::find_collection_ids_by_photo(&state.db, user_id.0, photo_id)
+            CollectionService::find_collection_ids_by_photo(&state, user_id.0, photo_id)
                 .await?;
         Ok(R::ok(result))
     }
