@@ -49,7 +49,7 @@ impl FeatureService {
         person_id: i64,
         feature: &face_feature::Model,
     ) -> Result<(), AppError> {
-        let person = match FacePersonMapper::find_by_id(&state.db, person_id).await {
+        let person = match FacePersonMapper::query_by_id(&state.db, person_id).await {
             Ok(p) => p,
             Err(_) => return Ok(()),
         };
@@ -69,7 +69,7 @@ impl FeatureService {
         let new_centroid = vector_utils::l2_normalize(&new_centroid);
 
         let (max_feature_id, max_score) = if person.max_score_feature_id == feature.id {
-            let remaining = FaceFeatureMapper::find_by_person_id(&state.db, person_id).await?;
+            let remaining = FaceFeatureMapper::query_by_person_id(&state.db, person_id).await?;
             let best = remaining
                 .iter()
                 .filter(|f| f.id != feature.id)
@@ -115,7 +115,7 @@ impl FeatureService {
         state: &PhotoState,
         feature_id: i64,
     ) -> Result<(), AppError> {
-        let feature = FaceFeatureMapper::find_by_id(&state.db, feature_id).await?;
+        let feature = FaceFeatureMapper::query_by_id(&state.db, feature_id).await?;
         let person_id = feature.person_id;
 
         FaceFeatureMapper::delete_by_id(&state.db, feature_id).await?;
@@ -146,7 +146,7 @@ impl FeatureService {
         state: &PhotoState,
         person_id: i64,
     ) -> Result<(), AppError> {
-        let features = FaceFeatureMapper::find_by_person_id(&state.db, person_id).await?;
+        let features = FaceFeatureMapper::query_by_person_id(&state.db, person_id).await?;
 
         if features.is_empty() {
             FacePersonMapper::delete_by_id(&state.db, person_id).await?;
@@ -208,7 +208,7 @@ impl FeatureService {
         state: &PhotoState,
         photo_id: i64,
     ) -> Result<Vec<FaceFeatureVO>, AppError> {
-        let features = FaceFeatureMapper::find_by_photo_id(&state.db, photo_id).await?;
+        let features = FaceFeatureMapper::query_by_photo_id(&state.db, photo_id).await?;
 
         if features.is_empty() {
             return Ok(vec![]);
@@ -269,7 +269,7 @@ impl FeatureService {
         db: &sea_orm::DatabaseConnection,
         person_ids: &[i64],
     ) -> Result<HashMap<i64, String>, AppError> {
-        let persons = FacePersonMapper::find_by_ids(db, person_ids.to_vec()).await?;
+        let persons = FacePersonMapper::query_by_ids(db, person_ids).await?;
         Ok(persons.into_iter().map(|p| (p.id, p.name)).collect())
     }
 
@@ -287,8 +287,8 @@ impl FeatureService {
         feature_id: i64,
         person_id: i64,
     ) -> Result<(), AppError> {
-        let _feature = FaceFeatureMapper::find_by_id(&state.db, feature_id).await?;
-        let _person = FacePersonMapper::find_by_id(&state.db, person_id).await?;
+        let _feature = FaceFeatureMapper::query_by_id(&state.db, feature_id).await?;
+        let _person = FacePersonMapper::query_by_id(&state.db, person_id).await?;
 
         FaceFeatureMapper::update_person_id(&state.db, feature_id, Some(person_id)).await?;
 

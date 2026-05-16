@@ -18,8 +18,10 @@ use common::models::UserId;
 use common::utils::{CacheExtension, FileValidator, MetricsTimerExt, ResultExt};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use const_format::formatcp;
-use sea_orm::prelude::DateTimeUtc;
+use entities::*;
+use sea_orm::prelude::*;
 use sea_orm::{ActiveModelTrait, Set, TransactionTrait};
+use sea_orm::{ColumnTrait, EntityTrait};
 use serde::Deserialize;
 use std::collections::HashSet;
 use tracing::{instrument, warn};
@@ -414,7 +416,7 @@ impl PhotoService {
     /// 1. 鉴权（仅管理员）
     /// 2. 查询所有照片元数据（file_id、created_at）
     /// 3. [face_recognition] 查询并分批删除人脸特征，收集涉及的 person_id
-    /// 4. 分批事务：删除收藏关联 → 更新收藏计数 → 删除评论点赞 → 删除评论 → 删除照片记录
+    /// 4. 分批事务：删除评论点赞 → 删除评论 → 删除照片记录
     /// 5. [face_recognition] 并发重新计算受影响人物的统计
     /// 6. 分批删除 S3 文件
     /// 7. 批量递减时间线统计
@@ -455,6 +457,105 @@ impl PhotoService {
             return Err(AppError::NotFound(
                 format!("以下照片不存在: {:?}", missing_ids).into(),
             ));
+        }
+
+        // [face_recognition] 查询并收集人脸特征
+        #[cfg(feature = "face_recognition")]
+        let features = {
+            use sea_orm::QuerySelect;
+
+            face_feature::Entity::find()
+                .select_only()
+                .column(face_feature::Column::Id)
+                .column(face_feature::Column::PersonId)
+                .filter(face_feature::Column::PhotoId.is_in(photo_ids.iter().copied()))
+                .into_tuple::<(i64, Option<i64>)>()
+                .all(&state.db)
+                .timed(metrics_timer_name!("delete_photos", "find_features"))
+                .await
+                .trace_internal_err("db_query_err", "获取人脸特征错误")?
+        };
+
+        state
+            .db
+            .transaction::<_, (), AppError>(|txn| {
+                Box::pin(async move {
+                    // [face_recognition] 删除人脸特征
+                    #[cfg(feature = "face_recognition")]
+                    if !features.is_empty() {
+                        FaceFeatureMapper::delete_by_ids(
+                            txn,
+                            features.iter().map(|f| f.0).collect(),
+                        )
+                        .timed(metrics_timer_name!("delete_photos", "delete_features"))
+                        .await
+                        .trace_internal_err("delete_features", "删除人脸特征失败")?;
+                    }
+
+                    // 3-c. 评论点赞 → 评论
+                    let comment_ids = CommentMapper::find_ids_by_photo_ids(txn, &photo_ids)
+                        .timed(metrics_timer_name!("delete_photos", "find_comment_ids"))
+                        .await
+                        .trace_internal_err(
+                            "photo::delete_photos:find_comment_ids",
+                            "查找评论失败",
+                        )?;
+
+                    if !comment_ids.is_empty() {
+                        CommentLikeMapper::delete_by_comment_ids(txn, &comment_ids)
+                            .timed(metrics_timer_name!("delete_photos", "delete_comment_like"))
+                            .await
+                            .trace_internal_err(
+                                "photo::delete_photos:delete_comment_like",
+                                "删除评论点赞失败",
+                            )?;
+                    }
+
+                    CommentMapper::delete_by_photo_ids(txn, &photo_ids)
+                        .timed(metrics_timer_name!("delete_photos", "delete_comment"))
+                        .await
+                        .trace_internal_err(
+                            "photo::delete_photos:delete_comment",
+                            "删除评论失败",
+                        )?;
+
+                    // 3-d. 照片主记录（最后删除，符合外键依赖顺序）
+                    PhotoMapper::delete_by_ids(txn, &photo_ids)
+                        .timed(metrics_timer_name!("delete_photos", "delete_photo"))
+                        .await
+                        .trace_internal_err(
+                            "photo::delete_photos:delete_photo",
+                            "删除照片记录失败",
+                        )?;
+
+                    Ok(())
+                })
+            })
+            .await
+            .trace_internal_err("photo::delete_photos:db_err", "数据库批量删除出错")?;
+
+        // ------------------------------------------------------------------
+        // Step 4: [face_recognition] 并发重算人物统计
+        // 事务已提交，此处失败不回滚，记录警告即可
+        // ------------------------------------------------------------------
+        #[cfg(feature = "face_recognition")]
+        {
+            let results = futures::future::join_all(
+                person_ids
+                    .iter()
+                    .map(|&pid| FeatureService::recalculate_person_stats(state, pid)),
+            )
+            .await;
+
+            for (pid, result) in person_ids.iter().zip(results) {
+                if let Err(e) = result {
+                    tracing::warn!(
+                        person_id = pid,
+                        error = ?e,
+                        "重新计算人物统计失败，数据可能暂时不一致"
+                    );
+                }
+            }
         }
 
         Ok(())

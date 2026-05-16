@@ -32,14 +32,14 @@ impl CommentService {
         limit: i64,
     ) -> Result<CursorPageVO<PhotoCommentVO, DateTime<Utc>>, AppError> {
         let hot_comments = if cursor.is_none() {
-            CommentMapper::find_hot_comments(&state.db, photo_id, 5, 3).await?
+            CommentMapper::query_hot_comments(&state.db, photo_id, 5, 3).await?
         } else {
             vec![]
         };
 
         let hot_ids: Vec<i64> = hot_comments.iter().map(|c| c.id).collect();
 
-        let time_comments = CommentMapper::find_by_photo_id_excluding_ids(&state.db, photo_id, hot_ids, cursor, limit as u64).await?;
+        let time_comments = CommentMapper::query_by_photo_id(&state.db, photo_id, &hot_ids, cursor, limit as u64).await?;
 
         let has_more = time_comments.len() > limit as usize;
         let time_comments: Vec<_> = time_comments.into_iter().take(limit as usize).collect();
@@ -49,7 +49,7 @@ impl CommentService {
 
         let comment_ids: Vec<i64> = all_comments.iter().map(|c| c.id).collect();
 
-        let liked = CommentLikeMapper::find_by_user_and_comments(&state.db, user_id, comment_ids).await?;
+        let liked = CommentLikeMapper::query_by_user_and_comments(&state.db, user_id, comment_ids).await?;
 
         let records: Vec<PhotoCommentVO> = all_comments
             .iter()
@@ -118,7 +118,7 @@ impl CommentService {
         user_id: i64,
         comment_id: i64,
     ) -> Result<(), AppError> {
-        let comment = CommentMapper::find_by_id(&state.db, comment_id).await?;
+        let comment = CommentMapper::query_by_id(&state.db, comment_id).await?;
 
         if comment.user_id != user_id {
             return Err(AppError::bad_request("无权限删除"));
@@ -158,7 +158,7 @@ impl CommentService {
         user_id: i64,
         comment_id: i64,
     ) -> Result<bool, AppError> {
-        let existing = CommentLikeMapper::find_by_user_and_comment(&state.db, user_id, comment_id).await?;
+        let existing = CommentLikeMapper::query_by_user_and_comment(&state.db, user_id, comment_id).await?;
 
         if let Some(like) = existing {
             state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {

@@ -16,11 +16,11 @@ impl CollectionMapper {
     /// # 返回
     /// - 成功: 返回收藏夹模型
     /// - 失败: 收藏夹不存在返回404错误
-    pub async fn find_by_id(db: &DatabaseConnection, id: i64) -> Result<collection::Model, AppError> {
+    pub async fn query_by_id(db: &DatabaseConnection, id: i64) -> Result<collection::Model, AppError> {
         collection::Entity::find_by_id(id)
             .one(db)
             .await
-            .map_internal_err("查询收藏夹失败")?
+            .trace_internal_err("db_query_err","查询收藏夹失败")?
             .ok_or_else(|| AppError::not_found("收藏夹不存在"))
     }
 
@@ -32,14 +32,14 @@ impl CollectionMapper {
     ///
     /// # 返回
     /// 返回用户的收藏夹列表，按是否收藏排序，再按创建时间倒序
-    pub async fn find_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Vec<collection::Model>, AppError> {
+    pub async fn query_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Vec<collection::Model>, AppError> {
         collection::Entity::find()
             .filter(collection::Column::UserId.eq(user_id))
             .order_by_asc(collection::Column::IsFavorite)
             .order_by_desc(collection::Column::CreatedAt)
             .all(db)
             .await
-            .map_internal_err("查询收藏夹失败")
+            .trace_internal_err("db_query_err","查询收藏夹失败")
     }
 
     /// 查询用户的"我喜欢"收藏夹
@@ -50,13 +50,13 @@ impl CollectionMapper {
     ///
     /// # 返回
     /// 返回用户的"我喜欢"收藏夹，不存在返回None
-    pub async fn find_favorite_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Option<collection::Model>, AppError> {
+    pub async fn query_favorite_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Option<collection::Model>, AppError> {
         collection::Entity::find()
             .filter(collection::Column::UserId.eq(user_id))
             .filter(collection::Column::IsFavorite.eq(true))
             .one(db)
             .await
-            .map_internal_err("查询失败")
+            .trace_internal_err("db_query_err","查询失败")
     }
 
     /// 查询用户"我喜欢"收藏夹的ID
@@ -67,7 +67,7 @@ impl CollectionMapper {
     ///
     /// # 返回
     /// 返回"我喜欢"收藏夹的ID，不存在返回None
-    pub async fn find_favorite_collection_id(db: &DatabaseConnection, user_id: i64) -> Result<Option<i64>, AppError> {
+    pub async fn query_favorite_collection_id(db: &DatabaseConnection, user_id: i64) -> Result<Option<i64>, AppError> {
         let result = collection::Entity::find()
             .filter(collection::Column::UserId.eq(user_id))
             .filter(collection::Column::IsFavorite.eq(true))
@@ -76,7 +76,7 @@ impl CollectionMapper {
             .into_tuple::<(i64,)>()
             .one(db)
             .await
-            .map_internal_err("查询失败")?;
+            .trace_internal_err("db_query_err","查询失败")?;
         Ok(result.map(|r| r.0))
     }
 
@@ -111,7 +111,7 @@ impl CollectionMapper {
             ..Default::default()
         };
 
-        collection.insert(db).await.map_internal_err("创建收藏夹失败")
+        collection.insert(db).await.trace_internal_err("db_insert_err","创建收藏夹失败")
     }
 
     /// 更新收藏夹信息
@@ -134,7 +134,7 @@ impl CollectionMapper {
         photo_count: Option<i64>,
         cover_image_id: Option<Option<i64>>,
     ) -> Result<collection::Model, AppError> {
-        let existing = Self::find_by_id(db, id).await?;
+        let existing = Self::query_by_id(db, id).await?;
         let mut active: collection::ActiveModel = existing.into();
 
         if let Some(n) = name {
@@ -151,7 +151,7 @@ impl CollectionMapper {
         }
         active.updated_at = Set(Utc::now().into());
 
-        active.update(db).await.map_internal_err("更新收藏夹失败")
+        active.update(db).await.trace_internal_err("db_update_err","更新收藏夹失败")
     }
 
     /// 删除收藏夹
@@ -166,7 +166,7 @@ impl CollectionMapper {
         collection::Entity::delete_by_id(id)
             .exec(db)
             .await
-            .map_internal_err("删除收藏夹失败")?;
+            .trace_internal_err("db_delete_err","删除收藏夹失败")?;
         Ok(())
     }
 
@@ -185,14 +185,14 @@ impl CollectionMapper {
         let collection = collection::Entity::find_by_id(id)
             .one(db)
             .await
-            .map_internal_err("查询收藏夹失败")?
+            .trace_internal_err("db_query_err","查询收藏夹失败")?
             .ok_or_else(|| AppError::not_found("收藏夹不存在"))?;
 
         let mut active: collection::ActiveModel = collection.into();
         let new_count = (*active.photo_count.as_ref() + delta as i64).max(0);
         active.photo_count = Set(new_count);
         active.updated_at = Set(Utc::now().into());
-        active.update(db).await.map_internal_err("更新照片数量失败")?;
+        active.update(db).await.trace_internal_err("db_update_err","更新照片数量失败")?;
         Ok(())
     }
 
@@ -220,7 +220,7 @@ impl CollectionMapper {
             .filter(collection::Column::Id.is_in(collection_ids))
             .exec(txn)
             .await
-            .map_internal_err("批量更新收藏夹计数失败")?;
+            .trace_internal_err("db_update_err","批量更新收藏夹计数失败")?;
 
         Ok(())
     }

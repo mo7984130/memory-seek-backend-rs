@@ -17,11 +17,11 @@ impl FacePersonMapper {
     /// # 返回
     /// - 成功: 返回人物模型
     /// - 失败: 人物不存在返回404错误
-    pub async fn find_by_id(db: &DatabaseConnection, id: i64) -> Result<face_person::Model, AppError> {
+    pub async fn query_by_id(db: &DatabaseConnection, id: i64) -> Result<face_person::Model, AppError> {
         face_person::Entity::find_by_id(id)
             .one(db)
             .await
-            .map_internal_err("查询失败")?
+            .trace_internal_err("db_query_err","查询失败")?
             .ok_or_else(|| AppError::not_found("人物不存在"))
     }
 
@@ -32,12 +32,12 @@ impl FacePersonMapper {
     /// 
     /// # 返回
     /// 返回所有人物列表，按名称排序
-    pub async fn find_all(db: &DatabaseConnection) -> Result<Vec<face_person::Model>, AppError> {
+    pub async fn query_all(db: &DatabaseConnection) -> Result<Vec<face_person::Model>, AppError> {
         face_person::Entity::find()
             .order_by_asc(face_person::Column::Name)
             .all(db)
             .await
-            .map_internal_err("查询失败")
+            .trace_internal_err("db_query_err","查询失败")
     }
 
     /// 根据名称查询人物
@@ -48,12 +48,12 @@ impl FacePersonMapper {
     /// 
     /// # 返回
     /// 返回匹配的人物，不存在返回None
-    pub async fn find_by_name(db: &DatabaseConnection, name: &str) -> Result<Option<face_person::Model>, AppError> {
+    pub async fn query_by_name(db: &DatabaseConnection, name: &str) -> Result<Option<face_person::Model>, AppError> {
         face_person::Entity::find()
             .filter(face_person::Column::Name.eq(name))
             .one(db)
             .await
-            .map_internal_err("查询失败")
+            .trace_internal_err("db_query_err","查询失败")
     }
 
     /// 游标分页查询人物列表
@@ -65,7 +65,7 @@ impl FacePersonMapper {
     /// 
     /// # 返回
     /// 返回人物列表，按照片数量倒序、ID倒序排列
-    pub async fn find_cursor_page(
+    pub async fn query_cursor_page(
         db: &DatabaseConnection,
         cursor: Option<&PersonCursor>,
         size: u64,
@@ -87,7 +87,7 @@ impl FacePersonMapper {
             );
         }
 
-        query.all(db).await.map_internal_err("查询失败")
+        query.all(db).await.trace_internal_err("db_query_err","查询失败")
     }
 
     /// 根据ID列表批量查询人物
@@ -98,15 +98,15 @@ impl FacePersonMapper {
     /// 
     /// # 返回
     /// 返回匹配的人物列表
-    pub async fn find_by_ids(db: &DatabaseConnection, ids: Vec<i64>) -> Result<Vec<face_person::Model>, AppError> {
+    pub async fn query_by_ids(db: &DatabaseConnection, ids: &[i64]) -> Result<Vec<face_person::Model>, AppError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
         face_person::Entity::find()
-            .filter(face_person::Column::Id.is_in(ids))
+            .filter(face_person::Column::Id.is_in(ids.iter().copied()))
             .all(db)
             .await
-            .map_internal_err("查询失败")
+            .trace_internal_err("db_query_err","查询失败")
     }
 
     /// 创建人物
@@ -147,7 +147,7 @@ impl FacePersonMapper {
             ..Default::default()
         };
 
-        person.insert(db).await.map_internal_err("创建人物失败")
+        person.insert(db).await.trace_internal_err("db_insert_err","创建人物失败")
     }
 
     /// 更新人物信息
@@ -179,7 +179,7 @@ impl FacePersonMapper {
         let existing = face_person::Entity::find_by_id(id)
             .one(db)
             .await
-            .map_internal_err("查询失败")?
+            .trace_internal_err("db_query_err","查询失败")?
             .ok_or_else(|| AppError::not_found("人物不存在"))?;
         let mut active: face_person::ActiveModel = existing.into();
 
@@ -206,7 +206,7 @@ impl FacePersonMapper {
         }
         active.updated_at = Set(chrono::Utc::now().into());
 
-        active.update(db).await.map_internal_err("更新失败")
+        active.update(db).await.trace_internal_err("db_update_err","更新失败")
     }
 
     /// 删除人物
@@ -221,7 +221,7 @@ impl FacePersonMapper {
         face_person::Entity::delete_by_id(id)
             .exec(db)
             .await
-            .map_internal_err("删除人物失败")?;
+            .trace_internal_err("db_delete_err","删除人物失败")?;
         Ok(())
     }
 
@@ -265,6 +265,6 @@ impl FacePersonMapper {
             );
         }
 
-        query.all(db).await.map_internal_err("搜索失败")
+        query.all(db).await.trace_internal_err("db_query_err","搜索失败")
     }
 }

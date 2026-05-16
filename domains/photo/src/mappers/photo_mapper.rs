@@ -21,13 +21,15 @@ impl PhotoMapper {
     /// # 返回
     /// - 成功: 返回照片模型
     /// - 失败: 照片不存在返回404错误，数据库错误返回500错误
-    pub async fn find_by_id(db: &DatabaseConnection, id: i64) -> Result<Model, AppError> {
+    pub async fn query_by_id(db: &DatabaseConnection, id: i64) -> Result<Model, AppError> {
         Entity::find_by_id(id)
             .one(db)
             .await
             .trace_internal_err("db_query_err", "查询照片失败")?
             .ok_or_else(|| AppError::not_found("照片不存在"))
     }
+
+    // TODO muti and sign
 
     /// 根据ID列表批量查询照片
     ///
@@ -37,7 +39,7 @@ impl PhotoMapper {
     ///
     /// # 返回
     /// 返回匹配的照片列表，空ID列表返回空列表
-    pub async fn find_by_ids(db: &DatabaseConnection, ids: &[i64]) -> Result<Vec<Model>, AppError> {
+    pub async fn query_by_ids(db: &DatabaseConnection, ids: &[i64]) -> Result<Vec<Model>, AppError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -81,7 +83,7 @@ impl PhotoMapper {
     ///
     /// # 返回
     /// 返回最早和最晚照片的创建时间元组，无照片时返回当前时间
-    pub async fn find_time_range(db: &DatabaseConnection) -> Result<TimeRange, AppError> {
+    pub async fn query_time_range(db: &DatabaseConnection) -> Result<TimeRange, AppError> {
         let result = Entity::find()
             .select_only()
             .column_as(Column::CreatedAt.min(), "min_time")
@@ -155,7 +157,7 @@ impl PhotoMapper {
     ///
     /// # 返回
     /// 返回照片列表，按创建时间倒序、ID倒序排列
-    pub async fn find_cursor_page(
+    pub async fn query_cursor_page(
         db: &DatabaseConnection,
         cursor: Option<&PhotoCursor>,
         size: u64,
@@ -177,7 +179,7 @@ impl PhotoMapper {
     ///
     /// # 返回
     /// 返回照片id，按创建时间倒序、ID倒序排列
-    pub async fn find_cursor_page_ids(
+    pub async fn query_cursor_page_ids(
         db: &DatabaseConnection,
         cursor: Option<PhotoCursor>,
         size: u64,
@@ -200,7 +202,7 @@ impl PhotoMapper {
     ///
     /// # 返回
     /// 返回匹配的照片模型，不存在返回404错误
-    pub async fn find_by_file_id(
+    pub async fn query_by_file_id(
         db: &DatabaseConnection,
         file_id: &str,
     ) -> Result<Model, AppError> {

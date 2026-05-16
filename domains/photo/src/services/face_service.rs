@@ -139,7 +139,7 @@ impl FaceService {
     ) -> Result<Vec<PersonCluster>, AppError> {
         info!("开始执行人脸聚类");
 
-        let features = FaceFeatureMapper::find_all_ordered(db).await?;
+        let features = FaceFeatureMapper::query_all_ordered(db).await?;
 
         if features.len() < min_points {
             return Ok(vec![]);
@@ -191,7 +191,7 @@ impl FaceService {
                     }
 
                     // 根据 ID 列表查询特征信息
-                    let features = FaceFeatureMapper::find_by_ids(txn, seed.member_ids.clone())
+                    let features = FaceFeatureMapper::query_by_ids(txn, &seed.member_ids)
                         .await
                         .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
@@ -258,15 +258,15 @@ impl FaceService {
         let size = query.size.unwrap_or(20) as u64;
         let decoded_cursor = query.cursor.as_ref().and_then(|s| PersonCursor::decode(s));
         
-        let persons = FacePersonMapper::find_cursor_page(&state.db, decoded_cursor.as_ref(), size + 1).await?;
+        let persons = FacePersonMapper::query_cursor_page(&state.db, decoded_cursor.as_ref(), size + 1).await?;
 
         let has_more = persons.len() > size as usize;
         let persons: Vec<_> = persons.into_iter().take(size as usize).collect();
 
         let feature_ids: Vec<i64> = persons.iter().map(|p| p.max_score_feature_id).collect();
-        let features = FaceFeatureMapper::find_by_ids(&state.db, feature_ids).await?;
+        let features = FaceFeatureMapper::query_by_ids(&state.db, &feature_ids).await?;
         let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-        let photos = PhotoMapper::find_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
+        let photos = PhotoMapper::query_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
 
         let records: Vec<FacePersonVO> = persons
             .into_iter()
@@ -319,7 +319,7 @@ impl FaceService {
     pub async fn get_all_person(
         state: &PhotoState,
     ) -> Result<Vec<FacePersonSimpleVO>, AppError> {
-        let persons = FacePersonMapper::find_all(&state.db).await?;
+        let persons = FacePersonMapper::query_all(&state.db).await?;
 
         Ok(persons
             .iter()
@@ -348,7 +348,7 @@ impl FaceService {
         person_id: i64,
         new_name: String,
     ) -> Result<FacePersonVO, AppError> {
-        let existing = FacePersonMapper::find_by_name(&state.db, &new_name).await?;
+        let existing = FacePersonMapper::query_by_name(&state.db, &new_name).await?;
 
         if existing.is_some() {
             return Err(AppError::bad_request("人物名称已存在"));
@@ -395,8 +395,8 @@ impl FaceService {
             return Err(AppError::bad_request("源人物和目标人物相同"));
         }
 
-        let source = FacePersonMapper::find_by_id(&state.db, source_id).await?;
-        let target = FacePersonMapper::find_by_id(&state.db, target_id).await?;
+        let source = FacePersonMapper::query_by_id(&state.db, source_id).await?;
+        let target = FacePersonMapper::query_by_id(&state.db, target_id).await?;
 
         let w1 = source.total_weight_count;
         let w2 = target.total_weight_count;
@@ -426,7 +426,7 @@ impl FaceService {
                     Some(new_weight),
                 ).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
-                let source_features = FaceFeatureMapper::find_by_person_id(txn, source_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                let source_features = FaceFeatureMapper::query_by_person_id(txn, source_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
                 for feature in source_features {
                     FaceFeatureMapper::update_person_id(txn, feature.id, Some(target_id))
@@ -477,12 +477,12 @@ impl FaceService {
         state: &PhotoState,
         person_id: i64,
     ) -> Result<FacePersonVO, AppError> {
-        let person = FacePersonMapper::find_by_id(&state.db, person_id).await?;
+        let person = FacePersonMapper::query_by_id(&state.db, person_id).await?;
 
-        let feature = FaceFeatureMapper::find_by_id(&state.db, person.max_score_feature_id).await.ok();
+        let feature = FaceFeatureMapper::query_by_id(&state.db, person.max_score_feature_id).await.ok();
 
         let cover_token = if let Some(f) = feature {
-            let photo = PhotoMapper::find_by_id(&state.db, f.photo_id).await.ok();
+            let photo = PhotoMapper::query_by_id(&state.db, f.photo_id).await.ok();
             if let Some(p) = photo {
                 let bbox: face_feature::FaceBBox = serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
                     face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
@@ -529,13 +529,13 @@ impl FaceService {
         cursor: Option<i64>,
         size: u32,
     ) -> Result<CursorPageVO<crate::models::photo::PhotoVO, i64>, AppError> {
-        let features = FaceFeatureMapper::find_cursor_page(&state.db, person_id, cursor, (size + 1) as u64).await?;
+        let features = FaceFeatureMapper::query_cursor_page(&state.db, person_id, cursor, (size + 1) as u64).await?;
 
         let has_more = features.len() > size as usize;
         let features: Vec<_> = features.into_iter().take(size as usize).collect();
 
         let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-        let photo_map = PhotoMapper::find_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
+        let photo_map = PhotoMapper::query_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
 
         let favorite_collection_id = crate::services::CollectionService::get_favorite_collection_id(state, user_id).await?;
         let favorited_photo_ids = crate::mappers::CollectionPhotoMapper::exists_in_collection(&state.db, favorite_collection_id, &photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
@@ -584,11 +584,11 @@ impl FaceService {
     /// # 返回
     /// 成功返回true
     pub async fn delete_person(state: &PhotoState, person_id: i64) -> Result<bool, AppError> {
-        let _person = FacePersonMapper::find_by_id(&state.db, person_id).await?;
+        let _person = FacePersonMapper::query_by_id(&state.db, person_id).await?;
 
         state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
             Box::pin(async move {
-                let features = FaceFeatureMapper::find_by_person_id(txn, person_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                let features = FaceFeatureMapper::query_by_person_id(txn, person_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
                 for feature in features {
                     FaceFeatureMapper::update_person_id(txn, feature.id, None)
@@ -631,9 +631,9 @@ impl FaceService {
 
         if query.detailed {
             let feature_ids: Vec<i64> = persons.iter().map(|p| p.max_score_feature_id).collect();
-            let features = FaceFeatureMapper::find_by_ids(&state.db, feature_ids).await?;
+            let features = FaceFeatureMapper::query_by_ids(&state.db, &feature_ids).await?;
             let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-            let photos = PhotoMapper::find_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
+            let photos = PhotoMapper::query_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
 
             let records: Vec<FacePersonVO> = persons
                 .into_iter()

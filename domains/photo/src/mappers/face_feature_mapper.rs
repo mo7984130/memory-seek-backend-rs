@@ -1,8 +1,10 @@
 use common::error::AppError;
 use common::utils::ResultExt;
-use entities::{face_feature, DrVector};
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
-
+use entities::{DrVector, face_feature};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set,
+};
 
 pub struct FaceFeatureMapper;
 
@@ -16,11 +18,14 @@ impl FaceFeatureMapper {
     /// # 返回
     /// - 成功: 返回特征模型
     /// - 失败: 特征不存在返回404错误
-    pub async fn find_by_id(db: &DatabaseConnection, id: i64) -> Result<face_feature::Model, AppError> {
+    pub async fn query_by_id(
+        db: &DatabaseConnection,
+        id: i64,
+    ) -> Result<face_feature::Model, AppError> {
         face_feature::Entity::find_by_id(id)
             .one(db)
             .await
-            .map_internal_err("查询失败")?
+            .trace_internal_err("db_query_err", "查询失败")?
             .ok_or_else(|| AppError::not_found("特征不存在"))
     }
 
@@ -32,12 +37,15 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回该照片中的所有人脸特征
-    pub async fn find_by_photo_id(db: &DatabaseConnection, photo_id: i64) -> Result<Vec<face_feature::Model>, AppError> {
+    pub async fn query_by_photo_id(
+        db: &DatabaseConnection,
+        photo_id: i64,
+    ) -> Result<Vec<face_feature::Model>, AppError> {
         face_feature::Entity::find()
             .filter(face_feature::Column::PhotoId.eq(photo_id))
             .all(db)
             .await
-            .map_internal_err("查询失败")
+            .trace_internal_err("db_query_err", "查询失败")
     }
 
     /// 查询人物的所有人脸特征
@@ -48,12 +56,15 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回该人物关联的所有人脸特征
-    pub async fn find_by_person_id<C: ConnectionTrait>(db: &C, person_id: i64) -> Result<Vec<face_feature::Model>, AppError> {
+    pub async fn query_by_person_id<C: ConnectionTrait>(
+        db: &C,
+        person_id: i64,
+    ) -> Result<Vec<face_feature::Model>, AppError> {
         face_feature::Entity::find()
             .filter(face_feature::Column::PersonId.eq(person_id))
             .all(db)
             .await
-            .map_internal_err("查询失败")
+            .trace_internal_err("db_query_err", "查询失败")
     }
 
     /// 根据ID列表批量查询人脸特征
@@ -64,15 +75,18 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回匹配的特征列表
-    pub async fn find_by_ids<C: ConnectionTrait>(db: &C, ids: Vec<i64>) -> Result<Vec<face_feature::Model>, AppError> {
+    pub async fn query_by_ids<C: ConnectionTrait>(
+        db: &C,
+        ids: &[i64],
+    ) -> Result<Vec<face_feature::Model>, AppError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
         face_feature::Entity::find()
-            .filter(face_feature::Column::Id.is_in(ids))
+            .filter(face_feature::Column::Id.is_in(ids.iter().copied()))
             .all(db)
             .await
-            .map_internal_err("查询失败")
+            .trace_internal_err("db_query_err", "查询失败")
     }
 
     /// 查询所有人脸特征（按ID排序）
@@ -82,12 +96,14 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回所有特征列表，用于聚类算法
-    pub async fn find_all_ordered(db: &DatabaseConnection) -> Result<Vec<face_feature::Model>, AppError> {
+    pub async fn query_all_ordered(
+        db: &DatabaseConnection,
+    ) -> Result<Vec<face_feature::Model>, AppError> {
         face_feature::Entity::find()
             .order_by_asc(face_feature::Column::Id)
             .all(db)
             .await
-            .map_internal_err("查询特征失败")
+            .trace_internal_err("db_query_err", "查询特征失败")
     }
 
     /// 游标分页查询人物的人脸特征
@@ -100,7 +116,7 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回特征列表，按ID倒序排列
-    pub async fn find_cursor_page(
+    pub async fn query_cursor_page(
         db: &DatabaseConnection,
         person_id: i64,
         cursor: Option<i64>,
@@ -115,7 +131,10 @@ impl FaceFeatureMapper {
             query = query.filter(face_feature::Column::Id.lt(c));
         }
 
-        query.all(db).await.map_internal_err("查询失败")
+        query
+            .all(db)
+            .await
+            .trace_internal_err("db_query_err", "查询失败")
     }
 
     /// 创建新人脸特征
@@ -150,7 +169,10 @@ impl FaceFeatureMapper {
             ..Default::default()
         };
 
-        feature.insert(db).await.map_internal_err("保存特征失败")
+        feature
+            .insert(db)
+            .await
+            .trace_internal_err("db_insert_err", "保存特征失败")
     }
 
     /// 更新人脸特征的人物关联
@@ -170,12 +192,15 @@ impl FaceFeatureMapper {
         let existing = face_feature::Entity::find_by_id(id)
             .one(db)
             .await
-            .map_internal_err("查询失败")?
+            .trace_internal_err("db_query_err", "查询失败")?
             .ok_or_else(|| AppError::not_found("特征不存在"))?;
         let mut active: face_feature::ActiveModel = existing.into();
         active.person_id = Set(person_id);
         active.updated_at = Set(chrono::Utc::now().into());
-        active.update(db).await.map_internal_err("更新失败")
+        active
+            .update(db)
+            .await
+            .trace_internal_err("db_update_err", "更新失败")
     }
 
     /// 删除单个人脸特征
@@ -190,14 +215,11 @@ impl FaceFeatureMapper {
         face_feature::Entity::delete_by_id(id)
             .exec(db)
             .await
-            .map_internal_err("删除特征失败")?;
+            .trace_internal_err("db_delete_err", "删除特征失败")?;
         Ok(())
     }
 
-    pub async fn delete_by_ids<C: ConnectionTrait>(
-        db: &C,
-        ids: Vec<i64>
-    ) -> Result<(), AppError> {
+    pub async fn delete_by_ids<C: ConnectionTrait>(db: &C, ids: Vec<i64>) -> Result<(), AppError> {
         if ids.is_empty() {
             return Ok(());
         }
@@ -206,7 +228,7 @@ impl FaceFeatureMapper {
             .filter(face_feature::Column::Id.is_in(ids))
             .exec(db)
             .await
-            .map_internal_err("批量删除人脸特征失败")?;
+            .trace_internal_err("db_delete_err", "批量删除人脸特征失败")?;
 
         Ok(())
     }
@@ -219,15 +241,18 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回被删除特征关联的 person_id 列表（用于更新人物统计）
-    pub async fn delete_by_photo_id(db: &DatabaseConnection, photo_id: i64) -> Result<Vec<Option<i64>>, AppError> {
-        let features = Self::find_by_photo_id(db, photo_id).await?;
+    pub async fn delete_by_photo_id(
+        db: &DatabaseConnection,
+        photo_id: i64,
+    ) -> Result<Vec<Option<i64>>, AppError> {
+        let features = Self::query_by_photo_id(db, photo_id).await?;
         let person_ids: Vec<Option<i64>> = features.iter().map(|f| f.person_id).collect();
 
         face_feature::Entity::delete_many()
             .filter(face_feature::Column::PhotoId.eq(photo_id))
             .exec(db)
             .await
-            .map_internal_err("删除特征失败")?;
+            .trace_internal_err("db_delete_err", "删除特征失败")?;
 
         Ok(person_ids)
     }
