@@ -201,7 +201,7 @@ impl FaceService {
 
                     let best = features
                         .iter()
-                        .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
+                        .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
                         .unwrap();
 
                     let centroid = Embedding512::new(seed.vector.clone());
@@ -730,6 +730,8 @@ impl FaceService {
             info!("处理照片, id为 {}", task.photo_id);
 
             tokio::spawn(async move {
+                let _permit = permit;
+
                 let engine = match lazy_engine_clone.get_or_load().await {
                     Ok(e) => e,
                     Err(e) => {
@@ -738,26 +740,15 @@ impl FaceService {
                     }
                 };
 
-                let res = tokio::task::spawn_blocking(move || {
-                    let _permit = permit;
-
-                    let handle = tokio::runtime::Handle::current();
-                    handle.block_on(async {
-                        if let Err(e) = Self::detect_and_recognize(
-                            &db_clone,
-                            &engine,
-                            task.photo_id,
-                            task.image_bytes,
-                            task.img_width,
-                            task.img_height,
-                        ).await {
-                            tracing::error!("人脸处理时出现问题, 照片id为: {}, 错误为: {}", task.photo_id, e);
-                        }
-                    })
-                }).await;
-
-                if let Err(e) = res {
-                    tracing::error!("人脸处理任务出现错误: {:?}", e);
+                if let Err(e) = Self::detect_and_recognize(
+                    &db_clone,
+                    &engine,
+                    task.photo_id,
+                    task.image_bytes,
+                    task.img_width,
+                    task.img_height,
+                ).await {
+                    tracing::error!("人脸处理时出现问题, 照片id为: {}, 错误为: {}", task.photo_id, e);
                 }
             });
         }

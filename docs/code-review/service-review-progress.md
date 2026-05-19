@@ -11,7 +11,7 @@
 | photo/timeline_stat_service.rs | 5 | 5 | 2 | ██████████ 100% |
 | photo/photo_service.rs | 6 | 6 | 2 | ██████████ 100% |
 | photo/feature_service.rs | 5 | 8 | 2 | ██████████ 100% |
-| photo/face_service.rs | 11 | 0 | 0 | ░░░░░░░░░░ 0% |
+| photo/face_service.rs | 11 | 11 | 2 | ██████████ 100% |
 
 > auth_service.rs 有 4 个 pub 函数 + 4 个私有辅助函数
 
@@ -177,3 +177,44 @@
 
 #### ✅ change_face_belonging() — 2026-05-19
 - 修复: 归属变更后重新计算原人物和目标人物的统计数据
+
+### face_service.rs
+
+#### ✅ detect_and_recognize() — 2026-05-19
+- 无需修复
+
+#### ✅ perform_clustering() — 2026-05-19
+- 无需修复
+
+#### ✅ sync_to_db() — 2026-05-19
+- 修复: partial_cmp unwrap 改为 unwrap_or(Ordering::Equal)，防止 NaN panic
+
+#### ✅ get_person_page() — 2026-05-19
+- 无需修复
+
+#### ✅ get_all_person() — 2026-05-19
+- 无需修复
+
+#### ✅ rename_person() — 2026-05-19
+- 无需修复
+
+#### ✅ merge_person() — 2026-05-19
+- 无需修复
+
+#### ✅ invalidate_person_cache() — 2026-05-19
+- 无需修复
+
+#### ✅ get_person_info() — 2026-05-19
+- 无需修复
+
+#### ✅ get_person_photo() — 2026-05-19
+- 无需修复
+
+#### ✅ delete_person() — 2026-05-19
+- 无需修复
+
+#### ✅ search_person() — 2026-05-19
+- 无需修复
+
+#### ✅ process_face_tasks() — 2026-05-19
+- 修复: 移除 block_on 包装，直接在 spawn 中执行 async 函数
