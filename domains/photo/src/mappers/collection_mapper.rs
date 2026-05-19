@@ -110,7 +110,7 @@ impl CollectionMapper {
             name: Set(name),
             description: Set(description),
             photo_count: Set(0),
-            cover_image_id: Set(None),
+            cover_file_id: Set(None),
             is_favorite: Set(is_favorite),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
@@ -128,7 +128,7 @@ impl CollectionMapper {
     /// - `name`: 新名称（可选）
     /// - `description`: 新描述（可选）
     /// - `photo_count`: 新照片数量（可选）
-    /// - `cover_image_id`: 新封面图片ID（可选，传None清除封面）
+    /// - `cover_file_id`: 新封面文件ID（可选，传None清除封面）
     ///
     /// # 返回
     /// 返回更新后的收藏夹模型
@@ -138,7 +138,7 @@ impl CollectionMapper {
         name: Option<String>,
         description: Option<String>,
         photo_count: Option<i64>,
-        cover_image_id: Option<Option<i64>>,
+        cover_file_id: Option<Option<String>>,
     ) -> Result<collection::Model, AppError> {
         let existing = Self::query_by_id(db, id).await?;
         let mut active: collection::ActiveModel = existing.into();
@@ -152,8 +152,8 @@ impl CollectionMapper {
         if let Some(c) = photo_count {
             active.photo_count = Set(c);
         }
-        if let Some(c) = cover_image_id {
-            active.cover_image_id = Set(c);
+        if let Some(c) = cover_file_id {
+            active.cover_file_id = Set(c);
         }
         active.updated_at = Set(Utc::now().into());
 
