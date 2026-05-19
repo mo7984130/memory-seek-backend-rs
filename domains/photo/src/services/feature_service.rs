@@ -5,7 +5,7 @@ use common::constants::redis_keys::photo::face_person_name;
 use common::error::AppError;
 use common::utils::RedisExt;
 use deadpool_redis::Pool;
-use entities::{face_feature, DrVector};
+use entities::{face_feature, Embedding512};
 use std::collections::HashMap;
 
 use crate::state::PhotoState;
@@ -94,7 +94,7 @@ impl FeatureService {
             Some(max_feature_id),
             Some(max_score),
             Some(person.total_photo_count - 1),
-            Some(DrVector::new(new_centroid.to_vec())),
+            Some(Embedding512::new(new_centroid.to_vec())),
             Some(old_weight - 1.0),
         ).await?;
 
@@ -158,7 +158,7 @@ impl FeatureService {
         let embeddings: Vec<&[f32]> = features.iter().map(|f| f.embedding.as_slice()).collect();
         let centroid = vector_utils::calculate_centroid(&embeddings);
         let centroid = vector_utils::l2_normalize(&centroid);
-        let centroid_embedding = DrVector::new(centroid.to_vec());
+        let centroid_embedding = Embedding512::new(centroid.to_vec());
 
         let total_weight = features.len() as f32;
 
