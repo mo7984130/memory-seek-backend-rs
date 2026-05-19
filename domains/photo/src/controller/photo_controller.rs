@@ -1,6 +1,5 @@
-use common::models::UserId;
 use crate::models::photo::{
-    CursorPageVO, Md5Query, PhotoCursorQuery, PhotoVO, TimeRangeVO, UploadWithCreatedAtQuery,
+    CursorPageVO, Md5Query, PhotoCursorQuery, PhotoVO, TimeRange, UploadWithCreatedAtQuery,
 };
 use crate::services::photo_service::PhotoService;
 use crate::state::PhotoState;
@@ -12,10 +11,12 @@ use axum::http::{StatusCode, header};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
 use common::error::AppError;
+use common::models::UserId;
 use common::models::{ImageToken, ImageTokenType};
 use common::r::R;
 use common::utils::ResultExt;
 use std::sync::Arc;
+use std::vec;
 use tracing::debug;
 
 pub struct PhotoController;
@@ -29,6 +30,10 @@ enum ImageDownloadType {
 }
 
 impl PhotoController {
+    /// 构建需要认证的照片相关路由
+    ///
+    /// # 返回
+    /// 包含上传、查询、删除等路由的 `Router`
     pub fn routes() -> Router<Arc<PhotoState>> {
         Router::new()
             .route("/upload", post(Self::upload))
@@ -42,6 +47,10 @@ impl PhotoController {
             .route("/{id}", delete(Self::delete_photo))
     }
 
+    /// 构建公开的图片访问路由（无需认证）
+    ///
+    /// # 返回
+    /// 包含图片获取、缩略图、预览图、原图、裁剪图等路由的 `Router`
     pub fn public_routes() -> Router<Arc<PhotoState>> {
         Router::new()
             .route("/{token}", get(Self::get_image))
@@ -51,6 +60,19 @@ impl PhotoController {
             .route("/{token}/crop", get(Self::get_crop))
     }
 
+    /// 上传照片
+    ///
+    /// # 参数
+    /// - `state`: 应用状态，包含数据库连接和存储客户端
+    /// - `user_id`: 当前认证用户的 ID
+    /// - `multipart`: multipart 表单数据，包含上传的文件
+    ///
+    /// # 返回
+    /// 返回上传成功后的照片信息
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: 表单数据无效或未找到上传文件
+    /// - `AppError`: 文件读取或上传失败
     async fn upload(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -76,6 +98,20 @@ impl PhotoController {
         Ok(R::ok(photo))
     }
 
+    /// 上传照片并指定创建时间（仅管理员可用）
+    ///
+    /// # 参数
+    /// - `state`: 应用状态，包含数据库连接和存储客户端
+    /// - `user_id`: 当前认证用户的 ID（必须为管理员）
+    /// - `query`: 查询参数，包含自定义的创建时间
+    /// - `multipart`: multipart 表单数据，包含上传的文件
+    ///
+    /// # 返回
+    /// 返回上传成功后的照片信息
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: 非管理员用户、表单数据无效或未找到上传文件
+    /// - `AppError`: 文件读取或上传失败
     async fn upload_with_created_at(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -112,6 +148,18 @@ impl PhotoController {
         Ok(R::ok(photo))
     }
 
+    /// 使用游标分页获取当前用户的照片列表
+    ///
+    /// # 参数
+    /// - `state`: 应用状态
+    /// - `user_id`: 当前认证用户的 ID
+    /// - `query`: 游标分页查询参数
+    ///
+    /// # 返回
+    /// 返回游标分页的照片列表
+    ///
+    /// # 错误
+    /// - `AppError`: 查询失败
     async fn get_photos_cursor(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -121,6 +169,18 @@ impl PhotoController {
         Ok(R::ok(result))
     }
 
+    /// 批量检查 MD5 对应的照片是否已存在
+    ///
+    /// # 参数
+    /// - `state`: 应用状态
+    /// - `params`: 包含多个 MD5 值的查询参数
+    /// - `user_id`: 当前认证用户的 ID
+    ///
+    /// # 返回
+    /// 返回与输入 MD5 列表对应的布尔值列表，表示每个 MD5 是否已存在
+    ///
+    /// # 错误
+    /// - `AppError`: 查询失败
     async fn md5_exist(
         State(state): State<Arc<PhotoState>>,
         Query(params): Query<Md5Query>,
@@ -130,13 +190,33 @@ impl PhotoController {
         Ok(R::ok(exists))
     }
 
+    /// 获取所有照片的时间范围（最早和最晚的拍摄时间）
+    ///
+    /// # 参数
+    /// - `state`: 应用状态
+    ///
+    /// # 返回
+    /// 返回照片的最早和最晚时间范围
+    ///
+    /// # 错误
+    /// - `AppError`: 查询失败
     async fn get_time_range(
         State(state): State<Arc<PhotoState>>,
-    ) -> Result<R<TimeRangeVO>, AppError> {
-        let (min, max) = PhotoService::get_time_range(&state).await?;
-        Ok(R::ok(TimeRangeVO { min, max }))
+    ) -> Result<R<TimeRange>, AppError> {
+        let time_range = PhotoService::get_time_range(&state).await?;
+        Ok(R::ok(time_range))
     }
 
+    /// 删除指定照片
+    ///
+    /// # 参数
+    /// - `state`: 应用状态
+    /// - `user_id`: 当前认证用户的 ID
+    /// - `id`: 要删除的照片 ID（路径参数）
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: 照片 ID 格式无效
+    /// - `AppError`: 删除失败或无权删除
     async fn delete_photo(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -146,11 +226,24 @@ impl PhotoController {
             .parse()
             .map_err(|_| AppError::bad_request("无效的照片ID"))?;
 
-        PhotoService::delete_photo(&state, user_id.0, photo_id).await?;
+        PhotoService::delete_photos(&state, user_id, vec![photo_id]).await?;
 
         Ok(R::ok(()))
     }
 
+    // 处理图片下载请求，根据下载类型从 OSS 获取对应规格的图片
+    //
+    // # 参数
+    // - `state`: 应用状态
+    // - `token`: 加密的图片 token
+    // - `download_type`: 下载类型（缩略图/预览图/原图/裁剪图）
+    //
+    // # 返回
+    // 返回包含图片数据和正确 Content-Type 的 HTTP 响应
+    //
+    // # 错误
+    // - `AppError::BadRequest`: token 无效或不包含裁剪信息
+    // - `AppError`: OSS 下载失败
     async fn handle_image_download(
         state: &Arc<PhotoState>,
         token: &str,
@@ -208,6 +301,18 @@ impl PhotoController {
             .unwrap())
     }
 
+    /// 根据 token 类型自动获取对应规格的图片
+    ///
+    /// # 参数
+    /// - `state`: 应用状态
+    /// - `token`: 加密的图片 token，内含类型信息
+    ///
+    /// # 返回
+    /// 返回对应规格的图片 HTTP 响应
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: token 无效
+    /// - `AppError`: 图片获取失败
     async fn get_image(
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
@@ -228,6 +333,18 @@ impl PhotoController {
         Self::handle_image_download(&state, &token, download_type).await
     }
 
+    /// 获取缩略图（300px 宽，webp 格式）
+    ///
+    /// # 参数
+    /// - `state`: 应用状态
+    /// - `token`: 加密的图片 token
+    ///
+    /// # 返回
+    /// 返回缩略图的 HTTP 响应
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: token 无效
+    /// - `AppError`: 图片获取失败
     async fn get_thumbnail(
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
@@ -235,6 +352,18 @@ impl PhotoController {
         Self::handle_image_download(&state, &token, ImageDownloadType::Thumbnail).await
     }
 
+    /// 获取预览图（1920px 宽，webp 格式）
+    ///
+    /// # 参数
+    /// - `state`: 应用状态
+    /// - `token`: 加密的图片 token
+    ///
+    /// # 返回
+    /// 返回预览图的 HTTP 响应
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: token 无效
+    /// - `AppError`: 图片获取失败
     async fn get_preview(
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
@@ -242,6 +371,18 @@ impl PhotoController {
         Self::handle_image_download(&state, &token, ImageDownloadType::Preview).await
     }
 
+    /// 获取原始图片（未经处理）
+    ///
+    /// # 参数
+    /// - `state`: 应用状态
+    /// - `token`: 加密的图片 token
+    ///
+    /// # 返回
+    /// 返回原始图片的 HTTP 响应
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: token 无效
+    /// - `AppError`: 图片获取失败
     async fn get_original(
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
@@ -249,6 +390,18 @@ impl PhotoController {
         Self::handle_image_download(&state, &token, ImageDownloadType::Original).await
     }
 
+    /// 获取裁剪后的图片（200px 宽，webp 格式）
+    ///
+    /// # 参数
+    /// - `state`: 应用状态
+    /// - `token`: 加密的图片 token，需包含裁剪区域信息
+    ///
+    /// # 返回
+    /// 返回裁剪后图片的 HTTP 响应
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: token 无效或不包含裁剪信息
+    /// - `AppError`: 图片获取失败
     async fn get_crop(
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
@@ -257,6 +410,13 @@ impl PhotoController {
     }
 }
 
+// 根据文件扩展名返回对应的 Content-Type
+//
+// # 参数
+// - `file_id`: 文件 ID 或路径，用于提取扩展名
+//
+// # 返回
+// 返回对应的 MIME 类型字符串，未知扩展名默认返回 "image/jpeg"
 fn get_content_type(file_id: &str) -> &'static str {
     let ext = file_id.split('.').last().unwrap_or("jpg").to_lowercase();
     match ext.as_str() {
