@@ -34,6 +34,12 @@ pub struct ImageToken {
 
 impl ImageToken {
     /// 创建缩略图 token
+    ///
+    /// # 参数
+    /// - `file_id`: 图片文件 ID
+    ///
+    /// # 返回
+    /// 返回类型为 `Thumbnail` 的 `ImageToken`
     pub fn thumbnail(file_id: String) -> Self {
         Self {
             file_id,
@@ -43,6 +49,12 @@ impl ImageToken {
     }
 
     /// 创建预览图 token
+    ///
+    /// # 参数
+    /// - `file_id`: 图片文件 ID
+    ///
+    /// # 返回
+    /// 返回类型为 `Preview` 的 `ImageToken`
     pub fn preview(file_id: String) -> Self {
         Self {
             file_id,
@@ -52,6 +64,12 @@ impl ImageToken {
     }
 
     /// 创建原图 token
+    ///
+    /// # 参数
+    /// - `file_id`: 图片文件 ID
+    ///
+    /// # 返回
+    /// 返回类型为 `Original` 的 `ImageToken`
     pub fn original(file_id: String) -> Self {
         Self {
             file_id,
@@ -61,6 +79,13 @@ impl ImageToken {
     }
 
     /// 创建裁剪图 token（人脸封面）
+    ///
+    /// # 参数
+    /// - `file_id`: 图片文件 ID
+    /// - `bbox`: 人脸边界框，用于定位裁剪区域
+    ///
+    /// # 返回
+    /// 返回类型为 `Crop` 且包含 `bbox` 的 `ImageToken`
     pub fn crop(file_id: String, bbox: FaceBBoxPixels) -> Self {
         Self {
             file_id,
