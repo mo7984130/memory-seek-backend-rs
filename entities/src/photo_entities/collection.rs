@@ -23,6 +23,10 @@ pub enum Relation {
 }
 
 impl Related<super::collection_photo::Entity> for Entity {
+    /// 返回 Collection 到 CollectionPhoto 的一对多关系定义
+    ///
+    /// # 返回
+    /// `Relation::CollectionPhotos` 的关系定义
     fn to() -> RelationDef {
         Relation::CollectionPhotos.def()
     }

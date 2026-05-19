@@ -23,6 +23,10 @@ pub enum Relation {
 }
 
 impl Related<super::comment::Entity> for Entity {
+    /// 返回 CommentLike 到 Comment 的多对一关系定义
+    ///
+    /// # 返回
+    /// `Relation::Comment` 的关系定义
     fn to() -> RelationDef {
         Relation::Comment.def()
     }

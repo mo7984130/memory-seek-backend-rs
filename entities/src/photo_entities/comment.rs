@@ -27,12 +27,20 @@ pub enum Relation {
 }
 
 impl Related<super::photo::Entity> for Entity {
+    /// 返回 Comment 到 Photo 的多对一关系定义
+    ///
+    /// # 返回
+    /// `Relation::Photo` 的关系定义
     fn to() -> RelationDef {
         Relation::Photo.def()
     }
 }
 
 impl Related<super::comment_like::Entity> for Entity {
+    /// 返回 Comment 到 CommentLike 的一对多关系定义
+    ///
+    /// # 返回
+    /// `Relation::Likes` 的关系定义
     fn to() -> RelationDef {
         Relation::Likes.def()
     }

@@ -41,12 +41,28 @@ pub struct UserDTO {
 }
 
 impl UserDTO {
+    /// 设置访问令牌信息并返回自身（Builder 模式）
+    ///
+    /// # 参数
+    /// - `token`: JWT 访问令牌
+    /// - `expire`: 令牌过期时间
+    ///
+    /// # 返回
+    /// 附加了访问令牌信息的 `UserDTO`
     pub fn with_access_token(mut self, token: String, expire: DateTime<Utc>) -> Self {
         self.access_token = Some(token);
         self.access_token_expire_at = Some(expire);
         self
     }
 
+    /// 设置刷新令牌信息并返回自身（Builder 模式）
+    ///
+    /// # 参数
+    /// - `token`: JWT 刷新令牌
+    /// - `expire`: 令牌过期时间
+    ///
+    /// # 返回
+    /// 附加了刷新令牌信息的 `UserDTO`
     pub fn with_refresh_token(mut self, token: String, expire: DateTime<Utc>) -> Self {
         self.refresh_token = Some(token);
         self.refresh_token_expire_at = Some(expire);

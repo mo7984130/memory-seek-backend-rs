@@ -15,48 +15,91 @@ use sqlx::Row;
 pub struct PostgreVector<const N: usize>(pub Vec<f32>);
 
 impl<const N: usize> PostgreVector<N> {
+    /// 创建新的 `PostgreVector` 实例
+    ///
+    /// # 参数
+    /// - `v`: 底层浮点数向量
     pub fn new(v: Vec<f32>) -> Self {
         PostgreVector(v)
     }
 
+    /// 克隆并返回底层 `Vec<f32>`
+    ///
+    /// # 返回
+    /// 向量数据的深拷贝
     pub fn to_vec(&self) -> Vec<f32> {
         self.0.clone()
     }
 
+    /// 返回底层数据的只读切片引用
+    ///
+    /// # 返回
+    /// 向量数据的 `&[f32]` 切片
     pub fn as_slice(&self) -> &[f32] {
         &self.0
     }
 
+    /// 返回向量的实际维度（元素数量）
+    ///
+    /// # 返回
+    /// 向量中浮点数的个数
     pub fn dim(&self) -> usize {
         self.0.len()
     }
 }
 
 impl<const N: usize> From<Vec<f32>> for PostgreVector<N> {
+    /// 从 `Vec<f32>` 构建 `PostgreVector`
+    ///
+    /// # 参数
+    /// - `vec`: 浮点数向量
     fn from(vec: Vec<f32>) -> Self {
         Self(vec)
     }
 }
 
 impl<const N: usize> From<PostgreVector<N>> for Vec<f32> {
+    /// 将 `PostgreVector` 转换为 `Vec<f32>`
+    ///
+    /// # 参数
+    /// - `val`: `PostgreVector` 实例
     fn from(val: PostgreVector<N>) -> Self {
         val.0
     }
 }
 
 impl<const N: usize> From<Vector> for PostgreVector<N> {
+    /// 从 pgvector 的 `Vector` 类型转换
+    ///
+    /// # 参数
+    /// - `v`: pgvector 原生向量
     fn from(v: Vector) -> Self {
         PostgreVector(v.into())
     }
 }
 
 impl<const N: usize> From<PostgreVector<N>> for Vector {
+    /// 将 `PostgreVector` 转换为 pgvector 的 `Vector` 类型
+    ///
+    /// # 参数
+    /// - `val`: `PostgreVector` 实例
     fn from(val: PostgreVector<N>) -> Self {
         Vector::from(val.0)
     }
 }
 
 impl<const N: usize> TryGetable for PostgreVector<N> {
+    /// 从 PostgreSQL 查询结果中提取向量列
+    ///
+    /// # 参数
+    /// - `res`: Sea-ORM 查询结果
+    /// - `index`: 列索引
+    ///
+    /// # 返回
+    /// 解码后的 `PostgreVector` 实例
+    ///
+    /// # 错误
+    /// - `TryGetError`: 行不是 PostgreSQL 类型或向量解码失败
     fn try_get_by<I: ColIdx>(res: &QueryResult, index: I) -> Result<Self, TryGetError> {
         let pg_row = res.try_as_pg_row().ok_or_else(|| {
             TryGetError::DbErr(sea_orm::DbErr::Type("Not a PostgreSQL row".into()))
@@ -71,6 +114,18 @@ impl<const N: usize> TryGetable for PostgreVector<N> {
 }
 
 impl<const N: usize> ValueType for PostgreVector<N> {
+    /// 从 Sea-ORM `Value` 尝试转换为 `PostgreVector`
+    ///
+    /// 支持解析格式为 `[1.0,2.0,3.0]` 的字符串值。
+    ///
+    /// # 参数
+    /// - `v`: Sea-ORM 值
+    ///
+    /// # 返回
+    /// 解析成功的 `PostgreVector` 实例
+    ///
+    /// # 错误
+    /// - `ValueTypeErr`: 输入不是字符串类型或格式不合法
     fn try_from(v: Value) -> Result<Self, ValueTypeErr> {
         match v {
             Value::String(Some(s)) => {
@@ -85,20 +140,38 @@ impl<const N: usize> ValueType for PostgreVector<N> {
         }
     }
 
+    /// 返回类型名称，格式为 `PostgreVector<N>`
+    ///
+    /// # 返回
+    /// 包含泛型维度参数的类型名字符串
     fn type_name() -> String {
         format!("PostgreVector<{}>", N)
     }
 
+    /// 返回数组元素类型为 `Float`
+    ///
+    /// # 返回
+    /// `ArrayType::Float`
     fn array_type() -> sea_orm::sea_query::ArrayType {
         sea_orm::sea_query::ArrayType::Float
     }
 
+    /// 返回 PostgreSQL `vector` 自定义列类型
+    ///
+    /// # 返回
+    /// `ColumnType::Custom("vector")`
     fn column_type() -> ColumnType {
         ColumnType::Custom(SeaRc::new(Alias::new("vector")))
     }
 }
 
 impl<const N: usize> From<PostgreVector<N>> for Value {
+    /// 将 `PostgreVector` 序列化为 Sea-ORM `Value::String`
+    ///
+    /// 输出格式为 `[1.0,2.0,3.0]`，整数元素保留一位小数。
+    ///
+    /// # 参数
+    /// - `val`: `PostgreVector` 实例
     fn from(val: PostgreVector<N>) -> Self {
         let s = format!(
             "[{}]",
@@ -119,6 +192,10 @@ impl<const N: usize> From<PostgreVector<N>> for Value {
 }
 
 impl<const N: usize> Nullable for PostgreVector<N> {
+    /// 返回表示 NULL 的 `Value::String(None)`
+    ///
+    /// # 返回
+    /// 空值
     fn null() -> Value {
         Value::String(None)
     }
@@ -127,12 +204,20 @@ impl<const N: usize> Nullable for PostgreVector<N> {
 impl<const N: usize> Deref for PostgreVector<N> {
     type Target = [f32];
 
+    /// 解引用为底层 `&[f32]` 切片
+    ///
+    /// # 返回
+    /// 向量数据的只读切片引用
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl<const N: usize> DerefMut for PostgreVector<N> {
+    /// 可变解引用为底层 `&mut [f32]` 切片
+    ///
+    /// # 返回
+    /// 向量数据的可变切片引用
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

@@ -39,12 +39,20 @@ pub enum Relation {
 }
 
 impl Related<super::photo::Entity> for Entity {
+    /// 返回 FaceFeature 到 Photo 的多对一关系定义
+    ///
+    /// # 返回
+    /// `Relation::Photo` 的关系定义
     fn to() -> RelationDef {
         Relation::Photo.def()
     }
 }
 
 impl Related<super::face_person::Entity> for Entity {
+    /// 返回 FaceFeature 到 FacePerson 的多对一关系定义
+    ///
+    /// # 返回
+    /// `Relation::Person` 的关系定义
     fn to() -> RelationDef {
         Relation::Person.def()
     }

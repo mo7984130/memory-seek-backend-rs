@@ -29,18 +29,30 @@ pub enum Relation {
 }
 
 impl Related<super::face_feature::Entity> for Entity {
+    /// 返回 Photo 到 FaceFeature 的一对多关系定义
+    ///
+    /// # 返回
+    /// `Relation::FaceFeatures` 的关系定义
     fn to() -> RelationDef {
         Relation::FaceFeatures.def()
     }
 }
 
 impl Related<super::collection_photo::Entity> for Entity {
+    /// 返回 Photo 到 CollectionPhoto 的一对多关系定义
+    ///
+    /// # 返回
+    /// `Relation::CollectionPhotos` 的关系定义
     fn to() -> RelationDef {
         Relation::CollectionPhotos.def()
     }
 }
 
 impl Related<super::comment::Entity> for Entity {
+    /// 返回 Photo 到 Comment 的一对多关系定义
+    ///
+    /// # 返回
+    /// `Relation::Comments` 的关系定义
     fn to() -> RelationDef {
         Relation::Comments.def()
     }
