@@ -12,6 +12,13 @@ pub struct TimelineStatService;
 
 impl TimelineStatService {
     /// 递增时间线统计（委托给事务版本）
+    ///
+    /// # 参数
+    /// - `state`: 照片域状态
+    /// - `created_at`: 照片创建时间
+    ///
+    /// # 错误
+    /// - `AppError`: 更新统计失败
     pub async fn incr_stat(
         state: &PhotoState,
         created_at: DateTime<Utc>,
@@ -20,6 +27,13 @@ impl TimelineStatService {
     }
 
     /// 递减时间线统计（委托给事务版本）
+    ///
+    /// # 参数
+    /// - `state`: 照片域状态
+    /// - `created_at`: 照片创建时间
+    ///
+    /// # 错误
+    /// - `AppError`: 更新统计失败
     pub async fn decr_stat(
         state: &PhotoState,
         created_at: DateTime<Utc>,
@@ -28,6 +42,13 @@ impl TimelineStatService {
     }
 
     /// 递增时间线统计（支持事务，使用 upsert 保证原子性）
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接（支持事务）
+    /// - `created_at`: 照片创建时间
+    ///
+    /// # 错误
+    /// - `AppError`: 更新统计失败
     pub async fn incr_stat_txn<C: ConnectionTrait>(
         db: &C,
         created_at: DateTime<Utc>,
@@ -65,8 +86,14 @@ impl TimelineStatService {
 
     /// 递减时间线统计（支持事务）
     ///
-    /// count > 1 时原子递减
-    /// count <= 1 时删除记录
+    /// count > 1 时原子递减，count <= 1 时删除记录。
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接（支持事务）
+    /// - `created_at`: 照片创建时间
+    ///
+    /// # 错误
+    /// - `AppError`: 查询或更新统计失败
     pub async fn decr_stat_txn<C: ConnectionTrait>(
         db: &C,
         created_at: DateTime<Utc>,
@@ -117,6 +144,15 @@ impl TimelineStatService {
     }
 
     /// 获取时间线统计列表
+    ///
+    /// # 参数
+    /// - `state`: 照片域状态
+    ///
+    /// # 返回
+    /// 返回按日期倒序排列的时间线统计列表
+    ///
+    /// # 错误
+    /// - `AppError`: 查询统计失败
     pub async fn get_stats(
         state: &PhotoState,
     ) -> Result<Vec<PhotoTimelineStatVO>, AppError> {

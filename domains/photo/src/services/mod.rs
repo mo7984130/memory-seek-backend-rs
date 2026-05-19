@@ -1,3 +1,7 @@
+//! 照片域服务层
+//!
+//! 提供照片管理、收藏、评论、人脸/特征识别和时间线统计等业务逻辑。
+
 pub mod photo_service;
 pub mod collection_service;
 #[cfg(feature = "face_recognition")]

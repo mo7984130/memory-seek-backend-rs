@@ -28,10 +28,9 @@ pub struct FaceService;
 
 impl FaceService {
     /// 检测并识别人脸
-    /// 
-    /// 对照片进行人脸检测，提取特征向量并保存
-    /// 过滤掉置信度低和面积小的人脸
-    /// 
+    ///
+    /// 对照片进行人脸检测，提取特征向量并保存。过滤掉置信度低和面积小的人脸。
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `face_engine`: 人脸引擎（检测器和特征提取器）
@@ -39,9 +38,9 @@ impl FaceService {
     /// - `image_bytes`: 图片字节数据
     /// - `img_width`: 图片宽度（像素）
     /// - `img_height`: 图片高度（像素）
-    /// 
-    /// # 返回
-    /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 人脸检测、对齐或特征提取失败
     pub async fn detect_and_recognize(
         db: &sea_orm::DatabaseConnection,
         face_engine: &FaceEngine,
@@ -120,18 +119,19 @@ impl FaceService {
     }
 
     /// 执行人脸聚类
-    /// 
-    /// 使用Union-Find算法对人脸特征进行聚类
-    /// 通过种子点生长阶段优化聚类结果
-    /// 将聚类结果同步到数据库
-    /// 
+    ///
+    /// 使用 Union-Find 算法对人脸特征进行聚类，通过种子点生长阶段优化聚类结果，并将聚类结果同步到数据库。
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `seed_radius`: 种子点半径阈值
     /// - `min_points`: 最小聚类点数
-    /// 
+    ///
     /// # 返回
     /// 返回聚类结果列表
+    ///
+    /// # 错误
+    /// - `AppError`: 查询特征或同步聚类结果失败
     pub async fn perform_clustering(
         db: &sea_orm::DatabaseConnection,
         seed_radius: f32,
@@ -170,13 +170,15 @@ impl FaceService {
     }
 
     /// 将聚类结果同步到数据库
-    /// 
-    /// 为每个聚类创建人物记录，并更新特征的关联
-    /// 使用事务保证原子性
-    /// 
+    ///
+    /// 为每个聚类创建人物记录，并更新特征的关联。使用事务保证原子性。
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `seeds`: 聚类结果列表
+    ///
+    /// # 错误
+    /// - `AppError`: 事务执行失败
     async fn sync_to_db(
         db: &sea_orm::DatabaseConnection,
         seeds: &[PersonCluster],
@@ -242,15 +244,16 @@ impl FaceService {
     }
 
     /// 获取人物列表（游标分页）
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池
+    /// - `state`: 照片域状态（包含数据库连接、Redis 和加密密钥）
     /// - `query`: 分页查询参数
-    /// - `token_cipher`: 加密密钥
-    /// 
+    ///
     /// # 返回
     /// 返回分页人物列表
+    ///
+    /// # 错误
+    /// - `AppError`: 查询人物或关联照片失败
     pub async fn get_person_page(
         state: &PhotoState,
         query: crate::models::face::PersonPageQuery,
@@ -310,12 +313,15 @@ impl FaceService {
     }
 
     /// 获取所有人物简单列表
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// 
+    /// - `state`: 照片域状态
+    ///
     /// # 返回
-    /// 返回所有人物的简单信息列表（ID和名称）
+    /// 返回所有人物的简单信息列表（ID 和名称）
+    ///
+    /// # 错误
+    /// - `AppError`: 查询人物列表失败
     pub async fn get_all_person(
         state: &PhotoState,
     ) -> Result<Vec<FacePersonSimpleVO>, AppError> {
@@ -331,18 +337,17 @@ impl FaceService {
     }
 
     /// 重命名人物
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池（用于清除缓存）
+    /// - `state`: 照片域状态
     /// - `person_id`: 人物ID
     /// - `new_name`: 新名称
-    /// 
+    ///
     /// # 返回
     /// 返回更新后的人物VO
-    /// 
+    ///
     /// # 错误
-    /// - 名称已存在返回400错误
+    /// - `AppError::BadRequest`: 名称已存在
     pub async fn rename_person(
         state: &PhotoState,
         person_id: i64,
@@ -369,23 +374,20 @@ impl FaceService {
     }
 
     /// 合并两个人物
-    /// 
-    /// 将源人物的所有特征转移到目标人物
-    /// 重新计算目标人物的质心向量和照片数量
-    /// 删除源人物
-    /// 使用事务保证原子性
-    /// 
+    ///
+    /// 将源人物的所有特征转移到目标人物，重新计算目标人物的质心向量和照片数量，删除源人物。使用事务保证原子性。
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池（用于清除缓存）
+    /// - `state`: 照片域状态
     /// - `source_id`: 源人物ID
     /// - `target_id`: 目标人物ID
-    /// 
+    ///
     /// # 返回
     /// 返回合并后的人物VO
-    /// 
+    ///
     /// # 错误
-    /// - 源和目标相同返回400错误
+    /// - `AppError::BadRequest`: 源和目标人物相同
+    /// - `AppError::InternalServerError`: 事务执行失败
     pub async fn merge_person(
         state: &PhotoState,
         source_id: i64,
@@ -454,10 +456,13 @@ impl FaceService {
     }
 
     /// 清除人物缓存
-    /// 
+    ///
     /// # 参数
-    /// - `redis`: Redis连接池
+    /// - `redis`: Redis 连接池
     /// - `person_id`: 人物ID
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 删除操作失败（已忽略错误）
     async fn invalidate_person_cache(redis: &Pool, person_id: i64) -> Result<(), AppError> {
         let key = face_person_name(person_id);
         redis.delete(&key).await.ok();
@@ -465,14 +470,16 @@ impl FaceService {
     }
 
     /// 获取人物详细信息
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片域状态
     /// - `person_id`: 人物ID
-    /// - `token_cipher`: 加密密钥
-    /// 
+    ///
     /// # 返回
-    /// 返回人物VO，包含封面图token
+    /// 返回人物 VO，包含封面图加密 token
+    ///
+    /// # 错误
+    /// - `AppError`: 查询人物或关联特征失败
     pub async fn get_person_info(
         state: &PhotoState,
         person_id: i64,
@@ -510,18 +517,19 @@ impl FaceService {
     }
 
     /// 获取人物的照片列表
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池
+    /// - `state`: 照片域状态
     /// - `user_id`: 用户ID（用于查询收藏状态）
     /// - `person_id`: 人物ID
     /// - `cursor`: 游标值（特征ID）
     /// - `size`: 每页数量
-    /// - `token_cipher`: 加密密钥
-    /// 
+    ///
     /// # 返回
     /// 返回分页的照片列表
+    ///
+    /// # 错误
+    /// - `AppError`: 查询特征、照片或收藏状态失败
     pub async fn get_person_photo(
         state: &PhotoState,
         user_id: i64,
@@ -573,16 +581,18 @@ impl FaceService {
     }
 
     /// 删除人物
-    /// 
-    /// 将人物关联的所有特征解除关联，然后删除人物
-    /// 使用事务保证原子性
-    /// 
+    ///
+    /// 将人物关联的所有特征解除关联，然后删除人物。使用事务保证原子性。
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片域状态
     /// - `person_id`: 人物ID
-    /// 
+    ///
     /// # 返回
-    /// 成功返回true
+    /// 成功返回 `true`
+    ///
+    /// # 错误
+    /// - `AppError::InternalServerError`: 事务执行失败
     pub async fn delete_person(state: &PhotoState, person_id: i64) -> Result<bool, AppError> {
         let _person = FacePersonMapper::query_by_id(&state.db, person_id).await?;
 
@@ -609,14 +619,16 @@ impl FaceService {
     }
 
     /// 搜索人物（游标分页）
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片域状态
     /// - `query`: 搜索查询参数
-    /// - `token_cipher`: 加密密钥
-    /// 
+    ///
     /// # 返回
     /// 返回匹配的人物列表
+    ///
+    /// # 错误
+    /// - `AppError`: 查询人物或关联照片失败
     pub async fn search_person(
         state: &PhotoState,
         query: crate::models::face::PersonSearchQuery,
@@ -703,10 +715,9 @@ impl FaceService {
     }
 
     /// 处理人脸检测任务的后台任务
-    /// 
-    /// 从通道接收照片上传任务，执行人脸检测和聚类
-    /// 使用懒加载引擎，模型在第一次请求时加载，闲置10分钟后自动释放
-    /// 
+    ///
+    /// 从通道接收照片上传任务，执行人脸检测和聚类。使用懒加载引擎，模型在第一次请求时加载，闲置 10 分钟后自动释放。
+    ///
     /// # 参数
     /// - `db`: 数据库连接
     /// - `rx`: 人脸检测任务接收通道

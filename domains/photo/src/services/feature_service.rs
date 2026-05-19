@@ -14,14 +14,13 @@ pub struct FeatureService;
 
 impl FeatureService {
     /// 删除单个人脸特征并更新人物统计（减量计算）
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池（用于清除缓存）
+    /// - `state`: 照片域状态
     /// - `feature`: 已查询的特征模型（避免重复查询）
-    /// 
-    /// # 返回
-    /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 删除特征或更新人物统计失败
     pub async fn delete_feature_with_decrement(
         state: &PhotoState,
         feature: face_feature::Model,
@@ -38,12 +37,14 @@ impl FeatureService {
     }
 
     /// 从人物统计中减去特征贡献（减量计算）
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池
+    /// - `state`: 照片域状态
     /// - `person_id`: 人物ID
     /// - `feature`: 被删除的特征
+    ///
+    /// # 错误
+    /// - `AppError`: 查询或更新人物统计失败
     async fn decrement_person_stats(
         state: &PhotoState,
         person_id: i64,
@@ -103,14 +104,13 @@ impl FeatureService {
     }
 
     /// 删除单个人脸特征并重新计算人物统计（全量计算）
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池（用于清除缓存）
+    /// - `state`: 照片域状态
     /// - `feature_id`: 特征ID
-    /// 
-    /// # 返回
-    /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 查询或删除特征失败
     pub async fn delete_feature(
         state: &PhotoState,
         feature_id: i64,
@@ -128,20 +128,16 @@ impl FeatureService {
     }
 
     /// 重新计算人物统计信息（全量计算）
-    /// 
-    /// 更新以下字段：
-    /// - total_photo_count: 特征数量
-    /// - centroid_embedding: 质心向量
-    /// - total_weight_count: 总权重
-    /// - max_score_feature_id: 最高分特征ID
-    /// - max_score: 最高分
-    /// 
-    /// 如果人物没有关联特征，则删除人物
-    /// 
+    ///
+    /// 更新以下字段：total_photo_count、centroid_embedding、total_weight_count、max_score_feature_id、max_score。
+    /// 如果人物没有关联特征，则删除人物。
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池
+    /// - `state`: 照片域状态
     /// - `person_id`: 人物ID
+    ///
+    /// # 错误
+    /// - `AppError`: 查询特征或更新人物统计失败
     pub async fn recalculate_person_stats(
         state: &PhotoState,
         person_id: i64,
@@ -185,10 +181,13 @@ impl FeatureService {
     }
 
     /// 清除人物缓存
-    /// 
+    ///
     /// # 参数
-    /// - `redis`: Redis连接池
+    /// - `redis`: Redis 连接池
     /// - `person_id`: 人物ID
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 删除操作失败（已忽略错误）
     async fn invalidate_person_cache(redis: &Pool, person_id: i64) -> Result<(), AppError> {
         let key = face_person_name(person_id);
         redis.delete(&key).await.ok();
@@ -196,14 +195,16 @@ impl FeatureService {
     }
 
     /// 获取照片中的人脸特征列表
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池（用于缓存人物名称）
+    /// - `state`: 照片域状态
     /// - `photo_id`: 照片ID
-    /// 
+    ///
     /// # 返回
-    /// 返回人脸特征VO列表，包含人物名称
+    /// 返回人脸特征 VO 列表，包含人物名称
+    ///
+    /// # 错误
+    /// - `AppError`: 查询特征或人物名称失败
     pub async fn get_photo_features(
         state: &PhotoState,
         photo_id: i64,
@@ -257,14 +258,16 @@ impl FeatureService {
     }
 
     /// 批量获取人物名称
-    /// 
+    ///
     /// # 参数
     /// - `db`: 数据库连接
-    /// - `_redis`: Redis连接池（暂未使用缓存）
     /// - `person_ids`: 人物ID列表
-    /// 
+    ///
     /// # 返回
-    /// 返回以人物ID为键、名称为值的HashMap
+    /// 返回以人物 ID 为键、名称为值的 HashMap
+    ///
+    /// # 错误
+    /// - `AppError`: 查询人物列表失败
     async fn get_person_names_batch(
         db: &sea_orm::DatabaseConnection,
         person_ids: &[i64],
@@ -274,14 +277,14 @@ impl FeatureService {
     }
 
     /// 更改人脸特征的人物归属
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片域状态
     /// - `feature_id`: 人脸特征ID
     /// - `person_id`: 目标人物ID
-    /// 
-    /// # 返回
-    /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 查询特征、人物或更新归属失败
     pub async fn change_face_belonging(
         state: &PhotoState,
         feature_id: i64,
