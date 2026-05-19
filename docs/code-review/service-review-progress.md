@@ -8,7 +8,7 @@
 | user/user_service.rs | 7 | 7 | 2 | ██████████ 100% |
 | photo/comment_service.rs | 4 | 4 | 1 | ██████████ 100% |
 | photo/collection_service.rs | 12 | 12 | 2 | ██████████ 100% |
-| photo/timeline_stat_service.rs | 5 | 0 | 0 | ░░░░░░░░░░ 0% |
+| photo/timeline_stat_service.rs | 5 | 5 | 2 | ██████████ 100% |
 | photo/photo_service.rs | 6 | 0 | 0 | ░░░░░░░░░░ 0% |
 | photo/feature_service.rs | 5 | 0 | 0 | ░░░░░░░░░░ 0% |
 | photo/face_service.rs | 11 | 0 | 0 | ░░░░░░░░░░ 0% |
@@ -113,4 +113,21 @@
 - 修复: 移除 exists_in_collection 调用中不必要的 clone
 
 #### ✅ batch_remove_photos_from_collection() — 2026-05-19
+- 无需修复
+
+### timeline_stat_service.rs
+
+#### ✅ incr_stat() — 2026-05-19
+- 修复: 改为委托给 incr_stat_txn，消除重复代码
+
+#### ✅ decr_stat() — 2026-05-19
+- 修复: 改为委托给 decr_stat_txn，消除重复代码
+
+#### ✅ incr_stat_txn() — 2026-05-19
+- 修复: check-then-act 改为 upsert（ON CONFLICT DO UPDATE count = count + 1）
+
+#### ✅ decr_stat_txn() — 2026-05-19
+- 修复: count > 1 时使用 upsert 原子递减，count <= 1 时删除
+
+#### ✅ get_stats() — 2026-05-19
 - 无需修复
