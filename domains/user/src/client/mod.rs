@@ -48,6 +48,11 @@ pub struct UserClient {
 }
 
 impl UserClient {
+    /// 创建新的 `UserClient` 实例
+    ///
+    /// # 参数
+    /// - `base_url`: 用户服务的基础 URL
+    /// - `auth_client`: 用于认证的 `AuthClient` 实例
     pub fn new(base_url: &str, auth_client: Arc<AuthClient>) -> Self {
         Self {
             http: reqwest::Client::builder()
@@ -59,19 +64,31 @@ impl UserClient {
         }
     }
 
+    /// 返回用户服务的基础 URL
     pub fn base_url(&self) -> &str {
         &self.base_url
     }
 
+    /// 返回认证客户端的引用
     pub fn auth_client(&self) -> &Arc<AuthClient> {
         &self.auth_client
     }
 
+    /// 返回底层 reqwest HTTP 客户端的引用
     pub fn raw(&self) -> &reqwest::Client {
         &self.http
     }
 
-    /// 获取用户信息
+    /// 根据用户 ID 获取单个用户信息
+    ///
+    /// # 参数
+    /// - `user_id`: 目标用户的 ID
+    ///
+    /// # 返回
+    /// 返回包含用户详细信息的 `UserDTO`
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: HTTP 请求失败、响应解析失败或 API 返回错误时
     pub async fn get_user_info(&self, user_id: i64) -> Result<UserDTO> {
         let resp = self
             .auth_client
@@ -91,7 +108,16 @@ impl UserClient {
         Ok(user)
     }
 
-    /// 生成邀请码
+    /// 为指定用户生成邀请码
+    ///
+    /// # 参数
+    /// - `user_id`: 需要生成邀请码的用户 ID
+    ///
+    /// # 返回
+    /// 返回包含邀请码及过期时间的 `InviterCodeDTO`
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: HTTP 请求失败、响应解析失败或 API 返回错误时
     pub async fn generate_inviter_code(&self, user_id: i64) -> Result<InviterCodeDTO> {
         let resp = self
             .auth_client
@@ -111,7 +137,17 @@ impl UserClient {
         Ok(code)
     }
 
-    /// 修改昵称
+    /// 修改指定用户的昵称
+    ///
+    /// # 参数
+    /// - `user_id`: 需要修改昵称的用户 ID
+    /// - `new_nickname`: 新的昵称
+    ///
+    /// # 返回
+    /// 返回修改后的昵称
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: HTTP 请求失败、响应解析失败或 API 返回错误时
     pub async fn change_nickname(&self, user_id: i64, new_nickname: &str) -> Result<String> {
         let req = ChangeNicknameRequest {
             new_nickname: new_nickname.to_string(),
@@ -135,7 +171,15 @@ impl UserClient {
         Ok(nickname)
     }
 
-    /// 修改密码
+    /// 修改指定用户的密码
+    ///
+    /// # 参数
+    /// - `user_id`: 需要修改密码的用户 ID
+    /// - `old_password`: 旧密码
+    /// - `new_password`: 新密码
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: HTTP 请求失败、响应解析失败或旧密码不正确时
     pub async fn change_password(&self, user_id: i64, old_password: &str, new_password: &str) -> Result<()> {
         let req = ChangePasswordRequest {
             old_password: old_password.to_string(),
@@ -161,7 +205,13 @@ impl UserClient {
         Ok(())
     }
 
-    /// 登出
+    /// 登出指定用户
+    ///
+    /// # 参数
+    /// - `user_id`: 需要登出的用户 ID
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: HTTP 请求失败、响应解析失败或 API 返回错误时
     pub async fn logout(&self, user_id: i64) -> Result<()> {
         let resp = self
             .auth_client
@@ -182,7 +232,16 @@ impl UserClient {
         Ok(())
     }
 
-    /// 批量获取用户信息
+    /// 批量获取多个用户的信息
+    ///
+    /// # 参数
+    /// - `user_ids`: 需要查询的用户 ID 切片
+    ///
+    /// # 返回
+    /// 返回 `Vec<Option<UserInfoVO>>`，每个元素对应一个用户的信息，找不到时为 `None`
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: `user_ids` 为空、HTTP 请求失败或响应解析失败时
     pub async fn get_user_info_batch(&self, user_ids: &[i64]) -> Result<Vec<Option<UserInfoVO>>> {
         let req = GetUserInfoBatchRequest {
             user_ids: user_ids.iter().map(|id| id.to_string()).collect(),
@@ -211,7 +270,16 @@ impl UserClient {
         Ok(users)
     }
 
-    /// 并发获取多个用户信息（使用批量接口）
+    /// 并发获取多个用户信息
+    ///
+    /// 优先使用批量接口，失败时自动回退到逐个请求。
+    ///
+    /// # 参数
+    /// - `user_ids`: 需要查询的用户 ID 切片
+    /// - `concurrency`: 回退到逐个请求时的最大并发数
+    ///
+    /// # 返回
+    /// 返回 `Vec<Option<UserInfoVO>>`，每个元素对应一个用户的信息，失败时对应位置为 `None`
     pub async fn get_user_info_batch_concurrent(
         &self,
         user_ids: &[i64],
