@@ -166,7 +166,7 @@ pub async fn update_avatar(
 ) -> Result<String, AppError> {
     metrics_group!("update_avatar");
 
-    // 效验图片
+    // 校验图片
     let img_metadata = timed!("update_avatar", "validate_image",
         FileValidator::validate_image(&file_data, &file_name, &content_type)
             .trace_bad_request_err("invalid_image", "文件验证失败")?
@@ -271,14 +271,14 @@ pub async fn change_password(
     let _permit = PASSWORD_VERIFY_SEM.acquire().await
         .map_err(|_| AppError::InternalServerError)?;
 
-    // 效验旧密码
+    // 校验旧密码
     let is_valid = {
         spawn_blocking(move || {
             HASHER.verify(&req.old_password, &old_password)
         })
         .timed(metrics_timer_name!("change_password", "verify_password")).await
         .map_err(|_| AppError::InternalServerError)?
-        .trace_bad_request_err("verify_error", "密码效验错误")?
+        .trace_bad_request_err("verify_error", "密码校验错误")?
     };
     if !is_valid {
         return Err(AppError::bad_request("原密码错误"));
@@ -286,7 +286,7 @@ pub async fn change_password(
 
     // 加密新密码
     let new_password_hash = {
-        let password = req.new_password.clone();
+        let password = req.new_password;
         spawn_blocking(move || {
             HASHER.hash(&password)
         })

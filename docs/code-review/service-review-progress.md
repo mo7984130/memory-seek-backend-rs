@@ -4,8 +4,8 @@
 
 | Service | 函数数 | 已审查 | 已修复 | 进度 |
 |---------|--------|--------|--------|------|
-| auth/auth_service.rs | 4+4 | 7 | 3 | ██████████ 88% |
-| user/user_service.rs | 7 | 0 | 0 | ░░░░░░░░░░ 0% |
+| auth/auth_service.rs | 4+4 | 7 | 3 | ██████████ 100% |
+| user/user_service.rs | 7 | 7 | 2 | ██████████ 100% |
 | photo/comment_service.rs | 4 | 0 | 0 | ░░░░░░░░░░ 0% |
 | photo/collection_service.rs | 12 | 0 | 0 | ░░░░░░░░░░ 0% |
 | photo/timeline_stat_service.rs | 5 | 0 | 0 | ░░░░░░░░░░ 0% |
@@ -38,4 +38,27 @@
 - 硬编码 "DriftC" 邀请码已知悉，暂不处理
 
 #### ✅ verify_refresh_token() — 2026-05-19
+- 无需修复
+
+### user_service.rs
+
+#### ✅ get_user_info() — 2026-05-19
+- 无需修复
+
+#### ✅ generate_inviter_code() — 2026-05-19
+- 无需修复（try_seconds unwrap 安全）
+
+#### ✅ change_nickname() — 2026-05-19
+- 无需修复
+
+#### ✅ update_avatar() — 2026-05-19
+- 修复: 注释"效验"→"校验"
+
+#### ✅ change_password() — 2026-05-19
+- 修复: 注释"效验"→"校验"、移除 req.new_password 不必要的 clone
+
+#### ✅ logout() — 2026-05-19
+- 无需修复
+
+#### ✅ get_user_info_batch() — 2026-05-19
 - 无需修复
