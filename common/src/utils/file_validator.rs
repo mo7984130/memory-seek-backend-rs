@@ -2,6 +2,7 @@ use const_format::formatcp;
 use std::io::Cursor;
 use thiserror::Error;
 
+/// 图片文件解析后的元数据
 #[derive(Debug, Clone)]
 pub struct ImageMetaData {
     pub format: String,
@@ -12,6 +13,7 @@ pub struct ImageMetaData {
     pub mime_type: String,
 }
 
+/// 文件校验错误类型
 #[derive(Error, Debug)]
 pub enum FileValidationError {
     #[error("文件不能为空")]
@@ -28,6 +30,7 @@ pub enum FileValidationError {
     ParseError(String),
 }
 
+/// 图片文件校验器，提供文件大小、类型、文件头等验证功能
 pub struct FileValidator;
 
 impl FileValidator {
@@ -37,6 +40,23 @@ impl FileValidator {
         FileValidator::ALLOW_IMAGE_MAX_SIZE / 1024 / 1024
     );
 
+    /// 校验图片文件的完整性，包括非空检查、大小限制、扩展名合法性、文件头匹配和图片尺寸解析
+    ///
+    /// # 参数
+    /// - `file_data`: 图片文件的原始字节数据
+    /// - `file_name`: 文件名，用于提取扩展名
+    /// - `content_type`: MIME 类型字符串，写入返回的元数据
+    ///
+    /// # 返回
+    /// 校验通过时返回 `ImageMetaData`，包含格式、宽高、大小等信息
+    ///
+    /// # 错误
+    /// - `FileValidationError::EmptyFile`: 文件数据为空
+    /// - `FileValidationError::TooLarge`: 文件超过 20MB 限制
+    /// - `FileValidationError::EmptyFileName`: 文件名为空
+    /// - `FileValidationError::UnsupportedFileType`: 扩展名不在支持列表中
+    /// - `FileValidationError::InvalidHeader`: 文件头与预期格式不匹配
+    /// - `FileValidationError::ParseError`: 图片尺寸解析失败
     pub fn validate_image(
         file_data: &[u8],
         file_name: &str,
@@ -72,6 +92,7 @@ impl FileValidator {
         })
     }
 
+    // 从文件名中提取小写扩展名，忽略 ".gitignore" 等纯点文件
     fn extract_file_extension(file_name: &str) -> String {
         file_name
             .rsplit_once('.')
@@ -80,6 +101,7 @@ impl FileValidator {
             .unwrap_or_default()
     }
 
+    // 根据文件扩展名返回预期的文件头十六进制字符串
     fn get_expected_header(file_type: &str) -> Result<&'static str, FileValidationError> {
         match file_type {
             "jpg" | "jpeg" => Ok("FFD8FF"),
@@ -90,6 +112,7 @@ impl FileValidator {
         }
     }
 
+    // 校验文件头部字节是否与预期的十六进制签名匹配
     fn validate_file_header(
         file_data: &[u8],
         expected_header: &str,
@@ -113,6 +136,7 @@ impl FileValidator {
         Ok(())
     }
 
+    // 使用 image 库解析图片数据，提取宽高尺寸
     fn extract_image_metadata(file_data: &[u8]) -> Result<(u32, u32), FileValidationError> {
         let cursor = Cursor::new(file_data);
 

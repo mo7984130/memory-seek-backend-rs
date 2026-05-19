@@ -3,30 +3,77 @@ use crate::r::R;
 use std::fmt::{Debug, Display};
 use tracing::{error, warn};
 
+/// 为 `Result<T, E>` 提供到 `AppError` 的便捷转换方法
 pub trait ResultExt<T, E> {
+    /// 将错误映射为 `AppError::InternalServerError`，并通过 `tracing::error!` 记录日志
+    ///
+    /// # 参数
+    /// - `context`: 错误上下文描述，用于日志输出
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::InternalServerError`
     fn map_internal_err(self, context: &'static str) -> Result<T, AppError>;
+
+    /// 将错误映射为 `AppError::BadRequest`，原始错误信息被丢弃
+    ///
+    /// # 参数
+    /// - `context`: 错误描述，作为 `BadRequest` 的消息内容
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::BadRequest`
     fn map_bad_request_err(self, context: &'static str) -> Result<T, AppError>;
 
+    /// 将错误转换为 `AppError::BadRequest`，保留原始错误的 `Display` 信息
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::BadRequest(e.to_string())`
     fn to_bad_request_error(self) -> Result<T, AppError>
     where
         E: Display;
 
+    /// 将 `Result<T, E>` 转换为 `Result<R<T>, AppError>`，成功值包装为 `R::ok`
+    ///
+    /// # 返回
+    /// 成功时返回 `R::ok(value)`，失败时将错误转换为 `AppError`
     fn into_ok_res(self) -> Result<R<T>, AppError>
     where
         Self: Sized,
         E: Into<AppError>,
         T: serde::Serialize;
 
+    /// 将错误映射为 `AppError::InternalServerError`，通过 `tracing::error!` 记录结构化日志
+    ///
+    /// # 参数
+    /// - `reason`: 日志中的 `reason` 字段
+    /// - `context`: 日志中的上下文描述
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::InternalServerError`
     fn trace_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
     where
         E: Debug;
 
+    /// 将错误映射为 `AppError::BadRequest`，通过 `tracing::warn!` 记录结构化日志
+    ///
+    /// # 参数
+    /// - `reason`: 日志中的 `reason` 字段
+    /// - `context`: 日志中的上下文描述，同时作为 `BadRequest` 的消息
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::BadRequest(context)`
     fn trace_bad_request_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
     where
         E: Display;
 }
 
 impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
+    /// 将错误映射为 `AppError::InternalServerError`，并通过 `tracing::error!` 记录日志
+    ///
+    /// # 参数
+    /// - `context`: 错误上下文描述，用于日志输出
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::InternalServerError`
     #[inline]
     fn map_internal_err(self, context: &'static str) -> Result<T, AppError> {
         self.map_err(|e| {
@@ -35,6 +82,13 @@ impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
         })
     }
 
+    /// 将错误映射为 `AppError::BadRequest`，原始错误信息被丢弃
+    ///
+    /// # 参数
+    /// - `context`: 错误描述，作为 `BadRequest` 的消息内容
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::BadRequest`
     #[inline]
     fn map_bad_request_err(self, context: &'static str) -> Result<T, AppError> {
         self.map_err(|_| {
@@ -42,7 +96,10 @@ impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
         })
     }
 
-    /// TODO static str
+    /// 将错误转换为 `AppError::BadRequest`，保留原始错误的 `Display` 信息
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::BadRequest(e.to_string())`
     #[inline]
     fn to_bad_request_error(self) -> Result<T, AppError>
     where
@@ -53,6 +110,10 @@ impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
         })
     }
 
+    /// 将 `Result<T, E>` 转换为 `Result<R<T>, AppError>`，成功值包装为 `R::ok`
+    ///
+    /// # 返回
+    /// 成功时返回 `R::ok(value)`，失败时将错误转换为 `AppError`
     #[inline]
     fn into_ok_res(self) -> Result<R<T>, AppError>
     where
@@ -62,6 +123,14 @@ impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
         self.map(R::ok).map_err(|e| e.into())
     }
 
+    /// 将错误映射为 `AppError::InternalServerError`，通过 `tracing::error!` 记录结构化日志
+    ///
+    /// # 参数
+    /// - `reason`: 日志中的 `reason` 字段
+    /// - `context`: 日志中的上下文描述
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::InternalServerError`
     fn trace_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
     where
         E: Debug
@@ -72,6 +141,14 @@ impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
         })
     }
 
+    /// 将错误映射为 `AppError::BadRequest`，通过 `tracing::warn!` 记录结构化日志
+    ///
+    /// # 参数
+    /// - `reason`: 日志中的 `reason` 字段
+    /// - `context`: 日志中的上下文描述，同时作为 `BadRequest` 的消息
+    ///
+    /// # 返回
+    /// 成功时返回原始值，失败时返回 `AppError::BadRequest(context)`
     fn trace_bad_request_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
     where
         E: Display
@@ -83,23 +160,39 @@ impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
     }
 }
 
+/// 为任意类型提供便捷的 `Ok` 包装方法
 pub trait ToOkExt {
+    /// 将值包装为 `Ok(self)`
+    ///
+    /// # 返回
+    /// 返回 `Ok(self)`，错误类型由调用方推断
     fn into_ok<E>(self) -> Result<Self, E>
     where
         Self: Sized;
 
-    // 针对你常用的 AppError 进一步简化
+    /// 将值包装为 `Ok(self)`，错误类型固定为 `AppError`
+    ///
+    /// # 返回
+    /// 返回 `Result<Self, AppError>` 的 `Ok` 变体
     fn ok_res(self) -> Result<Self, AppError>
     where
         Self: Sized;
 }
 
 impl<T> ToOkExt for T {
+    /// 将值包装为 `Ok(self)`
+    ///
+    /// # 返回
+    /// 返回 `Ok(self)`
     #[inline]
     fn into_ok<E>(self) -> Result<Self, E> {
         Ok(self)
     }
 
+    /// 将值包装为 `Ok(self)`，错误类型固定为 `AppError`
+    ///
+    /// # 返回
+    /// 返回 `Result<Self, AppError>` 的 `Ok` 变体
     #[inline]
     fn ok_res(self) -> Result<Self, AppError> {
         Ok(self)
