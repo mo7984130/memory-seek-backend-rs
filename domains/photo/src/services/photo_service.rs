@@ -42,9 +42,6 @@ pub enum PageDirection {
 /// 数据库 IN 子句单批最大条数
 const DB_BATCH_SIZE: usize = 512;
 
-/// S3 单次批量删除最大条数
-const S3_BATCH_SIZE: usize = 1024;
-
 const HIT_MAX_SIZE_MSG: &str = formatcp!("查询参数长度不可以超过 {}", DB_BATCH_SIZE);
 
 pub struct PhotoService;
@@ -108,7 +105,7 @@ impl PhotoService {
             return Err(AppError::bad_request("图片已存在"));
         }
 
-        // 效验文件
+        // 校验文件
         let metadata = {
             let file_data_clone = file_data.clone();
             timed!(
@@ -119,7 +116,7 @@ impl PhotoService {
                     &file_name,
                     &content_type
                 )
-                .trace_bad_request_err("photo::upload:invaild_photo", "图片效验不通过"))
+                .trace_bad_request_err("photo::upload:invalid_photo", "图片校验不通过"))
                 .await
                 .trace_internal_err(
                     "spawn_blocking_validate_photo_err",
@@ -368,7 +365,7 @@ impl PhotoService {
             .map(PhotoInfo::from);
 
         metrics_success!("get_photo_info_by_id");
-        return res;
+        res
     }
 
     pub async fn exists_by_md5_batch(
@@ -387,7 +384,7 @@ impl PhotoService {
         let res = md5s.iter().map(|md5| existing.contains(md5)).collect();
 
         metrics_success!("exists_by_md5_batch");
-        return Ok(res);
+        Ok(res)
     }
 
     /// 获取所有照片的时间范围
@@ -403,7 +400,7 @@ impl PhotoService {
         let res = PhotoMapper::query_time_range(&state.db).await;
 
         metrics_success!("get_time_range");
-        return res;
+        res
     }
 
     /// 批量删除照片
@@ -537,7 +534,7 @@ impl PhotoService {
 
         // 照片时间线统计删减
         // 报错不返回
-        TimelineStatMapper::decr_stat_by_created_ats(
+        let _ = TimelineStatMapper::decr_stat_by_created_ats(
             &state.db,
             photos.iter().map(|p| p.created_at.clone()).collect(),
         )

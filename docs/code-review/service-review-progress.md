@@ -9,7 +9,7 @@
 | photo/comment_service.rs | 4 | 4 | 1 | ██████████ 100% |
 | photo/collection_service.rs | 12 | 12 | 2 | ██████████ 100% |
 | photo/timeline_stat_service.rs | 5 | 5 | 2 | ██████████ 100% |
-| photo/photo_service.rs | 6 | 0 | 0 | ░░░░░░░░░░ 0% |
+| photo/photo_service.rs | 6 | 6 | 2 | ██████████ 100% |
 | photo/feature_service.rs | 5 | 0 | 0 | ░░░░░░░░░░ 0% |
 | photo/face_service.rs | 11 | 0 | 0 | ░░░░░░░░░░ 0% |
 
@@ -131,3 +131,23 @@
 
 #### ✅ get_stats() — 2026-05-19
 - 无需修复
+
+### photo_service.rs
+
+#### ✅ upload_photo() — 2026-05-19
+- 修复: 注释"效验"→"校验"、错误字符串 "invaild_photo" → "invalid_photo"
+
+#### ✅ get_photo_cursor_page() — 2026-05-19
+- 无需修复
+
+#### ✅ get_photo_info_by_id() — 2026-05-19
+- 修复: 移除多余 return
+
+#### ✅ exists_by_md5_batch() — 2026-05-19
+- 修复: 移除多余 return
+
+#### ✅ get_time_range() — 2026-05-19
+- 修复: 移除多余 return
+
+#### ✅ delete_photos() — 2026-05-19
+- 无需修复（管理员硬编码 user_id=1 已知悉）
