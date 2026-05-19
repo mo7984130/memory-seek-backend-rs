@@ -156,6 +156,7 @@ impl FileValidator {
 mod tests {
     use super::*;
 
+    // 根据十六进制文件头和指定总大小创建模拟文件数据，用于测试文件校验逻辑
     fn create_mock_file(header_hex: &str, total_size: usize) -> Vec<u8> {
         let mut data = Vec::with_capacity(total_size);
         for i in (0..header_hex.len()).step_by(2) {

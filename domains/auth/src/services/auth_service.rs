@@ -487,6 +487,7 @@ struct RefreshTokenValidation {
     refresh_token_expire_at: Option<DateTime<Utc>>,
 }
 
+// 校验用户的 refresh_token：查询数据库验证匹配性和有效期，不匹配或过期返回 Unauthorized
 async fn verify_refresh_token(
     db: &DatabaseConnection,
     user_id: i64,

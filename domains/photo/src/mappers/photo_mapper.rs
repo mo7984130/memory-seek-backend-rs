@@ -98,7 +98,7 @@ impl PhotoMapper {
         Ok(result.unwrap_or_default())
     }
 
-    /// 构建游标分页的基础查询
+    // 构建游标分页的基础查询，根据方向设置排序和游标过滤条件
     fn build_cursor_query(
         cursor: Option<&PhotoCursor>,
         size: u64,
