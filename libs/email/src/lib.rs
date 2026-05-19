@@ -12,6 +12,18 @@ pub struct EmailClient {
 }
 
 impl EmailClient {
+    /// 创建邮件客户端
+    ///
+    /// # 参数
+    /// - `server`: SMTP 服务器地址
+    /// - `port`: SMTP 端口号（465 使用 SSL，其他使用 STARTTLS）
+    /// - `user`: SMTP 用户名
+    /// - `pass`: SMTP 密码
+    /// - `from_email`: 发件人邮箱地址
+    /// - `from_name`: 发件人显示名称
+    ///
+    /// # 返回
+    /// 初始化完成的 `EmailClient` 实例
     pub fn new(server: &str, port: u16, user: &str, pass: &str, from_email: &str, from_name: &str) -> Self {
         let creds = Credentials::new(user.to_string(), pass.to_string());
 
@@ -37,6 +49,19 @@ impl EmailClient {
         }
     }
 
+    /// 发送 HTML 格式邮件
+    ///
+    /// # 参数
+    /// - `to`: 收件人邮箱地址
+    /// - `subject`: 邮件主题
+    /// - `body`: HTML 格式的邮件正文
+    ///
+    /// # 返回
+    /// 发送成功返回 `()`
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: 收件人邮箱格式无效
+    /// - `AppError::InternalServerError`: 发件人地址格式错误、邮件构建失败或 SMTP 发送失败
     pub async fn send_message(
         &self,
         to: &str,

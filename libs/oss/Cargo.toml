@@ -10,3 +10,7 @@ bytes = "1.10"
 
 rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+tokio = { workspace = true }
+futures = { workspace = true }
+tracing = { workspace = true }

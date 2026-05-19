@@ -36,11 +36,49 @@ pub struct ImageUrl {
     pub cache_age: u32,
 }
 
+/// 图片 URL 生成器 trait，统一缩略图、预览、原图、裁剪的 URL 生成接口
 #[async_trait]
 pub trait ImageUrlGenerator: Send + Sync {
+    /// 生成缩略图 URL
+    ///
+    /// # 参数
+    /// - `file_id`: 文件路径/键名
+    ///
+    /// # 返回
+    /// 包含 URL 和缓存时长的 `ImageUrl`
     async fn thumbnail(&self, file_id: &str) -> ImageUrl;
+
+    /// 生成预览图 URL
+    ///
+    /// # 参数
+    /// - `file_id`: 文件路径/键名
+    ///
+    /// # 返回
+    /// 包含 URL 和缓存时长的 `ImageUrl`
     async fn preview(&self, file_id: &str) -> ImageUrl;
+
+    /// 生成原图 URL
+    ///
+    /// # 参数
+    /// - `file_id`: 文件路径/键名
+    /// - `extension`: 文件扩展名
+    ///
+    /// # 返回
+    /// 包含 URL 和缓存时长的 `ImageUrl`
     async fn original(&self, file_id: &str, extension: &str) -> ImageUrl;
+
+    /// 生成裁剪图 URL
+    ///
+    /// # 参数
+    /// - `file_id`: 文件路径/键名
+    /// - `x`: 裁剪区域左上角 X 坐标
+    /// - `y`: 裁剪区域左上角 Y 坐标
+    /// - `w`: 裁剪区域宽度
+    /// - `h`: 裁剪区域高度
+    /// - `size`: 输出正方形的边长
+    ///
+    /// # 返回
+    /// 包含 URL 和缓存时长的 `ImageUrl`
     async fn crop(&self, file_id: &str, x: i32, y: i32, w: i32, h: i32, size: u32) -> ImageUrl;
 }
 
@@ -50,6 +88,14 @@ pub enum ImageUrlProvider {
 }
 
 impl ImageUrlProvider {
+    /// 根据配置创建图片 URL 提供者
+    ///
+    /// # 参数
+    /// - `config`: 图片 URL 生成器配置，包含代理类型、OSS 地址、密钥等
+    /// - `s3_client`: S3 客户端实例，OSS 模式下必须提供
+    ///
+    /// # 返回
+    /// 对应代理类型的 `ImageUrlProvider` 实例
     pub fn new(config: ImageUrlGeneratorConfig, s3_client: Option<Arc<S3Client>>) -> Self {
         match config.proxy_type {
             ProxyType::ImgProxy => {
@@ -75,6 +121,13 @@ impl ImageUrlProvider {
 
 #[async_trait]
 impl ImageUrlGenerator for ImageUrlProvider {
+    /// 生成缩略图 URL，委托给内部代理实现
+    ///
+    /// # 参数
+    /// - `file_id`: 文件路径/键名
+    ///
+    /// # 返回
+    /// 包含 URL 和缓存时长的 `ImageUrl`
     async fn thumbnail(&self, file_id: &str) -> ImageUrl {
         match self {
             Self::ImgProxy(generator) => generator.thumbnail(file_id).await,
@@ -82,6 +135,13 @@ impl ImageUrlGenerator for ImageUrlProvider {
         }
     }
 
+    /// 生成预览图 URL，委托给内部代理实现
+    ///
+    /// # 参数
+    /// - `file_id`: 文件路径/键名
+    ///
+    /// # 返回
+    /// 包含 URL 和缓存时长的 `ImageUrl`
     async fn preview(&self, file_id: &str) -> ImageUrl {
         match self {
             Self::ImgProxy(generator) => generator.preview(file_id).await,
@@ -89,6 +149,14 @@ impl ImageUrlGenerator for ImageUrlProvider {
         }
     }
 
+    /// 生成原图 URL，委托给内部代理实现
+    ///
+    /// # 参数
+    /// - `file_id`: 文件路径/键名
+    /// - `extension`: 文件扩展名
+    ///
+    /// # 返回
+    /// 包含 URL 和缓存时长的 `ImageUrl`
     async fn original(&self, file_id: &str, extension: &str) -> ImageUrl {
         match self {
             Self::ImgProxy(generator) => generator.original(file_id, extension).await,
@@ -96,6 +164,18 @@ impl ImageUrlGenerator for ImageUrlProvider {
         }
     }
 
+    /// 生成裁剪图 URL，委托给内部代理实现
+    ///
+    /// # 参数
+    /// - `file_id`: 文件路径/键名
+    /// - `x`: 裁剪区域左上角 X 坐标
+    /// - `y`: 裁剪区域左上角 Y 坐标
+    /// - `w`: 裁剪区域宽度
+    /// - `h`: 裁剪区域高度
+    /// - `size`: 输出正方形的边长
+    ///
+    /// # 返回
+    /// 包含 URL 和缓存时长的 `ImageUrl`
     async fn crop(&self, file_id: &str, x: i32, y: i32, w: i32, h: i32, size: u32) -> ImageUrl {
         match self {
             Self::ImgProxy(generator) => generator.crop(file_id, x, y, w, h, size).await,
