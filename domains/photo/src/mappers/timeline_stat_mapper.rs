@@ -11,6 +11,17 @@ use sea_orm::{
 pub struct TimelineStatMapper;
 
 impl TimelineStatMapper {
+    /// 根据照片创建时间批量递减时间线统计计数
+    ///
+    /// 将创建时间按年月分组后，使用 `CASE WHEN` 表达式批量更新对应月份的计数，
+    /// 并通过 `GREATEST(..., 0)` 保证计数不低于零。
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接或事务
+    /// - `created_ats`: 照片创建时间列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库更新失败
     pub async fn decr_stat_by_created_ats(
         db: &impl ConnectionTrait,
         created_ats: Vec<DateTimeUtc>,

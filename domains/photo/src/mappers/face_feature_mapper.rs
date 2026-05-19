@@ -18,8 +18,10 @@ impl FaceFeatureMapper {
     /// - `id`: 特征ID
     ///
     /// # 返回
-    /// - 成功: 返回特征模型
-    /// - 失败: 特征不存在返回404错误
+    /// 返回特征模型
+    ///
+    /// # 错误
+    /// - `AppError::NotFound`: 特征不存在
     pub async fn query_by_id(db: &DatabaseConnection, id: i64) -> Result<Model, AppError> {
         Entity::find_by_id(id)
             .one(db)
@@ -36,6 +38,9 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回该照片中的所有人脸特征
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_by_photo_id(
         db: &DatabaseConnection,
         photo_id: i64,
@@ -55,6 +60,9 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回该人物关联的所有人脸特征
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_by_person_id<C: ConnectionTrait>(
         db: &C,
         person_id: i64,
@@ -74,6 +82,9 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回匹配的特征列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_by_ids<C: ConnectionTrait>(
         db: &C,
         ids: &[i64],
@@ -95,6 +106,9 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回所有特征列表，用于聚类算法
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_all_ordered(db: &DatabaseConnection) -> Result<Vec<Model>, AppError> {
         Entity::find()
             .order_by_asc(Column::Id)
@@ -113,6 +127,9 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回特征列表，按ID倒序排列
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_cursor_page(
         db: &DatabaseConnection,
         person_id: i64,
@@ -146,6 +163,9 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回创建的特征模型
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库插入失败
     pub async fn insert(
         db: &DatabaseConnection,
         photo_id: i64,
@@ -181,6 +201,10 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回更新后的特征模型
+    ///
+    /// # 错误
+    /// - `AppError::NotFound`: 特征不存在
+    /// - `AppError`: 数据库更新失败
     pub async fn update_person_id<C: ConnectionTrait>(
         db: &C,
         id: i64,
@@ -206,8 +230,8 @@ impl FaceFeatureMapper {
     /// - `db`: 数据库连接或事务
     /// - `id`: 特征ID
     ///
-    /// # 返回
-    /// 成功返回空元组
+    /// # 错误
+    /// - `AppError`: 数据库删除失败
     pub async fn delete_by_id<C: ConnectionTrait>(db: &C, id: i64) -> Result<(), AppError> {
         Entity::delete_by_id(id)
             .exec(db)
@@ -216,6 +240,14 @@ impl FaceFeatureMapper {
         Ok(())
     }
 
+    /// 根据ID列表批量删除人脸特征
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接或事务
+    /// - `ids`: 特征ID列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库删除失败
     pub async fn delete_by_ids<C: ConnectionTrait>(db: &C, ids: Vec<i64>) -> Result<(), AppError> {
         if ids.is_empty() {
             return Ok(());
@@ -238,6 +270,9 @@ impl FaceFeatureMapper {
     ///
     /// # 返回
     /// 返回被删除特征关联的 person_id 列表（用于更新人物统计）
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询或删除失败
     pub async fn delete_by_photo_id(
         db: &DatabaseConnection,
         photo_id: i64,
@@ -254,6 +289,19 @@ impl FaceFeatureMapper {
         Ok(person_ids)
     }
 
+    /// 批量查询每个人物的最高分特征
+    ///
+    /// 使用窗口函数 `ROW_NUMBER()` 按人物分组取最高分特征，用于人物统计更新。
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接或事务
+    /// - `person_ids`: 人物ID列表
+    ///
+    /// # 返回
+    /// 返回人物ID到 `(feature_id, score)` 的映射，无特征的人物值为 `None`
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_max_score_features_by_person_ids(
         db: &impl ConnectionTrait,
         person_ids: Vec<i64>,

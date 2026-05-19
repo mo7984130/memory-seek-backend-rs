@@ -20,6 +20,9 @@ impl CommentLikeMapper {
     ///
     /// # 返回
     /// 返回点赞记录，未点赞返回None
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_by_user_and_comment(
         db: &impl ConnectionTrait,
         user_id: i64,
@@ -42,6 +45,9 @@ impl CommentLikeMapper {
     ///
     /// # 返回
     /// 返回用户已点赞的评论ID集合
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_by_user_and_comments(
         db: &DatabaseConnection,
         user_id: i64,
@@ -74,6 +80,9 @@ impl CommentLikeMapper {
     ///
     /// # 返回
     /// 返回创建的点赞记录模型
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库插入失败
     pub async fn insert<C: ConnectionTrait>(
         db: &C,
         comment_id: i64,
@@ -95,8 +104,8 @@ impl CommentLikeMapper {
     /// - `db`: 数据库连接或事务
     /// - `id`: 点赞记录ID
     ///
-    /// # 返回
-    /// 成功返回空元组
+    /// # 错误
+    /// - `AppError`: 数据库删除失败
     pub async fn delete_by_id<C: ConnectionTrait>(db: &C, id: i64) -> Result<(), AppError> {
         Entity::delete_by_id(id)
             .exec(db)
@@ -111,8 +120,8 @@ impl CommentLikeMapper {
     /// - `db`: 数据库连接或事务
     /// - `comment_id`: 评论ID
     ///
-    /// # 返回
-    /// 成功返回空元组
+    /// # 错误
+    /// - `AppError`: 数据库删除失败
     pub async fn delete_by_comment_id<C: ConnectionTrait>(
         db: &C,
         comment_id: i64,
@@ -131,8 +140,8 @@ impl CommentLikeMapper {
     /// - `db`: 数据库连接或事务
     /// - `comment_ids`: 评论ID列表
     ///
-    /// # 返回
-    /// 成功返回空元组
+    /// # 错误
+    /// - `AppError`: 数据库删除失败
     pub async fn delete_by_comment_ids(
         db: &impl ConnectionTrait,
         comment_ids: &[i64],

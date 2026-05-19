@@ -26,8 +26,10 @@ impl FacePersonMapper {
     /// - `id`: 人物ID
     ///
     /// # 返回
-    /// - 成功: 返回人物模型
-    /// - 失败: 人物不存在返回404错误
+    /// 返回人物模型
+    ///
+    /// # 错误
+    /// - `AppError::NotFound`: 人物不存在
     pub async fn query_by_id(
         db: &DatabaseConnection,
         id: i64,
@@ -46,6 +48,9 @@ impl FacePersonMapper {
     ///
     /// # 返回
     /// 返回所有人物列表，按名称排序
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_all(db: &DatabaseConnection) -> Result<Vec<face_person::Model>, AppError> {
         face_person::Entity::find()
             .order_by_asc(face_person::Column::Name)
@@ -62,6 +67,9 @@ impl FacePersonMapper {
     ///
     /// # 返回
     /// 返回匹配的人物，不存在返回None
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_by_name(
         db: &DatabaseConnection,
         name: &str,
@@ -82,6 +90,9 @@ impl FacePersonMapper {
     ///
     /// # 返回
     /// 返回人物列表，按照片数量倒序、ID倒序排列
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_cursor_page(
         db: &DatabaseConnection,
         cursor: Option<&PersonCursor>,
@@ -118,6 +129,9 @@ impl FacePersonMapper {
     ///
     /// # 返回
     /// 返回匹配的人物列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn query_by_ids(
         db: &impl ConnectionTrait,
         ids: &[i64],
@@ -146,6 +160,9 @@ impl FacePersonMapper {
     ///
     /// # 返回
     /// 返回创建的人物模型
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库插入失败
     pub async fn insert<C: ConnectionTrait>(
         db: &C,
         name: String,
@@ -191,6 +208,10 @@ impl FacePersonMapper {
     ///
     /// # 返回
     /// 返回更新后的人物模型
+    ///
+    /// # 错误
+    /// - `AppError::NotFound`: 人物不存在
+    /// - `AppError`: 数据库更新失败
     pub async fn update<C: ConnectionTrait>(
         db: &C,
         id: i64,
@@ -244,8 +265,8 @@ impl FacePersonMapper {
     /// - `db`: 数据库连接或事务
     /// - `id`: 人物ID
     ///
-    /// # 返回
-    /// 成功返回空元组
+    /// # 错误
+    /// - `AppError`: 数据库删除失败
     pub async fn delete_by_id<C: ConnectionTrait>(db: &C, id: i64) -> Result<(), AppError> {
         face_person::Entity::delete_by_id(id)
             .exec(db)
@@ -264,6 +285,9 @@ impl FacePersonMapper {
     ///
     /// # 返回
     /// 返回匹配的人物列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn search_by_keyword(
         db: &DatabaseConnection,
         keyword: &str,
@@ -301,16 +325,16 @@ impl FacePersonMapper {
     }
 
     /// 批量减少人物特征的权重
-    /// 注意 在这之前需要先删除特征, 因为寻找最大分数的特征的时候是全局查找, 所以需要先删除特征
     ///
-    /// # Arguments
+    /// 调用前需先删除特征记录，因为寻找最高分特征时是全局查找。
+    /// 重新计算质心、权重、照片数及最高分特征。
     ///
-    /// * `db` - 数据库连接
-    /// * `features` - 特征列表，每个特征包含 (feature_id, person_id, embedding, score)
+    /// # 参数
+    /// - `db`: 数据库连接或事务
+    /// - `features`: 特征列表，每项为 `(feature_id, person_id, embedding, score)`
     ///
-    /// # Returns
-    ///
-    /// * `Result<(), AppError>` - 操作结果
+    /// # 错误
+    /// - `AppError`: 数据库查询或更新失败
     pub async fn decr_by_features(
         db: &impl ConnectionTrait,
         features: &[(i64, Option<i64>, Vec<f32>, f32)], // (feature_id, person_id, embedding, score)
@@ -440,6 +464,7 @@ impl FacePersonMapper {
         Ok(())
     }
 
+    // 批量更新人物的质心、权重、照片数及最高分特征
     async fn update_persons(
         db: &impl ConnectionTrait,
         updates: Vec<UpdateInfo>,
