@@ -5,7 +5,7 @@ use common::error::AppError;
 use common::models::{FaceBBoxPixels, ImageToken};
 use common::utils::{RedisExt, ResultExt};
 use deadpool_redis::Pool;
-use entities::{face_feature, face_person, DrVector};
+use entities::{face_feature, face_person, Embedding512};
 use face_engine::{FaceAligner, FaceEngine, LazyFaceEngine};
 use sea_orm::{EntityTrait, Set, TransactionTrait};
 use std::collections::HashMap;
@@ -86,7 +86,7 @@ impl FaceService {
                 .map_internal_err("特征提取失败")?;
 
             let norm_embedding = vector_utils::l2_normalize(&embedding);
-            let dr_vector = DrVector::new(norm_embedding.to_vec());
+            let embedding = Embedding512::new(norm_embedding.to_vec());
 
             let bbox_value = serde_json::json!({
                 "x": detection.bbox.x,
@@ -98,7 +98,7 @@ impl FaceService {
             face_features.push(face_feature::ActiveModel {
                 photo_id: Set(photo_id),
                 person_id: Set(None),
-                embedding: Set(dr_vector),
+                embedding: Set(embedding),
                 bbox: Set(bbox_value),
                 score: Set(detection.score),
                 ..Default::default()
@@ -204,7 +204,7 @@ impl FaceService {
                         .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
                         .unwrap();
 
-                    let centroid = DrVector::new(seed.vector.clone());
+                    let centroid = Embedding512::new(seed.vector.clone());
 
                     let name = format!(
                         "人物_{}_{}",
@@ -408,7 +408,7 @@ impl FaceService {
         // 使用 ndarray 优化的加权合并
         let merged = vector_utils::weighted_merge(&c1, w1, &c2, w2);
         let merged = vector_utils::l2_normalize(&merged);
-        let merged_embedding = DrVector::new(merged.to_vec());
+        let merged_embedding = Embedding512::new(merged.to_vec());
 
         let new_photo_count = target.total_photo_count + source.total_photo_count;
 
