@@ -7,6 +7,7 @@ pub mod face_feature_mapper;
 #[cfg(feature = "face_recognition")]
 pub mod face_person_mapper;
 pub mod photo_mapper;
+mod timeline_stat_mapper;
 
 pub use collection_mapper::CollectionMapper;
 pub use collection_photo_mapper::CollectionPhotoMapper;
@@ -17,3 +18,4 @@ pub use face_feature_mapper::FaceFeatureMapper;
 #[cfg(feature = "face_recognition")]
 pub use face_person_mapper::FacePersonMapper;
 pub use photo_mapper::PhotoMapper;
+pub use timeline_stat_mapper::TimelineStatMapper;

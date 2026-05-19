@@ -7,8 +7,6 @@ use sea_orm::{
     QueryOrder, QuerySelect, Set, sea_query::Expr,
 };
 
-use std::collections::HashSet;
-
 pub struct CommentMapper;
 
 impl CommentMapper {
@@ -128,6 +126,9 @@ impl CommentMapper {
     ///
     /// # 返回
     /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库删除失败时返回错误
     pub async fn delete_by_id<C: ConnectionTrait>(db: &C, id: i64) -> Result<(), AppError> {
         Entity::delete_by_id(id)
             .exec(db)
@@ -142,6 +143,9 @@ impl CommentMapper {
     /// - `db`: 数据库连接或事务
     /// - `id`: 评论ID
     /// - `delta`: 点赞数变化量（正数增加，负数减少）
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库更新失败时返回错误
     pub async fn update_like_count<C: ConnectionTrait>(
         db: &C,
         id: i64,
@@ -169,6 +173,9 @@ impl CommentMapper {
     ///
     /// # 返回
     /// 返回评论ID列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败时返回错误
     pub async fn query_ids_by_photo_id<C: ConnectionTrait>(
         db: &C,
         photo_id: i64,
@@ -183,6 +190,52 @@ impl CommentMapper {
             .trace_internal_err("db_query_err", "查询失败")
     }
 
+    /// 批量查询多张照片的评论ID列表
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接或事务
+    /// - `photo_ids`: 照片ID列表
+    ///
+    /// # 返回
+    /// 返回所有匹配照片的评论ID列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败时返回错误
+    pub async fn query_ids_by_photo_ids(
+        db: &impl ConnectionTrait,
+        photo_ids: &[i64],
+    ) -> Result<Vec<i64>, AppError> {
+        Entity::find()
+            .select_only()
+            .column(Column::Id)
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
+            .into_values::<i64, Column>()
+            .all(db)
+            .await
+            .trace_internal_err("db_query_err", "获取评论id错误")
+    }
+
+    /// 根据ID列表批量删除评论
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接或事务
+    /// - `ids`: 评论ID列表
+    ///
+    /// # 返回
+    /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库删除失败时返回错误
+    pub async fn delete_by_ids(db: &impl ConnectionTrait, ids: &[i64]) -> Result<(), AppError> {
+        Entity::delete_many()
+            .filter(Column::Id.is_in(ids.iter().copied()))
+            .exec(db)
+            .await
+            .trace_internal_err("db_del_err", "根据评论id删除评论错误")?;
+
+        Ok(())
+    }
+
     /// 删除照片的所有评论
     ///
     /// # 参数
@@ -191,6 +244,9 @@ impl CommentMapper {
     ///
     /// # 返回
     /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库删除失败时返回错误
     pub async fn delete_by_photo_id<C: ConnectionTrait>(
         db: &C,
         photo_id: i64,

@@ -32,6 +32,9 @@ impl CollectionMapper {
     ///
     /// # 返回
     /// 返回用户的收藏夹列表，按是否收藏排序，再按创建时间倒序
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败时返回错误
     pub async fn query_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Vec<collection::Model>, AppError> {
         collection::Entity::find()
             .filter(collection::Column::UserId.eq(user_id))
@@ -50,6 +53,9 @@ impl CollectionMapper {
     ///
     /// # 返回
     /// 返回用户的"我喜欢"收藏夹，不存在返回None
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败时返回错误
     pub async fn query_favorite_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Option<collection::Model>, AppError> {
         collection::Entity::find()
             .filter(collection::Column::UserId.eq(user_id))
@@ -162,6 +168,9 @@ impl CollectionMapper {
     ///
     /// # 返回
     /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库删除失败时返回错误
     pub async fn delete_by_id<C: ConnectionTrait>(db: &C, id: i64) -> Result<(), AppError> {
         collection::Entity::delete_by_id(id)
             .exec(db)
@@ -181,6 +190,9 @@ impl CollectionMapper {
     ///
     /// # 返回
     /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 收藏夹不存在或数据库更新失败时返回错误
     pub async fn increment_photo_count<C: ConnectionTrait>(db: &C, id: i64, delta: i32) -> Result<(), AppError> {
         let collection = collection::Entity::find_by_id(id)
             .one(db)
@@ -196,6 +208,18 @@ impl CollectionMapper {
         Ok(())
     }
 
+    /// 批量原子递增/递减多个收藏夹的照片数量
+    ///
+    /// # 参数
+    /// - `txn`: 数据库连接或事务
+    /// - `collection_ids`: 收藏夹ID列表
+    /// - `change`: 变化量（正数递增，负数递减）
+    ///
+    /// # 返回
+    /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库更新失败时返回错误
     pub async fn increment_photo_counts<C: ConnectionTrait>(
         txn: &C,
         collection_ids: Vec<i64>,

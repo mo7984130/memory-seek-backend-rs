@@ -39,7 +39,10 @@ impl PhotoMapper {
     ///
     /// # 返回
     /// 返回匹配的照片列表，空ID列表返回空列表
-    pub async fn query_by_ids(db: &DatabaseConnection, ids: &[i64]) -> Result<Vec<Model>, AppError> {
+    pub async fn query_by_ids(
+        db: &DatabaseConnection,
+        ids: &[i64],
+    ) -> Result<Vec<Model>, AppError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -222,11 +225,35 @@ impl PhotoMapper {
     ///
     /// # 返回
     /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库删除失败时返回错误
     pub async fn delete_by_id<C: ConnectionTrait>(db: &C, id: i64) -> Result<(), AppError> {
         Entity::delete_by_id(id)
             .exec(db)
             .await
             .trace_internal_err("db_del_err", "删除照片失败")?;
+        Ok(())
+    }
+
+    /// 根据ID列表批量删除照片
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接或事务
+    /// - `ids`: 照片ID列表
+    ///
+    /// # 返回
+    /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库删除失败时返回错误
+    pub async fn delete_by_ids(db: &impl ConnectionTrait, ids: &[i64]) -> Result<(), AppError> {
+        Entity::delete_many()
+            .filter(Column::Id.is_in(ids.iter().copied()))
+            .exec(db)
+            .await
+            .trace_internal_err("db_del_err", "删除照片失败")?;
+
         Ok(())
     }
 }

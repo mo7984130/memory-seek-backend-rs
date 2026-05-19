@@ -141,6 +141,9 @@ impl CollectionPhotoMapper {
     ///
     /// # 返回
     /// 返回在收藏夹中的照片ID列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败时返回错误
     pub async fn exists_in_collection<C: ConnectionTrait>(
         db: &C,
         collection_id: i64,
@@ -230,6 +233,9 @@ impl CollectionPhotoMapper {
     ///
     /// # 返回
     /// 成功返回空元组
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库删除失败时返回错误
     pub async fn delete_by_collection_id<C: ConnectionTrait>(
         db: &C,
         collection_id: i64,
@@ -250,6 +256,9 @@ impl CollectionPhotoMapper {
     ///
     /// # 返回
     /// 返回受影响的收藏夹ID列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询或删除失败时返回错误
     pub async fn delete_by_photo_id<C: ConnectionTrait>(
         db: &C,
         photo_id: i64,

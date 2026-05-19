@@ -133,15 +133,15 @@ impl CommentLikeMapper {
     ///
     /// # 返回
     /// 成功返回空元组
-    pub async fn delete_by_comment_ids<C: ConnectionTrait>(
-        db: &C,
-        comment_ids: Vec<i64>,
+    pub async fn delete_by_comment_ids(
+        db: &impl ConnectionTrait,
+        comment_ids: &[i64],
     ) -> Result<(), AppError> {
         if comment_ids.is_empty() {
             return Ok(());
         }
         Entity::delete_many()
-            .filter(Column::CommentId.is_in(comment_ids))
+            .filter(Column::CommentId.is_in(comment_ids.iter().copied()))
             .exec(db)
             .await
             .trace_internal_err("db_delete_err", "删除点赞失败")?;
