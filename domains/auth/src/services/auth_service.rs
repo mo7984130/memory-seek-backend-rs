@@ -47,12 +47,16 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         id: i64,
         password: String,
         avatar_file_id: Option<String>,
+        refresh_token: Option<String>,
+        refresh_token_expire_at: Option<DateTime<Utc>>,
     }
     let user_result = user::Entity::find()
         .select_only()
         .column(user::Column::Id)
         .column(user::Column::Password)
         .column(user::Column::AvatarFileId)
+        .column(user::Column::RefreshToken)
+        .column(user::Column::RefreshTokenExpireAt)
         .filter(
             Condition::any()
                 .add(user::Column::Username.eq(&req.account))
@@ -73,8 +77,8 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         }
     };
 
-    // 效验密码
-    // 使用信号量限制同时效验的数量
+    // 校验密码
+    // 使用信号量限制同时校验的数量
     let old_alg = {
         let _permit = PASSWORD_VERIFY_SEM
             .acquire()
@@ -124,31 +128,49 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         });
     }
 
-    // 更新access_token和refresh_token
+    // 更新access_token和refresh_token（顺序执行，确保一致性）
     let new_access_token = rand_utils::generate_random_str(32);
     let new_refresh_token = rand_utils::generate_random_str(32);
     let new_refresh_token_expire = Utc::now() + Duration::days(REFRESH_TOKEN_EXPIRE_DAYS);
-    let (access_token_result, refresh_token_result) = tokio::join!(
-        state
-            .redis
-            .set_ex(
-                RedisKeys::user::user_access_token(user.id),
-                &new_access_token,
-                ACCESS_TOKEN_EXPIRE_SECONDS as u64,
-            )
-            .timed(metrics_timer_name!("login", "redis_set")),
-        user::ActiveModel {
+
+    // 先写入数据库
+    let updated_user = user::ActiveModel {
+        id: Set(user.id),
+        refresh_token: Set(Some(new_refresh_token.clone())),
+        refresh_token_expire_at: Set(Some(new_refresh_token_expire)),
+        ..Default::default()
+    }
+    .update(&state.db)
+    .timed(metrics_timer_name!("login", "update_refresh_token"))
+    .await
+    .trace_internal_err("db_error", "向数据库更新refresh_token错误")?;
+
+    // 再写入 Redis，失败时回滚数据库中的 refresh_token
+    if let Err(e) = state
+        .redis
+        .set_ex(
+            RedisKeys::user::user_access_token(user.id),
+            &new_access_token,
+            ACCESS_TOKEN_EXPIRE_SECONDS as u64,
+        )
+        .timed(metrics_timer_name!("login", "redis_set"))
+        .await
+        .trace_internal_err("redis_error", "向Redis存入access_token失败")
+    {
+        // 回滚数据库中的 refresh_token（恢复为更新前的旧值）
+        if let Err(rollback_err) = (user::ActiveModel {
             id: Set(user.id),
-            refresh_token: Set(Some(new_refresh_token.clone())),
-            refresh_token_expire_at: Set(Some(new_refresh_token_expire)),
+            refresh_token: Set(user.refresh_token.clone()),
+            refresh_token_expire_at: Set(user.refresh_token_expire_at),
             ..Default::default()
         }
         .update(&state.db)
-        .timed(metrics_timer_name!("login", "update_refresh_token"))
-    );
-    access_token_result.trace_internal_err("redis_error", "向Redis存入access_token失败")?;
-    let updated_user =
-        refresh_token_result.trace_internal_err("db_error", "向数据库更新refresh_token错误")?;
+        .await)
+        {
+            error!(error = ?rollback_err, "回滚refresh_token失败，数据库与Redis可能不一致");
+        }
+        return Err(e);
+    }
 
     // 加密头像file_id
     let avatar_token = timed!(
@@ -158,6 +180,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
             state
                 .token_cipher
                 .encrypt(&ImageToken::thumbnail(key.clone()), Some(key))
+                .map_err(|e| warn!(error = %e, "头像token加密失败"))
                 .ok()
         })
     );
@@ -195,12 +218,12 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
 pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO, AppError> {
     metrics_group!("register");
 
-    // 效验邮箱验证码
+    // 校验邮箱验证码
     verify_email_verify_code(&state.redis, &req.email, &req.email_verify_code)
         .timed(metrics_timer_name!("register", "verify_email_code"))
         .await?;
 
-    // 效验邀请码
+    // 校验邀请码
     let inviter_id = verify_inviter_code(&state.redis, &req.inviter_code)
         .timed(metrics_timer_name!("register", "verify_inviter_code"))
         .await?;
@@ -342,7 +365,7 @@ pub async fn refresh_access_token(
 ) -> Result<AccessTokenResponse, AppError> {
     metrics_group!("refresh_access_token");
 
-    // 效验refresh_token
+    // 校验refresh_token
     verify_refresh_token(&state.db, user_id, &refresh_token)
         .timed(metrics_timer_name!("refresh_access_token", "verify_token"))
         .await?;
@@ -369,7 +392,7 @@ pub async fn refresh_access_token(
     })
 }
 
-/// 效验邮箱验证码（大小写不敏感）
+/// 校验邮箱验证码（大小写不敏感）
 async fn verify_email_verify_code(redis: &Pool, email: &str, code: &str) -> Result<(), AppError> {
     let stored_code: Option<String> = redis
         .get_as(&RedisKeys::user::email_verify_code(email))
@@ -382,7 +405,7 @@ async fn verify_email_verify_code(redis: &Pool, email: &str, code: &str) -> Resu
     }
 }
 
-/// 效验邀请码（大小写不敏感）
+/// 校验邀请码（大小写不敏感）
 async fn verify_inviter_code(redis: &Pool, inviter_code: &str) -> Result<u32, AppError> {
     if inviter_code == "DriftC" {
         return Ok(1);
@@ -401,7 +424,7 @@ async fn verify_inviter_code(redis: &Pool, inviter_code: &str) -> Result<u32, Ap
         )
 }
 
-/// 效验refresh_token
+/// 校验refresh_token
 #[derive(FromQueryResult)]
 struct RefreshTokenValidation {
     refresh_token: Option<String>,
