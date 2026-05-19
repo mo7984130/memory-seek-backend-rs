@@ -45,6 +45,7 @@ struct ApiResponse<T> {
 }
 
 impl TokenState {
+    // 创建当前 token 状态的快照副本，用于在释放读锁后保留数据
     fn snapshot(&self) -> TokenStateSnapshot {
         TokenStateSnapshot {
             user_id: self.user_id,
@@ -58,6 +59,11 @@ impl TokenState {
 }
 
 impl TokenStore {
+    /// 创建新的 TokenStore 实例
+    ///
+    /// # 参数
+    /// - `base_url`: 认证服务的基础 URL
+    /// - `refresh_before_expiry_secs`: token 过期前提前刷新的秒数阈值
     pub fn new(base_url: &str, refresh_before_expiry_secs: i64) -> Self {
         Self {
             entries: RwLock::new(HashMap::new()),
@@ -67,6 +73,17 @@ impl TokenStore {
         }
     }
 
+    /// 登录用户并将 token 状态存入 store
+    ///
+    /// # 参数
+    /// - `account`: 用户账号
+    /// - `password`: 用户密码
+    ///
+    /// # 返回
+    /// 登录成功的用户 ID
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 登录请求失败、响应解析错误或缺少必要 token 字段
     pub async fn login(&self, account: &str, password: &str) -> Result<i64> {
         let resp = self
             .http
@@ -106,21 +123,45 @@ impl TokenStore {
         Ok(user_id)
     }
 
-    /// 获取用户账号
+    /// 获取指定用户的账号
+    ///
+    /// # 参数
+    /// - `user_id`: 用户 ID
+    ///
+    /// # 返回
+    /// 用户账号字符串
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 用户 ID 未在 store 中找到
     pub async fn get_account(&self, user_id: i64) -> Result<String> {
         let entries = self.entries.read().await;
         let state = entries.get(&user_id).context("user_id not found")?;
         Ok(state.account.clone())
     }
 
-    /// 获取用户refresh_token
+    /// 获取指定用户的 refresh_token
+    ///
+    /// # 参数
+    /// - `user_id`: 用户 ID
+    ///
+    /// # 返回
+    /// refresh_token 字符串
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 用户 ID 未在 store 中找到
     pub async fn get_refresh_token(&self, user_id: i64) -> Result<String> {
         let entries = self.entries.read().await;
         let state = entries.get(&user_id).context("user_id not found")?;
         Ok(state.refresh_token.clone())
     }
 
-    /// 检查用户是否已登录且token有效
+    /// 检查用户的 access_token 是否仍然有效
+    ///
+    /// # 参数
+    /// - `user_id`: 用户 ID
+    ///
+    /// # 返回
+    /// token 有效返回 `true`，用户未登录或 token 已过期返回 `false`
     pub async fn is_token_valid(&self, user_id: i64) -> bool {
         let entries = self.entries.read().await;
         if let Some(state) = entries.get(&user_id) {
@@ -131,23 +172,42 @@ impl TokenStore {
         }
     }
 
-    /// 移除用户的token状态
+    /// 移除指定用户的 token 状态
+    ///
+    /// # 参数
+    /// - `user_id`: 用户 ID
     pub async fn remove(&self, user_id: i64) -> Result<()> {
         self.entries.write().await.remove(&user_id);
         Ok(())
     }
 
-    /// 获取所有已登录用户的ID列表
+    /// 获取所有已登录用户的 ID 列表
+    ///
+    /// # 返回
+    /// store 中所有用户 ID 的向量
     pub async fn get_all_user_ids(&self) -> Vec<i64> {
         let entries = self.entries.read().await;
         entries.keys().copied().collect()
     }
 
-    /// 清除所有token状态
+    /// 清除所有用户的 token 状态
     pub async fn clear(&self) {
         self.entries.write().await.clear();
     }
 
+    /// 获取用户的认证信息（用户 ID + access_token），必要时自动刷新
+    ///
+    /// 采用双检锁模式：先快速检查 token 是否有效，若接近过期则加锁刷新。
+    /// 若 refresh_token 也已过期，则返回错误要求重新登录。
+    ///
+    /// # 参数
+    /// - `user_id`: 用户 ID
+    ///
+    /// # 返回
+    /// 元组 `(user_id, access_token)`
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 用户未登录、token 刷新失败或 refresh_token 已过期
     pub async fn get_auth(&self, user_id: i64) -> Result<(i64, String)> {
         // 快速路径：token未过期
         {
@@ -222,13 +282,33 @@ impl TokenStore {
         anyhow::bail!("user_id {} not found in token store", user_id)
     }
 
-    /// Re-login a user, replacing stale token state (e.g. after password change).
+    /// 重新登录用户，替换旧的 token 状态（如密码修改后）
+    ///
+    /// # 参数
+    /// - `account`: 用户账号
+    /// - `password`: 新密码
+    ///
+    /// # 返回
+    /// 用户 ID
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 登录请求失败或响应解析错误
     pub async fn relogin(&self, account: &str, password: &str) -> Result<i64> {
         // Login will overwrite the existing entry for this user_id
         let uid = self.login(account, password).await?;
         Ok(uid)
     }
 
+    /// 串行预热多个用户的 token（逐个登录）
+    ///
+    /// # 参数
+    /// - `credentials`: 凭证列表，每个元素为 `(account, password)` 元组
+    ///
+    /// # 返回
+    /// 登录成功的用户 ID 列表
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 任意用户登录失败
     pub async fn warmup(&self, credentials: &[(&str, &str)]) -> Result<Vec<i64>> {
         let mut user_ids = Vec::with_capacity(credentials.len());
         for (account, password) in credentials {
@@ -238,7 +318,17 @@ impl TokenStore {
         Ok(user_ids)
     }
 
-    /// 并发登录多个用户（提高效率）
+    /// 并发预热多个用户的 token
+    ///
+    /// # 参数
+    /// - `credentials`: 凭证列表，每个元素为 `(account, password)` 元组
+    /// - `concurrency`: 最大并发数
+    ///
+    /// # 返回
+    /// 登录成功的用户 ID 列表
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 任意用户登录失败
     pub async fn warmup_concurrent(
         &self,
         credentials: &[(&str, &str)],
@@ -261,7 +351,16 @@ impl TokenStore {
         Ok(user_ids)
     }
 
-    /// 批量获取多个用户的认证信息
+    /// 串行批量获取多个用户的认证信息
+    ///
+    /// # 参数
+    /// - `user_ids`: 用户 ID 列表
+    ///
+    /// # 返回
+    /// 认证信息列表，每个元素为 `(user_id, access_token)` 元组
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 任意用户的认证信息获取失败
     pub async fn batch_get_auth(&self, user_ids: &[i64]) -> Result<Vec<(i64, String)>> {
         let mut results = Vec::with_capacity(user_ids.len());
         for &user_id in user_ids {
@@ -272,6 +371,16 @@ impl TokenStore {
     }
 
     /// 并发获取多个用户的认证信息
+    ///
+    /// # 参数
+    /// - `user_ids`: 用户 ID 列表
+    /// - `concurrency`: 最大并发数
+    ///
+    /// # 返回
+    /// 认证信息列表，每个元素为 `(user_id, access_token)` 元组
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 任意用户的认证信息获取失败
     pub async fn batch_get_auth_concurrent(
         &self,
         user_ids: &[i64],
@@ -292,7 +401,14 @@ impl TokenStore {
         Ok(auth_results)
     }
 
-    /// 重新登录用户（用于密码修改等场景）
+    /// 使用新密码重新登录指定用户
+    ///
+    /// # 参数
+    /// - `user_id`: 用户 ID
+    /// - `new_password`: 新密码
+    ///
+    /// # 错误
+    /// - `anyhow::Error`: 用户未登录或重新登录失败
     pub async fn relogin_with_password(
         &self,
         user_id: i64,
