@@ -14,6 +14,13 @@ pub struct AuthState {
 }
 
 impl AuthState {
+    /// 创建认证服务状态实例
+    ///
+    /// # 参数
+    /// - `db`: PostgreSQL 数据库连接
+    /// - `redis`: Redis 连接池
+    /// - `email_client`: 邮件发送客户端
+    /// - `token_cipher`: token 加密/解密工具
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,
