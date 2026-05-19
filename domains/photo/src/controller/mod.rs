@@ -1,3 +1,7 @@
+/// 照片域控制器模块
+///
+/// 包含照片、收藏、评论和时间线相关的 HTTP 请求处理器。
+/// 通过 feature flag `face_recognition` 可选编译人脸识别控制器。
 pub mod photo_controller;
 pub mod collection_controller;
 pub mod comment_controller;
