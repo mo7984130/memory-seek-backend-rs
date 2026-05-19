@@ -41,6 +41,17 @@ pub struct FaceEngine {
 }
 
 impl FaceEngine {
+    /// 初始化人脸引擎，加载检测和识别模型并执行预热
+    ///
+    /// # 参数
+    /// - `det_model_path`: SCRFD 检测模型的 ONNX 文件路径
+    /// - `rec_model_path`: ArcFace 识别模型的 ONNX 文件路径
+    ///
+    /// # 返回
+    /// 返回初始化完成的 `FaceEngine` 实例
+    ///
+    /// # 错误
+    /// - `FaceEngineError::OrtError`: 模型加载或预热失败
     pub fn new(det_model_path: &str, rec_model_path: &str) -> Result<Self, FaceEngineError> {
         info!("初始化人脸识别模型...");
         info!("Detector 模型路径: {}", det_model_path);
@@ -57,14 +68,49 @@ impl FaceEngine {
         Ok(Self { detector, recognizer })
     }
 
+    /// 检测图片中的人脸，返回包含边界框、关键点和置信度的检测结果列表
+    ///
+    /// # 参数
+    /// - `image_bytes`: 原始图片的字节数据
+    ///
+    /// # 返回
+    /// 返回检测到的人脸列表
+    ///
+    /// # 错误
+    /// - `FaceEngineError::ImageError`: 图片解码失败
+    /// - `FaceEngineError::OrtError`: 推理执行失败
     pub fn detect_faces(&self, image_bytes: &[u8]) -> Result<Vec<FaceDetection>, FaceEngineError> {
         self.detector.detect(image_bytes)
     }
 
+    /// 从已对齐的人脸图像中提取 512 维特征向量
+    ///
+    /// # 参数
+    /// - `aligned_face`: 已对齐的 112x112 人脸图像
+    ///
+    /// # 返回
+    /// 返回 L2 归一化后的 512 维特征向量
+    ///
+    /// # 错误
+    /// - `FaceEngineError::OrtError`: 推理执行失败
+    /// - `FaceEngineError::InvalidOutput`: 模型输出维度不匹配
     pub fn extract_embedding(&self, aligned_face: &DynamicImage) -> Result<[f32; 512], FaceEngineError> {
         self.recognizer.extract(aligned_face)
     }
 
+    /// 一站式检测图片中所有人脸并提取特征向量
+    ///
+    /// # 参数
+    /// - `image_bytes`: 原始图片的字节数据
+    ///
+    /// # 返回
+    /// 返回检测结果与对应特征向量的配对列表
+    ///
+    /// # 错误
+    /// - `FaceEngineError::ImageError`: 图片解码失败
+    /// - `FaceEngineError::OrtError`: 推理执行失败
+    /// - `FaceEngineError::AlignmentFailed`: 人脸对齐失败
+    /// - `FaceEngineError::InvalidOutput`: 模型输出维度不匹配
     pub fn detect_and_extract(
         &self,
         image_bytes: &[u8],

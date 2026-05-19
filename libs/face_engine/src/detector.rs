@@ -12,15 +12,40 @@ pub struct Detector {
 }
 
 impl Detector {
+    /// 创建 SCRFD 人脸检测器，加载指定路径的 ONNX 模型并执行预热
+    ///
+    /// # 参数
+    /// - `model_path`: SCRFD 检测模型的 ONNX 文件路径
+    ///
+    /// # 返回
+    /// 返回初始化完成的 `Detector` 实例
+    ///
+    /// # 错误
+    /// - `FaceEngineError::OrtError`: 模型加载或预热失败
     pub fn new(model_path: &str) -> Result<Self, FaceEngineError> {
         let session = OrtSession::new(model_path, INPUT_SIZE, "SCRFD detector")?;
         Ok(Self { session })
     }
 
+    /// 使用全零输入预热检测模型，确保首次推理时延迟稳定
+    ///
+    /// # 错误
+    /// - `FaceEngineError::OrtError`: ONNX Runtime 推理执行失败
     pub fn warmup(&self) -> Result<(), FaceEngineError> {
         self.session.warmup("SCRFD detector")
     }
 
+    /// 检测图片中的人脸，返回包含边界框、关键点和置信度的检测结果列表
+    ///
+    /// # 参数
+    /// - `image_bytes`: 原始图片的字节数据
+    ///
+    /// # 返回
+    /// 返回检测到的人脸列表，包含归一化坐标和原始分辨率的关键点
+    ///
+    /// # 错误
+    /// - `FaceEngineError::ImageError`: 图片解码失败
+    /// - `FaceEngineError::OrtError`: ONNX Runtime 推理执行失败
     pub fn detect(&self, image_bytes: &[u8]) -> Result<Vec<FaceDetection>, FaceEngineError> {
         let img = image::load_from_memory(image_bytes)?;
         let (orig_width, orig_height) = (img.width(), img.height());
@@ -30,6 +55,7 @@ impl Detector {
         })
     }
 
+    // 解析 SCRFD 模型的多尺度输出，解码边界框和关键点并执行 NMS 过滤
     fn postprocess(
         outputs: &ort::session::SessionOutputs,
         orig_width: u32,
@@ -108,6 +134,7 @@ impl Detector {
         Ok(scaled_detections)
     }
 
+    // 对检测结果执行非极大值抑制，按置信度排序后移除重叠度过高的候选框
     fn apply_nms(mut detections: Vec<FaceDetection>, threshold: f32) -> Vec<FaceDetection> {
         if detections.is_empty() {
             return vec![];

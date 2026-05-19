@@ -14,6 +14,18 @@ pub struct OrtSession {
 }
 
 impl OrtSession {
+    /// 从 ONNX 模型文件创建推理会话，支持 CUDA 和 CPU 执行提供程序
+    ///
+    /// # 参数
+    /// - `model_path`: ONNX 模型文件路径
+    /// - `input_size`: 模型输入图像的边长（正方形）
+    /// - `model_name`: 模型名称，用于日志输出
+    ///
+    /// # 返回
+    /// 返回初始化完成的 `OrtSession` 实例
+    ///
+    /// # 错误
+    /// - `FaceEngineError::OrtError`: 路径无效、模型文件读取失败或 ONNX Runtime 初始化失败
     pub fn new(model_path: &str, input_size: u32, model_name: &str) -> Result<Self, FaceEngineError> {
         let full_path = Path::new(model_path)
             .canonicalize()
@@ -46,6 +58,13 @@ impl OrtSession {
         })
     }
 
+    /// 使用全零输入预热模型，确保首次推理时延迟稳定
+    ///
+    /// # 参数
+    /// - `model_name`: 模型名称，用于日志输出
+    ///
+    /// # 错误
+    /// - `FaceEngineError::OrtError`: ONNX Runtime 推理执行失败
     pub fn warmup(&self, model_name: &str) -> Result<(), FaceEngineError> {
         info!("Warming up {}...", model_name);
         let (shape, input_data) = self.preprocess_tensor();
@@ -64,6 +83,17 @@ impl OrtSession {
         Ok(())
     }
 
+    /// 对图像进行预处理后执行推理，并通过回调函数处理输出
+    ///
+    /// # 参数
+    /// - `img`: 输入的动态图像
+    /// - `f`: 处理推理输出的回调函数
+    ///
+    /// # 返回
+    /// 返回回调函数处理后的结果
+    ///
+    /// # 错误
+    /// - `FaceEngineError::OrtError`: ONNX Runtime 推理执行失败
     pub fn run_inference<F, R>(&self, img: &DynamicImage, f: F) -> Result<R, FaceEngineError>
     where
         F: FnOnce(&ort::session::SessionOutputs) -> Result<R, FaceEngineError>,
@@ -83,12 +113,14 @@ impl OrtSession {
         f(&outputs)
     }
 
+    // 生成全零的预热张量，形状为 [1, 3, input_size, input_size]
     fn preprocess_tensor(&self) -> (Vec<usize>, Vec<f32>) {
         let shape = vec![1usize, 3, self.input_size as usize, self.input_size as usize];
         let input_data: Vec<f32> = vec![0.0; shape.iter().product()];
         (shape, input_data)
     }
 
+    // 将图像缩放到指定大小，转换为 NCHW 格式的归一化浮点张量
     fn preprocess_image(img: &DynamicImage, input_size: u32) -> Result<(Vec<usize>, Vec<f32>), FaceEngineError> {
         let resized = img.resize_exact(
             input_size,

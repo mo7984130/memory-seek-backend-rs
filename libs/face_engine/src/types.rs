@@ -9,10 +9,15 @@ pub struct BBox {
 }
 
 impl BBox {
+    /// 计算边界框的面积
     pub fn area(&self) -> f32 {
         self.w * self.h
     }
 
+    /// 计算与另一个边界框的交并比 (Intersection over Union)
+    ///
+    /// # 参数
+    /// - `other`: 另一个边界框
     pub fn iou(&self, other: &BBox) -> f32 {
         let x1 = self.x.max(other.x);
         let y1 = self.y.max(other.y);
@@ -38,6 +43,12 @@ pub struct FaceDetection {
 }
 
 impl FaceDetection {
+    /// 创建人脸检测结果
+    ///
+    /// # 参数
+    /// - `bbox`: 边界框
+    /// - `landmarks`: 5 个关键点的坐标，共 10 个浮点值
+    /// - `score`: 检测置信度
     pub fn new(bbox: BBox, landmarks: [f32; 10], score: f32) -> Self {
         Self { bbox, landmarks, score }
     }
@@ -50,6 +61,11 @@ pub struct Point {
 }
 
 impl Point {
+    /// 创建二维坐标点
+    ///
+    /// # 参数
+    /// - `x`: 横坐标
+    /// - `y`: 纵坐标
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }

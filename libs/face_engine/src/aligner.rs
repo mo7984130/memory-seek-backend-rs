@@ -15,6 +15,18 @@ const OUTPUT_SIZE: u32 = 112;
 pub struct FaceAligner;
 
 impl FaceAligner {
+    /// 根据人脸关键点对原始图片字节进行对齐，输出标准化的 112x112 人脸图像
+    ///
+    /// # 参数
+    /// - `image_bytes`: 原始图片的字节数据
+    /// - `landmarks`: 5 个关键点的坐标，共 10 个浮点值 (x0, y0, x1, y1, ..., x4, y4)
+    ///
+    /// # 返回
+    /// 返回对齐后的 112x112 RGB 图像
+    ///
+    /// # 错误
+    /// - `FaceEngineError::ImageError`: 图片解码失败
+    /// - `FaceEngineError::AlignmentFailed`: 关键点退化导致变换矩阵不可逆
     pub fn align(image_bytes: &[u8], landmarks: &[f32; 10]) -> Result<DynamicImage, FaceEngineError> {
         let img = image::load_from_memory(image_bytes)?;
 
@@ -33,6 +45,17 @@ impl FaceAligner {
         Ok(DynamicImage::ImageRgb8(aligned))
     }
 
+    /// 根据人脸关键点对已解码的图像进行对齐，输出标准化的 112x112 人脸图像
+    ///
+    /// # 参数
+    /// - `img`: 已解码的动态图像
+    /// - `landmarks`: 5 个关键点的坐标，共 10 个浮点值 (x0, y0, x1, y1, ..., x4, y4)
+    ///
+    /// # 返回
+    /// 返回对齐后的 112x112 RGB 图像
+    ///
+    /// # 错误
+    /// - `FaceEngineError::AlignmentFailed`: 关键点退化导致变换矩阵不可逆
     pub fn align_from_image(
         img: &DynamicImage,
         landmarks: &[f32; 10],
@@ -52,6 +75,7 @@ impl FaceAligner {
         Ok(DynamicImage::ImageRgb8(aligned))
     }
 
+    // 使用最小二乘法估计源关键点到目标关键点的相似变换矩阵
     fn estimate_similarity_transform(
         src_points: &[Point; 5],
         dst_points: &[Point; 5],
@@ -102,6 +126,7 @@ impl FaceAligner {
         Ok([a as f32, b as f32, c as f32, -b as f32, a as f32, d as f32])
     }
 
+    // 将相似变换应用于图像，通过逆映射和双线性插值生成对齐结果
     fn apply_transform(
         img: &DynamicImage,
         transform: &[f32; 6],
@@ -142,6 +167,7 @@ impl FaceAligner {
         result
     }
 
+    // 在图像上执行双线性插值，获取亚像素精度的颜色值
     fn bilinear_interpolate(img: &DynamicImage, x: f32, y: f32) -> Rgb<u8> {
         let x0 = x.floor() as u32;
         let y0 = y.floor() as u32;
@@ -175,6 +201,7 @@ impl FaceAligner {
         Rgb([r, g, b])
     }
 
+    // 线性插值：在 a 和 b 之间按比例 t 插值
     fn lerp(a: f32, b: f32, t: f32) -> f32 {
         a + (b - a) * t
     }
