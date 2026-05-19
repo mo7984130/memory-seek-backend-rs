@@ -7,6 +7,7 @@ use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
+/// 修改密码请求体
 #[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangePasswordRequest {
@@ -16,6 +17,7 @@ pub struct ChangePasswordRequest {
     pub new_password: String
 }
 
+/// 修改昵称请求体
 #[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangeNicknameRequest {
@@ -26,12 +28,14 @@ pub struct ChangeNicknameRequest {
     pub new_nickname: String
 }
 
+/// 批量获取用户信息请求体
 #[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct GetUserInfoBatchRequest {
     pub user_ids: Vec<String>
 }
 
+/// 邀请码数据传输对象，包含邀请码值和过期时间
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InviterCodeDTO {
@@ -39,6 +43,7 @@ pub struct InviterCodeDTO {
     pub expire_at: DateTime<Utc>,
 }
 
+/// 用户信息数据库查询结果，直接映射数据库字段
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfoDTO {
@@ -47,6 +52,7 @@ pub struct UserInfoDTO {
     pub avatar_file_id: Option<String>,
 }
 
+/// 用户信息视图对象，用于 API 响应，头像字段已加密为 token
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfoVO {
@@ -56,6 +62,14 @@ pub struct UserInfoVO {
 }
 
 impl UserInfoVO {
+    /// 将数据库 DTO 转换为视图对象，对头像文件 ID 进行加密
+    ///
+    /// # 参数
+    /// - `dto`: 用户信息数据库查询结果
+    /// - `token_cipher`: 用于加密头像文件 ID 的加密器
+    ///
+    /// # 返回
+    /// 转换后的用户信息视图对象，`user_id` 转为字符串，头像字段加密为 token
     pub fn from_dto(dto: UserInfoDTO, token_cipher: &TokenCipher) -> Self {
         let avatar_token = dto.avatar_file_id
             .as_ref()
@@ -75,6 +89,7 @@ mod tests {
     use common::utils::TokenCipher;
     use validator::Validate;
 
+    // 创建用于测试的 TokenCipher 实例
     fn create_test_cipher() -> TokenCipher {
         TokenCipher::new("test-secret-key-32bytes!xxxxxx", "test-salt")
     }
