@@ -50,19 +50,6 @@ impl CollectionService {
             collections
         };
 
-        let cover_ids: Vec<Option<i64>> = collections.iter().map(|c| c.cover_image_id).collect();
-
-        let photos_with_covers = if cover_ids.iter().any(|id| id.is_some()) {
-            let cover_ids: Vec<i64> = cover_ids.into_iter().flatten().collect();
-            PhotoMapper::query_by_ids(&state.db, &cover_ids).await?
-        } else {
-            vec![]
-        };
-        let _photo_map: HashMap<i64, _> = photos_with_covers
-            .into_iter()
-            .map(|p| (p.id, p))
-            .collect();
-
         let no_cover_ids: Vec<i64> = collections
             .iter()
             .filter(|c| c.cover_image_id.is_none())
@@ -541,7 +528,7 @@ impl CollectionService {
         let already_exists_ids = CollectionPhotoMapper::exists_in_collection(
             &state.db,
             collection_id,
-            &unique_photo_ids.clone(),
+            &unique_photo_ids,
         )
         .await?;
         let already_exists_set: std::collections::HashSet<i64> =

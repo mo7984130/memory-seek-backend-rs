@@ -7,7 +7,7 @@
 | auth/auth_service.rs | 4+4 | 7 | 3 | ██████████ 100% |
 | user/user_service.rs | 7 | 7 | 2 | ██████████ 100% |
 | photo/comment_service.rs | 4 | 4 | 1 | ██████████ 100% |
-| photo/collection_service.rs | 12 | 0 | 0 | ░░░░░░░░░░ 0% |
+| photo/collection_service.rs | 12 | 12 | 2 | ██████████ 100% |
 | photo/timeline_stat_service.rs | 5 | 0 | 0 | ░░░░░░░░░░ 0% |
 | photo/photo_service.rs | 6 | 0 | 0 | ░░░░░░░░░░ 0% |
 | photo/feature_service.rs | 5 | 0 | 0 | ░░░░░░░░░░ 0% |
@@ -75,4 +75,42 @@
 - 无需修复
 
 #### ✅ toggle_like() — 2026-05-19
+- 无需修复
+
+### collection_service.rs
+
+#### ✅ get_collection_list() — 2026-05-19
+- 修复: 删除死代码 _photo_map（查询了照片但从未使用）
+
+#### ✅ create_collection() — 2026-05-19
+- 无需修复
+
+#### ✅ edit_collection() — 2026-05-19
+- 无需修复
+
+#### ✅ delete_collection() — 2026-05-19
+- 无需修复
+
+#### ✅ add_photo_to_collection() — 2026-05-19
+- 无需修复
+
+#### ✅ remove_photo_from_collection() — 2026-05-19
+- 无需修复
+
+#### ✅ get_collection_photos() — 2026-05-19
+- 无需修复
+
+#### ✅ find_collection_ids_by_photo() — 2026-05-19
+- 无需修复
+
+#### ✅ create_favorite_collection() — 2026-05-19
+- 无需修复
+
+#### ✅ get_favorite_collection_id() — 2026-05-19
+- 无需修复
+
+#### ✅ batch_add_photos_to_collection() — 2026-05-19
+- 修复: 移除 exists_in_collection 调用中不必要的 clone
+
+#### ✅ batch_remove_photos_from_collection() — 2026-05-19
 - 无需修复
