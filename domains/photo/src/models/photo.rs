@@ -30,6 +30,14 @@ pub struct PhotoVO {
 }
 
 impl PhotoVO {
+    /// 为照片生成缩略图、预览和原图三种加密访问令牌
+    ///
+    /// # 参数
+    /// - `file_id`: 文件唯一标识
+    /// - `token_cipher`: 加密器实例
+    ///
+    /// # 返回
+    /// 返回 `(thumbnail_token, preview_token, original_token)` 三元组，加密失败时对应位置为 `None`
     pub fn generate_tokens(
         file_id: &str,
         token_cipher: &TokenCipher,
@@ -59,10 +67,12 @@ pub struct PhotoCursorQuery {
     pub default_collection_id: Option<String>,
 }
 
+// 默认分页大小
 fn default_size() -> u32 {
     100
 }
 
+// 默认翻页方向
 fn default_direction() -> PageDirection {
     PageDirection::Next
 }
@@ -74,11 +84,25 @@ pub struct PhotoCursor {
 }
 
 impl PhotoCursor {
+    /// 将游标编码为 URL 安全的 Base64 字符串
+    ///
+    /// # 返回
+    /// 返回 Base64 编码后的游标字符串
     pub fn encode(&self) -> String {
         let json = serde_json::to_string(self).unwrap_or_default();
         URL_SAFE_NO_PAD.encode(json.as_bytes())
     }
 
+    /// 从 URL 安全的 Base64 字符串解码游标
+    ///
+    /// # 参数
+    /// - `s`: Base64 编码的游标字符串
+    ///
+    /// # 返回
+    /// 返回解码后的 `PhotoCursor`
+    ///
+    /// # 错误
+    /// - `AppError`: Base64 解码失败、UTF-8 转换失败或 JSON 反序列化失败
     pub fn decode(s: impl AsRef<[u8]>) -> Result<Self, AppError> {
         let bytes = URL_SAFE_NO_PAD
             .decode(s)
@@ -99,6 +123,10 @@ pub struct CursorPageVO<T, C> {
 }
 
 impl<T, C> CursorPageVO<T, C> {
+    /// 创建空的游标分页容器
+    ///
+    /// # 返回
+    /// 返回无记录、无游标的空分页结果
     pub fn empty() -> Self {
         Self {
             records: vec![],
@@ -127,6 +155,7 @@ pub struct TimeRange {
     pub max_time: Option<DateTimeUtc>,
 }
 impl Default for TimeRange {
+    /// 创建时间范围实例，最小和最大时间均为 `None`
     fn default() -> Self {
         Self {
             min_time: None,
@@ -147,6 +176,7 @@ pub struct PhotoInfo {
     pub created_at: DateTimeUtc,
 }
 impl From<entities::photo::Model> for PhotoInfo {
+    /// 从数据库照片实体转换为照片信息 DTO
     fn from(m: entities::photo::Model) -> Self {
         Self {
             id: m.id,

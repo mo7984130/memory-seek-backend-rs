@@ -1,27 +1,27 @@
 use ndarray::{Array1, ArrayView1};
 use rayon::prelude::*;
 
-/// 欧几里得距离（使用 ndarray SIMD 优化）
-/// 
+/// 计算两个向量之间的欧几里得距离（使用 ndarray SIMD 优化）
+///
 /// # 参数
 /// - `a`: 第一个向量
 /// - `b`: 第二个向量
-/// 
+///
 /// # 返回
-/// 返回两个向量之间的欧几里得距离
+/// 返回两个向量之间的欧几里得距离（f64）
 pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f64 {
     let a_arr = ArrayView1::from(a).mapv(|x| x as f64);
     let b_arr = ArrayView1::from(b).mapv(|x| x as f64);
     (&a_arr - &b_arr).mapv(|x| x * x).sum().sqrt()
 }
 
-/// L2 归一化（使用 ndarray）
-/// 
+/// 对向量进行 L2 归一化（使用 ndarray）
+///
 /// # 参数
 /// - `vec`: 待归一化的向量
-/// 
+///
 /// # 返回
-/// 返回归一化后的向量
+/// 返回 L2 归一化后的向量，零向量返回原向量的副本
 pub fn l2_normalize(vec: &[f32]) -> Vec<f32> {
     let arr = Array1::from_vec(vec.to_vec());
     let norm = arr.mapv(|x| x * x).sum().sqrt();
@@ -31,14 +31,14 @@ pub fn l2_normalize(vec: &[f32]) -> Vec<f32> {
     (arr / norm).to_vec()
 }
 
-/// 余弦相似度（使用 ndarray）
-/// 
+/// 计算两个向量之间的余弦相似度（使用 ndarray）
+///
 /// # 参数
 /// - `a`: 第一个向量
 /// - `b`: 第二个向量
-/// 
+///
 /// # 返回
-/// 返回两个向量之间的余弦相似度
+/// 返回余弦相似度，任一零向量返回 0.0
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     let a_arr = ArrayView1::from(a);
     let b_arr = ArrayView1::from(b);
@@ -52,12 +52,12 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     dot / (norm_a * norm_b)
 }
 
-/// 批量欧几里得距离计算（使用 rayon 并行）
-/// 
+/// 批量计算查询向量与目标向量之间的欧几里得距离（使用 rayon 并行）
+///
 /// # 参数
 /// - `query`: 查询向量
-/// - `targets`: 目标向量列表
-/// 
+/// - `targets`: 目标向量切片列表
+///
 /// # 返回
 /// 返回查询向量与每个目标向量之间的距离列表
 pub fn euclidean_distance_batch(query: &[f32], targets: &[&[f32]]) -> Vec<f64> {
@@ -67,13 +67,13 @@ pub fn euclidean_distance_batch(query: &[f32], targets: &[&[f32]]) -> Vec<f64> {
         .collect()
 }
 
-/// 计算质心（使用 ndarray）
-/// 
+/// 计算一组向量的平均质心（使用 ndarray）
+///
 /// # 参数
-/// - `embeddings`: 嵌入向量切片列表（避免内存拷贝）
-/// 
+/// - `embeddings`: 嵌入向量切片列表
+///
 /// # 返回
-/// 返回所有向量的平均质心
+/// 返回所有向量的平均质心，空输入返回 512 维零向量
 pub fn calculate_centroid(embeddings: &[&[f32]]) -> Vec<f32> {
     if embeddings.is_empty() {
         return vec![0.0; 512];
@@ -88,14 +88,14 @@ pub fn calculate_centroid(embeddings: &[&[f32]]) -> Vec<f32> {
     (sum / n).to_vec()
 }
 
-/// 加权质心计算（使用 ndarray，避免内存拷贝）
-/// 
+/// 计算一组向量的加权质心（使用 ndarray，避免内存拷贝）
+///
 /// # 参数
-/// - `embeddings`: 嵌入向量切片列表（避免内存拷贝）
+/// - `embeddings`: 嵌入向量切片列表
 /// - `weights`: 权重列表
-/// 
+///
 /// # 返回
-/// 返回加权质心向量
+/// 返回加权质心向量，空输入或零权重返回零向量
 pub fn calculate_weighted_centroid(embeddings: &[&[f32]], weights: &[f32]) -> Vec<f32> {
     if embeddings.is_empty() || weights.is_empty() {
         return vec![0.0; 512];
@@ -115,15 +115,15 @@ pub fn calculate_weighted_centroid(embeddings: &[&[f32]], weights: &[f32]) -> Ve
 }
 
 /// 加权合并两个向量
-/// 
+///
 /// # 参数
 /// - `a`: 第一个向量
 /// - `weight_a`: 第一个向量的权重
 /// - `b`: 第二个向量
 /// - `weight_b`: 第二个向量的权重
-/// 
+///
 /// # 返回
-/// 返回加权合并后的向量
+/// 返回加权合并后的向量，总权重为零时返回零向量
 pub fn weighted_merge(a: &[f32], weight_a: f32, b: &[f32], weight_b: f32) -> Vec<f32> {
     let a_arr = Array1::from_vec(a.to_vec());
     let b_arr = Array1::from_vec(b.to_vec());
@@ -134,15 +134,15 @@ pub fn weighted_merge(a: &[f32], weight_a: f32, b: &[f32], weight_b: f32) -> Vec
     ((a_arr * weight_a + b_arr * weight_b) / total_weight).to_vec()
 }
 
-/// 向量减量计算（从质心中减去一个向量）
-/// 
+/// 从加权质心中移除一个向量，返回新的质心
+///
 /// # 参数
 /// - `centroid`: 当前质心
 /// - `weight`: 当前总权重
-/// - `embedding`: 要减去的向量
-/// 
+/// - `embedding`: 要移除的向量
+///
 /// # 返回
-/// 返回新的质心
+/// 返回移除后的新的质心，权重不足时返回零向量
 pub fn decrement_centroid(centroid: &[f32], weight: f32, embedding: &[f32]) -> Vec<f32> {
     if weight <= 1.0 {
         return vec![0.0; centroid.len()];

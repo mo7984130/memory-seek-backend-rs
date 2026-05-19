@@ -1,5 +1,14 @@
 use pinyin::ToPinyin;
 
+/// 将字符串转换为拼音首字母缩写
+///
+/// 中文字符取拼音首字母，英文字母保留并转小写，数字被忽略。
+///
+/// # 参数
+/// - `s`: 待转换的字符串
+///
+/// # 返回
+/// 返回拼音首字母组成的字符串
 pub fn to_pinyin_initials(s: &str) -> String {
     let mut initials = String::new();
 

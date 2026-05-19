@@ -9,6 +9,10 @@ pub struct UnionFind {
 }
 
 impl UnionFind {
+    /// 创建包含 `n` 个元素的并查集，初始时每个元素各自为一个集合
+    ///
+    /// # 参数
+    /// - `n`: 元素总数
     pub fn new(n: usize) -> Self {
         Self {
             parent: (0..n).collect(),
@@ -16,6 +20,13 @@ impl UnionFind {
         }
     }
 
+    /// 查找元素 `i` 所属集合的根节点，使用路径压缩优化
+    ///
+    /// # 参数
+    /// - `i`: 待查找的元素索引
+    ///
+    /// # 返回
+    /// 返回元素 `i` 所在集合的根节点索引
     pub fn find(&mut self, mut i: usize) -> usize {
         while self.parent[i] != i {
             self.parent[i] = self.parent[self.parent[i]];
@@ -24,6 +35,11 @@ impl UnionFind {
         i
     }
 
+    /// 合并元素 `i` 和 `j` 所属的集合，使用按秩合并优化
+    ///
+    /// # 参数
+    /// - `i`: 第一个元素索引
+    /// - `j`: 第二个元素索引
     pub fn union(&mut self, i: usize, j: usize) {
         let root_i = self.find(i);
         let root_j = self.find(j);
@@ -39,6 +55,16 @@ impl UnionFind {
         }
     }
 
+    /// 基于欧几里得距离对特征节点进行并查集聚类
+    ///
+    /// 同一照片的特征节点不会被合并。使用 rayon 并行计算距离对。
+    ///
+    /// # 参数
+    /// - `features`: 特征节点列表
+    /// - `radius`: 聚类半径阈值，距离小于此值的节点将被合并
+    ///
+    /// # 返回
+    /// 返回以根节点索引为键、成员索引列表为值的聚类映射
     pub fn cluster(
         features: &[FeatureNode],
         radius: f64,
@@ -108,6 +134,17 @@ pub fn calculate_weighted_centroid(nodes: &[&FeatureNode]) -> Vec<f32> {
 /// 
 /// # 返回
 /// 返回有效的种子聚类列表
+/// 从聚类结果中筛选有效的种子聚类
+///
+/// 有效条件：聚类点数不少于 `min_points`，且不包含同一照片的多个特征。
+///
+/// # 参数
+/// - `clusters`: 并查集聚类结果
+/// - `features`: 特征节点列表
+/// - `min_points`: 最小聚类点数阈值
+///
+/// # 返回
+/// 返回满足条件的种子聚类列表
 pub fn filter_valid_seeds(
     clusters: HashMap<usize, Vec<usize>>,
     features: &[FeatureNode],
@@ -152,15 +189,16 @@ pub fn filter_valid_seeds(
     seeds
 }
 
-/// 种子生长阶段
-/// 
-/// 将未分配的特征节点分配到最近的种子聚类中
-/// 
+/// 种子生长阶段：将未分配的特征节点分配到最近的种子聚类中
+///
+/// 距离在 `CENTROID_EFFECT_DISTANCE`（0.7）以内的节点会触发质心更新。
+/// 同一照片的多个特征不会被分配到同一聚类。
+///
 /// # 参数
-/// - `seeds`: 种子聚类列表
-/// - `features`: 特征节点列表（用于查找 photo_id 和 embedding）
+/// - `seeds`: 种子聚类列表（会被原地修改）
+/// - `features`: 特征节点列表
 /// - `grow_radius`: 生长半径阈值
-/// - `update_centroid`: 是否更新质心
+/// - `update_centroid`: 是否在分配后更新聚类质心
 pub fn grow_stage(
     seeds: &mut [PersonCluster],
     features: &[FeatureNode],
