@@ -10,7 +10,7 @@ pub struct Model {
     pub name: String,
     pub description: Option<String>,
     pub photo_count: i64,
-    pub cover_image_id: Option<i64>,
+    pub cover_file_id: Option<String>,
     pub is_favorite: bool,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
