@@ -1,7 +1,12 @@
+/// 常规字符验证器
+///
+/// 禁止 `< > / \ " ' & @` 等特殊符号，适用于名称、标题等通用文本输入。
+
 use once_cell::sync::Lazy;
 use regex::Regex;
 use validator::ValidationError;
 
+/// 常规字符验证配置，定义允许的字符模式和错误提示信息
 pub struct CommonValidConfig;
 
 impl CommonValidConfig {
@@ -13,6 +18,18 @@ static NORMAL_CHAR_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(CommonValidConfig::NORMAL_CHAR_PATTERN).expect("Invalid Normal Char Regex")
 });
 
+/// 验证字符串是否仅包含常规字符（不允许 `< > / \ " ' & @` 等特殊符号）
+///
+/// 空字符串或仅包含空白字符的字符串也会被拒绝。
+///
+/// # 参数
+/// - `value`: 待验证的字符串
+///
+/// # 返回
+/// 验证通过返回 `Ok(())`，否则返回包含错误信息的 `ValidationError`
+///
+/// # 错误
+/// - `ValidationError("invalid_characters")`: 字符串为空或包含禁止的特殊符号
 pub fn validate_normal_char(value: &str) -> Result<(), ValidationError> {
     // 空字符串或只包含空格的字符串直接拒绝
     if value.is_empty() || value.trim().is_empty() {

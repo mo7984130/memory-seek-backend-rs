@@ -1,7 +1,12 @@
+/// 用户名验证器
+///
+/// 要求用户名仅包含字母、数字、下划线和短横线，长度 4-20 个字符。
+
 use once_cell::sync::Lazy;
 use regex::Regex;
 use validator::ValidationError;
 
+/// 用户名验证配置，定义长度范围、允许字符模式和错误提示信息
 pub struct UsernameValidConfig;
 impl UsernameValidConfig {
     pub const MIN_LENGTH: usize = 4;
@@ -12,6 +17,19 @@ impl UsernameValidConfig {
 }
 pub static USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(UsernameValidConfig::PATTERN).unwrap());
 
+/// 验证用户名格式
+///
+/// 检查用户名长度是否在 4-20 个字符之间，且仅包含字母、数字、下划线和短横线。
+///
+/// # 参数
+/// - `username`: 待验证的用户名字符串
+///
+/// # 返回
+/// 验证通过返回 `Ok(())`，否则返回包含错误信息的 `ValidationError`
+///
+/// # 错误
+/// - `ValidationError("invalid_length")`: 用户名长度不在 4-20 范围内
+/// - `ValidationError("invalid_username")`: 用户名包含非法字符
 pub fn validate_username(username: &str) -> Result<(), ValidationError> {
     let len = username.chars().count();
     if !(UsernameValidConfig::MIN_LENGTH..=UsernameValidConfig::MAX_LENGTH).contains(&len) {

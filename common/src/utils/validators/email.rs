@@ -1,9 +1,24 @@
+/// 邮箱格式验证器
+
 use once_cell::sync::Lazy;
 use regex::Regex;
 use validator::ValidationError;
 
+/// 邮箱正则表达式，匹配 `local@domain.tld` 格式，支持子域名和 `+` 标签
 pub static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z0-9-]+$").unwrap() );
 
+/// 验证邮箱地址格式
+///
+/// 检查邮箱是否为空、是否包含连续的点号，并通过正则表达式验证整体格式。
+///
+/// # 参数
+/// - `email`: 待验证的邮箱地址字符串
+///
+/// # 返回
+/// 验证通过返回 `Ok(())`，否则返回包含错误信息的 `ValidationError`
+///
+/// # 错误
+/// - `ValidationError("invalid_email")`: 邮箱为空、包含连续点号或格式不合法
 pub fn validate_email(email: &str) -> Result<(), ValidationError> {
     // 空字符串直接拒绝
     if email.is_empty() {

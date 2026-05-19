@@ -1,8 +1,13 @@
+/// 密码强度验证器
+///
+/// 要求密码长度 8-64 位，且必须同时包含字母和数字。
+
 use fancy_regex::Regex;
 use once_cell::sync::Lazy;
 use tracing::error;
 use validator::ValidationError;
 
+/// 密码验证配置，定义长度范围、复杂性模式和错误提示信息
 pub struct PasswordValidConfig;
 impl PasswordValidConfig {
     pub const MIN: usize = 8;
@@ -16,6 +21,21 @@ static PASSWORD_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(PasswordValidConfig::PATTERN).unwrap()
 });
 
+/// 验证密码强度
+///
+/// 依次执行非空检查、长度检查（8-64 位）和复杂性检查（必须同时包含字母和数字）。
+///
+/// # 参数
+/// - `password`: 待验证的密码字符串
+///
+/// # 返回
+/// 验证通过返回 `Ok(())`，否则返回包含错误信息的 `ValidationError`
+///
+/// # 错误
+/// - `ValidationError("required")`: 密码为空或仅包含空白字符
+/// - `ValidationError("invalid_length")`: 密码长度不在 8-64 范围内
+/// - `ValidationError("invalid_password")`: 密码未同时包含字母和数字
+/// - `ValidationError("internal_error")`: 正则表达式匹配异常（内部错误）
 pub fn validate_password(password: &str) -> Result<(), ValidationError> {
     // 1. 非空检查 (NotBlank)
     if password.trim().is_empty() {

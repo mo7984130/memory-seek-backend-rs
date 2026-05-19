@@ -1,3 +1,19 @@
+/// 通用工具模块
+///
+/// 提供项目中常用的工具类型和函数，包括：
+///
+/// - `redis_ext`: Redis 缓存扩展（`CacheExtension`、`RedisExt`）
+/// - `result_ext`: Result 类型扩展（`ResultExt`、`ToOkExt`）
+/// - `rand_utils`: 随机数工具
+/// - `db_utils`: 数据库工具（`DbUtils`）
+/// - `validators`: 输入验证器（账号、用户名、邮箱、密码、常规字符）
+/// - `file_validator`: 文件验证（`FileValidator`）
+/// - `option_ext`: Option 类型扩展（`OptionExt`）
+/// - `bool_ext`: Bool 类型扩展（`BoolExt`）
+/// - `password`: 密码哈希工具（Argon2id、Bcrypt）
+/// - `avatar`: 头像 token 加密
+/// - `token_cipher`: 通用 token 加解密
+/// - `metrics_ext`: 性能监控工具（仅 `metrics` feature）
 mod redis_ext;
 mod result_ext;
 pub mod rand_utils;
