@@ -26,6 +26,16 @@ static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> =
     LazyLock::new(|| Semaphore::new(common::constants::get_password_verify_max_concurrency()));
 
 /// 获取用户个人信息
+///
+/// # 参数
+/// - `state`: 用户模块共享状态
+/// - `user_id`: 用户 ID
+///
+/// # 返回
+/// 返回用户 DTO，包含 id、用户名、昵称、邮箱、头像 token 和注册时间
+///
+/// # 错误
+/// - `AppError`: 用户不存在或数据库查询失败时返回错误
 #[tracing::instrument(
     name = "user_get_user_info",
     skip_all,
@@ -67,7 +77,17 @@ pub async fn get_user_info(
     })
 }
 
-/// 生成邀请码
+/// 为用户生成唯一邀请码
+///
+/// # 参数
+/// - `state`: 用户模块共享状态
+/// - `user_id`: 用户 ID
+///
+/// # 返回
+/// 返回邀请码 DTO，包含随机生成的邀请码字符串和过期时间
+///
+/// # 错误
+/// - `AppError`: 邀请码生成重试耗尽（冲突）或 Redis 操作失败时返回内部服务器错误
 #[tracing::instrument(
     name = "user_generate_inviter_code",
     skip_all,
@@ -113,7 +133,18 @@ pub async fn generate_inviter_code(
     Err(AppError::InternalServerError)
 }
 
-/// 修改昵称
+/// 修改用户昵称
+///
+/// # 参数
+/// - `state`: 用户模块共享状态
+/// - `user_id`: 用户 ID
+/// - `new_nickname`: 新的昵称字符串
+///
+/// # 返回
+/// 返回更新后的昵称字符串
+///
+/// # 错误
+/// - `AppError`: 用户不存在或数据库更新失败时返回错误
 #[tracing::instrument(
     name = "user_change_nickname",
     skip_all,
@@ -151,7 +182,20 @@ pub async fn change_nickname(
     Ok(new_nickname)
 }
 
-/// 上传头像
+/// 上传并更新用户头像
+///
+/// # 参数
+/// - `state`: 用户模块共享状态
+/// - `user_id`: 用户 ID
+/// - `file_name`: 上传文件的原始文件名
+/// - `file_data`: 头像文件的二进制数据
+/// - `content_type`: 文件的 MIME 类型
+///
+/// # 返回
+/// 返回新头像的加密访问 token
+///
+/// # 错误
+/// - `AppError`: 图片校验失败、S3 上传失败、数据库更新失败或用户不存在时返回错误
 #[tracing::instrument(
     name = "user_update_avatar",
     skip_all,
@@ -238,7 +282,18 @@ pub async fn update_avatar(
     Ok(avatar_token)
 }
 
-/// 修改密码
+/// 修改用户登录密码
+///
+/// # 参数
+/// - `state`: 用户模块共享状态
+/// - `user_id`: 用户 ID
+/// - `req`: 包含旧密码和新密码的请求体
+///
+/// # 返回
+/// 无返回值
+///
+/// # 错误
+/// - `AppError`: 用户不存在、旧密码校验失败、新旧密码相同或数据库更新失败时返回错误
 #[tracing::instrument(
     name = "user_change_password",
     skip_all,
@@ -315,7 +370,17 @@ pub async fn change_password(
     Ok(())
 }
 
-/// 登出
+/// 用户登出，清除所有令牌和缓存
+///
+/// # 参数
+/// - `state`: 用户模块共享状态
+/// - `user_id`: 用户 ID
+///
+/// # 返回
+/// 无返回值
+///
+/// # 错误
+/// - `AppError`: 数据库更新或 Redis 删除失败时返回错误
 #[tracing::instrument(
     name = "user_logout",
     skip_all,
@@ -354,7 +419,17 @@ pub async fn logout(
     Ok(())
 }
 
-/// 批量获取其他人的信息
+/// 批量获取多个用户的基本信息（带 Redis 缓存）
+///
+/// # 参数
+/// - `state`: 用户模块共享状态
+/// - `user_ids`: 要查询的用户 ID 列表
+///
+/// # 返回
+/// 返回用户信息列表，未找到的用户对应位置为 `None`；空列表直接返回空结果
+///
+/// # 错误
+/// - `AppError`: 列表长度超出限制或数据库查询失败时返回错误
 #[tracing::instrument(
     name = "user_get_user_info_batch",
     skip_all,
