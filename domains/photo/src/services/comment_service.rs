@@ -19,19 +19,22 @@ pub struct CommentService;
 
 impl CommentService {
     /// 获取照片评论分页列表
-    /// 
-    /// 首页会先显示热门评论（点赞数超过阈值的评论）
-    /// 然后按时间倒序显示其他评论
-    /// 
+    ///
+    /// 首页会先显示热门评论（点赞数超过阈值的评论），
+    /// 然后按时间倒序显示其他评论。
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `photo_id`: 照片ID
     /// - `user_id`: 当前用户ID（用于判断点赞状态）
     /// - `cursor`: 游标时间点
     /// - `limit`: 每页数量
-    /// 
+    ///
     /// # 返回
     /// 返回分页评论列表，包含用户点赞状态
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: 分页参数超出范围
     pub async fn get_comment_page(
         state: &PhotoState,
         photo_id: i64,
@@ -92,15 +95,18 @@ impl CommentService {
     }
 
     /// 发布评论
-    /// 
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `photo_id`: 照片ID
     /// - `user_id`: 用户ID
     /// - `content`: 评论内容
-    /// 
+    ///
     /// # 返回
     /// 返回创建的评论VO
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库插入失败
     pub async fn publish_comment(
         state: &PhotoState,
         photo_id: i64,
@@ -120,18 +126,18 @@ impl CommentService {
     }
 
     /// 删除评论
-    /// 
-    /// 只能删除自己的评论
-    /// 同时删除评论的所有点赞记录
-    /// 使用事务保证原子性
-    /// 
+    ///
+    /// 只能删除自己的评论，同时删除评论的所有点赞记录。
+    /// 使用事务保证原子性。
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID（用于权限验证）
     /// - `comment_id`: 评论ID
-    /// 
+    ///
     /// # 错误
-    /// - 无权限删除返回400错误
+    /// - `AppError::BadRequest`: 无权限删除该评论
+    /// - `AppError::InternalServerError`: 数据库事务失败
     pub async fn delete_comment(
         state: &PhotoState,
         user_id: i64,
@@ -160,18 +166,20 @@ impl CommentService {
     }
 
     /// 切换评论点赞状态
-    /// 
-    /// 已点赞则取消，未点赞则添加
-    /// 同时更新评论的点赞数
-    /// 使用事务保证原子性
-    /// 
+    ///
+    /// 已点赞则取消，未点赞则添加，同时更新评论的点赞数。
+    /// 使用事务保证原子性。
+    ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID
     /// - `comment_id`: 评论ID
-    /// 
+    ///
     /// # 返回
-    /// 返回点赞后的状态（true为已点赞，false为已取消）
+    /// 返回点赞后的状态（`true` 为已点赞，`false` 为已取消）
+    ///
+    /// # 错误
+    /// - `AppError::InternalServerError`: 数据库事务失败
     pub async fn toggle_like(
         state: &PhotoState,
         user_id: i64,

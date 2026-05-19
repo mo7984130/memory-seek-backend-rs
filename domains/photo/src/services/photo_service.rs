@@ -55,22 +55,22 @@ impl PhotoService {
     /// 3. 上传到OSS存储
     /// 4. 保存照片记录到数据库
     /// 5. 更新时间线统计
-    /// 6. 发送人脸检测任务（如果启用了face_recognition feature）
+    /// 6. 发送人脸检测任务（如果启用了 face_recognition feature）
     ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `_redis`: Redis连接池（暂未使用）
-    /// - `s3`: OSS客户端
-    /// - `face_tx`: 人脸检测任务发送通道（仅face_recognition feature）
+    /// - `state`: 照片模块状态（包含数据库连接、OSS客户端、Redis连接池等）
     /// - `user_id`: 用户ID
     /// - `file_data`: 文件字节数据
     /// - `file_name`: 原始文件名
     /// - `content_type`: 文件MIME类型
-    /// - `created_at`: 自定义创建时间（可选）
-    /// - `token_cipher`: 加密密钥
+    /// - `created_at`: 自定义创建时间（可选，为空则使用当前时间）
     ///
     /// # 返回
     /// 返回上传成功的照片VO
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: 图片已存在、文件校验不通过
+    /// - `AppError::InternalServerError`: S3上传失败、数据库写入失败
     #[instrument(name = "photo_upload", skip_all, fields(user_id, file_name))]
     pub async fn upload_photo(
         state: &PhotoState,
@@ -212,14 +212,15 @@ impl PhotoService {
     /// 游标分页查询照片列表
     ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID
-    /// - `query`: 分页查询参数
-    /// - `token_cipher`: 加密密钥
+    /// - `query`: 分页查询参数（包含游标、方向、每页数量）
     ///
     /// # 返回
     /// 返回分页照片列表，包含是否有更多数据的标识
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: size 参数无效或超过最大值
     pub async fn get_photo_cursor_page(
         state: &PhotoState,
         user_id: i64,
@@ -349,11 +350,14 @@ impl PhotoService {
     /// 根据ID获取照片详情
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `photo_id`: 照片ID
     ///
     /// # 返回
-    /// 返回照片模型，不存在返回404错误
+    /// 返回照片信息模型
+    ///
+    /// # 错误
+    /// - `AppError::NotFound`: 照片不存在
     pub async fn get_photo_info_by_id(
         state: &PhotoState,
         photo_id: i64,
@@ -368,6 +372,18 @@ impl PhotoService {
         res
     }
 
+    /// 批量检查MD5是否已存在于数据库
+    ///
+    /// # 参数
+    /// - `state`: 照片模块状态
+    /// - `user_id`: 用户ID（用于日志记录）
+    /// - `md5s`: 待检查的MD5哈希列表
+    ///
+    /// # 返回
+    /// 返回与输入等长的布尔列表，`true` 表示该MD5已存在
+    ///
+    /// # 错误
+    /// - `AppError::BadRequest`: MD5列表长度超过最大批次限制
     pub async fn exists_by_md5_batch(
         state: &PhotoState,
         user_id: UserId,
@@ -388,9 +404,6 @@ impl PhotoService {
     }
 
     /// 获取所有照片的时间范围
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
     ///
     /// # 返回
     /// 返回最早和最晚照片的创建时间元组
@@ -414,8 +427,15 @@ impl PhotoService {
     /// 6. 分批删除 S3 文件
     /// 7. 批量递减时间线统计
     ///
-    /// # 注意
-    /// - S3 / 时间线 / 人脸统计失败仅记录警告，不回滚已提交的数据库事务；
+    /// # 参数
+    /// - `state`: 照片模块状态
+    /// - `user_id`: 用户ID（仅管理员可执行）
+    /// - `photo_ids`: 待删除的照片ID列表
+    ///
+    /// # 错误
+    /// - `AppError::Forbidden`: 非管理员用户执行删除
+    /// - `AppError::NotFound`: 部分照片ID不存在
+    /// - `AppError::InternalServerError`: 数据库事务失败
     pub async fn delete_photos(
         state: &PhotoState,
         user_id: UserId,

@@ -26,17 +26,18 @@ static LOCAL_FAVORITE_ID_CACHE: Lazy<Cache<i64, i64>> = Lazy::new(|| {
 impl CollectionService {
     /// 获取用户的收藏夹列表
     ///
-    /// 如果用户没有收藏夹，会自动创建"我喜欢"收藏夹
-    /// 为每个收藏夹生成封面图token
+    /// 如果用户没有收藏夹，会自动创建"我喜欢"收藏夹，
+    /// 并为每个收藏夹生成封面图token。
     ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `_redis`: Redis连接池（暂未使用）
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID
-    /// - `token_cipher`: 加密密钥
     ///
     /// # 返回
     /// 返回收藏夹VO列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询或创建收藏夹失败
     pub async fn get_collection_list(
         state: &PhotoState,
         user_id: i64,
@@ -102,13 +103,16 @@ impl CollectionService {
     /// 创建新收藏夹
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID
     /// - `name`: 收藏夹名称
     /// - `description`: 收藏夹描述
     ///
     /// # 返回
     /// 返回创建的收藏夹VO
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库插入失败
     pub async fn create_collection(
         state: &PhotoState,
         user_id: i64,
@@ -131,7 +135,7 @@ impl CollectionService {
     /// 编辑收藏夹信息
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID（用于权限验证）
     /// - `collection_id`: 收藏夹ID
     /// - `name`: 新名称（可选）
@@ -141,7 +145,7 @@ impl CollectionService {
     /// 返回更新后的收藏夹VO
     ///
     /// # 错误
-    /// - 无权限返回400错误
+    /// - `AppError::BadRequest`: 无权限编辑该收藏夹
     pub async fn edit_collection(
         state: &PhotoState,
         user_id: i64,
@@ -170,16 +174,16 @@ impl CollectionService {
 
     /// 删除收藏夹
     ///
-    /// 使用事务保证原子性
+    /// 使用事务保证原子性，先删除收藏夹内所有照片关联，再删除收藏夹本身。
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID（用于权限验证）
     /// - `collection_id`: 收藏夹ID
     ///
     /// # 错误
-    /// - 无权限返回400错误
-    /// - 尝试删除"我喜欢"返回400错误
+    /// - `AppError::BadRequest`: 无权限或尝试删除"我喜欢"收藏夹
+    /// - `AppError::InternalServerError`: 数据库事务失败
     pub async fn delete_collection(
         state: &PhotoState,
         user_id: i64,
@@ -213,17 +217,17 @@ impl CollectionService {
 
     /// 添加照片到收藏夹
     ///
-    /// 使用事务保证原子性，使用 ON CONFLICT 检测重复
+    /// 使用事务保证原子性，插入关联记录并递增收藏夹照片计数。
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID（用于权限验证）
     /// - `collection_id`: 收藏夹ID
     /// - `photo_id`: 照片ID
     ///
     /// # 错误
-    /// - 无权限返回400错误
-    /// - 照片已在收藏夹中返回400错误
+    /// - `AppError::BadRequest`: 无权限或照片已在收藏夹中
+    /// - `AppError::InternalServerError`: 数据库事务失败
     pub async fn add_photo_to_collection(
         state: &PhotoState,
         user_id: i64,
@@ -258,16 +262,17 @@ impl CollectionService {
 
     /// 从收藏夹移除照片
     ///
-    /// 使用事务保证原子性
+    /// 使用事务保证原子性，删除关联记录并递减收藏夹照片计数。
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID
     /// - `collection_id`: 收藏夹ID
     /// - `photo_id`: 照片ID
     ///
     /// # 错误
-    /// - 未找到收藏关系返回400错误
+    /// - `AppError::BadRequest`: 未找到该收藏关系
+    /// - `AppError::InternalServerError`: 数据库事务失败
     pub async fn remove_photo_from_collection(
         state: &PhotoState,
         user_id: i64,
@@ -302,19 +307,17 @@ impl CollectionService {
     /// 获取收藏夹中的照片列表
     ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID（用于权限验证和查询收藏状态）
     /// - `collection_id`: 收藏夹ID
     /// - `cursor`: 复合游标（base64编码的字符串）
     /// - `size`: 每页数量
-    /// - `token_cipher`: 加密密钥
     ///
     /// # 返回
     /// 返回分页的收藏照片列表
     ///
     /// # 错误
-    /// - 无权限返回400错误
+    /// - `AppError::BadRequest`: 无权限访问该收藏夹
     pub async fn get_collection_photos(
         state: &PhotoState,
         user_id: i64,
@@ -383,12 +386,15 @@ impl CollectionService {
     /// 查询照片所在的收藏夹ID列表
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID
     /// - `photo_id`: 照片ID
     ///
     /// # 返回
     /// 返回收藏夹ID字符串列表
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询失败
     pub async fn find_collection_ids_by_photo(
         state: &PhotoState,
         user_id: i64,
@@ -400,14 +406,17 @@ impl CollectionService {
 
     /// 创建"我喜欢"收藏夹
     ///
-    /// 如果已存在则返回现有收藏夹
+    /// 如果已存在则返回现有收藏夹。
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID
     ///
     /// # 返回
     /// 返回"我喜欢"收藏夹VO
+    ///
+    /// # 错误
+    /// - `AppError`: 数据库查询或创建失败
     pub async fn create_favorite_collection(
         state: &PhotoState,
         user_id: i64,
@@ -441,19 +450,18 @@ impl CollectionService {
 
     /// 获取用户"我喜欢"收藏夹ID
     ///
-    /// 因为 喜欢收藏夹的id是不会改变的, 所以加上本地缓存
-    /// 使用Redis缓存，缓存时间24小时
+    /// 因为喜欢收藏夹的ID不会改变，所以加上本地缓存。
+    /// 优先从本地缓存获取，其次从Redis缓存获取，最后查询数据库。
     ///
     /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis连接池
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID
     ///
     /// # 返回
     /// 返回"我喜欢"收藏夹ID
     ///
     /// # 错误
-    /// - 未找到收藏夹返回404错误
+    /// - `AppError::NotFound`: 未找到收藏夹
     pub async fn get_favorite_collection_id(
         state: &PhotoState,
         user_id: i64,
@@ -483,23 +491,20 @@ impl CollectionService {
 
     /// 批量添加照片到收藏夹
     ///
-    /// 使用事务保证原子性
+    /// 使用事务保证原子性，自动跳过已存在的照片和不存在的照片ID。
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID（用于权限验证）
     /// - `collection_id`: 收藏夹ID
     /// - `photo_ids`: 照片ID列表
     ///
     /// # 返回
-    /// 返回批量操作结果
-    /// - success_count: 成功添加数量
-    /// - already_exists_count/count: 已存在于收藏夹的数量
-    /// - failed_count: 失败数量（照片不存在等原因）
+    /// 返回批量操作结果，包含成功数量、已存在数量和失败数量
     ///
     /// # 错误
-    /// - 无权限返回400错误
-    /// - 数据库错误返回500错误（事务会回滚）
+    /// - `AppError::BadRequest`: 无权限操作该收藏夹
+    /// - `AppError::InternalServerError`: 数据库事务失败（会回滚）
     pub async fn batch_add_photos_to_collection(
         state: &PhotoState,
         user_id: i64,
@@ -594,18 +599,19 @@ impl CollectionService {
 
     /// 批量从收藏夹移除照片
     ///
-    /// 使用事务保证原子性
+    /// 使用事务保证原子性，不存在的关联会被计入失败数量。
     ///
     /// # 参数
-    /// - `db`: 数据库连接
+    /// - `state`: 照片模块状态
     /// - `user_id`: 用户ID
     /// - `collection_id`: 收藏夹ID
     /// - `photo_ids`: 照片ID列表
     ///
     /// # 返回
-    /// 返回批量操作结果
-    /// - success_count: 成功移除数量
-    /// - failed_count: 失败数量（不在收藏夹中）
+    /// 返回批量操作结果，包含成功数量和失败数量
+    ///
+    /// # 错误
+    /// - `AppError::InternalServerError`: 数据库事务失败（会回滚）
     pub async fn batch_remove_photos_from_collection(
         state: &PhotoState,
         user_id: i64,
