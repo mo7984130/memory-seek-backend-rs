@@ -1,6 +1,11 @@
-use crate::vector::DrVector;
+use crate::vector::PostgreVector;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+
+pub const FEATURE_DIM: usize = 512;
+
+/// 512 维人脸特征嵌入向量
+pub type Embedding512 = PostgreVector<FEATURE_DIM>;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "photo_face_feature")]
@@ -9,7 +14,7 @@ pub struct Model {
     pub id: i64,
     pub photo_id: i64,
     pub person_id: Option<i64>,
-    pub embedding: DrVector,
+    pub embedding: Embedding512,
     #[sea_orm(column_type = "Json")]
     pub bbox: Json,
     pub score: f32,
