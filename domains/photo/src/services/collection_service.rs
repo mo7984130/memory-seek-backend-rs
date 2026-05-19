@@ -3,6 +3,7 @@ use crate::models::collection::{
     BatchOperationResultVO, CollectionPhotoCursor, CollectionPhotoVO, CollectionVO,
 };
 use crate::models::photo::CursorPageVO;
+use crate::photo::PhotoVO;
 use chrono::Utc;
 use common::constants::RedisKeys;
 use common::error::AppError;
