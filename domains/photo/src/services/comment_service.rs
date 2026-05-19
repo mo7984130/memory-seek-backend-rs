@@ -7,6 +7,14 @@ use crate::models::comment::PhotoCommentVO;
 use crate::models::photo::CursorPageVO;
 use crate::state::PhotoState;
 
+/// 评论分页参数限制
+const COMMENT_PAGE_LIMIT_MIN: i64 = 1;
+const COMMENT_PAGE_LIMIT_MAX: i64 = 100;
+
+/// 热门评论配置
+const HOT_COMMENT_MIN_LIKES: i32 = 5;
+const HOT_COMMENT_MAX_COUNT: u64 = 3;
+
 pub struct CommentService;
 
 impl CommentService {
@@ -31,26 +39,37 @@ impl CommentService {
         cursor: Option<DateTime<Utc>>,
         limit: i64,
     ) -> Result<CursorPageVO<PhotoCommentVO, DateTime<Utc>>, AppError> {
+        // 校验 limit 参数
+        if limit < COMMENT_PAGE_LIMIT_MIN || limit > COMMENT_PAGE_LIMIT_MAX {
+            return Err(AppError::bad_request("分页参数超出范围"));
+        }
+        let limit = limit as u64;
+        let limit_usize = limit as usize;
+
+        // 首页展示热门评论，翻页后不再重复
         let hot_comments = if cursor.is_none() {
-            CommentMapper::query_hot_comments(&state.db, photo_id, 5, 3).await?
+            CommentMapper::query_hot_comments(&state.db, photo_id, HOT_COMMENT_MIN_LIKES, HOT_COMMENT_MAX_COUNT).await?
         } else {
             vec![]
         };
 
+        // 查询时间线评论（排除已展示的热门评论）
         let hot_ids: Vec<i64> = hot_comments.iter().map(|c| c.id).collect();
+        let time_comments = CommentMapper::query_by_photo_id(&state.db, photo_id, &hot_ids, cursor, limit).await?;
 
-        let time_comments = CommentMapper::query_by_photo_id(&state.db, photo_id, &hot_ids, cursor, limit as u64).await?;
+        // 判断是否有更多数据，并截取当前页
+        let has_more = time_comments.len() > limit_usize;
+        let time_comments: Vec<_> = time_comments.into_iter().take(limit_usize).collect();
 
-        let has_more = time_comments.len() > limit as usize;
-        let time_comments: Vec<_> = time_comments.into_iter().take(limit as usize).collect();
-
+        // 合并评论：热门在前，时间线在后
         let mut all_comments = hot_comments;
         all_comments.extend(time_comments);
 
+        // 批量查询当前用户的点赞状态
         let comment_ids: Vec<i64> = all_comments.iter().map(|c| c.id).collect();
-
         let liked = CommentLikeMapper::query_by_user_and_comments(&state.db, user_id, comment_ids).await?;
 
+        // 构建返回数据
         let records: Vec<PhotoCommentVO> = all_comments
             .iter()
             .map(|c| PhotoCommentVO {

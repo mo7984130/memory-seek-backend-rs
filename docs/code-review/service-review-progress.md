@@ -6,7 +6,7 @@
 |---------|--------|--------|--------|------|
 | auth/auth_service.rs | 4+4 | 7 | 3 | ██████████ 100% |
 | user/user_service.rs | 7 | 7 | 2 | ██████████ 100% |
-| photo/comment_service.rs | 4 | 0 | 0 | ░░░░░░░░░░ 0% |
+| photo/comment_service.rs | 4 | 4 | 1 | ██████████ 100% |
 | photo/collection_service.rs | 12 | 0 | 0 | ░░░░░░░░░░ 0% |
 | photo/timeline_stat_service.rs | 5 | 0 | 0 | ░░░░░░░░░░ 0% |
 | photo/photo_service.rs | 6 | 0 | 0 | ░░░░░░░░░░ 0% |
@@ -61,4 +61,18 @@
 - 无需修复
 
 #### ✅ get_user_info_batch() — 2026-05-19
+- 无需修复
+
+### comment_service.rs
+
+#### ✅ get_comment_page() — 2026-05-19
+- 修复: 添加 limit 参数校验（正数+上限 100）、提取魔法数字为命名常量、整理函数逻辑注释
+
+#### ✅ publish_comment() — 2026-05-19
+- 无需修复
+
+#### ✅ delete_comment() — 2026-05-19
+- 无需修复
+
+#### ✅ toggle_like() — 2026-05-19
 - 无需修复
