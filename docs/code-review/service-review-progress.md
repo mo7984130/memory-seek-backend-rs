@@ -10,7 +10,7 @@
 | photo/collection_service.rs | 12 | 12 | 2 | ██████████ 100% |
 | photo/timeline_stat_service.rs | 5 | 5 | 2 | ██████████ 100% |
 | photo/photo_service.rs | 6 | 6 | 2 | ██████████ 100% |
-| photo/feature_service.rs | 5 | 0 | 0 | ░░░░░░░░░░ 0% |
+| photo/feature_service.rs | 5 | 8 | 2 | ██████████ 100% |
 | photo/face_service.rs | 11 | 0 | 0 | ░░░░░░░░░░ 0% |
 
 > auth_service.rs 有 4 个 pub 函数 + 4 个私有辅助函数
@@ -151,3 +151,29 @@
 
 #### ✅ delete_photos() — 2026-05-19
 - 无需修复（管理员硬编码 user_id=1 已知悉）
+
+### feature_service.rs
+
+#### ✅ delete_feature_with_decrement() — 2026-05-19
+- 无需修复
+
+#### ✅ decrement_person_stats() — 2026-05-19
+- 修复: partial_cmp unwrap 改为 unwrap_or(Ordering::Equal)，防止 NaN panic
+
+#### ✅ delete_feature() — 2026-05-19
+- 无需修复
+
+#### ✅ recalculate_person_stats() — 2026-05-19
+- 修复: partial_cmp unwrap 改为 unwrap_or(Ordering::Equal)，防止 NaN panic
+
+#### ✅ invalidate_person_cache() — 2026-05-19
+- 无需修复
+
+#### ✅ get_photo_features() — 2026-05-19
+- 无需修复
+
+#### ✅ get_person_names_batch() — 2026-05-19
+- 无需修复
+
+#### ✅ change_face_belonging() — 2026-05-19
+- 修复: 归属变更后重新计算原人物和目标人物的统计数据

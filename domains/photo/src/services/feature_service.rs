@@ -73,7 +73,7 @@ impl FeatureService {
             let best = remaining
                 .iter()
                 .filter(|f| f.id != feature.id)
-                .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+                .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
             match best {
                 Some(b) => (b.id, b.score),
                 None => {
@@ -164,7 +164,7 @@ impl FeatureService {
 
         let best_feature = features
             .iter()
-            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
+            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap();
 
         FacePersonMapper::update(
@@ -287,10 +287,20 @@ impl FeatureService {
         feature_id: i64,
         person_id: i64,
     ) -> Result<(), AppError> {
-        let _feature = FaceFeatureMapper::query_by_id(&state.db, feature_id).await?;
+        let feature = FaceFeatureMapper::query_by_id(&state.db, feature_id).await?;
         let _person = FacePersonMapper::query_by_id(&state.db, person_id).await?;
 
+        let old_person_id = feature.person_id;
+
         FaceFeatureMapper::update_person_id(&state.db, feature_id, Some(person_id)).await?;
+
+        // 重新计算原人物统计
+        if let Some(old_pid) = old_person_id {
+            Self::recalculate_person_stats(state, old_pid).await?;
+        }
+
+        // 重新计算目标人物统计
+        Self::recalculate_person_stats(state, person_id).await?;
 
         Ok(())
     }
