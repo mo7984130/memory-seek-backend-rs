@@ -25,18 +25,41 @@ pub struct TokenCipherConfig {
 }
 
 impl TokenCipher {
+    /// 使用原始密钥和盐创建 TokenCipher 实例
+    ///
+    /// 内部通过 HKDF 从原始密钥派生 AES-256-GCM 加密密钥
+    ///
+    /// # 参数
+    /// - `raw_key`: 用于密钥派生的原始密钥材料
+    /// - `salt`: HKDF 密钥派生所需的盐值
     pub fn new(raw_key: impl AsRef<[u8]>, salt: impl AsRef<[u8]>) -> Self {
         let cipher = Self::build_cipher(raw_key.as_ref(), salt.as_ref());
         Self { cipher }
     }
 
+    /// 从配置结构体创建 TokenCipher 实例
+    ///
+    /// # 参数
+    /// - `config`: 包含 `key` 和 `salt` 字段的配置
     pub fn from_config(config: &TokenCipherConfig) -> Self {
         Self::new(&config.key, &config.salt)
     }
 
-    /// 加密任意可序列化的 Payload，nonce_seed 决定确定性
-    /// - 需要稳定 URL（如 file_id）：传入 file_id 作为 nonce_seed
-    /// - 需要随机性：传入 None，自动生成随机 nonce
+    /// 加密任意可序列化的 Payload 为 URL-safe Base64 token
+    ///
+    /// nonce_seed 参数控制 nonce 的生成方式：
+    /// - 传入 `Some(seed)` 时，通过 HKDF 从 seed 派生确定性 nonce，相同 seed 产生相同密文
+    /// - 传入 `None` 时，自动生成随机 nonce，每次加密结果不同
+    ///
+    /// # 参数
+    /// - `payload`: 待加密的可序列化数据
+    /// - `nonce_seed`: 可选的 nonce 种子，`Some` 实现确定性加密，`None` 使用随机 nonce
+    ///
+    /// # 返回
+    /// 返回 URL-safe Base64 编码的加密 token
+    ///
+    /// # 错误
+    /// - `AppError`: 序列化失败或 AES-GCM 加密失败
     pub fn encrypt<T: Serialize>(
             &self,
             payload: &T,
@@ -61,6 +84,16 @@ impl TokenCipher {
         Ok(URL_SAFE_NO_PAD.encode(&combined))
     }
 
+    /// 解密 URL-safe Base64 token 还原为原始数据
+    ///
+    /// # 参数
+    /// - `token`: 由 `encrypt` 方法生成的加密 token 字符串
+    ///
+    /// # 返回
+    /// 返回反序列化后的原始数据
+    ///
+    /// # 错误
+    /// - `AppError`: Base64 解码失败、token 长度不合法、AES-GCM 解密失败或反序列化失败
     pub fn decrypt<T: DeserializeOwned>(&self, token: &str) -> Result<T, AppError> {
         let combined = URL_SAFE_NO_PAD
             .decode(token)
@@ -77,6 +110,7 @@ impl TokenCipher {
             .trace_internal_err("token_deserialize_error", "反序列化 Payload 失败")
     }
 
+    // 通过 HKDF 从原始密钥和盐派生 AES-256-GCM 密钥并创建加密器
     fn build_cipher(raw_key: &[u8], salt: &[u8]) -> Aes256Gcm {
         let hk = Hkdf::<Sha256>::new(Some(salt), raw_key);
         let mut derived = [0u8; 32];
@@ -85,6 +119,7 @@ impl TokenCipher {
         Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&derived))
     }
 
+    // 通过 HKDF 从种子字符串派生确定性 nonce
     fn derive_nonce(str: &str) -> [u8; NONCE_LEN] {
         let mut nonce_bytes = [0u8; NONCE_LEN];
         Hkdf::<Sha256>::new(Some(HKDF_NONCE_SALT), str.as_bytes())

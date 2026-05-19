@@ -30,6 +30,13 @@ pub struct Argon2idConfig {
 }
 
 impl HashAlgorithm {
+    /// 从哈希字符串自动检测所使用的密码哈希算法及其参数
+    ///
+    /// # 参数
+    /// - `hash`: 密码哈希字符串，支持 bcrypt（`$2` 前缀）和 Argon2id（`$argon2` 前缀）
+    ///
+    /// # 返回
+    /// 返回检测到的算法类型及参数；无法识别时返回 `None`
     pub fn detect(hash: &str) -> Option<Self> {
         if hash.starts_with("$2") {
             let cost = bcrypt::HashParts::from_str(hash).ok()?.get_cost();
@@ -45,6 +52,16 @@ impl HashAlgorithm {
         }
     }
 
+    /// 使用当前算法对明文密码进行哈希
+    ///
+    /// # 参数
+    /// - `password`: 明文密码
+    ///
+    /// # 返回
+    /// 返回哈希后的密码字符串
+    ///
+    /// # 错误
+    /// - `AppError::InternalServerError`: 哈希计算过程中发生内部错误
     pub fn hash(&self, password: &str) -> Result<String, AppError> {
         match self {
             Self::Bcrypt(cfg) => {
@@ -60,6 +77,17 @@ impl HashAlgorithm {
         }
     }
 
+    /// 验证明文密码与哈希值是否匹配
+    ///
+    /// # 参数
+    /// - `password`: 明文密码
+    /// - `hash`: 存储的密码哈希值
+    ///
+    /// # 返回
+    /// 匹配返回 `true`，不匹配返回 `false`
+    ///
+    /// # 错误
+    /// - `AppError::InternalServerError`: 哈希解析或验证过程中发生内部错误
     pub fn verify(&self, password: &str, hash: &str) -> Result<bool, AppError> {
         match self {
             Self::Bcrypt(_) => {
@@ -82,6 +110,17 @@ impl HashAlgorithm {
         }
     }
 
+    /// 自动检测哈希算法并验证密码是否匹配
+    ///
+    /// # 参数
+    /// - `password`: 明文密码
+    /// - `hash`: 存储的密码哈希值
+    ///
+    /// # 返回
+    /// 返回 `(是否匹配, 检测到的算法类型)` 元组
+    ///
+    /// # 错误
+    /// - `AppError`: 无法识别哈希算法或验证过程中发生错误
     pub fn verify_and_detect(password: &str, hash: &str) -> Result<(bool, HashAlgorithm), AppError> {
         match HashAlgorithm::detect(hash) {
             Some(alg) => {
@@ -95,6 +134,7 @@ impl HashAlgorithm {
         }
     }
 
+    // 根据配置创建 Argon2id 哈希器实例
     fn argon2_hasher(cfg: &Argon2idConfig) -> Result<Argon2<'static>, AppError> {
         let params = Params::new(cfg.m_cost, cfg.t_cost, cfg.p_cost, None)
             .trace_internal_err("argon2_params_error", "创建 Argon2 参数失败")?;
@@ -102,7 +142,9 @@ impl HashAlgorithm {
     }
 
     /// 执行恒定时间的 dummy 验证，防止基于时序的用户枚举攻击
-    /// 当用户不存在时调用，使响应时间与密码错误时一致
+    ///
+    /// 当用户不存在时调用此方法，使响应时间与密码错误时保持一致，
+    /// 从而阻止攻击者通过响应时间差异枚举有效用户
     pub fn dummy_verify() {
         let _ = bcrypt::verify(
             "dummy",

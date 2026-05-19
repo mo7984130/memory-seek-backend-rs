@@ -5,18 +5,45 @@ use indexmap::IndexMap;
 use redis::{AsyncCommands, FromRedisValue, ToSingleRedisArg};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::fmt::Debug;
 use std::future::Future;
-use std::{collections::HashMap, fmt::Debug};
-use tracing::{error, warn};
+use tracing::warn;
 
+/// Redis 连接池的基础操作扩展 trait
 pub trait RedisExt {
+    /// 从连接池获取一个 Redis 连接
+    ///
+    /// # 返回
+    /// 返回可用的 Redis 连接
+    ///
+    /// # 错误
+    /// - `AppError`: 连接池获取连接失败
     fn get_conn(&self) -> impl Future<Output = Result<Connection, AppError>> + Send;
 
+    /// 从 Redis 获取指定 key 的值并反序列化为目标类型
+    ///
+    /// # 参数
+    /// - `key`: Redis key
+    ///
+    /// # 返回
+    /// 返回 `Some(T)` 表示 key 存在且反序列化成功，`None` 表示 key 不存在
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 读取失败
     fn get_as<T: FromRedisValue + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
     ) -> impl Future<Output = Result<Option<T>, AppError>> + Send;
 
+    /// 将值写入 Redis 并设置过期时间
+    ///
+    /// # 参数
+    /// - `key`: Redis key
+    /// - `value`: 待写入的值
+    /// - `ttl`: 过期时间（秒）
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 写入失败
     fn set_ex<T: ToSingleRedisArg + Send + Sync>(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -24,6 +51,13 @@ pub trait RedisExt {
         ttl: u64,
     ) -> impl Future<Output = Result<(), AppError>> + Send;
 
+    /// 删除 Redis 中指定 key
+    ///
+    /// # 参数
+    /// - `key`: 待删除的 Redis key
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 删除操作失败
     fn delete(
         &self,
         key: impl AsRef<str> + Send + Sync,
@@ -31,11 +65,25 @@ pub trait RedisExt {
 }
 
 impl RedisExt for Pool {
+    /// 从连接池获取一个 Redis 连接
+    ///
+    /// # 错误
+    /// - `AppError`: 连接池获取连接失败
     #[inline]
     async fn get_conn(&self) -> Result<Connection, AppError> {
         self.get().await.map_internal_err("redis 连接获取错误")
     }
 
+    /// 从 Redis 获取指定 key 的值
+    ///
+    /// # 参数
+    /// - `key`: Redis key
+    ///
+    /// # 返回
+    /// 返回 `Some(T)` 表示 key 存在，`None` 表示 key 不存在
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 读取失败
     #[inline]
     async fn get_as<T: FromRedisValue + Send + Sync>(
         &self,
@@ -49,6 +97,15 @@ impl RedisExt for Pool {
         Ok(result)
     }
 
+    /// 将值写入 Redis 并设置过期时间
+    ///
+    /// # 参数
+    /// - `key`: Redis key
+    /// - `value`: 待写入的值
+    /// - `ttl`: 过期时间（秒）
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 写入失败
     #[inline]
     async fn set_ex<T: ToSingleRedisArg + Send + Sync>(
         &self,
@@ -62,6 +119,13 @@ impl RedisExt for Pool {
             .map_internal_err("Redis 写入失败")
     }
 
+    /// 删除 Redis 中指定 key
+    ///
+    /// # 参数
+    /// - `key`: 待删除的 Redis key
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 删除操作失败
     #[inline]
     async fn delete(&self, key: impl AsRef<str> + Send + Sync) -> Result<(), AppError> {
         let mut conn = self.get_conn().await?;
@@ -73,7 +137,22 @@ impl RedisExt for Pool {
     }
 }
 
+/// Redis 缓存加载扩展 trait，提供缓存穿透保护的懒加载模式
 pub trait CacheExtension {
+    /// 从 Redis 获取缓存，未命中时通过 loader 加载并回写缓存
+    ///
+    /// 缓存以 JSON 字符串形式存储。反序列化失败时视为缓存未命中，重新加载数据。
+    ///
+    /// # 参数
+    /// - `key`: Redis 缓存 key
+    /// - `ttl`: 缓存过期时间（秒）
+    /// - `loader`: 缓存未命中时的数据加载闭包
+    ///
+    /// # 返回
+    /// 返回缓存或加载得到的数据
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 操作失败或 loader 返回错误
     fn get_or_load<T, F, Fut>(
         &self,
         key: String,
@@ -85,6 +164,23 @@ pub trait CacheExtension {
         F: FnOnce() -> Fut + Send,
         Fut: Future<Output = Result<T, AppError>> + Send;
 
+    /// 批量获取缓存，未命中的项通过 loader 批量加载并回写
+    ///
+    /// 使用 MGET 一次性获取所有缓存，减少 Redis 往返次数。
+    /// 支持参数去重：相同 key 的多个参数只加载一次，并广播结果到所有对应索引。
+    ///
+    /// # 参数
+    /// - `params`: 待查询的参数列表
+    /// - `key_provider`: 参数到 Redis key 的映射函数
+    /// - `ttl`: 缓存过期时间（秒）
+    /// - `loader`: 缓存未命中时的批量数据加载闭包
+    /// - `result_mapper`: 从结果值反向提取参数 key 的映射函数
+    ///
+    /// # 返回
+    /// 返回与 params 等长的结果列表，缓存未命中且 loader 未返回的项为 `None`
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 连接失败或 loader 返回错误
     fn get_or_load_batch<K, V, F, Fut, M>(
         &self,
         params: &[K],
@@ -102,6 +198,18 @@ pub trait CacheExtension {
 }
 
 impl CacheExtension for Pool {
+    /// 从 Redis 获取缓存，未命中时通过 loader 加载并回写
+    ///
+    /// # 参数
+    /// - `key`: Redis 缓存 key
+    /// - `ttl`: 缓存过期时间（秒）
+    /// - `loader`: 缓存未命中时的数据加载闭包
+    ///
+    /// # 返回
+    /// 返回缓存或加载得到的数据
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 操作失败或 loader 返回错误
     async fn get_or_load<T, F, Fut>(&self, key: String, ttl: u64, loader: F) -> Result<T, AppError>
     where
         T: Serialize + DeserializeOwned + Debug + Send,
@@ -133,6 +241,20 @@ impl CacheExtension for Pool {
         Ok(value)
     }
 
+    /// 批量获取缓存，未命中的项通过 loader 批量加载并回写
+    ///
+    /// # 参数
+    /// - `params`: 待查询的参数列表
+    /// - `key_provider`: 参数到 Redis key 的映射函数
+    /// - `ttl`: 缓存过期时间（秒）
+    /// - `loader`: 缓存未命中时的批量数据加载闭包
+    /// - `param_extractor`: 从结果值反向提取参数 key 的映射函数
+    ///
+    /// # 返回
+    /// 返回与 params 等长的结果列表，未命中的项为 `None`
+    ///
+    /// # 错误
+    /// - `AppError`: Redis 连接失败或 loader 返回错误
     async fn get_or_load_batch<K, V, F, Fut, M>(
         &self,
         params: &[K],
