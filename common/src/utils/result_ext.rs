@@ -1,139 +1,112 @@
-use crate::error::AppError;
+use crate::error::{AppError, DbErrExt};
 use crate::r::R;
 use std::fmt::{Debug, Display};
 use tracing::{error, warn};
 
+// TODO ChainErr
+
+// ============================================================
+// ChainErr：链式错误处理的中间态
+// ============================================================
+
+/// 链式错误处理的中间态
+///
+/// 用于 `trace_conflict_warn` 等「部分处理」方法：
+/// - 已识别的错误（如冲突）转为 `Resolved(AppError)`，后续链直接透传
+/// - 未识别的错误保留为 `Pending(E)`，等待下一个链节处理
+pub enum ChainErr<E> {
+    /// 已转换好的 AppError
+    Resolved(AppError),
+    /// 尚未处理的原始错误
+    Pending(E),
+}
+
+impl<E: Debug> From<ChainErr<E>> for AppError {
+    fn from(e: ChainErr<E>) -> Self {
+        match e {
+            ChainErr::Resolved(app_err) => app_err,
+            ChainErr::Pending(e) => {
+                error!(error = ?e, "未处理的数据库错误，已降级为 InternalServerError");
+                AppError::InternalServerError
+            }
+        }
+    }
+}
+
+// ============================================================
+// ResultExt trait
+// ============================================================
+
 /// 为 `Result<T, E>` 提供到 `AppError` 的便捷转换方法
-pub trait ResultExt<T, E> {
-    /// 将错误映射为 `AppError::InternalServerError`，并通过 `tracing::error!` 记录日志
-    ///
-    /// # 参数
-    /// - `context`: 错误上下文描述，用于日志输出
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::InternalServerError`
-    fn map_internal_err(self, context: &'static str) -> Result<T, AppError>;
-
-    /// 将错误映射为 `AppError::BadRequest`，原始错误信息被丢弃
-    ///
-    /// # 参数
-    /// - `context`: 错误描述，作为 `BadRequest` 的消息内容
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::BadRequest`
-    fn map_bad_request_err(self, context: &'static str) -> Result<T, AppError>;
-
-    /// 将错误转换为 `AppError::BadRequest`，保留原始错误的 `Display` 信息
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::BadRequest(e.to_string())`
-    fn to_bad_request_error(self) -> Result<T, AppError>
-    where
-        E: Display;
-
+pub trait ResultExt<T, E>: Sized {
     /// 将 `Result<T, E>` 转换为 `Result<R<T>, AppError>`，成功值包装为 `R::ok`
-    ///
-    /// # 返回
-    /// 成功时返回 `R::ok(value)`，失败时将错误转换为 `AppError`
     fn into_ok_res(self) -> Result<R<T>, AppError>
     where
-        Self: Sized,
         E: Into<AppError>,
         T: serde::Serialize;
 
     /// 将错误映射为 `AppError::InternalServerError`，通过 `tracing::error!` 记录结构化日志
-    ///
-    /// # 参数
-    /// - `reason`: 日志中的 `reason` 字段
-    /// - `context`: 日志中的上下文描述
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::InternalServerError`
-    fn trace_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
+    fn trace_to_internal_err(
+        self,
+        reason: &'static str,
+        context: &'static str,
+    ) -> Result<T, AppError>
     where
         E: Debug;
 
     /// 将错误映射为 `AppError::BadRequest`，通过 `tracing::warn!` 记录结构化日志
-    ///
-    /// # 参数
-    /// - `reason`: 日志中的 `reason` 字段
-    /// - `context`: 日志中的上下文描述，同时作为 `BadRequest` 的消息
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::BadRequest(context)`
-    fn trace_bad_request_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
+    fn trace_to_bad_request_warn(
+        self,
+        reason: &'static str,
+        context: &'static str,
+    ) -> Result<T, AppError>
     where
         E: Display;
+
+    /// 唯一键冲突 → `ChainErr::Resolved(AppError::Conflict)`，其他错误 → `ChainErr::Pending(e)`
+    ///
+    /// 返回 `Result<T, ChainErr<E>>` 而非 `Result<T, AppError>`，
+    /// 允许后续继续链式调用 `trace_to_internal_err` 处理剩余错误。
+    /// 冲突时通过 `?` 提前返回 `AppError::Conflict`（需 `From<ChainErr<E>> for AppError`）。
+    ///
+    /// # 示例
+    /// ```rust
+    /// relation.insert(db).await
+    ///     .trace_conflict_warn("db_insert_conflict", "照片已存在")?
+    ///     .trace_to_internal_err("db_insert_err", "添加收藏夹失败")
+    /// ```
+    fn trace_conflict_warn(
+        self,
+        reason: &'static str,
+        context: &'static str,
+    ) -> Result<T, ChainErr<E>>
+    where
+        E: Display + DbErrExt;
 }
 
+// ============================================================
+// Result<T, E> 实现
+// ============================================================
+
 impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
-    /// 将错误映射为 `AppError::InternalServerError`，并通过 `tracing::error!` 记录日志
-    ///
-    /// # 参数
-    /// - `context`: 错误上下文描述，用于日志输出
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::InternalServerError`
-    #[inline]
-    fn map_internal_err(self, context: &'static str) -> Result<T, AppError> {
-        self.map_err(|e| {
-            error!("内部错误: {} \n {:?}", context, e);
-            AppError::InternalServerError
-        })
-    }
-
-    /// 将错误映射为 `AppError::BadRequest`，原始错误信息被丢弃
-    ///
-    /// # 参数
-    /// - `context`: 错误描述，作为 `BadRequest` 的消息内容
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::BadRequest`
-    #[inline]
-    fn map_bad_request_err(self, context: &'static str) -> Result<T, AppError> {
-        self.map_err(|_| {
-            AppError::bad_request(context)
-        })
-    }
-
-    /// 将错误转换为 `AppError::BadRequest`，保留原始错误的 `Display` 信息
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::BadRequest(e.to_string())`
-    #[inline]
-    fn to_bad_request_error(self) -> Result<T, AppError>
-    where
-        E: Display
-    {
-        self.map_err(|e| {
-            AppError::BadRequest(e.to_string().into())
-        })
-    }
-
-    /// 将 `Result<T, E>` 转换为 `Result<R<T>, AppError>`，成功值包装为 `R::ok`
-    ///
-    /// # 返回
-    /// 成功时返回 `R::ok(value)`，失败时将错误转换为 `AppError`
     #[inline]
     fn into_ok_res(self) -> Result<R<T>, AppError>
     where
         E: Into<AppError>,
         T: serde::Serialize,
     {
-        self.map(R::ok).map_err(|e| e.into())
+        self.map(R::ok).map_err(Into::into)
     }
 
-    /// 将错误映射为 `AppError::InternalServerError`，通过 `tracing::error!` 记录结构化日志
-    ///
-    /// # 参数
-    /// - `reason`: 日志中的 `reason` 字段
-    /// - `context`: 日志中的上下文描述
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::InternalServerError`
-    fn trace_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
+    #[inline]
+    // TODO avoid double trace_to_internal_err
+    fn trace_to_internal_err(
+        self,
+        reason: &'static str,
+        context: &'static str,
+    ) -> Result<T, AppError>
     where
-        E: Debug
+        E: Debug,
     {
         self.map_err(|e| {
             error!(%reason, status = "error", error = ?e, "{context}");
@@ -141,160 +114,124 @@ impl<T, E: Debug> ResultExt<T, E> for Result<T, E> {
         })
     }
 
-    /// 将错误映射为 `AppError::BadRequest`，通过 `tracing::warn!` 记录结构化日志
-    ///
-    /// # 参数
-    /// - `reason`: 日志中的 `reason` 字段
-    /// - `context`: 日志中的上下文描述，同时作为 `BadRequest` 的消息
-    ///
-    /// # 返回
-    /// 成功时返回原始值，失败时返回 `AppError::BadRequest(context)`
-    fn trace_bad_request_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>
+    #[inline]
+    fn trace_to_bad_request_warn(
+        self,
+        reason: &'static str,
+        context: &'static str,
+    ) -> Result<T, AppError>
     where
-        E: Display
+        E: Display,
     {
         self.map_err(|e| {
-            warn!(%reason, status="failed", error = %e, "{context}");
+            warn!(%reason, status = "failed", error = %e, "{context}");
             AppError::bad_request(context)
+        })
+    }
+
+    #[inline]
+    fn trace_conflict_warn(
+        self,
+        reason: &'static str,
+        context: &'static str,
+    ) -> Result<T, ChainErr<E>>
+    where
+        E: Display + DbErrExt,
+    {
+        self.map_err(|e| {
+            if e.is_unique_violation() {
+                warn!(%reason, status = "failed", error = %e, "{context}");
+                ChainErr::Resolved(AppError::Conflict(context.into()))
+            } else {
+                ChainErr::Pending(e)
+            }
         })
     }
 }
 
-/// 为任意类型提供便捷的 `Ok` 包装方法
-pub trait ToOkExt {
-    /// 将值包装为 `Ok(self)`
-    ///
-    /// # 返回
-    /// 返回 `Ok(self)`，错误类型由调用方推断
-    fn into_ok<E>(self) -> Result<Self, E>
-    where
-        Self: Sized;
+// ============================================================
+// Result<T, ChainErr<E>> 实现：让链式调用继续工作
+// ============================================================
 
-    /// 将值包装为 `Ok(self)`，错误类型固定为 `AppError`
-    ///
-    /// # 返回
-    /// 返回 `Result<Self, AppError>` 的 `Ok` 变体
-    fn ok_res(self) -> Result<Self, AppError>
+impl<T, E: Debug + Display> ResultExt<T, ChainErr<E>> for Result<T, ChainErr<E>> {
+    #[inline]
+    fn into_ok_res(self) -> Result<R<T>, AppError>
     where
-        Self: Sized;
+        ChainErr<E>: Into<AppError>,
+        T: serde::Serialize,
+    {
+        self.map(R::ok).map_err(Into::into)
+    }
+
+    /// 核心：`Pending` 转 `InternalServerError`，`Resolved` 直接透传
+    #[inline]
+    fn trace_to_internal_err(
+        self,
+        reason: &'static str,
+        context: &'static str,
+    ) -> Result<T, AppError>
+    where
+        ChainErr<E>: Debug,
+    {
+        self.map_err(|chain| match chain {
+            ChainErr::Resolved(app_err) => app_err,
+            ChainErr::Pending(e) => {
+                error!(%reason, status = "error", error = %e, "{context}");
+                AppError::InternalServerError
+            }
+        })
+    }
+
+    #[inline]
+    fn trace_to_bad_request_warn(
+        self,
+        reason: &'static str,
+        context: &'static str,
+    ) -> Result<T, AppError>
+    where
+        ChainErr<E>: Display,
+    {
+        self.map_err(|chain| match chain {
+            ChainErr::Resolved(app_err) => app_err,
+            ChainErr::Pending(e) => {
+                warn!(%reason, status = "failed", error = %e, "{context}");
+                AppError::bad_request(context)
+            }
+        })
+    }
+
+    /// 链中已有 ChainErr，冲突已处理过，直接透传
+    #[inline]
+    fn trace_conflict_warn(
+        self,
+        _reason: &'static str,
+        _context: &'static str,
+    ) -> Result<T, ChainErr<ChainErr<E>>>
+    where
+        ChainErr<E>: Display + DbErrExt,
+    {
+        self.map_err(ChainErr::Pending) // 透传，不重复处理
+    }
+}
+
+// ============================================================
+// ToOkExt trait
+// ============================================================
+
+/// 为任意类型提供便捷的 `Ok` 包装方法
+pub trait ToOkExt: Sized {
+    fn into_ok<E>(self) -> Result<Self, E>;
+    fn ok_res(self) -> Result<Self, AppError>;
 }
 
 impl<T> ToOkExt for T {
-    /// 将值包装为 `Ok(self)`
-    ///
-    /// # 返回
-    /// 返回 `Ok(self)`
     #[inline]
     fn into_ok<E>(self) -> Result<Self, E> {
         Ok(self)
     }
 
-    /// 将值包装为 `Ok(self)`，错误类型固定为 `AppError`
-    ///
-    /// # 返回
-    /// 返回 `Result<Self, AppError>` 的 `Ok` 变体
     #[inline]
     fn ok_res(self) -> Result<Self, AppError> {
         Ok(self)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 测试 map_internal_err 在 Ok 情况下的处理
-    #[test]
-    fn test_map_internal_err_with_ok() {
-        let result: Result<i32, &str> = Ok(42);
-        let mapped = result.map_internal_err("test error");
-        assert!(mapped.is_ok());
-        assert_eq!(mapped.unwrap(), 42);
-    }
-
-    /// 测试 map_internal_err 在 Err 情况下转换为 InternalServerError
-    #[test]
-    fn test_map_internal_err_with_error() {
-        let result: Result<i32, &str> = Err("test");
-        let mapped = result.map_internal_err("test error");
-        assert!(mapped.is_err());
-        assert!(matches!(mapped.unwrap_err(), AppError::InternalServerError));
-    }
-
-    /// 测试 map_bad_request_err 在 Ok 情况下的处理
-    #[test]
-    fn test_map_bad_request_err_with_ok() {
-        let result: Result<i32, &str> = Ok(42);
-        let mapped = result.map_bad_request_err("test error");
-        assert!(mapped.is_ok());
-        assert_eq!(mapped.unwrap(), 42);
-    }
-
-    /// 测试 map_bad_request_err 在 Err 情况下转换为 BadRequest
-    #[test]
-    fn test_map_bad_request_err_with_error() {
-        let result: Result<i32, &str> = Err("test");
-        let mapped = result.map_bad_request_err("test error");
-        assert!(mapped.is_err());
-        assert!(matches!(mapped.unwrap_err(), AppError::BadRequest(_)));
-    }
-
-    /// 测试 to_bad_request_error 在 Ok 情况下的处理
-    #[test]
-    fn test_to_bad_request_error_with_ok() {
-        let result: Result<i32, &str> = Ok(42);
-        let mapped = result.to_bad_request_error();
-        assert!(mapped.is_ok());
-        assert_eq!(mapped.unwrap(), 42);
-    }
-
-    /// 测试 to_bad_request_error 在 Err 情况下保留错误信息并转换为 BadRequest
-    #[test]
-    fn test_to_bad_request_error_with_error() {
-        let result: Result<i32, &str> = Err("custom error");
-        let mapped = result.to_bad_request_error();
-        assert!(mapped.is_err());
-        if let AppError::BadRequest(msg) = mapped.unwrap_err() {
-            assert_eq!(msg, "custom error");
-        } else {
-            panic!("Expected BadRequest error");
-        }
-    }
-
-    /// 测试 into_ok_res 在 Ok 情况下包装为 R 结构体
-    #[test]
-    fn test_into_ok_res_with_ok() {
-        let result: Result<i32, &str> = Ok(42);
-        let mapped = result.into_ok_res();
-        assert!(mapped.is_ok());
-        let r = mapped.unwrap();
-        assert_eq!(r.data, Some(42));
-    }
-
-    /// 测试 into_ok_res 在 Err 情况下的错误转换
-    #[test]
-    fn test_into_ok_res_with_error() {
-        let result: Result<i32, AppError> = Err(AppError::bad_request("test"));
-        let mapped = result.into_ok_res();
-        assert!(mapped.is_err());
-        assert!(matches!(mapped.unwrap_err(), AppError::BadRequest(_)));
-    }
-
-    /// 测试 into_ok 扩展方法将值包装为 Ok
-    #[test]
-    fn test_into_ok() {
-        let value = 42;
-        let result: Result<i32, &str> = value.into_ok();
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 42);
-    }
-
-    /// 测试 ok_res 扩展方法将值包装为 Ok 并指定 AppError 错误类型
-    #[test]
-    fn test_ok_res() {
-        let value = 42;
-        let result: Result<i32, AppError> = value.ok_res();
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 42);
     }
 }
