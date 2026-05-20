@@ -50,7 +50,7 @@ impl CollectionPhotoMapper {
         query
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 批量查询多个收藏夹中的照片关系
@@ -73,7 +73,7 @@ impl CollectionPhotoMapper {
             .order_by_desc(collection_photo::Column::CreatedAt)
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 查询照片所在的收藏夹ID列表
@@ -95,7 +95,7 @@ impl CollectionPhotoMapper {
             .filter(collection_photo::Column::PhotoId.eq(photo_id))
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?;
+            .trace_to_internal_err("db_query_err", "查询失败")?;
 
         Ok(relations.iter().map(|r| r.collection_id).collect())
     }
@@ -121,7 +121,7 @@ impl CollectionPhotoMapper {
             .order_by_desc(collection_photo::Column::CreatedAt)
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?;
+            .trace_to_internal_err("db_query_err", "查询失败")?;
 
         let mut result = HashMap::new();
         for cp in relations {
@@ -161,7 +161,7 @@ impl CollectionPhotoMapper {
             .into_tuple()
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?;
+            .trace_to_internal_err("db_query_err", "查询失败")?;
 
         Ok(relations)
     }
@@ -195,7 +195,8 @@ impl CollectionPhotoMapper {
         relation
             .insert(db)
             .await
-            .trace_internal_err("db_insert_err", "添加到收藏夹失败")
+            .trace_conflict_warn("db_insert_confilct", "添加到收藏夹失败, 照片已存在")?
+            .trace_to_internal_err("db_insert_err", "添加到收藏夹失败")
     }
 
     /// 从收藏夹移除照片
@@ -220,7 +221,7 @@ impl CollectionPhotoMapper {
             .filter(collection_photo::Column::UserId.eq(user_id))
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "移除失败")?;
+            .trace_to_internal_err("db_delete_err", "移除失败")?;
 
         Ok(result.rows_affected > 0)
     }
@@ -244,7 +245,7 @@ impl CollectionPhotoMapper {
             .filter(collection_photo::Column::CollectionId.eq(collection_id))
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "删除收藏夹照片失败")?;
+            .trace_to_internal_err("db_delete_err", "删除收藏夹照片失败")?;
         Ok(())
     }
 
@@ -267,7 +268,7 @@ impl CollectionPhotoMapper {
             .filter(collection_photo::Column::PhotoId.eq(photo_id))
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?;
+            .trace_to_internal_err("db_query_err", "查询失败")?;
 
         let collection_ids: Vec<i64> = relations.iter().map(|r| r.collection_id).collect();
 
@@ -276,7 +277,7 @@ impl CollectionPhotoMapper {
                 .filter(collection_photo::Column::PhotoId.eq(photo_id))
                 .exec(db)
                 .await
-                .trace_internal_err("db_delete_err", "删除收藏关联失败")?;
+                .trace_to_internal_err("db_delete_err", "删除收藏关联失败")?;
         }
 
         Ok(collection_ids)
@@ -321,7 +322,7 @@ impl CollectionPhotoMapper {
         collection_photo::Entity::insert_many(models)
             .exec(db)
             .await
-            .trace_internal_err("db_insert_err", "批量添加到收藏夹失败")?;
+            .trace_to_internal_err("db_insert_err", "批量添加到收藏夹失败")?;
 
         Ok(count)
     }
@@ -352,7 +353,7 @@ impl CollectionPhotoMapper {
             .filter(collection_photo::Column::UserId.eq(user_id))
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "批量移除失败")?;
+            .trace_to_internal_err("db_delete_err", "批量移除失败")?;
 
         Ok(result.rows_affected as u32)
     }
