@@ -33,7 +33,7 @@ impl CommentLikeMapper {
             .filter(Column::CommentId.eq(comment_id))
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 批量查询用户对多条评论的点赞状态
@@ -64,7 +64,7 @@ impl CommentLikeMapper {
             .into_values::<i64, Column>()
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?
+            .trace_to_internal_err("db_query_err", "查询失败")?
             .into_iter()
             .collect();
 
@@ -95,7 +95,7 @@ impl CommentLikeMapper {
         }
         .insert(db)
         .await
-        .trace_internal_err("db_insert_err", "点赞失败")
+        .trace_to_internal_err("db_insert_err", "点赞失败")
     }
 
     /// 根据ID删除点赞记录
@@ -110,7 +110,7 @@ impl CommentLikeMapper {
         Entity::delete_by_id(id)
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "取消点赞失败")?;
+            .trace_to_internal_err("db_delete_err", "取消点赞失败")?;
         Ok(())
     }
 
@@ -130,7 +130,7 @@ impl CommentLikeMapper {
             .filter(Column::CommentId.eq(comment_id))
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "删除点赞失败")?;
+            .trace_to_internal_err("db_delete_err", "删除点赞失败")?;
         Ok(())
     }
 
@@ -153,7 +153,7 @@ impl CommentLikeMapper {
             .filter(Column::CommentId.is_in(comment_ids.iter().copied()))
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "删除点赞失败")?;
+            .trace_to_internal_err("db_delete_err", "删除点赞失败")?;
         Ok(())
     }
 }

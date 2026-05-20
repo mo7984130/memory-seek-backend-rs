@@ -55,22 +55,22 @@ impl PhotoService {
     /// 3. 上传到OSS存储
     /// 4. 保存照片记录到数据库
     /// 5. 更新时间线统计
-    /// 6. 发送人脸检测任务（如果启用了 face_recognition feature）
+    /// 6. 发送人脸检测任务（如果启用了face_recognition feature）
     ///
     /// # 参数
-    /// - `state`: 照片模块状态（包含数据库连接、OSS客户端、Redis连接池等）
+    /// - `db`: 数据库连接
+    /// - `_redis`: Redis连接池（暂未使用）
+    /// - `s3`: OSS客户端
+    /// - `face_tx`: 人脸检测任务发送通道（仅face_recognition feature）
     /// - `user_id`: 用户ID
     /// - `file_data`: 文件字节数据
     /// - `file_name`: 原始文件名
     /// - `content_type`: 文件MIME类型
-    /// - `created_at`: 自定义创建时间（可选，为空则使用当前时间）
+    /// - `created_at`: 自定义创建时间（可选）
+    /// - `token_cipher`: 加密密钥
     ///
     /// # 返回
     /// 返回上传成功的照片VO
-    ///
-    /// # 错误
-    /// - `AppError::BadRequest`: 图片已存在、文件校验不通过
-    /// - `AppError::InternalServerError`: S3上传失败、数据库写入失败
     #[instrument(name = "photo_upload", skip_all, fields(user_id, file_name))]
     pub async fn upload_photo(
         state: &PhotoState,
@@ -93,7 +93,7 @@ impl PhotoService {
                     md5::compute(&file_data_clone)
                 ))
                 .await
-                .trace_internal_err(
+                .trace_to_internal_err(
                     "spawn_blocking_md5_compute_err",
                     "tokio spawn_blocking join err"
                 )?
@@ -105,7 +105,7 @@ impl PhotoService {
             return Err(AppError::bad_request("图片已存在"));
         }
 
-        // 校验文件
+        // 效验文件
         let metadata = {
             let file_data_clone = file_data.clone();
             timed!(
@@ -116,9 +116,9 @@ impl PhotoService {
                     &file_name,
                     &content_type
                 )
-                .trace_bad_request_err("photo::upload:invalid_photo", "图片校验不通过"))
+                .trace_to_bad_request_warn("photo::upload:invaild_photo", "图片效验不通过"))
                 .await
-                .trace_internal_err(
+                .trace_to_internal_err(
                     "spawn_blocking_validate_photo_err",
                     "tokio spawn_blocking join err"
                 )??
@@ -134,7 +134,7 @@ impl PhotoService {
             .upload(&file_id, &file_data, &metadata.mime_type)
             .timed(metrics_timer_name!("upload_photo", "s3_upload"))
             .await
-            .trace_internal_err("photo::upload:s3_upload_err", "s3上传失败")?;
+            .trace_to_internal_err("photo::upload:s3_upload_err", "s3上传失败")?;
 
         // 更新数据库
         let now = Utc::now();
@@ -154,7 +154,7 @@ impl PhotoService {
         .insert(&state.db)
         .timed(metrics_timer_name!("upload_photo", "db_insert"))
         .await
-        .trace_internal_err("photo::upload:db_insert_err", "保存照片失败");
+        .trace_to_internal_err("photo::upload:db_insert_err", "保存照片失败");
         // 删除文件
         let photo = match insert_result {
             Ok(photo) => photo,
@@ -163,7 +163,7 @@ impl PhotoService {
                     .s3_client
                     .delete(&file_id)
                     .await
-                    .trace_internal_err("photo::upload:s3_delete_err", "删除文件失败");
+                    .trace_to_internal_err("photo::upload:s3_delete_err", "删除文件失败");
                 return Err(e);
             }
         };
@@ -172,7 +172,7 @@ impl PhotoService {
         // 错误不返回
         let _ = TimelineStatService::incr_stat(state, photo.created_at)
             .await
-            .trace_internal_err("photo::upload:incr_timeline_err", "增加时间线统计错误");
+            .trace_to_internal_err("photo::upload:incr_timeline_err", "增加时间线统计错误");
 
         // 发送人脸识别任务
         // 错误不返回
@@ -186,7 +186,7 @@ impl PhotoService {
                 img_height: metadata.height,
             })
             .await
-            .trace_internal_err("photo::upload:send_face_task_err", "发送人脸识别任务错误");
+            .trace_to_internal_err("photo::upload:send_face_task_err", "发送人脸识别任务错误");
 
         // 生成token
         let (thumbnail_token, preview_token, original_token) =
@@ -212,15 +212,14 @@ impl PhotoService {
     /// 游标分页查询照片列表
     ///
     /// # 参数
-    /// - `state`: 照片模块状态
+    /// - `db`: 数据库连接
+    /// - `redis`: Redis连接池
     /// - `user_id`: 用户ID
-    /// - `query`: 分页查询参数（包含游标、方向、每页数量）
+    /// - `query`: 分页查询参数
+    /// - `token_cipher`: 加密密钥
     ///
     /// # 返回
     /// 返回分页照片列表，包含是否有更多数据的标识
-    ///
-    /// # 错误
-    /// - `AppError::BadRequest`: size 参数无效或超过最大值
     pub async fn get_photo_cursor_page(
         state: &PhotoState,
         user_id: i64,
@@ -228,8 +227,8 @@ impl PhotoService {
     ) -> Result<CursorPageVO<PhotoVO, String>, AppError> {
         metrics_group!("get_photo_cursor_page");
 
-        let size =
-            usize::try_from(query.size).trace_bad_request_err("invalid_size", "size 必须为正数")?;
+        let size = usize::try_from(query.size)
+            .trace_to_bad_request_warn("invalid_size", "size 必须为正数")?;
         if size > DB_BATCH_SIZE {
             warn!(user_id=%user_id, "size超过最大值");
             return Err(AppError::bad_request(HIT_MAX_SIZE_MSG));
@@ -350,14 +349,11 @@ impl PhotoService {
     /// 根据ID获取照片详情
     ///
     /// # 参数
-    /// - `state`: 照片模块状态
+    /// - `db`: 数据库连接
     /// - `photo_id`: 照片ID
     ///
     /// # 返回
-    /// 返回照片信息模型
-    ///
-    /// # 错误
-    /// - `AppError::NotFound`: 照片不存在
+    /// 返回照片模型，不存在返回404错误
     pub async fn get_photo_info_by_id(
         state: &PhotoState,
         photo_id: i64,
@@ -369,21 +365,9 @@ impl PhotoService {
             .map(PhotoInfo::from);
 
         metrics_success!("get_photo_info_by_id");
-        res
+        return res;
     }
 
-    /// 批量检查MD5是否已存在于数据库
-    ///
-    /// # 参数
-    /// - `state`: 照片模块状态
-    /// - `user_id`: 用户ID（用于日志记录）
-    /// - `md5s`: 待检查的MD5哈希列表
-    ///
-    /// # 返回
-    /// 返回与输入等长的布尔列表，`true` 表示该MD5已存在
-    ///
-    /// # 错误
-    /// - `AppError::BadRequest`: MD5列表长度超过最大批次限制
     pub async fn exists_by_md5_batch(
         state: &PhotoState,
         user_id: UserId,
@@ -400,10 +384,13 @@ impl PhotoService {
         let res = md5s.iter().map(|md5| existing.contains(md5)).collect();
 
         metrics_success!("exists_by_md5_batch");
-        Ok(res)
+        return Ok(res);
     }
 
     /// 获取所有照片的时间范围
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接
     ///
     /// # 返回
     /// 返回最早和最晚照片的创建时间元组
@@ -413,7 +400,7 @@ impl PhotoService {
         let res = PhotoMapper::query_time_range(&state.db).await;
 
         metrics_success!("get_time_range");
-        res
+        return res;
     }
 
     /// 批量删除照片
@@ -427,15 +414,8 @@ impl PhotoService {
     /// 6. 分批删除 S3 文件
     /// 7. 批量递减时间线统计
     ///
-    /// # 参数
-    /// - `state`: 照片模块状态
-    /// - `user_id`: 用户ID（仅管理员可执行）
-    /// - `photo_ids`: 待删除的照片ID列表
-    ///
-    /// # 错误
-    /// - `AppError::Forbidden`: 非管理员用户执行删除
-    /// - `AppError::NotFound`: 部分照片ID不存在
-    /// - `AppError::InternalServerError`: 数据库事务失败
+    /// # 注意
+    /// - S3 / 时间线 / 人脸统计失败仅记录警告，不回滚已提交的数据库事务；
     pub async fn delete_photos(
         state: &PhotoState,
         user_id: UserId,
@@ -486,7 +466,7 @@ impl PhotoService {
                 .all(&state.db)
                 .timed(metrics_timer_name!("delete_photos", "find_features"))
                 .await
-                .trace_internal_err("db_query_err", "获取人脸特征错误")?
+                .trace_to_internal_err("db_query_err", "获取人脸特征错误")?
                 .into_iter()
                 .map(|(id, pid, emb, score)| (id, pid, emb.to_vec(), score))
                 .collect::<Vec<_>>()
@@ -510,7 +490,7 @@ impl PhotoService {
                         )
                         .timed(metrics_timer_name!("delete_photos", "delete_features"))
                         .await
-                        .trace_internal_err("delete_features", "删除人脸特征失败")?;
+                        .trace_to_internal_err("delete_features", "删除人脸特征失败")?;
 
                         // 减量计算人物
                         FacePersonMapper::decr_by_features(txn, &features).await?;
@@ -530,21 +510,19 @@ impl PhotoService {
                     CommentMapper::delete_by_ids(txn, &comment_ids)
                         .timed(metrics_timer_name!("delete_photos", "delete_comment"))
                         .await
-                        .trace_internal_err("delete_comment", "删除评论失败")?;
+                        .trace_to_internal_err("delete_comment", "删除评论失败")?;
 
                     // 删除照片
                     PhotoMapper::delete_by_ids(txn, &photo_ids)
                         .timed(metrics_timer_name!("delete_photos", "delete_photo"))
                         .await
-                        .trace_internal_err("delete_photo", "删除照片记录失败")?;
+                        .trace_to_internal_err("delete_photo", "删除照片记录失败")?;
 
                     Ok(())
                 })
             })
             .await
-            .trace_internal_err("db_err", "数据库批量删除出错")?;
-
-        // TODO 人物特征重算
+            .trace_to_internal_err("db_err", "数据库批量删除出错")?;
 
         // 删除照片文件
         state

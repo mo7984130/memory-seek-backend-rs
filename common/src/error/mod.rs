@@ -4,3 +4,9 @@
 /// `AppError` 自动实现 axum 的 `IntoResponse`，可直接作为 handler 返回值。
 mod app_error;
 pub use app_error::AppError;
+
+mod db_err_ext;
+mod repo_error;
+
+pub use db_err_ext::DbErrExt;
+pub use repo_error::RepoError;

@@ -2,7 +2,10 @@ use chrono::Utc;
 use common::error::AppError;
 use common::utils::ResultExt;
 use entities::collection;
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set,
+};
 
 pub struct CollectionMapper;
 
@@ -16,11 +19,14 @@ impl CollectionMapper {
     /// # 返回
     /// - 成功: 返回收藏夹模型
     /// - 失败: 收藏夹不存在返回404错误
-    pub async fn query_by_id(db: &DatabaseConnection, id: i64) -> Result<collection::Model, AppError> {
+    pub async fn query_by_id(
+        db: &DatabaseConnection,
+        id: i64,
+    ) -> Result<collection::Model, AppError> {
         collection::Entity::find_by_id(id)
             .one(db)
             .await
-            .trace_internal_err("db_query_err","查询收藏夹失败")?
+            .trace_to_internal_err("db_query_er r","查询收藏夹失败")?
             .ok_or_else(|| AppError::not_found("收藏夹不存在"))
     }
 
@@ -35,14 +41,17 @@ impl CollectionMapper {
     ///
     /// # 错误
     /// - `AppError`: 数据库查询失败时返回错误
-    pub async fn query_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Vec<collection::Model>, AppError> {
+    pub async fn query_by_user_id(
+        db: &DatabaseConnection,
+        user_id: i64,
+    ) -> Result<Vec<collection::Model>, AppError> {
         collection::Entity::find()
             .filter(collection::Column::UserId.eq(user_id))
             .order_by_asc(collection::Column::IsFavorite)
             .order_by_desc(collection::Column::CreatedAt)
             .all(db)
             .await
-            .trace_internal_err("db_query_err","查询收藏夹失败")
+            .trace_to_internal_err("db_query_er r","查询收藏夹失败")
     }
 
     /// 查询用户的"我喜欢"收藏夹
@@ -56,13 +65,16 @@ impl CollectionMapper {
     ///
     /// # 错误
     /// - `AppError`: 数据库查询失败时返回错误
-    pub async fn query_favorite_by_user_id(db: &DatabaseConnection, user_id: i64) -> Result<Option<collection::Model>, AppError> {
+    pub async fn query_favorite_by_user_id(
+        db: &DatabaseConnection,
+        user_id: i64,
+    ) -> Result<Option<collection::Model>, AppError> {
         collection::Entity::find()
             .filter(collection::Column::UserId.eq(user_id))
             .filter(collection::Column::IsFavorite.eq(true))
             .one(db)
             .await
-            .trace_internal_err("db_query_err","查询失败")
+            .trace_to_internal_err("db_query_er r","查询失败")
     }
 
     /// 查询用户"我喜欢"收藏夹的ID
@@ -73,7 +85,10 @@ impl CollectionMapper {
     ///
     /// # 返回
     /// 返回"我喜欢"收藏夹的ID，不存在返回None
-    pub async fn query_favorite_collection_id(db: &DatabaseConnection, user_id: i64) -> Result<Option<i64>, AppError> {
+    pub async fn query_favorite_collection_id(
+        db: &DatabaseConnection,
+        user_id: i64,
+    ) -> Result<Option<i64>, AppError> {
         let result = collection::Entity::find()
             .filter(collection::Column::UserId.eq(user_id))
             .filter(collection::Column::IsFavorite.eq(true))
@@ -82,7 +97,7 @@ impl CollectionMapper {
             .into_tuple::<(i64,)>()
             .one(db)
             .await
-            .trace_internal_err("db_query_err","查询失败")?;
+            .trace_to_internal_err("db_query_er r","查询失败")?;
         Ok(result.map(|r| r.0))
     }
 
@@ -117,7 +132,10 @@ impl CollectionMapper {
             ..Default::default()
         };
 
-        collection.insert(db).await.trace_internal_err("db_insert_err","创建收藏夹失败")
+        collection
+            .insert(db)
+            .await
+            .trace_to_internal_err("db_insert_er r","创建收藏夹失败")
     }
 
     /// 更新收藏夹信息
@@ -157,7 +175,10 @@ impl CollectionMapper {
         }
         active.updated_at = Set(Utc::now().into());
 
-        active.update(db).await.trace_internal_err("db_update_err","更新收藏夹失败")
+        active
+            .update(db)
+            .await
+            .trace_to_internal_err("db_update_er r","更新收藏夹失败")
     }
 
     /// 删除收藏夹
@@ -175,7 +196,7 @@ impl CollectionMapper {
         collection::Entity::delete_by_id(id)
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err","删除收藏夹失败")?;
+            .trace_to_internal_err("db_delete_er r","删除收藏夹失败")?;
         Ok(())
     }
 
@@ -193,18 +214,25 @@ impl CollectionMapper {
     ///
     /// # 错误
     /// - `AppError`: 收藏夹不存在或数据库更新失败时返回错误
-    pub async fn increment_photo_count<C: ConnectionTrait>(db: &C, id: i64, delta: i32) -> Result<(), AppError> {
+    pub async fn increment_photo_count<C: ConnectionTrait>(
+        db: &C,
+        id: i64,
+        delta: i32,
+    ) -> Result<(), AppError> {
         let collection = collection::Entity::find_by_id(id)
             .one(db)
             .await
-            .trace_internal_err("db_query_err","查询收藏夹失败")?
+            .trace_to_internal_err("db_query_er r","查询收藏夹失败")?
             .ok_or_else(|| AppError::not_found("收藏夹不存在"))?;
 
         let mut active: collection::ActiveModel = collection.into();
         let new_count = (*active.photo_count.as_ref() + delta as i64).max(0);
         active.photo_count = Set(new_count);
         active.updated_at = Set(Utc::now().into());
-        active.update(db).await.trace_internal_err("db_update_err","更新照片数量失败")?;
+        active
+            .update(db)
+            .await
+            .trace_to_internal_err("db_update_er r","更新照片数量失败")?;
         Ok(())
     }
 
@@ -233,20 +261,20 @@ impl CollectionMapper {
 
         // 构建更新表达式
         // 逻辑：photo_count = GREATEST(0, photo_count + change)
-        let new_count_expr = Expr::cust_with_exprs(
-            "GREATEST(0, photo_count + ?)",
-            vec![change.into()]
-        );
+        let new_count_expr =
+            Expr::cust_with_exprs("GREATEST(0, photo_count + ?)", vec![change.into()]);
 
         collection::Entity::update_many()
             .col_expr(collection::Column::PhotoCount, new_count_expr)
-            .col_expr(collection::Column::UpdatedAt, Expr::value(Utc::now().naive_utc()))
+            .col_expr(
+                collection::Column::UpdatedAt,
+                Expr::value(Utc::now().naive_utc()),
+            )
             .filter(collection::Column::Id.is_in(collection_ids))
             .exec(txn)
             .await
-            .trace_internal_err("db_update_err","批量更新收藏夹计数失败")?;
+            .trace_to_internal_err("db_update_er r","批量更新收藏夹计数失败")?;
 
         Ok(())
     }
-
 }

@@ -23,7 +23,7 @@ impl CommentMapper {
         Entity::find_by_id(id)
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?
+            .trace_to_internal_err("db_query_err", "查询失败")?
             .ok_or_else(|| AppError::not_found("评论不存在"))
     }
 
@@ -50,7 +50,7 @@ impl CommentMapper {
             .limit(limit)
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 游标分页查询照片评论，排除指定ID
@@ -88,7 +88,7 @@ impl CommentMapper {
         query
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 发布新评论
@@ -115,7 +115,7 @@ impl CommentMapper {
         }
         .insert(db)
         .await
-        .trace_internal_err("db_insert_err", "发布失败")
+        .trace_to_internal_err("db_insert_err", "发布失败")
     }
 
     /// 删除评论
@@ -133,7 +133,7 @@ impl CommentMapper {
         Entity::delete_by_id(id)
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "删除失败")?;
+            .trace_to_internal_err("db_delete_err", "删除失败")?;
         Ok(())
     }
 
@@ -160,7 +160,7 @@ impl CommentMapper {
             .filter(Column::Id.eq(id))
             .exec(db)
             .await
-            .trace_internal_err("db_update_err", "更新失败")?;
+            .trace_to_internal_err("db_update_err", "更新失败")?;
 
         Ok(())
     }
@@ -187,7 +187,7 @@ impl CommentMapper {
             .into_values::<i64, Column>()
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 批量查询多张照片的评论ID列表
@@ -212,7 +212,7 @@ impl CommentMapper {
             .into_values::<i64, Column>()
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "获取评论id错误")
+            .trace_to_internal_err("db_query_err", "获取评论id错误")
     }
 
     /// 根据ID列表批量删除评论
@@ -231,7 +231,7 @@ impl CommentMapper {
             .filter(Column::Id.is_in(ids.iter().copied()))
             .exec(db)
             .await
-            .trace_internal_err("db_del_err", "根据评论id删除评论错误")?;
+            .trace_to_internal_err("db_del_err", "根据评论id删除评论错误")?;
 
         Ok(())
     }
@@ -255,7 +255,7 @@ impl CommentMapper {
             .filter(Column::PhotoId.eq(photo_id))
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "删除评论失败")?;
+            .trace_to_internal_err("db_delete_err", "删除评论失败")?;
         Ok(())
     }
 }

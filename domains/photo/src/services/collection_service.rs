@@ -7,11 +7,12 @@ use crate::photo::PhotoVO;
 use chrono::Utc;
 use common::constants::RedisKeys;
 use common::error::AppError;
-use common::utils::CacheExtension;
+use common::utils::{CacheExtension, ResultExt};
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use sea_orm::TransactionTrait;
 use std::collections::HashMap;
+use std::os::linux::raw::stat;
 
 use crate::state::PhotoState;
 
@@ -56,25 +57,10 @@ impl CollectionService {
             collections
         };
 
+        // 组装结果
         let result: Vec<CollectionVO> = collections
             .into_iter()
-            .map(|c| {
-                let cover_token = c.cover_file_id.as_ref().and_then(|fid| {
-                    let (thumbnail_token, _, _) =
-                        crate::models::photo::PhotoVO::generate_tokens(fid, &state.token_cipher);
-                    thumbnail_token
-                });
-
-                CollectionVO {
-                    id: c.id.to_string(),
-                    name: c.name,
-                    description: c.description,
-                    photo_count: c.photo_count,
-                    cover_token,
-                    is_favorite: c.is_favorite,
-                    created_at: c.created_at.with_timezone(&Utc),
-                }
-            })
+            .map(|c| CollectionVO::from_collection(c, &state.token_cipher))
             .collect();
 
         Ok(result)
@@ -99,18 +85,8 @@ impl CollectionService {
         name: String,
         description: Option<String>,
     ) -> Result<CollectionVO, AppError> {
-        let collection =
-            CollectionMapper::insert(&state.db, user_id, name, description, false).await?;
-
-        Ok(CollectionVO {
-            id: collection.id.to_string(),
-            name: collection.name,
-            description: collection.description,
-            photo_count: 0,
-            cover_token: None,
-            is_favorite: false,
-            created_at: collection.created_at.with_timezone(&Utc),
-        })
+        let c = CollectionMapper::insert(&state.db, user_id, name, description, false).await?;
+        Ok(CollectionVO::from_collection(c, &state.token_cipher))
     }
 
     /// 编辑收藏夹信息
@@ -134,31 +110,20 @@ impl CollectionService {
         name: Option<String>,
         description: Option<String>,
     ) -> Result<CollectionVO, AppError> {
+        // 效验权限
         let collection = CollectionMapper::query_by_id(&state.db, collection_id).await?;
-
         if collection.user_id != user_id {
-            return Err(AppError::bad_request("无权限"));
+            return Err(AppError::forbidden("无权限"));
         }
 
         let collection =
             CollectionMapper::update(&state.db, collection_id, name, description, None, None)
                 .await?;
 
-        let cover_token = collection.cover_file_id.as_ref().and_then(|fid| {
-            let (thumbnail_token, _, _) =
-                crate::models::photo::PhotoVO::generate_tokens(fid, &state.token_cipher);
-            thumbnail_token
-        });
-
-        Ok(CollectionVO {
-            id: collection.id.to_string(),
-            name: collection.name,
-            description: collection.description,
-            photo_count: collection.photo_count,
-            cover_token,
-            is_favorite: collection.is_favorite,
-            created_at: collection.created_at.with_timezone(&Utc),
-        })
+        Ok(CollectionVO::from_collection(
+            collection,
+            &state.token_cipher,
+        ))
     }
 
     /// 删除收藏夹
@@ -178,34 +143,30 @@ impl CollectionService {
         user_id: i64,
         collection_id: i64,
     ) -> Result<(), AppError> {
+        // 校验
         let collection = CollectionMapper::query_by_id(&state.db, collection_id).await?;
-
         if collection.user_id != user_id {
-            return Err(AppError::bad_request("无权限"));
+            return Err(AppError::forbidden("无权限"));
         }
-
         if collection.is_favorite {
             return Err(AppError::bad_request("我喜欢不可删除"));
         }
 
         state
             .db
-            .transaction::<_, (), sea_orm::DbErr>(|txn| {
+            .transaction::<_, (), AppError>(|txn| {
                 Box::pin(async move {
-                    CollectionPhotoMapper::delete_by_collection_id(txn, collection_id)
-                        .await
-                        .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
-                    CollectionMapper::delete_by_id(txn, collection_id)
-                        .await
-                        .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    // 删除收藏夹里面的照片
+                    CollectionPhotoMapper::delete_by_collection_id(txn, collection_id).await?;
+                    // 删除收藏夹本身
+                    CollectionMapper::delete_by_id(txn, collection_id).await?;
                     Ok(())
                 })
             })
             .await
-            .map_err(|e| {
-                tracing::error!(target:"logs", "删除收藏夹失败: {:?}", e);
-                AppError::InternalServerError
-            })
+            .trace_to_internal_err("db_err", "删除收藏夹")?;
+
+        Ok(())
     }
 
     /// 添加照片到收藏夹
@@ -227,8 +188,8 @@ impl CollectionService {
         collection_id: i64,
         photo_id: i64,
     ) -> Result<(), AppError> {
+        // 校验权限
         let collection = CollectionMapper::query_by_id(&state.db, collection_id).await?;
-
         if collection.user_id != user_id {
             return Err(AppError::bad_request("无权限"));
         }
@@ -242,22 +203,16 @@ impl CollectionService {
 
         state
             .db
-            .transaction::<_, (), sea_orm::DbErr>(|txn| {
+            .transaction::<_, (), AppError>(|txn| {
                 Box::pin(async move {
-                    CollectionPhotoMapper::insert(txn, collection_id, photo_id, user_id)
-                        .await
-                        .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
-                    CollectionMapper::increment_photo_count(txn, collection_id, 1)
-                        .await
-                        .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    CollectionPhotoMapper::insert(txn, collection_id, photo_id, user_id).await?;
+                    CollectionMapper::increment_photo_count(txn, collection_id, 1).await?;
                     Ok(())
                 })
             })
-            .await
-            .map_err(|e| {
-                tracing::error!(target:"logs", "添加到收藏夹失败: {:?}", e);
-                AppError::InternalServerError
-            })
+            .await?;
+
+        Ok(())
     }
 
     /// 从收藏夹移除照片

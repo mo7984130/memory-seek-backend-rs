@@ -22,6 +22,9 @@ pub enum AppError {
     #[error("{0}")]
     Forbidden(Cow<'static, str>),
 
+    #[error("{0}")]
+    Conflict(Cow<'static, str>),
+
     #[error("服务器内部错误")]
     InternalServerError,
 }
@@ -52,6 +55,7 @@ impl AppError {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
+            Self::Conflict(_) => StatusCode::CONFLICT,
         }
     }
 

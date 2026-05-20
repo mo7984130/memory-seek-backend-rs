@@ -9,9 +9,11 @@ use common::utils::{OptionExt, ResultExt};
 use entities::user::UserDTO;
 use std::sync::Arc;
 
-
 use crate::UserState;
-use crate::models::{ChangeNicknameRequest, ChangePasswordRequest, GetUserInfoBatchRequest, InviterCodeDTO, UserInfoVO};
+use crate::models::{
+    ChangeNicknameRequest, ChangePasswordRequest, GetUserInfoBatchRequest, InviterCodeDTO,
+    UserInfoVO,
+};
 use crate::services as user_service;
 
 /// 用户模块 HTTP 控制器，处理用户相关的 API 请求
@@ -46,9 +48,11 @@ impl UserController {
     /// - `AppError`: 用户不存在或数据库查询失败时返回错误
     async fn get_user_info(
         State(state): State<Arc<UserState>>,
-        Extension(user_id): Extension<UserId>
+        Extension(user_id): Extension<UserId>,
     ) -> Result<R<UserDTO>, AppError> {
-        user_service::get_user_info(&state, user_id.0).await.into_ok_res()
+        user_service::get_user_info(&state, user_id.0)
+            .await
+            .into_ok_res()
     }
 
     /// 为当前用户生成邀请码
@@ -64,9 +68,11 @@ impl UserController {
     /// - `AppError`: 邀请码生成重试耗尽或 Redis 操作失败时返回错误
     async fn generate_inviter_code(
         State(state): State<Arc<UserState>>,
-        Extension(user_id): Extension<UserId>
+        Extension(user_id): Extension<UserId>,
     ) -> Result<R<InviterCodeDTO>, AppError> {
-        user_service::generate_inviter_code(&state, user_id.0).await.into_ok_res()
+        user_service::generate_inviter_code(&state, user_id.0)
+            .await
+            .into_ok_res()
     }
 
     /// 修改当前用户的昵称
@@ -84,9 +90,11 @@ impl UserController {
     async fn change_nickname(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedJson(req): ValidatedJson<ChangeNicknameRequest>
+        ValidatedJson(req): ValidatedJson<ChangeNicknameRequest>,
     ) -> Result<R<String>, AppError> {
-        user_service::change_nickname(&state, user_id.0, req.new_nickname).await.into_ok_res()
+        user_service::change_nickname(&state, user_id.0, req.new_nickname)
+            .await
+            .into_ok_res()
     }
 
     /// 上传并更新当前用户的头像
@@ -109,22 +117,21 @@ impl UserController {
         let field = multipart
             .next_field()
             .await
-            .trace_bad_request_err("invaild_multipart", "无效的表单数据")?
+            .trace_to_bad_request_warn("invaild_multipart", "无效的表单数据")?
             .ok_or_warn("mutipart_not_found", "表单数据为空", "未找到上传文件")?;
 
         let file_name = field.file_name().unwrap_or("avatar.jpg").to_string();
         let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field
-            .bytes()
-            .await
-            .map_bad_request_err("读取文件失败")?;
+        let file_data = field.bytes().await.map_bad_request_err("读取文件失败")?;
 
         let res = user_service::update_avatar(
             &state,
             user_id.0,
-            file_name, file_data.to_vec(), content_type,
+            file_name,
+            file_data.to_vec(),
+            content_type,
         )
-            .await?;
+        .await?;
         Ok(R::ok(res))
     }
 
@@ -143,9 +150,11 @@ impl UserController {
     async fn change_password(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedJson(req): ValidatedJson<ChangePasswordRequest>
+        ValidatedJson(req): ValidatedJson<ChangePasswordRequest>,
     ) -> Result<R<()>, AppError> {
-        user_service::change_password(&state, user_id.0, req).await.into_ok_res()
+        user_service::change_password(&state, user_id.0, req)
+            .await
+            .into_ok_res()
     }
 
     /// 登出当前用户，清除所有令牌
@@ -161,7 +170,7 @@ impl UserController {
     /// - `AppError`: 数据库更新或 Redis 操作失败时返回错误
     async fn logout(
         State(state): State<Arc<UserState>>,
-        Extension(user_id): Extension<UserId>
+        Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>, AppError> {
         user_service::logout(&state, user_id.0).await.into_ok_res()
     }
@@ -181,11 +190,15 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         ValidatedJson(req): ValidatedJson<GetUserInfoBatchRequest>,
     ) -> Result<R<Vec<Option<UserInfoVO>>>, AppError> {
-        let user_ids = req.user_ids.into_iter()
+        let user_ids = req
+            .user_ids
+            .into_iter()
             .map(|id| id.parse::<i64>())
             .collect::<Result<Vec<i64>, _>>()
             .map_bad_request_err("id格式错误")?;
 
-        user_service::get_user_info_batch(&state, user_ids).await.into_ok_res()
+        user_service::get_user_info_batch(&state, user_ids)
+            .await
+            .into_ok_res()
     }
 }

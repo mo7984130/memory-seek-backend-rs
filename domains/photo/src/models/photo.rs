@@ -1,3 +1,4 @@
+use crate::services::photo_service::PageDirection;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use common::models::ImageToken;
@@ -6,7 +7,6 @@ use common::{error::AppError, utils::ResultExt};
 use sea_orm::FromQueryResult;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
-use crate::services::photo_service::PageDirection;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +53,20 @@ impl PhotoVO {
             .ok();
 
         (thumbnail_token, preview_token, original_token)
+    }
+
+    /// 为指定文件生成缩略图访问令牌
+    ///
+    /// # 参数
+    /// - `file_id`: 文件唯一标识
+    /// - `token_cipher`: 加密器实例
+    ///
+    /// # 返回
+    /// 加密成功时返回令牌，失败时返回 `None`
+    pub fn generate_thumbnail_token(file_id: &str, token_cipher: &TokenCipher) -> Option<String> {
+        token_cipher
+            .encrypt(&ImageToken::thumbnail(file_id.to_string()), Some(file_id))
+            .ok()
     }
 }
 
@@ -106,11 +120,13 @@ impl PhotoCursor {
     pub fn decode(s: impl AsRef<[u8]>) -> Result<Self, AppError> {
         let bytes = URL_SAFE_NO_PAD
             .decode(s)
-            .trace_bad_request_err("photo::photo_cursor:decode_err", "解码photo_curosr错误")?;
-        let json = String::from_utf8(bytes)
-            .trace_bad_request_err("photo::photo_cursor:from_utf8_err", "解码photo_curosr错误")?;
+            .trace_to_bad_request_warn("photo::photo_cursor:decode_err", "解码photo_curosr错误")?;
+        let json = String::from_utf8(bytes).trace_to_bad_request_warn(
+            "photo::photo_cursor:from_utf8_err",
+            "解码photo_curosr错误",
+        )?;
         serde_json::from_str(&json)
-            .trace_bad_request_err("photo::photo_cursor:from_str_err", "解码photo_curosr错误")
+            .trace_to_bad_request_warn("photo::photo_cursor:from_str_err", "解码photo_curosr错误")
     }
 }
 

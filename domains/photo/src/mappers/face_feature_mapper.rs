@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use common::error::AppError;
 use common::utils::ResultExt;
-use entities::{face_feature::*, Embedding512};
+use entities::{Embedding512, face_feature::*};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
     EntityName, EntityTrait, IdenStatic, QueryFilter, QueryOrder, QuerySelect, Set, Statement,
@@ -26,7 +26,7 @@ impl FaceFeatureMapper {
         Entity::find_by_id(id)
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?
+            .trace_to_internal_err("db_query_err", "查询失败")?
             .ok_or_else(|| AppError::not_found("特征不存在"))
     }
 
@@ -49,7 +49,7 @@ impl FaceFeatureMapper {
             .filter(Column::PhotoId.eq(photo_id))
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 查询人物的所有人脸特征
@@ -71,7 +71,7 @@ impl FaceFeatureMapper {
             .filter(Column::PersonId.eq(person_id))
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 根据ID列表批量查询人脸特征
@@ -96,7 +96,7 @@ impl FaceFeatureMapper {
             .filter(Column::Id.is_in(ids.iter().copied()))
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 查询所有人脸特征（按ID排序）
@@ -114,7 +114,7 @@ impl FaceFeatureMapper {
             .order_by_asc(Column::Id)
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询特征失败")
+            .trace_to_internal_err("db_query_err", "查询特征失败")
     }
 
     /// 游标分页查询人物的人脸特征
@@ -148,7 +148,7 @@ impl FaceFeatureMapper {
         query
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 创建新人脸特征
@@ -189,7 +189,7 @@ impl FaceFeatureMapper {
         feature
             .insert(db)
             .await
-            .trace_internal_err("db_insert_err", "保存特征失败")
+            .trace_to_internal_err("db_insert_err", "保存特征失败")
     }
 
     /// 更新人脸特征的人物关联
@@ -213,7 +213,7 @@ impl FaceFeatureMapper {
         let existing = Entity::find_by_id(id)
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?
+            .trace_to_internal_err("db_query_err", "查询失败")?
             .ok_or_else(|| AppError::not_found("特征不存在"))?;
         let mut active: ActiveModel = existing.into();
         active.person_id = Set(person_id);
@@ -221,7 +221,7 @@ impl FaceFeatureMapper {
         active
             .update(db)
             .await
-            .trace_internal_err("db_update_err", "更新失败")
+            .trace_to_internal_err("db_update_err", "更新失败")
     }
 
     /// 删除单个人脸特征
@@ -236,7 +236,7 @@ impl FaceFeatureMapper {
         Entity::delete_by_id(id)
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "删除特征失败")?;
+            .trace_to_internal_err("db_delete_err", "删除特征失败")?;
         Ok(())
     }
 
@@ -257,7 +257,7 @@ impl FaceFeatureMapper {
             .filter(Column::Id.is_in(ids))
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "批量删除人脸特征失败")?;
+            .trace_to_internal_err("db_delete_err", "批量删除人脸特征失败")?;
 
         Ok(())
     }
@@ -284,7 +284,7 @@ impl FaceFeatureMapper {
             .filter(Column::PhotoId.eq(photo_id))
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "删除特征失败")?;
+            .trace_to_internal_err("db_delete_err", "删除特征失败")?;
 
         Ok(person_ids)
     }
@@ -343,7 +343,7 @@ impl FaceFeatureMapper {
                 values,
             ))
             .await
-            .trace_internal_err("db_query_err", "查询最高分特征失败")?;
+            .trace_to_internal_err("db_query_err", "查询最高分特征失败")?;
 
         let mut result: HashMap<i64, Option<(i64, f32)>> =
             person_ids.iter().map(|&id| (id, None)).collect();
@@ -351,13 +351,13 @@ impl FaceFeatureMapper {
         for row in rows {
             let person_id: i64 = row
                 .try_get("", person_id_col.as_str())
-                .trace_internal_err("db_query_err", "获取person_id列错误")?;
+                .trace_to_internal_err("db_query_err", "获取person_id列错误")?;
             let feature_id: i64 = row
                 .try_get("", id_col.as_str())
-                .trace_internal_err("db_query_err", "获取feature_id列错误")?;
+                .trace_to_internal_err("db_query_err", "获取feature_id列错误")?;
             let score: f32 = row
                 .try_get("", score_col.as_str())
-                .trace_internal_err("db_query_err", "获取score列错误")?;
+                .trace_to_internal_err("db_query_err", "获取score列错误")?;
             result.insert(person_id, Some((feature_id, score)));
         }
 

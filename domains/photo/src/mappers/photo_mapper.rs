@@ -25,7 +25,7 @@ impl PhotoMapper {
         Entity::find_by_id(id)
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询照片失败")?
+            .trace_to_internal_err("db_query_err", "查询照片失败")?
             .ok_or_else(|| AppError::not_found("照片不存在"))
     }
 
@@ -75,7 +75,7 @@ impl PhotoMapper {
             .into_tuple::<String>()
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "批量查询MD5失败")?;
+            .trace_to_internal_err("db_query_err", "批量查询MD5失败")?;
         Ok(existing.into_iter().collect())
     }
 
@@ -94,7 +94,7 @@ impl PhotoMapper {
             .into_model::<TimeRange>()
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询时间范围失败")?;
+            .trace_to_internal_err("db_query_err", "查询时间范围失败")?;
         Ok(result.unwrap_or_default())
     }
 
@@ -169,7 +169,7 @@ impl PhotoMapper {
         Self::build_cursor_query(cursor, size, direction)
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 游标分页查询照片id
@@ -194,7 +194,7 @@ impl PhotoMapper {
             .into_tuple::<i64>()
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询 ID 列表失败")
+            .trace_to_internal_err("db_query_err", "查询 ID 列表失败")
     }
 
     /// 根据文件ID查询照片
@@ -213,7 +213,7 @@ impl PhotoMapper {
             .filter(Column::FileId.eq(file_id))
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询照片失败")?
+            .trace_to_internal_err("db_query_err", "查询照片失败")?
             .ok_or_else(|| AppError::not_found("照片不存在"))
     }
 
@@ -232,7 +232,7 @@ impl PhotoMapper {
         Entity::delete_by_id(id)
             .exec(db)
             .await
-            .trace_internal_err("db_del_err", "删除照片失败")?;
+            .trace_to_internal_err("db_del_err", "删除照片失败")?;
         Ok(())
     }
 
@@ -252,7 +252,7 @@ impl PhotoMapper {
             .filter(Column::Id.is_in(ids.iter().copied()))
             .exec(db)
             .await
-            .trace_internal_err("db_del_err", "删除照片失败")?;
+            .trace_to_internal_err("db_del_err", "删除照片失败")?;
 
         Ok(())
     }

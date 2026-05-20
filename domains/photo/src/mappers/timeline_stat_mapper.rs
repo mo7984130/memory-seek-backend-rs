@@ -63,7 +63,7 @@ impl TimelineStatMapper {
             .filter(Column::DateStr.is_in(date_strs))
             .exec(db)
             .await
-            .trace_internal_err("db_update_err", "批量更新照片时间线统计错误")?;
+            .trace_to_internal_err("db_update_err", "批量更新照片时间线统计错误")?;
 
         Ok(())
     }

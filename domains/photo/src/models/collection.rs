@@ -1,6 +1,11 @@
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
+use entities::collection;
+use img_url_generator::TokenCipher;
+use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
+
+use crate::photo::PhotoVO;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -11,7 +16,24 @@ pub struct CollectionVO {
     pub photo_count: i64,
     pub cover_token: Option<String>,
     pub is_favorite: bool,
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTimeUtc,
+}
+
+impl CollectionVO {
+    pub fn from_collection(c: collection::Model, cipher: &TokenCipher) -> Self {
+        CollectionVO {
+            id: c.id.to_string(),
+            name: c.name,
+            description: c.description,
+            photo_count: c.photo_count,
+            cover_token: c
+                .cover_file_id
+                .as_ref()
+                .and_then(|fid| PhotoVO::generate_thumbnail_token(fid, &state.token_cipher)),
+            is_favorite: c.is_favorite,
+            created_at: c.created_at,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

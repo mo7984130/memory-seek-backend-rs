@@ -37,7 +37,7 @@ impl FacePersonMapper {
         face_person::Entity::find_by_id(id)
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?
+            .trace_to_internal_err("db_query_err", "查询失败")?
             .ok_or_else(|| AppError::not_found("人物不存在"))
     }
 
@@ -56,7 +56,7 @@ impl FacePersonMapper {
             .order_by_asc(face_person::Column::Name)
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 根据名称查询人物
@@ -78,7 +78,7 @@ impl FacePersonMapper {
             .filter(face_person::Column::Name.eq(name))
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 游标分页查询人物列表
@@ -118,7 +118,7 @@ impl FacePersonMapper {
         query
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 根据ID列表批量查询人物
@@ -143,7 +143,7 @@ impl FacePersonMapper {
             .filter(face_person::Column::Id.is_in(ids.iter().copied()))
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")
+            .trace_to_internal_err("db_query_err", "查询失败")
     }
 
     /// 创建人物
@@ -190,7 +190,7 @@ impl FacePersonMapper {
         person
             .insert(db)
             .await
-            .trace_internal_err("db_insert_err", "创建人物失败")
+            .trace_to_internal_err("db_insert_err", "创建人物失败")
     }
 
     /// 更新人物信息
@@ -226,7 +226,7 @@ impl FacePersonMapper {
         let existing = face_person::Entity::find_by_id(id)
             .one(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?
+            .trace_to_internal_err("db_query_err", "查询失败")?
             .ok_or_else(|| AppError::not_found("人物不存在"))?;
         let mut active: face_person::ActiveModel = existing.into();
 
@@ -256,7 +256,7 @@ impl FacePersonMapper {
         active
             .update(db)
             .await
-            .trace_internal_err("db_update_err", "更新失败")
+            .trace_to_internal_err("db_update_err", "更新失败")
     }
 
     /// 删除人物
@@ -271,7 +271,7 @@ impl FacePersonMapper {
         face_person::Entity::delete_by_id(id)
             .exec(db)
             .await
-            .trace_internal_err("db_delete_err", "删除人物失败")?;
+            .trace_to_internal_err("db_delete_err", "删除人物失败")?;
         Ok(())
     }
 
@@ -321,7 +321,7 @@ impl FacePersonMapper {
         query
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "搜索失败")
+            .trace_to_internal_err("db_query_err", "搜索失败")
     }
 
     /// 批量减少人物特征的权重
@@ -365,7 +365,7 @@ impl FacePersonMapper {
         // 查询person的信息
         let persons = Self::query_by_ids(db, &person_features.keys().copied().collect::<Vec<_>>())
             .await
-            .trace_internal_err("db_query_err", "获取人物信息错误")?;
+            .trace_to_internal_err("db_query_err", "获取人物信息错误")?;
 
         // 减量计算
         let mut updates: Vec<UpdateInfo> = Vec::with_capacity(persons.len());
@@ -550,7 +550,7 @@ impl FacePersonMapper {
             .filter(Column::Id.is_in(person_ids))
             .exec(db)
             .await
-            .trace_internal_err("db_update_err", "批量更新人物错误")?;
+            .trace_to_internal_err("db_update_err", "批量更新人物错误")?;
 
         Ok(())
     }

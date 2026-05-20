@@ -1,5 +1,6 @@
 use common::error::AppError;
 use common::utils::ResultExt;
+use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
@@ -24,7 +25,14 @@ impl EmailClient {
     ///
     /// # 返回
     /// 初始化完成的 `EmailClient` 实例
-    pub fn new(server: &str, port: u16, user: &str, pass: &str, from_email: &str, from_name: &str) -> Self {
+    pub fn new(
+        server: &str,
+        port: u16,
+        user: &str,
+        pass: &str,
+        from_email: &str,
+        from_name: &str,
+    ) -> Self {
         let creds = Credentials::new(user.to_string(), pass.to_string());
 
         // 根据端口判断加密方式：
@@ -69,17 +77,23 @@ impl EmailClient {
         body: String,
     ) -> Result<(), AppError> {
         let email = Message::builder()
-            .from(format!("{} <{}>", self.from_name, self.from_email).parse().map_internal_err("发件人地址格式错误")?)
-            .to(to.parse().map_bad_request_err("目标邮箱格式错误")?)
+            .from(
+                format!("{} <{}>", self.from_name, self.from_email)
+                    .parse::<Mailbox>()
+                    .trace_to_internal_err("email_from_email_err", "发件人地址格式错误")?,
+            )
+            .to(to
+                .parse::<Mailbox>()
+                .trace_to_bad_request_warn("email_to_email_err", "目标邮箱格式错误")?)
             .subject(subject)
             .header(ContentType::TEXT_HTML)
             .body(body)
-            .map_internal_err("构建邮件消息失败")?;
+            .trace_to_internal_err("email_body_err", "构建邮件消息失败")?;
 
         self.transport
             .send(email)
             .await
-            .map_internal_err("邮件服务商发送失败")?;
+            .trace_to_internal_err("email_send_err", "邮件服务商发送失败")?;
 
         Ok(())
     }
