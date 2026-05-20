@@ -1,7 +1,6 @@
 /// 账号验证器
 ///
 /// 支持用户名和邮箱两种账号格式的自动识别与验证。
-
 use crate::utils::validators::email::EMAIL_REGEX;
 use crate::utils::validators::username::{UsernameValidConfig, USERNAME_REGEX};
 use validator::ValidationError;

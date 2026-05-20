@@ -1,5 +1,4 @@
 /// 邮箱格式验证器
-
 use once_cell::sync::Lazy;
 use regex::Regex;
 use validator::ValidationError;

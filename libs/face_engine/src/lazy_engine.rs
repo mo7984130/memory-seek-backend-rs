@@ -107,16 +107,16 @@ impl LazyFaceEngine {
     pub async fn unload_if_idle(&self) -> bool {
         let last_used = self.last_used.read().await;
 
-        if let Some(last) = *last_used {
-            if last.elapsed() > self.ttl {
-                drop(last_used);
+        if let Some(last) = *last_used
+            && last.elapsed() > self.ttl
+        {
+            drop(last_used);
 
-                let mut engine = self.engine.write().await;
-                if engine.is_some() {
-                    info!("FaceEngine 闲置超时，释放模型");
-                    *engine = None;
-                    return true;
-                }
+            let mut engine = self.engine.write().await;
+            if engine.is_some() {
+                info!("FaceEngine 闲置超时，释放模型");
+                *engine = None;
+                return true;
             }
         }
         false
@@ -147,7 +147,7 @@ impl LazyFaceEngine {
         let engine = self.get_or_load().await?;
 
         let det_path = self.det_model_path.clone();
-        let _ = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             let _ = &engine;
             let _ = &det_path;
         })

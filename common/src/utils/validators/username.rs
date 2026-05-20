@@ -1,7 +1,6 @@
 /// 用户名验证器
 ///
 /// 要求用户名仅包含字母、数字、下划线和短横线，长度 4-20 个字符。
-
 use once_cell::sync::Lazy;
 use regex::Regex;
 use validator::ValidationError;

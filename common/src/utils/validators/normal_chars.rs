@@ -1,7 +1,6 @@
 /// 常规字符验证器
 ///
 /// 禁止 `< > / \ " ' & @` 等特殊符号，适用于名称、标题等通用文本输入。
-
 use once_cell::sync::Lazy;
 use regex::Regex;
 use validator::ValidationError;
