@@ -2,10 +2,11 @@ use axum::extract::{Multipart, State};
 use axum::routing::{get, post};
 use axum::{Extension, Router};
 use common::error::AppError;
+use common::ext::ResultErrExt;
+use common::ext::{OptionExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::models::UserId;
 use common::r::R;
-use common::utils::{OptionExt, ResultExt};
 use entities::user::UserDTO;
 use std::sync::Arc;
 
@@ -52,7 +53,7 @@ impl UserController {
     ) -> Result<R<UserDTO>, AppError> {
         user_service::get_user_info(&state, user_id.0)
             .await
-            .into_ok_res()
+            .to_r_ok()
     }
 
     /// 为当前用户生成邀请码
@@ -72,7 +73,7 @@ impl UserController {
     ) -> Result<R<InviterCodeDTO>, AppError> {
         user_service::generate_inviter_code(&state, user_id.0)
             .await
-            .into_ok_res()
+            .to_r_ok()
     }
 
     /// 修改当前用户的昵称
@@ -94,7 +95,7 @@ impl UserController {
     ) -> Result<R<String>, AppError> {
         user_service::change_nickname(&state, user_id.0, req.new_nickname)
             .await
-            .into_ok_res()
+            .to_r_ok()
     }
 
     /// 上传并更新当前用户的头像
@@ -118,11 +119,14 @@ impl UserController {
             .next_field()
             .await
             .trace_to_bad_request_warn("invaild_multipart", "无效的表单数据")?
-            .ok_or_warn("mutipart_not_found", "表单数据为空", "未找到上传文件")?;
+            .ok_or_warn("mutipart_not_found", "未找到上传文件")?;
 
         let file_name = field.file_name().unwrap_or("avatar.jpg").to_string();
         let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field.bytes().await.map_bad_request_err("读取文件失败")?;
+        let file_data = field
+            .bytes()
+            .await
+            .trace_to_bad_request_warn("read_file_err", "读取文件失败")?;
 
         let res = user_service::update_avatar(
             &state,
@@ -154,7 +158,7 @@ impl UserController {
     ) -> Result<R<()>, AppError> {
         user_service::change_password(&state, user_id.0, req)
             .await
-            .into_ok_res()
+            .to_r_ok()
     }
 
     /// 登出当前用户，清除所有令牌
@@ -172,7 +176,7 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>, AppError> {
-        user_service::logout(&state, user_id.0).await.into_ok_res()
+        user_service::logout(&state, user_id.0).await.to_r_ok()
     }
 
     /// 批量获取多个用户的基本信息
@@ -195,10 +199,10 @@ impl UserController {
             .into_iter()
             .map(|id| id.parse::<i64>())
             .collect::<Result<Vec<i64>, _>>()
-            .map_bad_request_err("id格式错误")?;
+            .trace_to_bad_request_warn("invalid_id_format", "id格式错误")?;
 
         user_service::get_user_info_batch(&state, user_ids)
             .await
-            .into_ok_res()
+            .to_r_ok()
     }
 }

@@ -3,26 +3,25 @@ use crate::models::collection::{
     BatchOperationResultVO, CollectionPhotoCursor, CollectionPhotoVO, CollectionVO,
 };
 use crate::models::photo::CursorPageVO;
-use crate::photo::PhotoVO;
 use chrono::Utc;
 use common::constants::RedisKeys;
 use common::error::AppError;
-use common::utils::{CacheExtension, ResultExt};
+use common::ext::{CacheExtension, ResultErrExt};
+use common::utils::DbUtils;
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use sea_orm::TransactionTrait;
 use std::collections::HashMap;
-use std::os::linux::raw::stat;
 
 use crate::state::PhotoState;
 
 pub struct CollectionService;
 
 // 定义全局缓存：Key 为 user_id (i64), Value 为 collection_id (i64)
-// 设置最大容量 10000 条，过期时间 24 小时
+// 设置最大容量 1024 * 16 条，过期时间 24 小时
 static LOCAL_FAVORITE_ID_CACHE: Lazy<Cache<i64, i64>> = Lazy::new(|| {
     Cache::builder()
-        .max_capacity(10000)
+        .max_capacity(1024 * 16)
         .time_to_live(std::time::Duration::from_secs(24 * 60 * 60))
         .build()
 });
@@ -76,9 +75,6 @@ impl CollectionService {
     ///
     /// # 返回
     /// 返回创建的收藏夹VO
-    ///
-    /// # 错误
-    /// - `AppError`: 数据库插入失败
     pub async fn create_collection(
         state: &PhotoState,
         user_id: i64,
@@ -100,9 +96,6 @@ impl CollectionService {
     ///
     /// # 返回
     /// 返回更新后的收藏夹VO
-    ///
-    /// # 错误
-    /// - `AppError::BadRequest`: 无权限编辑该收藏夹
     pub async fn edit_collection(
         state: &PhotoState,
         user_id: i64,
@@ -201,16 +194,14 @@ impl CollectionService {
             return Err(AppError::bad_request("照片已在收藏夹中"));
         }
 
-        state
-            .db
-            .transaction::<_, (), AppError>(|txn| {
-                Box::pin(async move {
-                    CollectionPhotoMapper::insert(txn, collection_id, photo_id, user_id).await?;
-                    CollectionMapper::increment_photo_count(txn, collection_id, 1).await?;
-                    Ok(())
-                })
+        DbUtils::write(&state.db, |txn| {
+            Box::pin(async move {
+                CollectionPhotoMapper::insert(txn, collection_id, photo_id, user_id).await?;
+                CollectionMapper::increment_photo_count(txn, collection_id, 1).await?;
+                Ok(())
             })
-            .await?;
+        })
+        .await?;
 
         Ok(())
     }
@@ -549,7 +540,7 @@ impl CollectionService {
 
         let failed_ids: Vec<i64> = unique_photo_ids
             .into_iter()
-            .filter(|id| !already_exists_set.contains(&id) && !existing_photo_ids.contains(&id))
+            .filter(|id| !already_exists_set.contains(id) && !existing_photo_ids.contains(id))
             .collect();
 
         let success_count = state

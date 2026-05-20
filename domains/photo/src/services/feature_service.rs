@@ -3,9 +3,9 @@ use crate::mappers::{FaceFeatureMapper, FacePersonMapper};
 use crate::models::face::FaceFeatureVO;
 use common::constants::redis_keys::photo::face_person_name;
 use common::error::AppError;
-use common::utils::RedisExt;
+use common::ext::RedisExt;
 use deadpool_redis::Pool;
-use entities::{face_feature, Embedding512};
+use entities::{Embedding512, face_feature};
 use std::collections::HashMap;
 
 use crate::state::PhotoState;
@@ -74,7 +74,11 @@ impl FeatureService {
             let best = remaining
                 .iter()
                 .filter(|f| f.id != feature.id)
-                .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
+                .max_by(|a, b| {
+                    a.score
+                        .partial_cmp(&b.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             match best {
                 Some(b) => (b.id, b.score),
                 None => {
@@ -97,7 +101,8 @@ impl FeatureService {
             Some(person.total_photo_count - 1),
             Some(Embedding512::new(new_centroid.to_vec())),
             Some(old_weight - 1.0),
-        ).await?;
+        )
+        .await?;
 
         Self::invalidate_person_cache(&state.redis, person_id).await?;
         Ok(())
@@ -111,10 +116,7 @@ impl FeatureService {
     ///
     /// # 错误
     /// - `AppError`: 查询或删除特征失败
-    pub async fn delete_feature(
-        state: &PhotoState,
-        feature_id: i64,
-    ) -> Result<(), AppError> {
+    pub async fn delete_feature(state: &PhotoState, feature_id: i64) -> Result<(), AppError> {
         let feature = FaceFeatureMapper::query_by_id(&state.db, feature_id).await?;
         let person_id = feature.person_id;
 
@@ -160,7 +162,11 @@ impl FeatureService {
 
         let best_feature = features
             .iter()
-            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.score
+                    .partial_cmp(&b.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .unwrap();
 
         FacePersonMapper::update(
@@ -173,7 +179,8 @@ impl FeatureService {
             Some(features.len() as i64),
             Some(centroid_embedding),
             Some(total_weight),
-        ).await?;
+        )
+        .await?;
 
         Self::invalidate_person_cache(&state.redis, person_id).await?;
 
@@ -231,14 +238,12 @@ impl FeatureService {
                     .and_then(|pid| person_names.get(&pid).cloned())
                     .unwrap_or_else(|| "未知人物".to_string());
 
-                let bbox: face_feature::FaceBBox =
-                    serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
-                        face_feature::FaceBBox {
-                            x: 0.0,
-                            y: 0.0,
-                            w: 0.1,
-                            h: 0.1,
-                        }
+                let bbox: face_feature::FaceBBox = serde_json::from_value(f.bbox.clone())
+                    .unwrap_or(face_feature::FaceBBox {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 0.1,
+                        h: 0.1,
                     });
 
                 FaceFeatureVO {

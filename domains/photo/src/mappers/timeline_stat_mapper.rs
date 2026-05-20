@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use common::{error::AppError, utils::ResultExt};
+use common::{error::AppError, ext::ResultErrExt};
 use entities::timeline_stat::{Column, Entity};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,

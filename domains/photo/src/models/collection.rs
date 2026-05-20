@@ -29,7 +29,7 @@ impl CollectionVO {
             cover_token: c
                 .cover_file_id
                 .as_ref()
-                .and_then(|fid| PhotoVO::generate_thumbnail_token(fid, &state.token_cipher)),
+                .and_then(|fid| PhotoVO::generate_thumbnail_token(fid, cipher)),
             is_favorite: c.is_favorite,
             created_at: c.created_at,
         }

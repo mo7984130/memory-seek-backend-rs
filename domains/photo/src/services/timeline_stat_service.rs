@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::ext::ResultErrExt;
 use entities::timeline_stat;
 use sea_orm::sea_query::{Expr, OnConflict};
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, Set};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 
 use crate::models::common::PhotoTimelineStatVO;
 use crate::state::PhotoState;
@@ -19,10 +19,7 @@ impl TimelineStatService {
     ///
     /// # 错误
     /// - `AppError`: 更新统计失败
-    pub async fn incr_stat(
-        state: &PhotoState,
-        created_at: DateTime<Utc>,
-    ) -> Result<(), AppError> {
+    pub async fn incr_stat(state: &PhotoState, created_at: DateTime<Utc>) -> Result<(), AppError> {
         Self::incr_stat_txn(&state.db, created_at).await
     }
 
@@ -34,10 +31,7 @@ impl TimelineStatService {
     ///
     /// # 错误
     /// - `AppError`: 更新统计失败
-    pub async fn decr_stat(
-        state: &PhotoState,
-        created_at: DateTime<Utc>,
-    ) -> Result<(), AppError> {
+    pub async fn decr_stat(state: &PhotoState, created_at: DateTime<Utc>) -> Result<(), AppError> {
         Self::decr_stat_txn(&state.db, created_at).await
     }
 
@@ -59,9 +53,9 @@ impl TimelineStatService {
         let insert = timeline_stat::ActiveModel {
             date_str: Set(date_str),
             count: Set(1),
-            anchor_time: Set(created_at.into()),
-            created_at: Set(now.into()),
-            updated_at: Set(now.into()),
+            anchor_time: Set(created_at),
+            created_at: Set(now),
+            updated_at: Set(now),
         };
 
         let mut on_conflict = OnConflict::column(timeline_stat::Column::DateStr);
@@ -79,7 +73,7 @@ impl TimelineStatService {
             .on_conflict(on_conflict)
             .exec(db)
             .await
-            .map_internal_err("更新统计失败")?;
+            .trace_to_internal_err("db_update_err", "更新统计失败")?;
 
         Ok(())
     }
@@ -104,7 +98,7 @@ impl TimelineStatService {
             .filter(timeline_stat::Column::DateStr.eq(&date_str))
             .one(db)
             .await
-            .map_internal_err("查询失败")?;
+            .trace_to_internal_err("db_query_err", "查询失败")?;
 
         let Some(stat) = existing else {
             return Ok(());
@@ -114,7 +108,7 @@ impl TimelineStatService {
             timeline_stat::Entity::delete_by_id(stat.date_str)
                 .exec(db)
                 .await
-                .map_internal_err("删除统计失败")?;
+                .trace_to_internal_err("db_delete_err", "删除统计失败")?;
         } else {
             // 使用 upsert 原子递减，避免 check-then-act 竞态
             let insert = timeline_stat::ActiveModel {
@@ -122,7 +116,7 @@ impl TimelineStatService {
                 count: Set(0), // INSERT 时的占位值，实际走 UPDATE 分支
                 anchor_time: Set(stat.anchor_time),
                 created_at: Set(stat.created_at),
-                updated_at: Set(Utc::now().into()),
+                updated_at: Set(Utc::now()),
             };
 
             let mut on_conflict = OnConflict::column(timeline_stat::Column::DateStr);
@@ -137,7 +131,7 @@ impl TimelineStatService {
                 .on_conflict(on_conflict)
                 .exec(db)
                 .await
-                .map_internal_err("更新统计失败")?;
+                .trace_to_internal_err("db_update_err", "更新统计失败")?;
         }
 
         Ok(())
@@ -153,14 +147,12 @@ impl TimelineStatService {
     ///
     /// # 错误
     /// - `AppError`: 查询统计失败
-    pub async fn get_stats(
-        state: &PhotoState,
-    ) -> Result<Vec<PhotoTimelineStatVO>, AppError> {
+    pub async fn get_stats(state: &PhotoState) -> Result<Vec<PhotoTimelineStatVO>, AppError> {
         let stats = timeline_stat::Entity::find()
             .order_by_desc(timeline_stat::Column::DateStr)
             .all(&state.db)
             .await
-            .map_internal_err("查询失败")?;
+            .trace_to_internal_err("db_query_err", "查询失败")?;
 
         Ok(stats
             .iter()

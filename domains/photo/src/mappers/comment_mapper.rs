@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::ext::ResultErrExt;
 use entities::comment::*;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::error::AppError;
-use crate::utils::ResultExt;
+use crate::ext::ResultErrExt;
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use bcrypt;
 use password_hash::SaltString;
@@ -126,7 +126,7 @@ impl HashAlgorithm {
                 let result = alg.verify(password, hash)?;
                 Ok((result, alg))
             }
-            None => Err(()).trace_to_internal_err("password_not_detect", "检测不到密码的算法"),
+            None => Err(()).trace_to_internal_err("password_not_detect", "密码算法检测失败"),
         }
     }
 

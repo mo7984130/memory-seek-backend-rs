@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::ext::ResultErrExt;
 use entities::{Embedding512, face_feature::*};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
@@ -181,8 +181,8 @@ impl FaceFeatureMapper {
             embedding: Set(embedding),
             bbox: Set(bbox),
             score: Set(score),
-            created_at: Set(now.into()),
-            updated_at: Set(now.into()),
+            created_at: Set(now),
+            updated_at: Set(now),
             ..Default::default()
         };
 
@@ -217,7 +217,7 @@ impl FaceFeatureMapper {
             .ok_or_else(|| AppError::not_found("特征不存在"))?;
         let mut active: ActiveModel = existing.into();
         active.person_id = Set(person_id);
-        active.updated_at = Set(chrono::Utc::now().into());
+        active.updated_at = Set(chrono::Utc::now());
         active
             .update(db)
             .await

@@ -43,7 +43,7 @@ impl CommentService {
         limit: i64,
     ) -> Result<CursorPageVO<PhotoCommentVO, DateTime<Utc>>, AppError> {
         // 校验 limit 参数
-        if limit < COMMENT_PAGE_LIMIT_MIN || limit > COMMENT_PAGE_LIMIT_MAX {
+        if !(COMMENT_PAGE_LIMIT_MIN..=COMMENT_PAGE_LIMIT_MAX).contains(&limit) {
             return Err(AppError::bad_request("分页参数超出范围"));
         }
         let limit = limit as u64;

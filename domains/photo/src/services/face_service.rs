@@ -2,18 +2,18 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::constants::redis_keys::photo::face_person_name;
 use common::error::AppError;
+use common::ext::{RedisExt, ResultErrExt};
 use common::models::{FaceBBoxPixels, ImageToken};
-use common::utils::{RedisExt, ResultExt};
 use deadpool_redis::Pool;
-use entities::{face_feature, face_person, Embedding512};
+use entities::{Embedding512, face_feature, face_person};
 use face_engine::{FaceAligner, FaceEngine, LazyFaceEngine};
 use sea_orm::{EntityTrait, Set, TransactionTrait};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{Semaphore, mpsc};
 use tracing::info;
 
-use crate::clustering::union_find::{filter_valid_seeds, grow_stage, UnionFind};
+use crate::clustering::union_find::{UnionFind, filter_valid_seeds, grow_stage};
 use crate::clustering::vector_utils;
 use crate::mappers::{FaceFeatureMapper, FacePersonMapper, PhotoMapper};
 use crate::models::face::{
@@ -55,7 +55,7 @@ impl FaceService {
 
         let detections = face_engine
             .detect_faces(&image_bytes)
-            .map_internal_err("人脸检测失败")?;
+            .trace_to_internal_err("face_detection_err", "人脸检测失败")?;
 
         info!("照片 {} 检测到 {} 张人脸", photo_id, detections.len());
 
@@ -78,11 +78,11 @@ impl FaceService {
             }
 
             let aligned_face = FaceAligner::align(&image_bytes, &detection.landmarks)
-                .map_internal_err("人脸对齐失败")?;
+                .trace_to_internal_err("face_align_err", "人脸对齐失败")?;
 
             let embedding = face_engine
                 .extract_embedding(&aligned_face)
-                .map_internal_err("特征提取失败")?;
+                .trace_to_internal_err("embedding_extract_err", "特征提取失败")?;
 
             let norm_embedding = vector_utils::l2_normalize(&embedding);
             let embedding = Embedding512::new(norm_embedding.to_vec());
@@ -109,7 +109,7 @@ impl FaceService {
             face_feature::Entity::insert_many(face_features)
                 .exec(db)
                 .await
-                .map_internal_err("批量保存人脸特征失败")?;
+                .trace_to_internal_err("db_insert_err", "批量保存人脸特征失败")?;
             info!("照片 {} 处理完成，入库 {} 张人脸", photo_id, count);
         } else {
             info!("照片 {} 处理完成，无有效人脸", photo_id);
@@ -203,7 +203,11 @@ impl FaceService {
 
                     let best = features
                         .iter()
-                        .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+                        .max_by(|a, b| {
+                            a.score
+                                .partial_cmp(&b.score)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
                         .unwrap();
 
                     let centroid = Embedding512::new(seed.vector.clone());
@@ -224,7 +228,9 @@ impl FaceService {
                         features.len() as i64,
                         centroid,
                         seed.total_weight,
-                    ).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    )
+                    .await
+                    .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
                     let person_id = person.id;
 
@@ -237,7 +243,9 @@ impl FaceService {
 
                 Ok(())
             })
-        }).await.map_err(|e| {
+        })
+        .await
+        .map_err(|e| {
             tracing::error!(target:"logs", "同步聚类结果失败: {:?}", e);
             AppError::InternalServerError
         })
@@ -260,8 +268,10 @@ impl FaceService {
     ) -> Result<CursorPageVO<FacePersonVO, String>, AppError> {
         let size = query.size.unwrap_or(20) as u64;
         let decoded_cursor = query.cursor.as_ref().and_then(|s| PersonCursor::decode(s));
-        
-        let persons = FacePersonMapper::query_cursor_page(&state.db, decoded_cursor.as_ref(), size + 1).await?;
+
+        let persons =
+            FacePersonMapper::query_cursor_page(&state.db, decoded_cursor.as_ref(), size + 1)
+                .await?;
 
         let has_more = persons.len() > size as usize;
         let persons: Vec<_> = persons.into_iter().take(size as usize).collect();
@@ -269,22 +279,34 @@ impl FaceService {
         let feature_ids: Vec<i64> = persons.iter().map(|p| p.max_score_feature_id).collect();
         let features = FaceFeatureMapper::query_by_ids(&state.db, &feature_ids).await?;
         let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-        let photos = PhotoMapper::query_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
+        let photos = PhotoMapper::query_by_ids(&state.db, &photo_ids)
+            .await?
+            .into_iter()
+            .map(|p| (p.id, p))
+            .collect::<HashMap<_, _>>();
 
         let records: Vec<FacePersonVO> = persons
             .into_iter()
             .filter_map(|p| {
                 let feature = features.iter().find(|f| f.id == p.max_score_feature_id)?;
                 let photo = photos.get(&feature.photo_id)?;
-                let bbox: face_feature::FaceBBox = serde_json::from_value(feature.bbox.clone()).unwrap_or_else(|_| {
-                    face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
-                });
+                let bbox: face_feature::FaceBBox = serde_json::from_value(feature.bbox.clone())
+                    .unwrap_or(face_feature::FaceBBox {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 0.1,
+                        h: 0.1,
+                    });
                 let x = (bbox.x * photo.width as f32) as i32;
                 let y = (bbox.y * photo.height as f32) as i32;
                 let w = (bbox.w * photo.width as f32) as i32;
                 let h = (bbox.h * photo.height as f32) as i32;
-                let cover_token = state.token_cipher
-                    .encrypt(&ImageToken::crop(photo.file_id.clone(), FaceBBoxPixels { x, y, w, h }), Some(&photo.file_id))
+                let cover_token = state
+                    .token_cipher
+                    .encrypt(
+                        &ImageToken::crop(photo.file_id.clone(), FaceBBoxPixels { x, y, w, h }),
+                        Some(&photo.file_id),
+                    )
                     .ok()?;
 
                 Some(FacePersonVO {
@@ -299,10 +321,13 @@ impl FaceService {
         let next_cursor = records.last().and_then(|r| {
             let person_id = r.id.parse().ok()?;
             let count = r.total_photo_count?;
-            Some(PersonCursor {
-                total_photo_count: count,
-                id: person_id,
-            }.encode())
+            Some(
+                PersonCursor {
+                    total_photo_count: count,
+                    id: person_id,
+                }
+                .encode(),
+            )
         });
 
         Ok(CursorPageVO {
@@ -322,9 +347,7 @@ impl FaceService {
     ///
     /// # 错误
     /// - `AppError`: 查询人物列表失败
-    pub async fn get_all_person(
-        state: &PhotoState,
-    ) -> Result<Vec<FacePersonSimpleVO>, AppError> {
+    pub async fn get_all_person(state: &PhotoState) -> Result<Vec<FacePersonSimpleVO>, AppError> {
         let persons = FacePersonMapper::query_all(&state.db).await?;
 
         Ok(persons
@@ -361,7 +384,18 @@ impl FaceService {
 
         let name_initials = to_pinyin_initials(&new_name);
 
-        let person = FacePersonMapper::update(&state.db, person_id, Some(new_name), Some(name_initials), None, None, None, None, None).await?;
+        let person = FacePersonMapper::update(
+            &state.db,
+            person_id,
+            Some(new_name),
+            Some(name_initials),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?;
 
         let _ = Self::invalidate_person_cache(&state.redis, person_id).await;
 
@@ -414,36 +448,46 @@ impl FaceService {
 
         let new_photo_count = target.total_photo_count + source.total_photo_count;
 
-        let target = state.db.transaction::<_, face_person::Model, sea_orm::DbErr>(|txn| {
-            Box::pin(async move {
-                let target = FacePersonMapper::update(
-                    txn,
-                    target_id,
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some(new_photo_count),
-                    Some(merged_embedding),
-                    Some(new_weight),
-                ).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+        let target = state
+            .db
+            .transaction::<_, face_person::Model, sea_orm::DbErr>(|txn| {
+                Box::pin(async move {
+                    let target = FacePersonMapper::update(
+                        txn,
+                        target_id,
+                        None,
+                        None,
+                        None,
+                        None,
+                        Some(new_photo_count),
+                        Some(merged_embedding),
+                        Some(new_weight),
+                    )
+                    .await
+                    .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
 
-                let source_features = FaceFeatureMapper::query_by_person_id(txn, source_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
-
-                for feature in source_features {
-                    FaceFeatureMapper::update_person_id(txn, feature.id, Some(target_id))
+                    let source_features = FaceFeatureMapper::query_by_person_id(txn, source_id)
                         .await
                         .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
-                }
 
-                FacePersonMapper::delete_by_id(txn, source_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    for feature in source_features {
+                        FaceFeatureMapper::update_person_id(txn, feature.id, Some(target_id))
+                            .await
+                            .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    }
 
-                Ok(target)
+                    FacePersonMapper::delete_by_id(txn, source_id)
+                        .await
+                        .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+
+                    Ok(target)
+                })
             })
-        }).await.map_err(|e| {
-            tracing::error!(target:"logs", "合并人物失败: {:?}", e);
-            AppError::InternalServerError
-        })?;
+            .await
+            .map_err(|e| {
+                tracing::error!(target:"logs", "合并人物失败: {:?}", e);
+                AppError::InternalServerError
+            })?;
 
         let _ = Self::invalidate_person_cache(&state.redis, source_id).await;
 
@@ -486,20 +530,30 @@ impl FaceService {
     ) -> Result<FacePersonVO, AppError> {
         let person = FacePersonMapper::query_by_id(&state.db, person_id).await?;
 
-        let feature = FaceFeatureMapper::query_by_id(&state.db, person.max_score_feature_id).await.ok();
+        let feature = FaceFeatureMapper::query_by_id(&state.db, person.max_score_feature_id)
+            .await
+            .ok();
 
         let cover_token = if let Some(f) = feature {
             let photo = PhotoMapper::query_by_id(&state.db, f.photo_id).await.ok();
             if let Some(p) = photo {
-                let bbox: face_feature::FaceBBox = serde_json::from_value(f.bbox.clone()).unwrap_or_else(|_| {
-                    face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
-                });
+                let bbox: face_feature::FaceBBox = serde_json::from_value(f.bbox.clone())
+                    .unwrap_or(face_feature::FaceBBox {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 0.1,
+                        h: 0.1,
+                    });
                 let x = (bbox.x * p.width as f32) as i32;
                 let y = (bbox.y * p.height as f32) as i32;
                 let w = (bbox.w * p.width as f32) as i32;
                 let h = (bbox.h * p.height as f32) as i32;
-                state.token_cipher
-                    .encrypt(&ImageToken::crop(p.file_id.clone(), FaceBBoxPixels { x, y, w, h }), Some(&p.file_id))
+                state
+                    .token_cipher
+                    .encrypt(
+                        &ImageToken::crop(p.file_id.clone(), FaceBBoxPixels { x, y, w, h }),
+                        Some(&p.file_id),
+                    )
                     .ok()
             } else {
                 None
@@ -537,16 +591,30 @@ impl FaceService {
         cursor: Option<i64>,
         size: u32,
     ) -> Result<CursorPageVO<crate::models::photo::PhotoVO, i64>, AppError> {
-        let features = FaceFeatureMapper::query_cursor_page(&state.db, person_id, cursor, (size + 1) as u64).await?;
+        let features =
+            FaceFeatureMapper::query_cursor_page(&state.db, person_id, cursor, (size + 1) as u64)
+                .await?;
 
         let has_more = features.len() > size as usize;
         let features: Vec<_> = features.into_iter().take(size as usize).collect();
 
         let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-        let photo_map = PhotoMapper::query_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
+        let photo_map = PhotoMapper::query_by_ids(&state.db, &photo_ids)
+            .await?
+            .into_iter()
+            .map(|p| (p.id, p))
+            .collect::<HashMap<_, _>>();
 
-        let favorite_collection_id = crate::services::CollectionService::get_favorite_collection_id(state, user_id).await?;
-        let favorited_photo_ids = crate::mappers::CollectionPhotoMapper::exists_in_collection(&state.db, favorite_collection_id, &photo_ids).await?.into_iter().collect::<std::collections::HashSet<i64>>();
+        let favorite_collection_id =
+            crate::services::CollectionService::get_favorite_collection_id(state, user_id).await?;
+        let favorited_photo_ids = crate::mappers::CollectionPhotoMapper::exists_in_collection(
+            &state.db,
+            favorite_collection_id,
+            &photo_ids,
+        )
+        .await?
+        .into_iter()
+        .collect::<std::collections::HashSet<i64>>();
 
         let next_cursor = features.last().map(|f| f.id);
 
@@ -554,9 +622,9 @@ impl FaceService {
             .into_iter()
             .filter_map(|f| {
                 let p = photo_map.get(&f.photo_id)?;
-                let (thumbnail_token, preview_token, original_token) = 
+                let (thumbnail_token, preview_token, original_token) =
                     crate::models::photo::PhotoVO::generate_tokens(&p.file_id, &state.token_cipher);
-                
+
                 Some(crate::models::photo::PhotoVO {
                     id: p.id.to_string(),
                     name: p.name.clone(),
@@ -596,24 +664,32 @@ impl FaceService {
     pub async fn delete_person(state: &PhotoState, person_id: i64) -> Result<bool, AppError> {
         let _person = FacePersonMapper::query_by_id(&state.db, person_id).await?;
 
-        state.db.transaction::<_, (), sea_orm::DbErr>(|txn| {
-            Box::pin(async move {
-                let features = FaceFeatureMapper::query_by_person_id(txn, person_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
-
-                for feature in features {
-                    FaceFeatureMapper::update_person_id(txn, feature.id, None)
+        state
+            .db
+            .transaction::<_, (), sea_orm::DbErr>(|txn| {
+                Box::pin(async move {
+                    let features = FaceFeatureMapper::query_by_person_id(txn, person_id)
                         .await
                         .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
-                }
 
-                FacePersonMapper::delete_by_id(txn, person_id).await.map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    for feature in features {
+                        FaceFeatureMapper::update_person_id(txn, feature.id, None)
+                            .await
+                            .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+                    }
 
-                Ok(())
+                    FacePersonMapper::delete_by_id(txn, person_id)
+                        .await
+                        .map_err(|e| sea_orm::DbErr::Custom(e.to_string()))?;
+
+                    Ok(())
+                })
             })
-        }).await.map_err(|e| {
-            tracing::error!(target:"logs", "删除人物失败: {:?}", e);
-            AppError::InternalServerError
-        })?;
+            .await
+            .map_err(|e| {
+                tracing::error!(target:"logs", "删除人物失败: {:?}", e);
+                AppError::InternalServerError
+            })?;
 
         Ok(true)
     }
@@ -636,7 +712,13 @@ impl FaceService {
         let size = query.size.unwrap_or(20) as u64;
         let decoded_cursor = query.cursor.as_ref().and_then(|s| PersonCursor::decode(s));
 
-        let persons = FacePersonMapper::search_by_keyword(&state.db, &query.keyword, decoded_cursor.as_ref(), size + 1).await?;
+        let persons = FacePersonMapper::search_by_keyword(
+            &state.db,
+            &query.keyword,
+            decoded_cursor.as_ref(),
+            size + 1,
+        )
+        .await?;
 
         let has_more = persons.len() > size as usize;
         let persons: Vec<_> = persons.into_iter().take(size as usize).collect();
@@ -645,22 +727,34 @@ impl FaceService {
             let feature_ids: Vec<i64> = persons.iter().map(|p| p.max_score_feature_id).collect();
             let features = FaceFeatureMapper::query_by_ids(&state.db, &feature_ids).await?;
             let photo_ids: Vec<i64> = features.iter().map(|f| f.photo_id).collect();
-            let photos = PhotoMapper::query_by_ids(&state.db, &photo_ids).await?.into_iter().map(|p| (p.id, p)).collect::<HashMap<_, _>>();
+            let photos = PhotoMapper::query_by_ids(&state.db, &photo_ids)
+                .await?
+                .into_iter()
+                .map(|p| (p.id, p))
+                .collect::<HashMap<_, _>>();
 
             let records: Vec<FacePersonVO> = persons
                 .into_iter()
                 .filter_map(|p| {
                     let feature = features.iter().find(|f| f.id == p.max_score_feature_id)?;
                     let photo = photos.get(&feature.photo_id)?;
-                    let bbox: face_feature::FaceBBox = serde_json::from_value(feature.bbox.clone()).unwrap_or_else(|_| {
-                        face_feature::FaceBBox { x: 0.0, y: 0.0, w: 0.1, h: 0.1 }
-                    });
+                    let bbox: face_feature::FaceBBox = serde_json::from_value(feature.bbox.clone())
+                        .unwrap_or(face_feature::FaceBBox {
+                            x: 0.0,
+                            y: 0.0,
+                            w: 0.1,
+                            h: 0.1,
+                        });
                     let x = (bbox.x * photo.width as f32) as i32;
                     let y = (bbox.y * photo.height as f32) as i32;
                     let w = (bbox.w * photo.width as f32) as i32;
                     let h = (bbox.h * photo.height as f32) as i32;
-                    let cover_token = state.token_cipher
-                        .encrypt(&ImageToken::crop(photo.file_id.clone(), FaceBBoxPixels { x, y, w, h }), Some(&photo.file_id))
+                    let cover_token = state
+                        .token_cipher
+                        .encrypt(
+                            &ImageToken::crop(photo.file_id.clone(), FaceBBoxPixels { x, y, w, h }),
+                            Some(&photo.file_id),
+                        )
                         .ok()?;
 
                     Some(FacePersonVO {
@@ -675,10 +769,13 @@ impl FaceService {
             let next_cursor = records.last().and_then(|r| {
                 let person_id = r.id.parse().ok()?;
                 let count = r.total_photo_count?;
-                Some(PersonCursor {
-                    total_photo_count: count,
-                    id: person_id,
-                }.encode())
+                Some(
+                    PersonCursor {
+                        total_photo_count: count,
+                        id: person_id,
+                    }
+                    .encode(),
+                )
             });
 
             Ok(CursorPageVO {
@@ -700,10 +797,13 @@ impl FaceService {
             let next_cursor = records.last().and_then(|r| {
                 let person_id = r.id.parse().ok()?;
                 let count = r.total_photo_count?;
-                Some(PersonCursor {
-                    total_photo_count: count,
-                    id: person_id,
-                }.encode())
+                Some(
+                    PersonCursor {
+                        total_photo_count: count,
+                        id: person_id,
+                    }
+                    .encode(),
+                )
             });
 
             Ok(CursorPageVO {
@@ -731,7 +831,10 @@ impl FaceService {
         let max_concurrency = (cpus / 2).max(1);
         let semaphore = Arc::new(Semaphore::new(max_concurrency));
 
-        info!("人脸处理任务处理器启动, cpu核心数为: {}, 最大并发数为: {}", cpus, max_concurrency);
+        info!(
+            "人脸处理任务处理器启动, cpu核心数为: {}, 最大并发数为: {}",
+            cpus, max_concurrency
+        );
 
         while let Some(task) = rx.recv().await {
             let permit = semaphore.clone().acquire_owned().await.unwrap();
@@ -758,8 +861,14 @@ impl FaceService {
                     task.image_bytes,
                     task.img_width,
                     task.img_height,
-                ).await {
-                    tracing::error!("人脸处理时出现问题, 照片id为: {}, 错误为: {}", task.photo_id, e);
+                )
+                .await
+                {
+                    tracing::error!(
+                        "人脸处理时出现问题, 照片id为: {}, 错误为: {}",
+                        task.photo_id,
+                        e
+                    );
                 }
             });
         }

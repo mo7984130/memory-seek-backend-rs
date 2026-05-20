@@ -5,10 +5,9 @@ use chrono::{DateTime, Duration, Utc};
 use common::constants::RedisKeys;
 use common::constants::redis_keys;
 use common::error::AppError;
+use common::ext::{BoolExt, OptionExt, RedisExt, ResultErrExt};
 use common::models::ImageToken;
-use common::utils::{
-    BoolExt, HashAlgorithm, MetricsTimerExt, OptionExt, RedisExt, ResultExt, ToOkExt, rand_utils,
-};
+use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use deadpool_redis::Pool;
 use entities::user;
@@ -292,7 +291,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO
 
             info!(status = "success", "用户注册成功");
 
-            UserDTO {
+            Ok(UserDTO {
                 id: user_model.id.to_string(),
                 username: user_model.username,
                 nickname: user_model.nickname,
@@ -303,8 +302,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO
                 refresh_token_expire_at: None,
                 access_token: None,
                 access_token_expire_at: None,
-            }
-            .ok_res()
+            })
         }
         Err(e) => {
             // 根据postgres的错误码, 来分辨错误的原因.
@@ -473,11 +471,7 @@ async fn verify_inviter_code(redis: &Pool, inviter_code: &str) -> Result<u32, Ap
         .get_as(&RedisKeys::user::inviter_code(&code_upper))
         .await
         .trace_to_internal_err("redis_error", "验证邀请码时 获取redis值错误")?
-        .ok_or_warn(
-            "invalid_inviter_code",
-            "邀请码无效",
-            "邀请码无效. 不存在或已过期",
-        )
+        .ok_or_warn("invalid_inviter_code", "邀请码无效. 不存在或已过期")
 }
 
 // 校验 refresh_token：从数据库查询用户的 refresh_token 并验证匹配性和有效期
@@ -506,7 +500,7 @@ async fn verify_refresh_token(
             "db_error",
             "刷新access_token时 查询 数据库RefreshToken 失败",
         )?
-        .ok_or_warn("user_not_found", "用户不存在", "用户不存在")?;
+        .ok_or_warn("user_not_found", "用户不存在")?;
     if res.refresh_token.as_deref() != Some(refresh_token) {
         warn!("refresh_token不匹配");
         return Err(AppError::Unauthorized);

@@ -17,5 +17,7 @@ pub mod utils;
 pub mod constants;
 pub mod macros;
 
+pub mod ext;
+
 #[cfg(feature = "metrics")]
 pub use metrics;

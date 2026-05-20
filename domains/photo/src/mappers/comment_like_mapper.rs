@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::ext::ResultErrExt;
 use entities::comment_like::*;
 use sea_orm::ActiveValue::Set;
 use sea_orm::ConnectionTrait;

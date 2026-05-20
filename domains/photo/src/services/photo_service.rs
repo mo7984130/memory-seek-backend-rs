@@ -10,8 +10,9 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::constants::RedisKeys;
 use common::error::AppError;
+use common::ext::{CacheExtension, ResultErrExt};
 use common::models::UserId;
-use common::utils::{CacheExtension, FileValidator, MetricsTimerExt, ResultExt};
+use common::utils::{FileValidator, MetricsTimerExt};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use const_format::formatcp;
 use entities::*;
@@ -147,8 +148,8 @@ impl PhotoService {
             mime_type: Set(metadata.mime_type),
             md5: Set(md5_hash),
             file_id: Set(file_id.clone()),
-            created_at: Set(created_at.unwrap_or(now).into()),
-            updated_at: Set(now.into()),
+            created_at: Set(created_at.unwrap_or(now)),
+            updated_at: Set(now),
             ..Default::default()
         }
         .insert(&state.db)
@@ -234,7 +235,7 @@ impl PhotoService {
             return Err(AppError::bad_request(HIT_MAX_SIZE_MSG));
         }
 
-        let decoded_cursor = query.cursor.map(|s| PhotoCursor::decode(s)).transpose()?;
+        let decoded_cursor = query.cursor.map(PhotoCursor::decode).transpose()?;
 
         // 获取photo_ids
         let mut photo_ids = PhotoMapper::query_cursor_page_ids(
@@ -277,7 +278,7 @@ impl PhotoService {
                         |id| RedisKeys::photo::photo_info(*id),
                         24 * 60 * 60,
                         |miss_ids| async move {
-                            Ok(PhotoMapper::query_by_ids(&state.db, &miss_ids).await?)
+                            PhotoMapper::query_by_ids(&state.db, &miss_ids).await
                         },
                         |photo| photo.id,
                     )
@@ -365,7 +366,7 @@ impl PhotoService {
             .map(PhotoInfo::from);
 
         metrics_success!("get_photo_info_by_id");
-        return res;
+        res
     }
 
     pub async fn exists_by_md5_batch(
@@ -384,7 +385,7 @@ impl PhotoService {
         let res = md5s.iter().map(|md5| existing.contains(md5)).collect();
 
         metrics_success!("exists_by_md5_batch");
-        return Ok(res);
+        Ok(res)
     }
 
     /// 获取所有照片的时间范围
@@ -400,7 +401,7 @@ impl PhotoService {
         let res = PhotoMapper::query_time_range(&state.db).await;
 
         metrics_success!("get_time_range");
-        return res;
+        res
     }
 
     /// 批量删除照片
@@ -534,7 +535,7 @@ impl PhotoService {
         // 报错不返回
         let _ = TimelineStatMapper::decr_stat_by_created_ats(
             &state.db,
-            photos.iter().map(|p| p.created_at.clone()).collect(),
+            photos.iter().map(|p| p.created_at).collect(),
         )
         .await;
 

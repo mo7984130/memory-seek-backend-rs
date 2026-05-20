@@ -1,6 +1,6 @@
 use chrono::Utc;
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::ext::ResultErrExt;
 use entities::collection_photo;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
@@ -125,9 +125,7 @@ impl CollectionPhotoMapper {
 
         let mut result = HashMap::new();
         for cp in relations {
-            if !result.contains_key(&cp.collection_id) {
-                result.insert(cp.collection_id, cp.photo_id);
-            }
+            result.entry(cp.collection_id).or_insert(cp.photo_id);
         }
         Ok(result)
     }
@@ -187,16 +185,16 @@ impl CollectionPhotoMapper {
             collection_id: Set(collection_id),
             photo_id: Set(photo_id),
             user_id: Set(user_id),
-            created_at: Set(now.into()),
-            updated_at: Set(now.into()),
+            created_at: Set(now),
+            updated_at: Set(now),
             ..Default::default()
         };
 
         relation
             .insert(db)
             .await
-            .trace_conflict_warn("db_insert_confilct", "添加到收藏夹失败, 照片已存在")?
-            .trace_to_internal_err("db_insert_err", "添加到收藏夹失败")
+            .trace_conflict_warn("db_insert_confilct", "添加到收藏夹失败, 照片已存在")
+            .trace_to_internal_err("db_insert_err", "添加照片到收藏夹失败")
     }
 
     /// 从收藏夹移除照片
@@ -312,8 +310,8 @@ impl CollectionPhotoMapper {
                 collection_id: Set(collection_id),
                 photo_id: Set(photo_id),
                 user_id: Set(user_id),
-                created_at: Set(now.into()),
-                updated_at: Set(now.into()),
+                created_at: Set(now),
+                updated_at: Set(now),
                 ..Default::default()
             })
             .collect();

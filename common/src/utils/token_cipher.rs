@@ -7,8 +7,8 @@ use hkdf::Hkdf;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 
-use crate::error::AppError;
-use crate::utils::ResultExt;
+use crate::ext::ResultErrExt;
+use crate::{error::AppError, ext::make_internal_err};
 
 const NONCE_LEN: usize = 12;
 const HKDF_KEY_INFO: &[u8] = b"image-file-id-token-v1";
@@ -101,7 +101,7 @@ impl TokenCipher {
             .decode(token)
             .trace_to_internal_err("token_base64_decode_error", "Token Base64 解码失败")?;
         if combined.len() <= NONCE_LEN {
-            return Err(()).trace_to_internal_err("token_too_short", "Token 长度不合法");
+            return Err(make_internal_err("token_too_short", "Token 长度不合法"));
         }
         let (nonce_bytes, ciphertext) = combined.split_at(NONCE_LEN);
         let nonce = Nonce::from_slice(nonce_bytes);

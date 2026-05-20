@@ -1,5 +1,5 @@
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::ext::ResultErrExt;
 use entities::photo::{Column, Entity, Model};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
@@ -50,7 +50,7 @@ impl PhotoMapper {
             .filter(Column::Id.is_in(ids.iter().copied()))
             .all(db)
             .await
-            .map_internal_err("查询照片失败")
+            .trace_to_internal_err("db_query_err", "查询照片失败")
     }
 
     /// 批量检查MD5是否已存在

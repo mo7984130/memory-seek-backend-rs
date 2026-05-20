@@ -1,5 +1,5 @@
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::ext::ResultErrExt;
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::ext::ResultErrExt;
 use entities::{
     Embedding512,
     face_feature::FEATURE_DIM,
@@ -163,6 +163,7 @@ impl FacePersonMapper {
     ///
     /// # 错误
     /// - `AppError`: 数据库插入失败
+    #[allow(clippy::too_many_arguments)]
     pub async fn insert<C: ConnectionTrait>(
         db: &C,
         name: String,
@@ -182,8 +183,8 @@ impl FacePersonMapper {
             total_photo_count: Set(total_photo_count),
             centroid_embedding: Set(centroid_embedding),
             total_weight_count: Set(total_weight_count),
-            created_at: Set(now.into()),
-            updated_at: Set(now.into()),
+            created_at: Set(now),
+            updated_at: Set(now),
             ..Default::default()
         };
 
@@ -211,7 +212,7 @@ impl FacePersonMapper {
     ///
     /// # 错误
     /// - `AppError::NotFound`: 人物不存在
-    /// - `AppError`: 数据库更新失败
+    #[allow(clippy::too_many_arguments)]
     pub async fn update<C: ConnectionTrait>(
         db: &C,
         id: i64,
@@ -251,7 +252,7 @@ impl FacePersonMapper {
         if let Some(w) = total_weight_count {
             active.total_weight_count = Set(w);
         }
-        active.updated_at = Set(chrono::Utc::now().into());
+        active.updated_at = Set(chrono::Utc::now());
 
         active
             .update(db)
@@ -489,23 +490,23 @@ impl FacePersonMapper {
 
             centroid_case = centroid_case.case(
                 cond.clone(),
-                SimpleExpr::from(Expr::value(update.new_centroid.clone())),
+                Expr::value(update.new_centroid.clone()),
             );
             weight_case = weight_case.case(
                 cond.clone(),
-                SimpleExpr::from(Expr::value(update.new_total_weight)),
+                Expr::value(update.new_total_weight),
             );
             photo_count_case = photo_count_case.case(
                 cond.clone(),
-                SimpleExpr::from(Expr::value(update.new_total_photo_count)),
+                Expr::value(update.new_total_photo_count),
             );
 
             if let Some((feature_id, score)) = update.new_max_score {
                 has_max_score_update = true;
                 max_score_case =
-                    max_score_case.case(cond.clone(), SimpleExpr::from(Expr::value(score)));
+                    max_score_case.case(cond.clone(), Expr::value(score));
                 max_score_feature_id_case =
-                    max_score_feature_id_case.case(cond, SimpleExpr::from(Expr::value(feature_id)));
+                    max_score_feature_id_case.case(cond, Expr::value(feature_id));
             }
         }
 
@@ -517,15 +518,15 @@ impl FacePersonMapper {
         let mut query = Entity::update_many()
             .col_expr(
                 Column::CentroidEmbedding,
-                SimpleExpr::Case(Box::new(centroid_case)).into(),
+                SimpleExpr::Case(Box::new(centroid_case)),
             )
             .col_expr(
                 Column::TotalWeightCount,
-                SimpleExpr::Case(Box::new(weight_case)).into(),
+                SimpleExpr::Case(Box::new(weight_case)),
             )
             .col_expr(
                 Column::TotalPhotoCount,
-                SimpleExpr::Case(Box::new(photo_count_case)).into(),
+                SimpleExpr::Case(Box::new(photo_count_case)),
             )
             .col_expr(Column::UpdatedAt, Expr::current_timestamp().into());
 
@@ -538,11 +539,11 @@ impl FacePersonMapper {
             query = query
                 .col_expr(
                     Column::MaxScore,
-                    SimpleExpr::Case(Box::new(max_score_case)).into(),
+                    SimpleExpr::Case(Box::new(max_score_case)),
                 )
                 .col_expr(
                     Column::MaxScoreFeatureId,
-                    SimpleExpr::Case(Box::new(max_score_feature_id_case)).into(),
+                    SimpleExpr::Case(Box::new(max_score_feature_id_case)),
                 );
         }
 

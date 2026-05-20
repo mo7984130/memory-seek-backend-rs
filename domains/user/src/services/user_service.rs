@@ -15,7 +15,7 @@ use crate::config::GET_USER_INFO_BATCH_MAX_LEN;
 use crate::models::{ChangePasswordRequest, InviterCodeDTO, UserInfoDTO, UserInfoVO};
 use common::constants::HASHER;
 use common::error::AppError;
-use common::utils::{CacheExtension, OptionExt, RedisExt, ResultExt};
+use common::ext::{CacheExtension, OptionExt, RedisExt, ResultErrExt};
 use common::utils::{DbUtils, MetricsTimerExt};
 use common::utils::{FileValidator, encrypt_avatar_token, rand_utils};
 
@@ -54,7 +54,7 @@ pub async fn get_user_info(state: &UserState, user_id: i64) -> Result<user::User
         .timed(metrics_timer_name!("get_user_info", "db_query"))
         .await
         .trace_to_internal_err("db_query_error", "在获取用户信息时 查询数据库错误")?
-        .ok_or_warn("user_not_found", "获取用户信息时用户不存在", "用户不存在")?;
+        .ok_or_warn("user_not_found", "用户不存在")?;
     // 加密头像
     let avatar_token = timed!(
         "get_user_info",
@@ -71,7 +71,7 @@ pub async fn get_user_info(state: &UserState, user_id: i64) -> Result<user::User
         nickname: user.nickname,
         email: user.email,
         avatar_token,
-        created_at: user.created_at.into(),
+        created_at: user.created_at,
         refresh_token: None,
         refresh_token_expire_at: None,
         access_token: None,
@@ -253,7 +253,7 @@ pub async fn update_avatar(
                 .one(txn)
                 .await
                 .trace_to_internal_err("db_query_error", "在上传头像时 查询头像url发生错误")?
-                .ok_or_warn("user_not_found", "上传头像", "用户不存在")?;
+                .ok_or_warn("user_not_found", "用户不存在")?;
 
             user::ActiveModel {
                 id: Set(user_id),
@@ -302,7 +302,7 @@ pub async fn update_avatar(
 
     // 生成头像Token
     let avatar_token = encrypt_avatar_token(Some(&new_key), &state.token_cipher)
-        .ok_or_else(|| AppError::InternalServerError)?;
+        .ok_or(AppError::InternalServerError)?;
 
     metrics_success!("update_avatar");
 
@@ -349,7 +349,7 @@ pub async fn change_password(
         .timed(metrics_timer_name!("change_password", "db_query"))
         .await
         .trace_to_internal_err("db_query_error", "更改密码: 数据库查询用户失败")?
-        .ok_or_warn("user_not_found", "更改密码", "用户不存在")?;
+        .ok_or_warn("user_not_found", "用户不存在")?;
 
     // 获取信号量许可，限制并发密码验证
     let _permit = PASSWORD_VERIFY_SEM

@@ -3,7 +3,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use common::models::ImageToken;
 use common::utils::TokenCipher;
-use common::{error::AppError, utils::ResultExt};
+use common::{error::AppError, ext::ResultErrExt};
 use sea_orm::FromQueryResult;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};

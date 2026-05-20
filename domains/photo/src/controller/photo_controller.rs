@@ -11,10 +11,10 @@ use axum::http::{StatusCode, header};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
 use common::error::AppError;
+use common::ext::ResultErrExt;
 use common::models::UserId;
 use common::models::{ImageToken, ImageTokenType};
 use common::r::R;
-use common::utils::ResultExt;
 use std::sync::Arc;
 use std::vec;
 use tracing::debug;
@@ -89,7 +89,10 @@ impl PhotoController {
             .unwrap_or("photo_entities.jpg")
             .to_string();
         let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field.bytes().await.map_internal_err("读取文件失败")?;
+        let file_data = field
+            .bytes()
+            .await
+            .trace_to_internal_err("read_file_err", "读取文件失败")?;
 
         let photo =
             PhotoService::upload_photo(&state, user_id.0, file_data, file_name, content_type, None)
@@ -133,7 +136,10 @@ impl PhotoController {
             .unwrap_or("photo_entities.jpg")
             .to_string();
         let content_type = field.content_type().unwrap_or("image/jpeg").to_string();
-        let file_data = field.bytes().await.map_internal_err("读取文件失败")?;
+        let file_data = field
+            .bytes()
+            .await
+            .trace_to_internal_err("read_file_err", "读取文件失败")?;
 
         let photo = PhotoService::upload_photo(
             &state,
@@ -418,7 +424,7 @@ impl PhotoController {
 // # 返回
 // 返回对应的 MIME 类型字符串，未知扩展名默认返回 "image/jpeg"
 fn get_content_type(file_id: &str) -> &'static str {
-    let ext = file_id.split('.').last().unwrap_or("jpg").to_lowercase();
+    let ext = file_id.split('.').next_back().unwrap_or("jpg").to_lowercase();
     match ext.as_str() {
         "png" => "image/png",
         "gif" => "image/gif",

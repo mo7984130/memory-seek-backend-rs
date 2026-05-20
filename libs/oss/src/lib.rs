@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use common::error::AppError;
-use common::utils::ResultExt;
+use common::ext::ResultErrExt;
 use s3::creds::Credentials;
 use s3::{Bucket, Region};
 use serde::Deserialize;
