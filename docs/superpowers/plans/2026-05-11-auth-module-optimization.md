@@ -172,21 +172,21 @@ async fn login(
     State(state): State<Arc<AuthState>>,
     ValidatedJson(req): ValidatedJson<LoginRequest>
 ) -> Result<R<UserDTO>, AppError> {
-    auth_service::login(&state, req).await.into_ok_res()
+    auth_service::login(&state, req).await.to_r_ok()
 }
 
 async fn register(
     State(state): State<Arc<AuthState>>,
     ValidatedJson(payload): ValidatedJson<RegisterRequest>
 ) -> Result<R<UserDTO>, AppError> {
-    auth_service::register(&state, payload).await.into_ok_res()
+    auth_service::register(&state, payload).await.to_r_ok()
 }
 
 async fn send_email_code(
     State(state): State<Arc<AuthState>>,
     ValidatedJson(payload): ValidatedJson<SendEmailCodeRequest>
 ) -> Result<R<()>, AppError> {
-    auth_service::send_email_code(&state, payload).await.into_ok_res()
+    auth_service::send_email_code(&state, payload).await.to_r_ok()
 }
 
 async fn refresh_access_token(
@@ -207,7 +207,7 @@ async fn refresh_access_token(
         .to_str()
         .map_err(|_| AppError::bad_request("x-refresh-token 格式非法"))?
         .to_string();
-    auth_service::refresh_access_token(&state, user_id, refresh_token_str).await.into_ok_res()
+    auth_service::refresh_access_token(&state, user_id, refresh_token_str).await.to_r_ok()
 }
 ```
 

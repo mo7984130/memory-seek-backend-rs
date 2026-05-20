@@ -59,3 +59,5 @@ UPDATE photo_collection c SET cover_file_id = (
 ALTER TABLE photo_collection DROP COLUMN cover_image_id;
 COMMENT ON COLUMN photo_collection.cover_file_id IS '收藏夹封面图的文件ID';
 ```
+
+最后记得提交git
