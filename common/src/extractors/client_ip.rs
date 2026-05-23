@@ -1,9 +1,11 @@
 use axum::{
     extract::{ConnectInfo, FromRequestParts},
-    http::{request::Parts, StatusCode},
+    http::request::Parts,
 };
 use axum_client_ip::XRealIp;
 use std::net::{IpAddr, SocketAddr};
+
+use crate::{error::AppError, ext::ResultErrExt};
 
 /// 客户端 IP 地址提取器
 ///
@@ -15,7 +17,7 @@ impl<S> FromRequestParts<S> for ClientIp
 where
     S: Send + Sync,
 {
-    type Rejection = (StatusCode, &'static str);
+    type Rejection = AppError;
 
     /// 从请求中提取客户端 IP 地址
     ///
@@ -28,10 +30,8 @@ where
     ///
     /// # 错误
     /// - `(StatusCode::INTERNAL_SERVER_ERROR, _)`: 路由未配置 `ConnectInfo` 且无 `X-Real-IP` 头
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let x_real_ip = XRealIp::from_request_parts(parts, state)
-            .await
-            .ok();
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, AppError> {
+        let x_real_ip = XRealIp::from_request_parts(parts, state).await.ok();
 
         if let Some(XRealIp(ip)) = x_real_ip {
             return Ok(ClientIp(ip));
@@ -39,12 +39,10 @@ where
 
         let ConnectInfo(addr) = ConnectInfo::<SocketAddr>::from_request_parts(parts, state)
             .await
-            .map_err(|_| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Missing ConnectInfo in router setup",
-                )
-            })?;
+            .to_internal_err(
+                "connect_info_miss",
+                "路由未配置 ConnectInfo 且无 X-Real-IP 头",
+            )?;
 
         Ok(ClientIp(addr.ip()))
     }

@@ -1,7 +1,5 @@
-mod avatar;
 mod db_utils;
-mod file_validator;
-mod password;
+mod password_hash;
 /// 通用工具模块
 ///
 /// 提供项目中常用的工具类型和函数，包括：
@@ -11,17 +9,21 @@ mod password;
 /// - `validators`: 输入验证器（账号、用户名、邮箱、密码、常规字符）
 /// - `file_validator`: 文件验证（`FileValidator`）
 /// - `password`: 密码哈希工具（Argon2id、Bcrypt）
-/// - `avatar`: 头像 token 加密
 /// - `token_cipher`: 通用 token 加解密
 /// - `metrics_ext`: 性能监控工具（仅 `metrics` feature）
 pub mod rand_utils;
 mod token_cipher;
+#[cfg(feature = "validators")]
 pub mod validators;
 
-pub use avatar::encrypt_avatar_token;
-pub use db_utils::DbUtils;
+#[cfg(feature = "file_validator")]
+mod file_validator;
+#[cfg(feature = "file_validator")]
 pub use file_validator::FileValidator;
-pub use password::{Argon2idConfig, BcryptConfig, HashAlgorithm};
+
+pub use db_utils::DbUtils;
+
+pub use password_hash::{Argon2idConfig, BcryptConfig, HashAlgorithm};
 pub use token_cipher::{TokenCipher, TokenCipherConfig};
 
 #[cfg(feature = "metrics")]

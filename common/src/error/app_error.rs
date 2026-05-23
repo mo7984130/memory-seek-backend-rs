@@ -27,27 +27,13 @@ pub enum AppError {
 
     #[error("服务器内部错误")]
     InternalServerError,
-}
 
-/// 将静态字符串转换为 `BadRequest` 错误
-///
-/// 便于在 handler 中使用 `?` 运算符快速返回错误。
-impl From<&'static str> for AppError {
-    fn from(msg: &'static str) -> Self {
-        AppError::BadRequest(msg.into())
-    }
+    #[error("忽略的错误, 不应该输出")]
+    Ignore,
 }
 
 impl AppError {
     /// 获取错误对应的 HTTP 状态码
-    ///
-    /// # 返回
-    /// 返回与错误类型对应的 `StatusCode`，映射关系：
-    /// - `Unauthorized` -> 401
-    /// - `InternalServerError` -> 500
-    /// - `BadRequest` -> 400
-    /// - `NotFound` -> 404
-    /// - `Forbidden` -> 403
     pub fn status_code(&self) -> StatusCode {
         match self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
@@ -56,6 +42,7 @@ impl AppError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::Conflict(_) => StatusCode::CONFLICT,
+            Self::Ignore => StatusCode::OK,
         }
     }
 
@@ -63,10 +50,7 @@ impl AppError {
     ///
     /// # 参数
     /// - `msg`: 错误描述信息，支持 `&str` 或 `String`
-    ///
-    /// # 返回
-    /// 返回 `BadRequest` 变体的 `AppError`
-    pub fn bad_request<S: Into<Cow<'static, str>>>(msg: S) -> Self {
+    pub fn bad_request(msg: impl Into<Cow<'static, str>>) -> Self {
         Self::BadRequest(msg.into())
     }
 
@@ -74,10 +58,7 @@ impl AppError {
     ///
     /// # 参数
     /// - `msg`: 错误描述信息，支持 `&str` 或 `String`
-    ///
-    /// # 返回
-    /// 返回 `NotFound` 变体的 `AppError`
-    pub fn not_found<S: Into<Cow<'static, str>>>(msg: S) -> Self {
+    pub fn not_found(msg: impl Into<Cow<'static, str>>) -> Self {
         Self::NotFound(msg.into())
     }
 
@@ -85,11 +66,16 @@ impl AppError {
     ///
     /// # 参数
     /// - `msg`: 错误描述信息，支持 `&str` 或 `String`
-    ///
-    /// # 返回
-    /// 返回 `Forbidden` 变体的 `AppError`
-    pub fn forbidden<S: Into<Cow<'static, str>>>(msg: S) -> Self {
+    pub fn forbidden(msg: impl Into<Cow<'static, str>>) -> Self {
         Self::Forbidden(msg.into())
+    }
+
+    /// 创建冲突错误
+    ///
+    /// # 参数
+    /// - `msg`: 错误描述信息，支持 `&str` 或 `String`
+    pub fn conflict(msg: impl Into<Cow<'static, str>>) -> Self {
+        Self::Conflict(msg.into())
     }
 }
 

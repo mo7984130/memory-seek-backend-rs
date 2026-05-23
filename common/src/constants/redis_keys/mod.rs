@@ -2,6 +2,6 @@
 //!
 //! 提供各业务域的 Redis 键命名规则，避免硬编码分散在业务代码中。
 
-pub mod user;
+pub mod auth;
 
 pub mod photo;

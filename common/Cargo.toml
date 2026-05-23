@@ -6,6 +6,8 @@ edition = "2024"
 [features]
 default = ["metrics"]
 metrics = ["dep:metrics"]
+validators = ["dep:validator"]
+file_validator = ["dep:image"]
 
 [dependencies]
 serde = { workspace = true }
@@ -20,10 +22,10 @@ rand = { workspace = true }
 deadpool-redis = { workspace = true }
 redis = { workspace = true }
 tracing = { workspace = true }
-image = { workspace = true }
+image = { workspace = true, optional = true }
 hex = { workspace = true }
 once_cell = { workspace = true }
-validator = { workspace = true }
+validator = { workspace = true, optional = true }
 regex = { workspace = true }
 fancy-regex = "0.17.0"
 axum-client-ip = { workspace = true }

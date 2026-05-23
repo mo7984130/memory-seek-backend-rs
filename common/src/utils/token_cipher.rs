@@ -7,8 +7,8 @@ use hkdf::Hkdf;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 
-use crate::ext::ResultErrExt;
-use crate::{error::AppError, ext::make_internal_err};
+use crate::{error::AppError, ext::log_err};
+use crate::{ext::ResultErrExt, models::ImageToken};
 
 const NONCE_LEN: usize = 12;
 const HKDF_KEY_INFO: &[u8] = b"image-file-id-token-v1";
@@ -75,11 +75,11 @@ impl TokenCipher {
         };
         let nonce = Nonce::from_slice(&nonce_bytes);
         let plaintext = serde_json::to_vec(payload)
-            .trace_to_internal_err("token_serialize_error", "序列化 Payload 失败")?;
+            .to_internal_err("token_serialize_error", "序列化 Payload 失败")?;
         let ciphertext = self
             .cipher
             .encrypt(nonce, plaintext.as_slice())
-            .trace_to_internal_err("aes_gcm_encrypt_error", "AES-GCM 加密失败")?;
+            .to_internal_err("aes_gcm_encrypt_error", "AES-GCM 加密失败")?;
         let mut combined = Vec::with_capacity(NONCE_LEN + ciphertext.len());
         combined.extend_from_slice(&nonce_bytes);
         combined.extend_from_slice(&ciphertext);
@@ -99,18 +99,23 @@ impl TokenCipher {
     pub fn decrypt<T: DeserializeOwned>(&self, token: &str) -> Result<T, AppError> {
         let combined = URL_SAFE_NO_PAD
             .decode(token)
-            .trace_to_internal_err("token_base64_decode_error", "Token Base64 解码失败")?;
+            .to_internal_err("token_base64_decode_error", "Token Base64 解码失败")?;
         if combined.len() <= NONCE_LEN {
-            return Err(make_internal_err("token_too_short", "Token 长度不合法"));
+            return Err(log_err(
+                "token_too_short",
+                "Token 长度不合法",
+                "",
+                AppError::InternalServerError,
+            ));
         }
         let (nonce_bytes, ciphertext) = combined.split_at(NONCE_LEN);
         let nonce = Nonce::from_slice(nonce_bytes);
         let plaintext = self
             .cipher
             .decrypt(nonce, ciphertext)
-            .trace_to_internal_err("aes_gcm_decrypt_error", "AES-GCM 解密失败")?;
+            .to_internal_err("aes_gcm_decrypt_error", "AES-GCM 解密失败")?;
         serde_json::from_slice(&plaintext)
-            .trace_to_internal_err("token_deserialize_error", "反序列化 Payload 失败")
+            .to_internal_err("token_deserialize_error", "反序列化 Payload 失败")
     }
 
     // 通过 HKDF 从原始密钥和盐派生 AES-256-GCM 密钥并创建加密器
@@ -129,5 +134,15 @@ impl TokenCipher {
             .expand(HKDF_NONCE_INFO, &mut nonce_bytes)
             .expect("12 字节 HKDF expand 不会失败");
         nonce_bytes
+    }
+}
+
+impl TokenCipher {
+    pub fn encrypt_avatar_token(&self, avatar_file_id: Option<&str>) -> Option<String> {
+        avatar_file_id.and_then(|key| {
+            self.encrypt(&ImageToken::thumbnail(key), Some(key))
+                .to_warn("encrypt_avatar_token_err", "加密头像失败", AppError::Ignore)
+                .ok()
+        })
     }
 }

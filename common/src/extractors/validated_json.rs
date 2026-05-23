@@ -1,11 +1,12 @@
-use axum::{
-    extract::{FromRequest, Request},
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
+use axum::extract::{FromRequest, Request};
 use serde::de::DeserializeOwned;
 use std::ops::Deref;
 use validator::{Validate, ValidationErrors};
+
+use crate::{
+    error::AppError,
+    ext::{ResultErrExt, log_warn},
+};
 
 /// 带自动验证的 JSON 请求体提取器
 ///
@@ -18,7 +19,7 @@ where
     T: DeserializeOwned + Validate,
     S: Send + Sync,
 {
-    type Rejection = Response;
+    type Rejection = AppError;
 
     /// 从请求体解析 JSON 并执行校验
     ///
@@ -31,40 +32,40 @@ where
     ///
     /// # 错误
     /// - `400 Bad Request`: body 读取失败、JSON 解析失败或字段校验不通过
-    async fn from_request(req: Request, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(req: Request, _state: &S) -> Result<Self, AppError> {
         let bytes = axum::body::to_bytes(req.into_body(), usize::MAX)
             .await
-            .map_err(|err| {
-                tracing::warn!("读取body错误: {}", err);
-                StatusCode::BAD_REQUEST.into_response()
-            })?;
+            .to_warn(
+                "validated_json_read_body_err",
+                "读取body错误",
+                AppError::bad_request("读取请求体body错误"),
+            )?;
 
-        let value: T = serde_json::from_slice(&bytes).map_err(|err| {
-            tracing::warn!("解析JSON错误: {}", err);
-            let msg = format!("解析JSON错误: {}", err);
-            (
-                StatusCode::BAD_REQUEST,
-                axum::Json(serde_json::json!({ "error": msg })),
-            )
-                .into_response()
-        })?;
+        let value: T = serde_json::from_slice(&bytes).to_warn(
+            "validated_json_parse_json_err",
+            "解析JSON错误",
+            AppError::bad_request("解析JSON错误"),
+        )?;
 
         value.validate().map_err(|err: ValidationErrors| {
-            tracing::warn!("效验失败: {}", err);
             let msg = err
                 .field_errors()
                 .into_iter()
                 .map(|(field, errors)| {
-                    let messages: Vec<String> = errors.iter().filter_map(|e| e.message.as_ref().map(|m| m.to_string())).collect();
+                    let messages: Vec<String> = errors
+                        .iter()
+                        .filter_map(|e| e.message.as_ref().map(|m| m.to_string()))
+                        .collect();
                     format!("{}: {}", field, messages.join(", "))
                 })
                 .collect::<Vec<_>>()
                 .join("; ");
-            (
-                StatusCode::BAD_REQUEST,
-                axum::Json(serde_json::json!({ "error": msg })),
+            log_warn(
+                "validated_json_validate_err",
+                "效验失败",
+                err,
+                AppError::bad_request(msg),
             )
-                .into_response()
         })?;
 
         Ok(ValidatedJson(value))

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::error::AppError;
-use crate::ext::ResultErrExt;
+use crate::ext::{ResultErrExt, log_err};
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use bcrypt;
 use password_hash::SaltString;
@@ -67,11 +67,14 @@ impl HashAlgorithm {
     pub fn hash(&self, password: &str) -> Result<String, AppError> {
         match self {
             Self::Bcrypt(cfg) => bcrypt::hash(password, cfg.cost)
-                .trace_to_internal_err("bcrypt hash error", "Bcrypt 计算失败"),
-            Self::Argon2id(cfg) => Self::argon2_hasher(cfg)?
-                .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
-                .trace_to_internal_err("argon2id hash error", "Argon2id 计算失败")
-                .map(|h: PasswordHash| h.to_string()),
+                .to_internal_err("bcrypt hash error", "Bcrypt 计算失败"),
+            Self::Argon2id(cfg) => {
+                let hash = Self::argon2_hasher(cfg)?
+                    .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
+                    .to_internal_err("argon2id hash error", "Argon2id 计算失败")?
+                    .to_string();
+                Ok(hash)
+            }
         }
     }
 
@@ -89,11 +92,11 @@ impl HashAlgorithm {
     pub fn verify(&self, password: &str, hash: &str) -> Result<bool, AppError> {
         match self {
             Self::Bcrypt(_) => bcrypt::verify(password, hash)
-                .trace_to_internal_err("bcrypt verify error", "Bcrypt 密码验证失败"),
+                .to_internal_err("bcrypt verify error", "Bcrypt 密码验证失败"),
             Self::Argon2id(cfg) => {
                 let hasher = Self::argon2_hasher(cfg)?;
                 let parsed = PasswordHash::new(hash)
-                    .trace_to_internal_err("argon2 parse error", "解析 Argon2 哈希失败")?;
+                    .to_internal_err("argon2 parse error", "解析 Argon2 哈希失败")?;
                 match hasher.verify_password(password.as_bytes(), &parsed) {
                     Ok(()) => Ok(true),
                     Err(password_hash::Error::Password) => Ok(false),
@@ -126,14 +129,19 @@ impl HashAlgorithm {
                 let result = alg.verify(password, hash)?;
                 Ok((result, alg))
             }
-            None => Err(()).trace_to_internal_err("password_not_detect", "密码算法检测失败"),
+            None => Err(log_err(
+                "password_not_detect",
+                "密码算法检测失败",
+                "",
+                AppError::InternalServerError,
+            )),
         }
     }
 
     // 根据配置创建 Argon2id 哈希器实例
     fn argon2_hasher(cfg: &Argon2idConfig) -> Result<Argon2<'static>, AppError> {
         let params = Params::new(cfg.m_cost, cfg.t_cost, cfg.p_cost, None)
-            .trace_to_internal_err("argon2_params_error", "创建 Argon2 参数失败")?;
+            .to_internal_err("argon2_params_error", "创建 Argon2 参数失败")?;
         Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
     }
 

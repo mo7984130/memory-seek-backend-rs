@@ -40,9 +40,9 @@ impl ImageToken {
     ///
     /// # 返回
     /// 返回类型为 `Thumbnail` 的 `ImageToken`
-    pub fn thumbnail(file_id: String) -> Self {
+    pub fn thumbnail(file_id: impl Into<String>) -> Self {
         Self {
-            file_id,
+            file_id: file_id.into(),
             token_type: ImageTokenType::Thumbnail,
             bbox: None,
         }
@@ -55,9 +55,9 @@ impl ImageToken {
     ///
     /// # 返回
     /// 返回类型为 `Preview` 的 `ImageToken`
-    pub fn preview(file_id: String) -> Self {
+    pub fn preview(file_id: impl Into<String>) -> Self {
         Self {
-            file_id,
+            file_id: file_id.into(),
             token_type: ImageTokenType::Preview,
             bbox: None,
         }
@@ -70,9 +70,9 @@ impl ImageToken {
     ///
     /// # 返回
     /// 返回类型为 `Original` 的 `ImageToken`
-    pub fn original(file_id: String) -> Self {
+    pub fn original(file_id: impl Into<String>) -> Self {
         Self {
-            file_id,
+            file_id: file_id.into(),
             token_type: ImageTokenType::Original,
             bbox: None,
         }
@@ -86,9 +86,9 @@ impl ImageToken {
     ///
     /// # 返回
     /// 返回类型为 `Crop` 且包含 `bbox` 的 `ImageToken`
-    pub fn crop(file_id: String, bbox: FaceBBoxPixels) -> Self {
+    pub fn crop(file_id: impl Into<String>, bbox: FaceBBoxPixels) -> Self {
         Self {
-            file_id,
+            file_id: file_id.into(),
             token_type: ImageTokenType::Crop,
             bbox: Some(bbox),
         }

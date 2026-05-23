@@ -1,4 +1,4 @@
-use crate::error::AppError;
+use crate::{error::AppError, ext::log_err};
 use futures::future::BoxFuture;
 use sea_orm::{DatabaseConnection, DatabaseTransaction, TransactionError, TransactionTrait};
 
@@ -26,16 +26,14 @@ impl DbUtils {
         F: for<'a> FnOnce(&'a DatabaseTransaction) -> BoxFuture<'a, Result<T, AppError>> + Send,
         T: Send,
     {
-        db.transaction(|txn| {
-            block(txn)
+        db.transaction(|txn| block(txn)).await.map_err(|e| match e {
+            TransactionError::Connection(e) => log_err(
+                "db_conn_err",
+                "获取数据库连接错误",
+                e,
+                AppError::InternalServerError,
+            ),
+            TransactionError::Transaction(e) => e,
         })
-            .await
-            .map_err(|e| match e {
-                TransactionError::Connection(e) => {
-                    tracing::error!("数据库连接错误: {}", e);
-                    AppError::InternalServerError
-                }
-                TransactionError::Transaction(e) => e,
-            })
     }
 }

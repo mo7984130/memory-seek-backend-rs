@@ -1,6 +1,6 @@
 use crate::{
     error::AppError,
-    ext::base::{log_bad_request_warn, log_internal_err},
+    ext::{log_err, log_warn},
 };
 
 /// 为 `Option<T>` 提供到 `AppError` 的便捷转换方法
@@ -14,7 +14,12 @@ pub trait OptionExt<T> {
     ///
     /// # 返回
     /// `Some` 时返回内部值，`None` 时返回 `AppError::BadRequest(msg)`
-    fn ok_or_warn(self, reason: &'static str, msg: &'static str) -> Result<T, AppError>;
+    fn ok_or_warn(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        app_err: AppError,
+    ) -> Result<T, AppError>;
 
     /// 将 `None` 转换为 `AppError::InternalServerError`，并通过 `tracing::error!` 记录日志
     ///
@@ -24,7 +29,12 @@ pub trait OptionExt<T> {
     ///
     /// # 返回
     /// `Some` 时返回内部值，`None` 时返回 `AppError::InternalServerError`
-    fn ok_or_error(self, reason: &'static str, context: &'static str) -> Result<T, AppError>;
+    fn ok_or_error(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        app_err: AppError,
+    ) -> Result<T, AppError>;
 }
 
 impl<T> OptionExt<T> for Option<T> {
@@ -32,25 +42,27 @@ impl<T> OptionExt<T> for Option<T> {
     ///
     /// # 参数
     /// - `reason`: 日志中的 `reason` 字段
-    /// - `msg`: `BadRequest` 错误消息
+    /// - `context`: 日志中的上下文描述
     ///
     /// # 返回
     /// `Some` 时返回内部值，`None` 时返回 `AppError::BadRequest(msg)`
     #[inline]
-    fn ok_or_warn(self, reason: &'static str, msg: &'static str) -> Result<T, AppError> {
-        self.ok_or_else(|| log_bad_request_warn(reason, msg, ()))
+    fn ok_or_warn(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        app_err: AppError,
+    ) -> Result<T, AppError> {
+        self.ok_or_else(|| log_warn(reason, context, "", app_err))
     }
 
-    /// 将 `None` 转换为 `AppError::InternalServerError`，并通过 `tracing::error!` 记录日志
-    ///
-    /// # 参数
-    /// - `reason`: 日志中的 `reason` 字段
-    /// - `context`: 日志中的上下文描述
-    ///
-    /// # 返回
-    /// `Some` 时返回内部值，`None` 时返回 `AppError::InternalServerError`
     #[inline]
-    fn ok_or_error(self, reason: &'static str, context: &'static str) -> Result<T, AppError> {
-        self.ok_or_else(|| log_internal_err(reason, context, ()))
+    fn ok_or_error(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        app_err: AppError,
+    ) -> Result<T, AppError> {
+        self.ok_or_else(|| log_err(reason, context, "", app_err))
     }
 }

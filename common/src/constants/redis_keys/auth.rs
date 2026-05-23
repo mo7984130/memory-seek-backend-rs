@@ -46,8 +46,8 @@ pub fn inviter_code(code: &str) -> String {
 /// 格式为 `u:i:{user_id}` 的缓存键
 #[inline]
 pub fn user_info_cache(user_id: i64) -> String {
-    //user:info
-    format!("u:i:{}", user_id)
+    //auth:user:info
+    format!("a:u:i:{}", user_id)
 }
 
 #[cfg(test)]
@@ -62,8 +62,14 @@ mod tests {
 
         // 2. 测试 email_verify_code (&str)
         // 注意验证特殊字符是否被原样保留（Redis Key 是支持的）
-        assert_eq!(email_verify_code("test@example.com"), "a:v:e:test@example.com");
-        assert_eq!(email_verify_code("user.name+label@gmail.com"), "a:v:e:user.name+label@gmail.com");
+        assert_eq!(
+            email_verify_code("test@example.com"),
+            "a:v:e:test@example.com"
+        );
+        assert_eq!(
+            email_verify_code("user.name+label@gmail.com"),
+            "a:v:e:user.name+label@gmail.com"
+        );
 
         // 3. 测试 inviter_code (&str)
         assert_eq!(inviter_code("RUST666"), "a:i:c:RUST666");
