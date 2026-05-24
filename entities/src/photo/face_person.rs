@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use super::face_feature::Embedding512;
 
+pub struct FacePersonId(pub i64);
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "photo_face_person")]
 pub struct Model {
@@ -20,19 +22,6 @@ pub struct Model {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(has_many = "super::face_feature::Entity")]
-    FaceFeatures,
-}
-
-impl Related<super::face_feature::Entity> for Entity {
-    /// 返回 FacePerson 到 FaceFeature 的一对多关系定义
-    ///
-    /// # 返回
-    /// `Relation::FaceFeatures` 的关系定义
-    fn to() -> RelationDef {
-        Relation::FaceFeatures.def()
-    }
-}
+pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}

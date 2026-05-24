@@ -5,20 +5,10 @@
 //! - `user_entities`：用户
 //! - `vector`：PostgreSQL pgvector 向量类型的 Sea-ORM 适配层
 
+pub mod auth;
+pub mod photo;
 pub mod vector;
-pub mod photo_entities;
-pub mod user_entities;
 
+pub use auth::*;
+pub use photo::*;
 pub use vector::PostgreVector;
-
-pub use photo_entities::collection;
-pub use photo_entities::collection_photo;
-pub use photo_entities::comment;
-pub use photo_entities::comment_like;
-pub use photo_entities::face_feature;
-pub use photo_entities::face_feature::Embedding512;
-pub use photo_entities::face_person;
-pub use photo_entities::photo;
-pub use photo_entities::timeline_stat;
-
-pub use user_entities::user;

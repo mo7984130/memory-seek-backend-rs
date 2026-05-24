@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+pub struct CommentLikeId(pub i64);
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "photo_comment_like")]
 pub struct Model {
@@ -13,23 +15,6 @@ pub struct Model {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::comment::Entity",
-        from = "Column::CommentId",
-        to = "super::comment::Column::Id"
-    )]
-    Comment,
-}
-
-impl Related<super::comment::Entity> for Entity {
-    /// 返回 CommentLike 到 Comment 的多对一关系定义
-    ///
-    /// # 返回
-    /// `Relation::Comment` 的关系定义
-    fn to() -> RelationDef {
-        Relation::Comment.def()
-    }
-}
+pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}
