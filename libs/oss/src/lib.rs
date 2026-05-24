@@ -90,7 +90,7 @@ impl S3Client {
         self.bucket
             .put_object_with_content_type(key, data.as_ref(), content_type)
             .await
-            .trace_to_internal_err("oss_upload_err", "OSS文件存储失败")?;
+            .to_internal_err("oss_upload_err", "OSS文件存储失败")?;
         Ok(())
     }
 
@@ -108,7 +108,7 @@ impl S3Client {
         self.bucket
             .delete_object(key)
             .await
-            .trace_to_internal_err("oss_delete_err", "OSS文件删除失败")?;
+            .to_internal_err("oss_delete_err", "OSS文件删除失败")?;
         Ok(())
     }
 
@@ -135,7 +135,7 @@ impl S3Client {
                             .bucket
                             .delete_object(key.as_str())
                             .await
-                            .trace_to_internal_err("oss_del_err", "OSS文件删除失败")
+                            .to_internal_err("oss_del_err", "OSS文件删除失败")
                         {
                             tracing::warn!(key = %key, err = ?e, "文件删除失败");
                             chunk_failed.push(key.as_str());
@@ -219,7 +219,7 @@ impl S3Client {
             .bucket
             .presign_get(key, expires.as_secs() as u32, custom_queries)
             .await
-            .trace_to_internal_err("oss_sign_url_err", "OSS 签名失败")?;
+            .to_internal_err("oss_sign_url_err", "OSS 签名失败")?;
 
         Ok(url)
     }
@@ -239,7 +239,7 @@ impl S3Client {
             .bucket
             .get_object(key)
             .await
-            .trace_to_internal_err("oss_download_err", "OSS下载失败")?;
+            .to_internal_err("oss_download_err", "OSS下载失败")?;
 
         Ok(Bytes::from(response_data.bytes().to_vec()))
     }
@@ -263,16 +263,16 @@ impl S3Client {
             .bucket
             .presign_get(key, 3600, Some(custom_queries))
             .await
-            .trace_to_internal_err("oss_sign_url_err", "OSS签名失败")?;
+            .to_internal_err("oss_sign_url_err", "OSS签名失败")?;
 
         let response = reqwest::get(&url)
             .await
-            .trace_to_internal_err("oss_download_err", "OSS下载失败")?;
+            .to_internal_err("oss_download_err", "OSS下载失败")?;
 
         let bytes = response
             .bytes()
             .await
-            .trace_to_internal_err("oss_read_data_err", "OSS读取数据失败")?;
+            .to_internal_err("oss_read_data_err", "OSS读取数据失败")?;
 
         Ok(bytes)
     }
