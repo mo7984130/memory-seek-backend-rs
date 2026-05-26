@@ -10,7 +10,7 @@ use common::error::AppError;
 use common::ext::{OptionExt, ResultErrExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
-use entities::user::UserDTO;
+use entities::auth::user::UserDTO;
 use std::sync::Arc;
 
 pub struct AuthController;

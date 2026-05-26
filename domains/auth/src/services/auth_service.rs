@@ -10,8 +10,7 @@ use common::models::ImageToken;
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use deadpool_redis::Pool;
-use entities::user;
-use entities::user::UserDTO;
+use entities::auth::user::{self, UserDTO};
 use sea_orm::error::DbErr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
@@ -203,7 +202,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
     info!(status="success", user_id = %user.id, username = %updated_user.username, "用户登录成功");
 
     // 返回UserDTO
-    Ok(UserDTO {
+    Ok(user::UserDTO {
         id: updated_user.id.to_string(),
         username: updated_user.username,
         nickname: updated_user.nickname,
