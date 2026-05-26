@@ -1,9 +1,6 @@
 pub mod models;
 pub mod services;
 
-#[cfg(feature = "client")]
-pub mod client;
-
 mod config;
 
 mod state;

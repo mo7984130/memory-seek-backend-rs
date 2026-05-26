@@ -7,7 +7,7 @@ use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::routing::{get, post};
 use common::error::AppError;
-use common::ext::ResultRExt;
+use common::ext::{OptionExt, ResultErrExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use entities::user::UserDTO;
@@ -106,21 +106,41 @@ impl AuthController {
     ) -> Result<R<AccessTokenResponse>, AppError> {
         let user_id = headers
             .get("x-user-id")
-            .ok_or_else(|| AppError::bad_request("x-user-id 头缺失"))?
+            .ok_or_warn(
+                "x-user-id_missing",
+                "鉴权时, x-user-id 头缺失",
+                AppError::bad_request("x-user-id 头缺失"),
+            )?
             .to_str()
-            .map_err(|_| AppError::bad_request("x-user-id 格式非法"))?
+            .to_warn(
+                "x-user-id_illegal",
+                "鉴权时, x-user-id 格式非法",
+                AppError::bad_request("x-user-id 格式非法"),
+            )?
             .parse::<i64>()
-            .map_err(|_| AppError::bad_request("x-user-id 必须是数字"))?;
+            .to_warn(
+                "x-user-id_invalid",
+                "鉴权时, x-user-id 必须是数字",
+                AppError::bad_request("x-user-id 必须是数字"),
+            )?;
 
         tracing::Span::current().record("user_id", user_id);
 
-        let refresh_token_str = headers
+        let refresh_token = headers
             .get("x-refresh-token")
-            .ok_or_else(|| AppError::bad_request("x-refresh-token 头缺失"))?
+            .ok_or_warn(
+                "x-refresh-token_missing",
+                "鉴权时, x-refresh-token 头缺失",
+                AppError::bad_request("x-refresh-token 头缺失"),
+            )?
             .to_str()
-            .map_err(|_| AppError::bad_request("x-refresh-token 格式非法"))?
+            .to_warn(
+                "x-refresh-token_illegal",
+                "鉴权时, x-refresh-token 格式非法",
+                AppError::bad_request("x-refresh-token 格式非法"),
+            )?
             .to_string();
-        auth_service::refresh_access_token(&state, user_id, refresh_token_str)
+        auth_service::refresh_access_token(&state, user_id, refresh_token)
             .await
             .to_r_ok()
     }
