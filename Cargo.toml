@@ -1,25 +1,13 @@
 [workspace]
+resolver = "3"
 members = [
     "common",
-    "domains/auth",
-    "domains/user",
-    "domains/photo",
-    "server",
-    "libs/oss",
-    "libs/email",
-    "libs/face_engine",
-    "libs/img_url_generator",
     "entities",
+    "libs/email",
+    "libs/img_url_generator",
+    "libs/oss",
+    "domains/auth"
 ]
-resolver = "3"
-
-[profile.release]
-#opt-level = 3
-#lto = true
-##codegen-units = 1    # 减少并行编译单元，提升优化效果
-panic = 'abort'
-strip = true
-debug = false
 
 [workspace.dependencies]
 axum = { version = "0.8.8", features = ["macros", "multipart"] }
