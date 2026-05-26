@@ -84,7 +84,7 @@ impl EmailClient {
             )
             .to(to.parse::<Mailbox>().to_warn(
                 "email_to_email_err",
-                "发送邮件时, 目标邮箱格式错误",
+                "目标邮箱格式错误",
                 AppError::bad_request("邮箱格式错误"),
             )?)
             .subject(subject)
