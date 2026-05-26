@@ -24,6 +24,13 @@ pub trait ResultErrExt<T, E>: Sized {
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError>;
+
+    fn to_warn_bad_request(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        msg: &'static str,
+    ) -> Result<T, AppError>;
 }
 
 impl<T, E: Debug + Display> ResultErrExt<T, E> for Result<T, E> {
@@ -47,5 +54,14 @@ impl<T, E: Debug + Display> ResultErrExt<T, E> for Result<T, E> {
         app_err: AppError,
     ) -> Result<T, AppError> {
         self.map_err(|e| log_warn(reason, context, e, app_err))
+    }
+
+    fn to_warn_bad_request(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        msg: &'static str,
+    ) -> Result<T, AppError> {
+        self.to_warn(reason, context, AppError::bad_request(msg))
     }
 }

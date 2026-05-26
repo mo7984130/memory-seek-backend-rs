@@ -21,6 +21,13 @@ pub trait OptionExt<T> {
         app_err: AppError,
     ) -> Result<T, AppError>;
 
+    fn ok_or_warn_bad_request(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        msg: &'static str,
+    ) -> Result<T, AppError>;
+
     /// 将 `None` 转换为 `AppError::InternalServerError`，并通过 `tracing::error!` 记录日志
     ///
     /// # 参数
@@ -54,6 +61,15 @@ impl<T> OptionExt<T> for Option<T> {
         app_err: AppError,
     ) -> Result<T, AppError> {
         self.ok_or_else(|| log_warn(reason, context, "", app_err))
+    }
+
+    fn ok_or_warn_bad_request(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        msg: &'static str,
+    ) -> Result<T, AppError> {
+        self.ok_or_else(|| log_warn(reason, context, "", AppError::bad_request(msg)))
     }
 
     #[inline]
