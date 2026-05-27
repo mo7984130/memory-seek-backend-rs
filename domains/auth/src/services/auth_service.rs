@@ -202,8 +202,11 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
     info!(status="success", user_id = %user.id, username = %updated_user.username, "用户登录成功");
 
     // 返回UserDTO
-    Ok(UserDTO::from_user(updated_user, avatar_token)
-        .with_access_token(new_access_token, Utc::now() + Duration::seconds(ACCESS_TOKEN_EXPIRE_SECONDS))
+    Ok(UserDTO::from_user(avatar_token, updated_user)
+        .with_access_token(
+            new_access_token,
+            Utc::now() + Duration::seconds(ACCESS_TOKEN_EXPIRE_SECONDS),
+        )
         .with_refresh_token(new_refresh_token, new_refresh_token_expire))
 }
 
@@ -280,7 +283,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO
 
     info!(status = "success", "用户注册成功");
 
-    Ok(UserDTO::from_user(user_model, None))
+    Ok(UserDTO::from_user(None, user_model))
 }
 
 /// 将 SeaORM 插入用户时的 DbErr 转换为 AppError
