@@ -5,9 +5,6 @@ mod state;
 #[cfg(feature = "controller")]
 pub mod controller;
 
-#[cfg(feature = "client")]
-pub mod client;
-
 mod config;
 
 pub use state::UserState;

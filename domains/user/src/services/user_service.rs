@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use common::constants::RedisKeys;
+use common::constants::{PasswordHasher, RedisKeys};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use entities::auth::user::UserDTO;
 use sea_orm::sea_query::Expr;
@@ -8,15 +8,16 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySele
 use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::UserState;
 use crate::config::GET_USER_INFO_BATCH_MAX_LEN;
 use crate::models::{ChangePasswordRequest, InviterCodeDTO, UserInfoDTO, UserInfoVO};
 use common::error::AppError;
-use common::ext::{CacheExtension, OptionExt, RedisExt, ResultErrExt};
+use common::ext::{CacheExtension, OptionExt, RedisExt, ResultErrExt, log_err, log_warn};
 use common::utils::{DbUtils, MetricsTimerExt};
-use common::utils::{FileValidator, encrypt_avatar_token, rand_utils};
+use common::utils::{FileValidator, rand_utils};
+use entities::auth::user;
 
 use crate::config::{
     GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL_SECONDS,
@@ -52,13 +53,15 @@ pub async fn get_user_info(state: &UserState, user_id: i64) -> Result<user::User
         .timed(metrics_timer_name!("get_user_info", "db_query"))
         .await
         .to_internal_err("db_query_error", "在获取用户信息时 查询数据库错误")?
-        .ok_or_bad_request("user_not_found", "用户不存在")?;
+        .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
     metrics_success!("get_user_info");
     info!(status = "success", user_id = %user_id, "获取用户信息成功");
 
     Ok(UserDTO::from_user(
+        state
+            .token_cipher
+            .encrypt_avatar_token(user.avatar_file_id.as_deref()),
         user,
-        state.token_cipher.encrypt_avatar_token(user.avatar_file_id),
     ))
 }
 
@@ -93,7 +96,7 @@ pub async fn generate_inviter_code(
         .to_internal_err("redis_conn_error", "生成邀请码时获取Redis连接错误")?;
     for _ in 0..GENERATE_INVITER_CODE_MAX_RETRY {
         let code: String = rand_utils::generate_random_uppercase_str(INVITER_CODE_LEN);
-        let key = RedisKeys::user::inviter_code(&code);
+        let key = RedisKeys::auth::inviter_code(&code);
 
         let success: bool = redis::cmd("SET")
             .arg(&key)
@@ -118,8 +121,12 @@ pub async fn generate_inviter_code(
         }
     }
 
-    warn!("邀请码生成重试耗尽");
-    Err(AppError::InternalServerError)
+    Err(log_err(
+        "inviter_code_generate_max_loop",
+        "生成邀请码达到最大尝试次数",
+        "",
+        AppError::InternalServerError,
+    ))
 }
 
 /// 修改用户昵称
@@ -163,7 +170,7 @@ pub async fn change_nickname(
     // 错误不返回
     let _ = state
         .redis
-        .delete(&RedisKeys::user::user_info_cache(user_id))
+        .delete(&RedisKeys::auth::user_info_cache(user_id))
         .timed(metrics_timer_name!("change_nickname", "redis_delete"))
         .await
         .to_internal_err("redis_delete_error", "删除用户信息缓存失败");
@@ -203,12 +210,17 @@ pub async fn update_avatar(
     metrics_group!("update_avatar");
 
     // 校验图片
-    let img_metadata = timed!(
-        "update_avatar",
-        "validate_image",
-        FileValidator::validate_image(&file_data, &file_name, &content_type)
-            .to_bad_request_warn("invalid_image", "文件验证失败")?
-    );
+    let img_metadata = timed!("update_avatar", "validate_image", {
+        FileValidator::validate_image(&file_data, &file_name, &content_type).map_err(|e| {
+            let msg = e.to_string();
+            log_warn(
+                "validate_image_err",
+                "图片校验失败",
+                "",
+                AppError::bad_request(msg),
+            )
+        })?
+    });
 
     // 上传图片
     let new_key = format!(
@@ -236,7 +248,7 @@ pub async fn update_avatar(
                 .one(txn)
                 .await
                 .to_internal_err("db_query_error", "在上传头像时 查询头像url发生错误")?
-                .ok_or_bad_request("user_not_found", "用户不存在")?;
+                .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
 
             user::ActiveModel {
                 id: Set(user_id),
@@ -267,7 +279,7 @@ pub async fn update_avatar(
     // 删除用户信息缓存
     state
         .redis
-        .delete(&RedisKeys::user::user_info_cache(user_id))
+        .delete(&RedisKeys::auth::user_info_cache(user_id))
         .timed(metrics_timer_name!("update_avatar", "redis_delete"))
         .await
         .to_internal_err("redis_delete_error", "删除用户信息缓存失败")?;
@@ -284,7 +296,9 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token = encrypt_avatar_token(Some(&new_key), &state.token_cipher)
+    let avatar_token = state
+        .token_cipher
+        .encrypt_avatar_token(Some(&new_key))
         .ok_or(AppError::InternalServerError)?;
 
     metrics_success!("update_avatar");
@@ -332,7 +346,7 @@ pub async fn change_password(
         .timed(metrics_timer_name!("change_password", "db_query"))
         .await
         .to_internal_err("db_query_error", "更改密码: 数据库查询用户失败")?
-        .ok_or_bad_request("user_not_found", "用户不存在")?;
+        .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
 
     // 获取信号量许可，限制并发密码验证
     let _permit = PASSWORD_VERIFY_SEM
@@ -342,11 +356,11 @@ pub async fn change_password(
 
     // 校验旧密码
     let is_valid = {
-        spawn_blocking(move || HASHER.verify(&req.old_password, &old_password))
+        spawn_blocking(move || PasswordHasher.verify(&req.old_password, &old_password))
             .timed(metrics_timer_name!("change_password", "verify_password"))
             .await
             .map_err(|_| AppError::InternalServerError)?
-            .to_bad_request_warn("verify_error", "密码校验错误")?
+            .to_warn_bad_request("verify_error", "密码校验错误", "密码校验失败")?
     };
     if !is_valid {
         return Err(AppError::bad_request("原密码错误"));
@@ -355,11 +369,11 @@ pub async fn change_password(
     // 加密新密码
     let new_password_hash = {
         let password = req.new_password;
-        spawn_blocking(move || HASHER.hash(&password))
+        spawn_blocking(move || PasswordHasher.hash(&password))
             .timed(metrics_timer_name!("change_password", "hash_password"))
             .await
             .map_err(|_| AppError::InternalServerError)?
-            .to_bad_request_warn("hash_error", "加密新密码失败")?
+            .to_warn_bad_request("hash_error", "加密新密码失败", "加密新密码失败")?
     };
 
     // 更新数据库
@@ -404,7 +418,7 @@ pub async fn logout(state: &UserState, user_id: i64) -> Result<(), AppError> {
     // 清除refresh_token
     // 清除access_token
     // 清除用户信息缓存
-    let cache_key = RedisKeys::user::user_info_cache(user_id);
+    let cache_key = RedisKeys::auth::user_info_cache(user_id);
     let (refresh_token_result, access_token_result, _) = tokio::join!(
         user::ActiveModel {
             id: Set(user_id),
@@ -416,7 +430,7 @@ pub async fn logout(state: &UserState, user_id: i64) -> Result<(), AppError> {
         .timed(metrics_timer_name!("logout", "db_update")),
         state
             .redis
-            .delete(RedisKeys::user::user_access_token(user_id))
+            .delete(RedisKeys::auth::user_access_token(user_id))
             .timed(metrics_timer_name!("logout", "redis_delete")),
         state
             .redis
@@ -469,7 +483,7 @@ pub async fn get_user_info_batch(
         .redis
         .get_or_load_batch(
             &user_ids,
-            |id| RedisKeys::user::user_info_cache(*id),
+            |id| RedisKeys::auth::user_info_cache(*id),
             USER_INFO_CACHE_TTL_SECS as u64,
             |miss_ids| {
                 Box::pin(async move {

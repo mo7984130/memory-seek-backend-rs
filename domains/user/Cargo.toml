@@ -7,7 +7,6 @@ edition = "2024"
 default = []
 metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum"]
-client = ["dep:reqwest", "dep:anyhow", "dep:futures", "dep:serde_json", "auth/client"]
 
 [dependencies]
 common = { path = "../../common" }
