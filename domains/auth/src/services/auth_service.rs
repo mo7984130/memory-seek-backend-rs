@@ -202,18 +202,9 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
     info!(status="success", user_id = %user.id, username = %updated_user.username, "用户登录成功");
 
     // 返回UserDTO
-    Ok(user::UserDTO {
-        id: updated_user.id.to_string(),
-        username: updated_user.username,
-        nickname: updated_user.nickname,
-        email: updated_user.email,
-        avatar_token,
-        created_at: updated_user.created_at,
-        refresh_token: Some(new_refresh_token),
-        refresh_token_expire_at: Some(new_refresh_token_expire),
-        access_token: Some(new_access_token),
-        access_token_expire_at: Some(Utc::now() + Duration::seconds(ACCESS_TOKEN_EXPIRE_SECONDS)),
-    })
+    Ok(UserDTO::from_user(updated_user, avatar_token)
+        .with_access_token(new_access_token, Utc::now() + Duration::seconds(ACCESS_TOKEN_EXPIRE_SECONDS))
+        .with_refresh_token(new_refresh_token, new_refresh_token_expire))
 }
 
 /// 用户注册
