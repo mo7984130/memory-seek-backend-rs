@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 use common::constants::RedisKeys;
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
-use entities::user;
+use entities::auth::user::UserDTO;
 use sea_orm::sea_query::Expr;
 use sea_orm::sqlx::types::uuid;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set};
@@ -13,7 +13,6 @@ use tracing::{info, warn};
 use crate::UserState;
 use crate::config::GET_USER_INFO_BATCH_MAX_LEN;
 use crate::models::{ChangePasswordRequest, InviterCodeDTO, UserInfoDTO, UserInfoVO};
-use common::constants::HASHER;
 use common::error::AppError;
 use common::ext::{CacheExtension, OptionExt, RedisExt, ResultErrExt};
 use common::utils::{DbUtils, MetricsTimerExt};
@@ -25,8 +24,7 @@ use crate::config::{
 };
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
-static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> =
-    LazyLock::new(|| Semaphore::new(common::constants::get_password_verify_max_concurrency()));
+static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(num_cups::get()));
 
 /// 获取用户个人信息
 ///
@@ -53,30 +51,15 @@ pub async fn get_user_info(state: &UserState, user_id: i64) -> Result<user::User
         .one(&state.db)
         .timed(metrics_timer_name!("get_user_info", "db_query"))
         .await
-        .trace_to_internal_err("db_query_error", "在获取用户信息时 查询数据库错误")?
-        .ok_or_warn("user_not_found", "用户不存在")?;
-    // 加密头像
-    let avatar_token = timed!(
-        "get_user_info",
-        "encrypt_avatar",
-        encrypt_avatar_token(user.avatar_file_id.as_deref(), &state.token_cipher)
-    );
-
+        .to_internal_err("db_query_error", "在获取用户信息时 查询数据库错误")?
+        .ok_or_bad_request("user_not_found", "用户不存在")?;
     metrics_success!("get_user_info");
     info!(status = "success", user_id = %user_id, "获取用户信息成功");
 
-    Ok(user::UserDTO {
-        id: user.id.to_string(),
-        username: user.username,
-        nickname: user.nickname,
-        email: user.email,
-        avatar_token,
-        created_at: user.created_at,
-        refresh_token: None,
-        refresh_token_expire_at: None,
-        access_token: None,
-        access_token_expire_at: None,
-    })
+    Ok(UserDTO::from_user(
+        user,
+        state.token_cipher.encrypt_avatar_token(user.avatar_file_id),
+    ))
 }
 
 /// 为用户生成唯一邀请码
@@ -107,7 +90,7 @@ pub async fn generate_inviter_code(
         .redis
         .get_conn()
         .await
-        .trace_to_internal_err("redis_conn_error", "生成邀请码时获取Redis连接错误")?;
+        .to_internal_err("redis_conn_error", "生成邀请码时获取Redis连接错误")?;
     for _ in 0..GENERATE_INVITER_CODE_MAX_RETRY {
         let code: String = rand_utils::generate_random_uppercase_str(INVITER_CODE_LEN);
         let key = RedisKeys::user::inviter_code(&code);
@@ -121,7 +104,7 @@ pub async fn generate_inviter_code(
             .query_async(&mut conn)
             .timed(metrics_timer_name!("generate_inviter_code", "redis_set"))
             .await
-            .trace_to_internal_err("redis_set_error", "生成邀请码时 redis错误")?;
+            .to_internal_err("redis_set_error", "生成邀请码时 redis错误")?;
 
         if success {
             metrics_success!("generate_inviter_code");
@@ -170,7 +153,7 @@ pub async fn change_nickname(
         .exec(&state.db)
         .timed(metrics_timer_name!("change_nickname", "db_update"))
         .await
-        .trace_to_internal_err("db_update_error", "数据库更新昵称失败")?;
+        .to_internal_err("db_update_error", "数据库更新昵称失败")?;
 
     if update_res.rows_affected == 0 {
         return Err(AppError::bad_request("用户不存在"));
@@ -183,7 +166,7 @@ pub async fn change_nickname(
         .delete(&RedisKeys::user::user_info_cache(user_id))
         .timed(metrics_timer_name!("change_nickname", "redis_delete"))
         .await
-        .trace_to_internal_err("redis_delete_error", "删除用户信息缓存失败");
+        .to_internal_err("redis_delete_error", "删除用户信息缓存失败");
 
     metrics_success!("change_nickname");
     info!(status = "success", user_id = %user_id, "修改昵称成功");
@@ -224,7 +207,7 @@ pub async fn update_avatar(
         "update_avatar",
         "validate_image",
         FileValidator::validate_image(&file_data, &file_name, &content_type)
-            .trace_to_bad_request_warn("invalid_image", "文件验证失败")?
+            .to_bad_request_warn("invalid_image", "文件验证失败")?
     );
 
     // 上传图片
@@ -232,14 +215,14 @@ pub async fn update_avatar(
         "avatars/{}/{}.{}",
         user_id,
         uuid::Uuid::new_v4(),
-        &img_metadata.format
+        img_metadata.format
     );
     state
         .s3_client
         .upload(&new_key, file_data, &img_metadata.mime_type)
         .timed(metrics_timer_name!("update_avatar", "s3_upload"))
         .await
-        .trace_to_internal_err("s3_upload_error", "上传头像到S3失败")?;
+        .to_internal_err("s3_upload_error", "上传头像到S3失败")?;
 
     // 获取旧头像key并更新数据库
     let new_key_for_db = new_key.clone();
@@ -252,8 +235,8 @@ pub async fn update_avatar(
                 .into_values::<Option<String>, user::Column>()
                 .one(txn)
                 .await
-                .trace_to_internal_err("db_query_error", "在上传头像时 查询头像url发生错误")?
-                .ok_or_warn("user_not_found", "用户不存在")?;
+                .to_internal_err("db_query_error", "在上传头像时 查询头像url发生错误")?
+                .ok_or_bad_request("user_not_found", "用户不存在")?;
 
             user::ActiveModel {
                 id: Set(user_id),
@@ -262,7 +245,7 @@ pub async fn update_avatar(
             }
             .update(txn)
             .await
-            .trace_to_internal_err("db_update_error", "在上传头像时 更新头像url发送错误")?;
+            .to_internal_err("db_update_error", "在上传头像时 更新头像url发送错误")?;
 
             Ok(old_key)
         })
@@ -277,7 +260,7 @@ pub async fn update_avatar(
             let _ = client
                 .delete(&key)
                 .await
-                .trace_to_internal_err("s3_delete_error", "删除上传的头像失败");
+                .to_internal_err("s3_delete_error", "删除上传的头像失败");
         });
     })?;
 
@@ -287,7 +270,7 @@ pub async fn update_avatar(
         .delete(&RedisKeys::user::user_info_cache(user_id))
         .timed(metrics_timer_name!("update_avatar", "redis_delete"))
         .await
-        .trace_to_internal_err("redis_delete_error", "删除用户信息缓存失败")?;
+        .to_internal_err("redis_delete_error", "删除用户信息缓存失败")?;
 
     // 删除旧头像
     // 删除失败, 不返回错误
@@ -297,7 +280,7 @@ pub async fn update_avatar(
             .delete(&old_key)
             .timed(metrics_timer_name!("update_avatar", "s3_delete"))
             .await
-            .trace_to_internal_err("s3_delete_error", "删除旧头像失败");
+            .to_internal_err("s3_delete_error", "删除旧头像失败");
     }
 
     // 生成头像Token
@@ -348,8 +331,8 @@ pub async fn change_password(
         .one(&state.db)
         .timed(metrics_timer_name!("change_password", "db_query"))
         .await
-        .trace_to_internal_err("db_query_error", "更改密码: 数据库查询用户失败")?
-        .ok_or_warn("user_not_found", "用户不存在")?;
+        .to_internal_err("db_query_error", "更改密码: 数据库查询用户失败")?
+        .ok_or_bad_request("user_not_found", "用户不存在")?;
 
     // 获取信号量许可，限制并发密码验证
     let _permit = PASSWORD_VERIFY_SEM
@@ -363,7 +346,7 @@ pub async fn change_password(
             .timed(metrics_timer_name!("change_password", "verify_password"))
             .await
             .map_err(|_| AppError::InternalServerError)?
-            .trace_to_bad_request_warn("verify_error", "密码校验错误")?
+            .to_bad_request_warn("verify_error", "密码校验错误")?
     };
     if !is_valid {
         return Err(AppError::bad_request("原密码错误"));
@@ -376,7 +359,7 @@ pub async fn change_password(
             .timed(metrics_timer_name!("change_password", "hash_password"))
             .await
             .map_err(|_| AppError::InternalServerError)?
-            .trace_to_bad_request_warn("hash_error", "加密新密码失败")?
+            .to_bad_request_warn("hash_error", "加密新密码失败")?
     };
 
     // 更新数据库
@@ -388,7 +371,7 @@ pub async fn change_password(
     .update(&state.db)
     .timed(metrics_timer_name!("change_password", "db_update"))
     .await
-    .trace_to_internal_err("db_update_error", "更改密码: 数据库更新错误")?;
+    .to_internal_err("db_update_error", "更改密码: 数据库更新错误")?;
 
     // 登出. 清除token
     logout(state, user_id).await?;
@@ -440,9 +423,8 @@ pub async fn logout(state: &UserState, user_id: i64) -> Result<(), AppError> {
             .delete(&cache_key)
             .timed(metrics_timer_name!("logout", "redis_delete_cache"))
     );
-    refresh_token_result
-        .trace_to_internal_err("db_update_error", "登出时 清除refresh_token失败")?;
-    access_token_result.trace_to_internal_err("redis_delete_error", "删除访问令牌失败")?;
+    refresh_token_result.to_internal_err("db_update_error", "登出时 清除refresh_token失败")?;
+    access_token_result.to_internal_err("redis_delete_error", "删除访问令牌失败")?;
 
     metrics_success!("logout");
     info!(status = "success", user_id = %user_id, "登出成功");
@@ -502,10 +484,7 @@ pub async fn get_user_info_batch(
                         .all(&state.db)
                         .timed(metrics_timer_name!("get_user_info_batch", "db_query"))
                         .await
-                        .trace_to_internal_err(
-                            "db_query_error",
-                            "在批量获取用户信息时, 从数据库获取失败",
-                        )
+                        .to_internal_err("db_query_error", "在批量获取用户信息时, 从数据库获取失败")
                 })
             },
             |dto| dto.user_id,
