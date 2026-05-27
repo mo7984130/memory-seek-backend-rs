@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone)]
 pub struct UserId(pub i64);
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
@@ -42,6 +43,21 @@ pub struct UserDTO {
 }
 
 impl UserDTO {
+    pub fn from_user(avatar_token: Option<String>, user: Model) -> Self {
+        Self {
+            id: user.id.to_string(),
+            username: user.username,
+            nickname: user.nickname,
+            email: user.email,
+            avatar_token,
+            created_at: user.created_at,
+            refresh_token: None,
+            refresh_token_expire_at: None,
+            access_token: None,
+            access_token_expire_at: None,
+        }
+    }
+
     /// 设置访问令牌信息并返回自身（Builder 模式）
     ///
     /// # 参数
