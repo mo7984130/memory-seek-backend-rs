@@ -280,18 +280,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO
 
     info!(status = "success", "用户注册成功");
 
-    Ok(UserDTO {
-        id: user_model.id.to_string(),
-        username: user_model.username,
-        nickname: user_model.nickname,
-        email: user_model.email,
-        avatar_token: None,
-        created_at: user_model.created_at,
-        refresh_token: None,
-        refresh_token_expire_at: None,
-        access_token: None,
-        access_token_expire_at: None,
-    })
+    Ok(UserDTO::from_user(user_model, None))
 }
 
 /// 将 SeaORM 插入用户时的 DbErr 转换为 AppError
