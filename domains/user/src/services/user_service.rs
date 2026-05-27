@@ -25,7 +25,7 @@ use crate::config::{
 };
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
-static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(num_cups::get()));
+static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(num_cpus::get()));
 
 /// 获取用户个人信息
 ///
