@@ -80,9 +80,9 @@ impl EmailClient {
             .from(
                 format!("{} <{}>", self.from_name, self.from_email)
                     .parse::<Mailbox>()
-                    .to_internal_err("email_from_email_err", "发件人地址格式错误")?,
+                    .trace_internal_err("email_from_email_err", "发件人地址格式错误")?,
             )
-            .to(to.parse::<Mailbox>().to_warn(
+            .to(to.parse::<Mailbox>().trace_warn(
                 "email_to_email_err",
                 "目标邮箱格式错误",
                 AppError::bad_request("邮箱格式错误"),
@@ -90,12 +90,12 @@ impl EmailClient {
             .subject(subject)
             .header(ContentType::TEXT_HTML)
             .body(body)
-            .to_internal_err("email_body_err", "构建邮件消息失败")?;
+            .trace_internal_err("email_body_err", "构建邮件消息失败")?;
 
         self.transport
             .send(email)
             .await
-            .to_internal_err("email_send_err", "邮件服务商发送失败")?;
+            .trace_internal_err("email_send_err", "邮件服务商发送失败")?;
 
         Ok(())
     }

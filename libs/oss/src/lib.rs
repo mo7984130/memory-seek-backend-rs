@@ -1,7 +1,9 @@
 use bytes::Bytes;
 use common::error::AppError;
 use common::ext::ResultErrExt;
+use futures::{Stream, StreamExt};
 use s3::creds::Credentials;
+use s3::request::ResponseDataStream;
 use s3::{Bucket, Region};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -90,7 +92,7 @@ impl S3Client {
         self.bucket
             .put_object_with_content_type(key, data.as_ref(), content_type)
             .await
-            .to_internal_err("oss_upload_err", "OSS文件存储失败")?;
+            .trace_internal_err("oss_upload_err", "OSS文件存储失败")?;
         Ok(())
     }
 
@@ -108,7 +110,7 @@ impl S3Client {
         self.bucket
             .delete_object(key)
             .await
-            .to_internal_err("oss_delete_err", "OSS文件删除失败")?;
+            .trace_internal_err("oss_delete_err", "OSS文件删除失败")?;
         Ok(())
     }
 
@@ -135,7 +137,7 @@ impl S3Client {
                             .bucket
                             .delete_object(key.as_str())
                             .await
-                            .to_internal_err("oss_del_err", "OSS文件删除失败")
+                            .trace_internal_err("oss_del_err", "OSS文件删除失败")
                         {
                             tracing::warn!(key = %key, err = ?e, "文件删除失败");
                             chunk_failed.push(key.as_str());
@@ -219,7 +221,7 @@ impl S3Client {
             .bucket
             .presign_get(key, expires.as_secs() as u32, custom_queries)
             .await
-            .to_internal_err("oss_sign_url_err", "OSS 签名失败")?;
+            .trace_internal_err("oss_sign_url_err", "OSS 签名失败")?;
 
         Ok(url)
     }
@@ -239,22 +241,38 @@ impl S3Client {
             .bucket
             .get_object(key)
             .await
-            .to_internal_err("oss_download_err", "OSS下载失败")?;
+            .trace_internal_err("oss_download_err", "OSS下载失败")?;
 
         Ok(Bytes::from(response_data.bytes().to_vec()))
     }
 
-    /// 下载文件并应用图片处理参数
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    /// - `process`: OSS 图片处理参数，如 "image/resize,w_300"
-    ///
-    /// # 返回
-    /// 处理后文件内容的 `Bytes`，可直接用于 HTTP 响应
-    ///
-    /// # 错误
-    /// - `AppError::InternalServerError`: OSS 签名、下载或数据读取失败
+    pub async fn get_download_stream_response(
+        &self,
+        key: &str,
+    ) -> Result<ResponseDataStream, AppError> {
+        self.bucket
+            .get_object_stream(key)
+            .await
+            .trace_internal_err("oss_download_err", "OSS流下载失败")
+    }
+
+    // pub async fn download_stream(
+    //     &self,
+    //     key: String,
+    // ) -> Result<impl Stream<Item = Result<Bytes, AppError>>, AppError> {
+    //     let response = self
+    //         .bucket
+    //         .get_object_stream(key)
+    //         .await
+    //         .trace_internal_err("oss_download_err", "OSS流下载失败")?;
+
+    //     let stream = response
+    //         .bytes
+    //         .map(|chunk| chunk.trace_internal_err("oss_stream_err", "OSS流读取失败"));
+
+    //     Ok(stream)
+    // }
+
     pub async fn download_with_process(&self, key: &str, process: &str) -> Result<Bytes, AppError> {
         let mut custom_queries = HashMap::new();
         custom_queries.insert("x-oss-process".to_string(), process.to_string());
@@ -263,16 +281,41 @@ impl S3Client {
             .bucket
             .presign_get(key, 3600, Some(custom_queries))
             .await
-            .to_internal_err("oss_sign_url_err", "OSS签名失败")?;
+            .trace_internal_err("oss_sign_url_err", "OSS签名失败")?;
 
         let response = reqwest::get(&url)
             .await
-            .to_internal_err("oss_download_err", "OSS下载失败")?;
+            .trace_internal_err("oss_download_err", "OSS下载失败")?;
 
         let bytes = response
             .bytes()
             .await
-            .to_internal_err("oss_read_data_err", "OSS读取数据失败")?;
+            .trace_internal_err("oss_read_data_err", "OSS读取数据失败")?;
+
+        Ok(bytes)
+    }
+
+    pub async fn download_stream_with_process(
+        &self,
+        key: &str,
+        process: &str,
+    ) -> Result<impl Stream<Item = Result<Bytes, AppError>>, AppError> {
+        let mut custom_queries = HashMap::new();
+        custom_queries.insert("x-oss-process".to_string(), process.to_string());
+
+        let url = self
+            .bucket
+            .presign_get(key, 3600, Some(custom_queries))
+            .await
+            .trace_internal_err("oss_sign_url_err", "OSS签名失败")?;
+
+        let response = reqwest::get(&url)
+            .await
+            .trace_internal_err("oss_download_err", "OSS下载失败")?;
+
+        let bytes = response
+            .bytes_stream()
+            .map(|r| r.trace_internal_err("oss_read_data_err", "OSS读取数据失败"));
 
         Ok(bytes)
     }
