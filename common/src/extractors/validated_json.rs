@@ -35,13 +35,13 @@ where
     async fn from_request(req: Request, _state: &S) -> Result<Self, AppError> {
         let bytes = axum::body::to_bytes(req.into_body(), usize::MAX)
             .await
-            .to_warn(
+            .trace_warn(
                 "validated_json_read_body_err",
                 "读取body错误",
                 AppError::bad_request("读取请求体body错误"),
             )?;
 
-        let value: T = serde_json::from_slice(&bytes).to_warn(
+        let value: T = serde_json::from_slice(&bytes).trace_warn(
             "validated_json_parse_json_err",
             "解析JSON错误",
             AppError::bad_request("解析JSON错误"),

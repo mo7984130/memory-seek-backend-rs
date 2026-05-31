@@ -9,6 +9,7 @@
 //! - [`macros`]：性能监控宏
 
 pub mod error;
+pub use error::Result;
 pub mod extractors;
 pub mod models;
 pub mod r;

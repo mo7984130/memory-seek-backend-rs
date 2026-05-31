@@ -9,23 +9,23 @@ use std::fmt::{Debug, Display};
 // ============================================================
 
 pub trait ResultErrExt<T, E>: Sized {
-    fn to_err(
+    fn trace_err(
         self,
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError>;
 
-    fn to_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>;
+    fn trace_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError>;
 
-    fn to_warn(
+    fn trace_warn(
         self,
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError>;
 
-    fn to_warn_bad_request(
+    fn trace_warn_bad_request(
         self,
         reason: &'static str,
         context: &'static str,
@@ -34,7 +34,7 @@ pub trait ResultErrExt<T, E>: Sized {
 }
 
 impl<T, E: Debug + Display> ResultErrExt<T, E> for Result<T, E> {
-    fn to_err(
+    fn trace_err(
         self,
         reason: &'static str,
         context: &'static str,
@@ -43,11 +43,11 @@ impl<T, E: Debug + Display> ResultErrExt<T, E> for Result<T, E> {
         self.map_err(|e| log_err(reason, context, e, app_err))
     }
 
-    fn to_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError> {
-        self.to_err(reason, context, AppError::InternalServerError)
+    fn trace_internal_err(self, reason: &'static str, context: &'static str) -> Result<T, AppError> {
+        self.trace_err(reason, context, AppError::InternalServerError)
     }
 
-    fn to_warn(
+    fn trace_warn(
         self,
         reason: &'static str,
         context: &'static str,
@@ -56,12 +56,12 @@ impl<T, E: Debug + Display> ResultErrExt<T, E> for Result<T, E> {
         self.map_err(|e| log_warn(reason, context, e, app_err))
     }
 
-    fn to_warn_bad_request(
+    fn trace_warn_bad_request(
         self,
         reason: &'static str,
         context: &'static str,
         msg: &'static str,
     ) -> Result<T, AppError> {
-        self.to_warn(reason, context, AppError::bad_request(msg))
+        self.trace_warn(reason, context, AppError::bad_request(msg))
     }
 }

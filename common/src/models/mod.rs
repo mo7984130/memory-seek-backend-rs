@@ -4,5 +4,7 @@
 /// - `ImageToken`: 图片访问 token，支持缩略图、预览图、原图和裁剪图
 /// - `UserId`: 用户 ID 的 newtype 封装
 pub mod image_token;
-
 pub use image_token::{FaceBBoxPixels, ImageToken, ImageTokenType};
+
+pub mod cursor_page;
+pub use cursor_page::CursorPageVO;

@@ -39,7 +39,7 @@ where
 
         let ConnectInfo(addr) = ConnectInfo::<SocketAddr>::from_request_parts(parts, state)
             .await
-            .to_internal_err(
+            .trace_internal_err(
                 "connect_info_miss",
                 "路由未配置 ConnectInfo 且无 X-Real-IP 头",
             )?;

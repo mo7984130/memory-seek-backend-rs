@@ -75,11 +75,11 @@ impl TokenCipher {
         };
         let nonce = Nonce::from_slice(&nonce_bytes);
         let plaintext = serde_json::to_vec(payload)
-            .to_internal_err("token_serialize_error", "序列化 Payload 失败")?;
+            .trace_internal_err("token_serialize_error", "序列化 Payload 失败")?;
         let ciphertext = self
             .cipher
             .encrypt(nonce, plaintext.as_slice())
-            .to_internal_err("aes_gcm_encrypt_error", "AES-GCM 加密失败")?;
+            .trace_internal_err("aes_gcm_encrypt_error", "AES-GCM 加密失败")?;
         let mut combined = Vec::with_capacity(NONCE_LEN + ciphertext.len());
         combined.extend_from_slice(&nonce_bytes);
         combined.extend_from_slice(&ciphertext);
@@ -99,7 +99,7 @@ impl TokenCipher {
     pub fn decrypt<T: DeserializeOwned>(&self, token: &str) -> Result<T, AppError> {
         let combined = URL_SAFE_NO_PAD
             .decode(token)
-            .to_internal_err("token_base64_decode_error", "Token Base64 解码失败")?;
+            .trace_internal_err("token_base64_decode_error", "Token Base64 解码失败")?;
         if combined.len() <= NONCE_LEN {
             return Err(log_err(
                 "token_too_short",
@@ -113,9 +113,9 @@ impl TokenCipher {
         let plaintext = self
             .cipher
             .decrypt(nonce, ciphertext)
-            .to_internal_err("aes_gcm_decrypt_error", "AES-GCM 解密失败")?;
+            .trace_internal_err("aes_gcm_decrypt_error", "AES-GCM 解密失败")?;
         serde_json::from_slice(&plaintext)
-            .to_internal_err("token_deserialize_error", "反序列化 Payload 失败")
+            .trace_internal_err("token_deserialize_error", "反序列化 Payload 失败")
     }
 
     // 通过 HKDF 从原始密钥和盐派生 AES-256-GCM 密钥并创建加密器
@@ -141,7 +141,7 @@ impl TokenCipher {
     pub fn encrypt_avatar_token(&self, avatar_file_id: Option<&str>) -> Option<String> {
         avatar_file_id.and_then(|key| {
             self.encrypt(&ImageToken::thumbnail(key), Some(key))
-                .to_warn("encrypt_avatar_token_err", "加密头像失败", AppError::Ignore)
+                .trace_warn("encrypt_avatar_token_err", "加密头像失败", AppError::Ignore)
                 .ok()
         })
     }

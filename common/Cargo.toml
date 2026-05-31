@@ -10,9 +10,9 @@ validators = ["dep:validator"]
 file_validator = ["dep:image"]
 
 [dependencies]
+entities = { path = "../entities" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_with = { workspace = true }
 axum = { workspace = true }
 thiserror = { workspace = true }
 sea-orm = { workspace = true }
@@ -33,7 +33,6 @@ metrics = { workspace = true, optional = true }
 bcrypt = { workspace = true }
 argon2 = { workspace = true }
 password-hash = { workspace = true }
-num_cpus = { workspace = true }
 aes-gcm = "0.10"
 hkdf = { workspace = true }
 sha2 = { workspace = true }

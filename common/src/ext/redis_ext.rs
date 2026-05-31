@@ -73,7 +73,7 @@ impl RedisExt for Pool {
     async fn get_conn(&self) -> Result<Connection, AppError> {
         self.get()
             .await
-            .to_internal_err("redis_get_conn_err", "redis 连接获取错误")
+            .trace_internal_err("redis_get_conn_err", "redis 连接获取错误")
     }
 
     /// 从 Redis 获取指定 key 的值
@@ -95,7 +95,7 @@ impl RedisExt for Pool {
         let result: Option<T> = conn
             .get(key.as_ref())
             .await
-            .to_internal_err("redis_query_err", "redis 获取错误")?;
+            .trace_internal_err("redis_query_err", "redis 获取错误")?;
         Ok(result)
     }
 
@@ -118,7 +118,7 @@ impl RedisExt for Pool {
         let mut conn = self.get_conn().await?;
         conn.set_ex(key.as_ref(), value, ttl)
             .await
-            .to_internal_err("redis_set_err", "Redis 写入失败")
+            .trace_internal_err("redis_set_err", "Redis 写入失败")
     }
 
     /// 删除 Redis 中指定 key
@@ -134,7 +134,7 @@ impl RedisExt for Pool {
         let _: () = conn
             .del(key.as_ref())
             .await
-            .to_internal_err("redis_del_err", "redis删除key错误")?;
+            .trace_internal_err("redis_del_err", "redis删除key错误")?;
         Ok(())
     }
 }
@@ -295,7 +295,7 @@ impl CacheExtension for Pool {
             let mut conn = self
                 .get()
                 .await
-                .to_internal_err("get_redis_conn_err", "Redis连接获取失败")?;
+                .trace_internal_err("get_redis_conn_err", "Redis连接获取失败")?;
             conn.mget(&unique_keys).await.unwrap_or_else(|e| {
                 warn!("get_or_load_batch MGET 失败，降级为全量加载: {:?}", e);
                 vec![None; unique_keys.len()]
@@ -337,7 +337,7 @@ impl CacheExtension for Pool {
             let mut conn = self
                 .get()
                 .await
-                .to_internal_err("get_redis_conn_err", "Redis连接获取失败(回写)")?;
+                .trace_internal_err("get_redis_conn_err", "Redis连接获取失败(回写)")?;
             let mut pipe = redis::pipe();
             let mut has_update = false;
 
