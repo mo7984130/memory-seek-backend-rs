@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone)]
 pub struct UserId(pub i64);
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]

@@ -6,4 +6,5 @@
 //! - `vector`：PostgreSQL pgvector 向量类型的 Sea-ORM 适配层
 
 pub mod auth;
+pub mod photo;
 pub mod vector;
