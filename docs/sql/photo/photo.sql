@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS photo_photo
     md5                  CHAR(32)     NULL,
     file_id              VARCHAR(255) NULL,
 
+    comment_count        BIGINT       NOT NULL DEFAULT 0,
+
     -- 时间记录
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW()
@@ -34,6 +36,7 @@ COMMENT ON COLUMN photo_photo.height IS '照片高度(像素)';
 COMMENT ON COLUMN photo_photo.mime_type IS '文件MIME类型';
 COMMENT ON COLUMN photo_photo.md5 IS '文件MD5哈希值';
 COMMENT ON COLUMN photo_photo.file_id IS '原始文件ID';
+COMMENT ON COLUMN photo_photo.comment_count IS '评论总数';
 COMMENT ON COLUMN photo_photo.created_at IS '创建时间';
 COMMENT ON COLUMN photo_photo.updated_at IS '更新时间';
 
@@ -69,4 +72,3 @@ DO UPDATE SET
     count = EXCLUDED.count,
     anchor_time = EXCLUDED.anchor_time,
     updated_at = NOW();
-
