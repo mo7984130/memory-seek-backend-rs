@@ -1,5 +1,5 @@
 use axum::extract::{Multipart, State};
-use axum::routing::{get, post};
+use axum::routing::{get, patch, post, put};
 use axum::{Extension, Router};
 use common::error::AppError;
 use common::ext::ResultErrExt;
@@ -26,13 +26,13 @@ impl UserController {
     /// 返回包含所有用户相关路由的 `Router`
     pub fn routes() -> Router<Arc<UserState>> {
         Router::new()
-            .route("/info", get(Self::get_user_info))
-            .route("/inviter-code", get(Self::generate_inviter_code))
-            .route("/nickname", post(Self::change_nickname))
-            .route("/avatar", post(Self::upload_avatar))
-            .route("/password", post(Self::change_password))
+            .route("/me", get(Self::get_user_info))
+            .route("/inviter-code", post(Self::generate_inviter_code))
+            .route("/nickname", patch(Self::change_nickname))
+            .route("/avatar", put(Self::upload_avatar))
+            .route("/password", patch(Self::change_password))
             .route("/logout", post(Self::logout))
-            .route("/info/batch", post(Self::get_user_info_batch))
+            .route("/batch", post(Self::get_user_info_batch))
     }
 
     /// 获取当前登录用户的个人信息
@@ -117,12 +117,12 @@ impl UserController {
         let field = multipart
             .next_field()
             .await
-            .to_warn_bad_request("invaild_multipart", "无效的表单数据", "无效的表单数据")?
+            .trace_warn_bad_request("invaild_multipart", "无效的表单数据", "无效的表单数据")?
             .ok_or_warn_bad_request("mutipart_not_found", "未找到上传文件", "未找到上传文件")?;
 
         let file_name = field.file_name().unwrap_or("avatar.jpg").to_string();
         let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field.bytes().await.to_warn_bad_request(
+        let file_data = field.bytes().await.trace_warn_bad_request(
             "read_file_err",
             "读取文件失败",
             "读取文件失败",
@@ -199,7 +199,7 @@ impl UserController {
             .into_iter()
             .map(|id| id.parse::<i64>())
             .collect::<Result<Vec<i64>, _>>()
-            .to_warn_bad_request("invalid_id_format", "id格式错误", "id格式错误")?;
+            .trace_warn_bad_request("invalid_id_format", "id格式错误", "id格式错误")?;
 
         user_service::get_user_info_batch(&state, user_ids)
             .await
