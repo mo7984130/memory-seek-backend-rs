@@ -1,5 +1,8 @@
 use crate::{
-    mappers::{comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper},
+    mappers::{
+        comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper,
+        photo_mapper::PhotoMapper,
+    },
     models::comment::{
         COMMENT_CURSOR_PAGE_MAX_SIZE, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES, PhotoCommentVO,
     },
@@ -10,10 +13,11 @@ use common::{
     error::AppError,
     ext::{ToErr, ToOk, log_warn},
     models::CursorPage,
+    utils::DbUtils,
 };
 use entities::{
     auth::user::UserId,
-    photo::photo::PhotoId,
+    photo::{comment::CommentId, photo::PhotoId},
 };
 use sea_orm::entity::prelude::DateTimeUtc;
 
@@ -27,7 +31,16 @@ impl CommentService {
         user_id: UserId,
         content: String,
     ) -> Result<PhotoCommentVO> {
-        let comment = CommentMapper::insert(&state.db, photo_id, user_id, content).await?;
+        let comment = DbUtils::write(&state.db, |txn| {
+            Box::pin(async move {
+                // 插入评论
+                let comment = CommentMapper::insert(txn, photo_id, user_id, content).await?;
+                // 更新评论总数
+                PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
+                Ok(comment)
+            })
+        })
+        .await?;
         PhotoCommentVO::from(comment).to_ok()
     }
 }
@@ -42,9 +55,10 @@ impl CommentService {
         photo_id: PhotoId,
         user_id: UserId,
         cursor: Option<DateTimeUtc>,
-        size: u64,
+        size: Option<u64>,
     ) -> Result<CursorPage<PhotoCommentVO, DateTimeUtc>> {
         // 校验 limit 参数
+        let size = size.unwrap_or(32);
         if size > COMMENT_CURSOR_PAGE_MAX_SIZE {
             return log_warn(
                 "comment_cursor_page_max_size",
@@ -72,10 +86,7 @@ impl CommentService {
         let time_comments = CommentMapper::query_by_photo_id(
             &state.db,
             photo_id,
-            hot_comments
-                .iter()
-                .map(|comment| comment.id)
-                .collect(),
+            hot_comments.iter().map(|comment| comment.id).collect(),
             cursor,
             size + 1,
         )
@@ -96,17 +107,18 @@ impl CommentService {
         };
 
         // 获取评论是否点赞
-        let comment_ids: Vec<_> = comments.iter().map(|c| c.id).collect();
-        let is_like = CommentLikeMapper::query_is_like_by_comment_ids(&state.db, user_id, comment_ids)
-            .await?;
+        let is_like = CommentLikeMapper::query_is_like_by_comment_ids(
+            &state.db,
+            user_id,
+            comments.iter().map(|c| c.id).collect(),
+        )
+        .await?;
 
         let records = comments
             .into_iter()
             .map(|c| {
                 let is_liked = is_like.contains(&c.id);
-                let mut vo = PhotoCommentVO::from(c);
-                vo.is_liked = is_liked;
-                vo
+                PhotoCommentVO::from(c).with_liked(is_liked)
             })
             .collect();
 
@@ -120,4 +132,34 @@ impl CommentService {
 }
 
 // 删除
-impl CommentService {}
+impl CommentService {
+    pub async fn delete(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
+        DbUtils::write(&state.db, |txn| {
+            Box::pin(async move {
+                // 先删除评论, 在删除评论的同时, 校验权限
+                let deleted = CommentMapper::delete(txn, user_id, comment_id).await?;
+                if !deleted {
+                    return log_warn(
+                        "del_comment_not_deleted",
+                        "用户尝试删除评论, 失败",
+                        "",
+                        AppError::bad_request("删除评论失败"),
+                    )
+                    .to_err();
+                }
+
+                // 更新照片评论数
+                PhotoMapper::update_comment_count_delta(txn, photo_id, -1).await?;
+
+                // 删除评论喜欢
+                // 错误不返回
+                let _ = CommentLikeMapper::delete_all_by_comment_id(txn, comment_id).await;
+
+                Ok(())
+            })
+        })
+        .await?;
+
+        Ok(())
+    }
+}

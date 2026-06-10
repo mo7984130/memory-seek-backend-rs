@@ -17,7 +17,7 @@ pub struct PhotoCommentVO {
     pub content: String,
     pub like_count: i32,
     pub is_liked: bool,
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTimeUtc,
 }
 impl From<CommentRecord> for PhotoCommentVO {
     fn from(record: CommentRecord) -> Self {
@@ -32,15 +32,22 @@ impl From<CommentRecord> for PhotoCommentVO {
     }
 }
 
+impl PhotoCommentVO {
+    pub fn with_liked(mut self, is_like: bool) -> Self {
+        self.is_liked = is_like;
+        self
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PublishCommentDTO {
+pub struct CommentPublishParam {
     pub content: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CommentPageQuery {
+pub struct CommentCursorPageQuery {
     pub cursor: Option<DateTimeUtc>,
-    pub limit: Option<i64>,
+    pub size: Option<u64>,
 }

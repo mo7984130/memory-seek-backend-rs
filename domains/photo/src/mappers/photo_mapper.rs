@@ -6,6 +6,7 @@ use common::{
     error::AppError,
     ext::{OkExt, ResultErrExt},
 };
+use sea_orm::sea_query::Expr;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use entities::photo::photo::*;
@@ -13,6 +14,32 @@ use entities::photo::photo::*;
 use crate::models::photo::{PageDirection, PhotoCursor};
 
 pub(crate) struct PhotoMapper;
+
+// 创建
+impl PhotoMapper {}
+
+// 修改
+impl PhotoMapper {
+    pub async fn update_comment_count_delta(
+        db: &impl ConnectionTrait,
+        photo_id: PhotoId,
+        delta: i64,
+    ) -> Result<()> {
+        Entity::update_many()
+            .col_expr(
+                Column::CommentCount,
+                Expr::col(Column::CommentCount).add(delta),
+            )
+            .filter(Column::Id.eq(photo_id.0))
+            .exec(db)
+            .await
+            .trace_internal_err("db_update_err", "更新照片评论总数数数据库错误")?;
+
+        Ok(())
+    }
+}
+
+// 查询
 impl PhotoMapper {
     pub async fn exists_by_md5_batch(
         db: &impl ConnectionTrait,
@@ -102,7 +129,10 @@ impl PhotoMapper {
             .to_ok()
     }
 
-    pub async fn query_by_ids(db: &impl ConnectionTrait, ids: &[PhotoId]) -> Result<Vec<PhotoRecord>> {
+    pub async fn query_by_ids(
+        db: &impl ConnectionTrait,
+        ids: &[PhotoId],
+    ) -> Result<Vec<PhotoRecord>> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -126,7 +156,10 @@ impl PhotoMapper {
             )
             .map(PhotoRecord::from)
     }
+}
 
+// 删除
+impl PhotoMapper {
     pub async fn delete_by_ids(db: &impl ConnectionTrait, ids: &[PhotoId]) -> Result<()> {
         if ids.is_empty() {
             return Ok(());

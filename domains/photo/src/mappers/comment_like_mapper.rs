@@ -94,4 +94,17 @@ impl CommentLikeMapper {
 
         return Ok(res.rows_affected != 0);
     }
+
+    pub async fn delete_all_by_comment_id(
+        db: &impl ConnectionTrait,
+        comment_id: CommentId,
+    ) -> Result<u64> {
+        Entity::delete_many()
+            .filter(Column::CommentId.eq(comment_id.0))
+            .exec(db)
+            .await
+            .trace_internal_err("db_del_err", "根据评论id删除所有评论喜欢数据库错误")?
+            .rows_affected
+            .to_ok()
+    }
 }
