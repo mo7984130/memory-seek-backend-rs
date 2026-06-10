@@ -5,7 +5,7 @@ use crate::services as auth_service;
 use axum::Router;
 use axum::extract::State;
 use axum::http::HeaderMap;
-use axum::routing::{get, post};
+use axum::routing::post;
 use common::error::AppError;
 use common::ext::{OptionExt, ResultErrExt, ResultRExt};
 use common::extractors::ValidatedJson;
@@ -24,8 +24,8 @@ impl AuthController {
         Router::new()
             .route("/login", post(Self::login))
             .route("/register", post(Self::register))
-            .route("/access-token", get(Self::refresh_access_token))
-            .route("/email-verify-code", post(Self::send_email_code))
+            .route("/token", post(Self::refresh_access_token))
+            .route("/verification-codes", post(Self::send_email_code))
     }
 
     /// 用户登录
@@ -112,13 +112,13 @@ impl AuthController {
                 AppError::bad_request("x-user-id 头缺失"),
             )?
             .to_str()
-            .to_warn(
+            .trace_warn(
                 "x-user-id_illegal",
                 "鉴权时, x-user-id 格式非法",
                 AppError::bad_request("x-user-id 格式非法"),
             )?
             .parse::<i64>()
-            .to_warn(
+            .trace_warn(
                 "x-user-id_invalid",
                 "鉴权时, x-user-id 必须是数字",
                 AppError::bad_request("x-user-id 必须是数字"),
@@ -134,7 +134,7 @@ impl AuthController {
                 AppError::bad_request("x-refresh-token 头缺失"),
             )?
             .to_str()
-            .to_warn(
+            .trace_warn(
                 "x-refresh-token_illegal",
                 "鉴权时, x-refresh-token 格式非法",
                 AppError::bad_request("x-refresh-token 格式非法"),

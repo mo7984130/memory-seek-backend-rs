@@ -2,8 +2,8 @@ use crate::AuthState;
 use crate::config::{ACCESS_TOKEN_EXPIRE_SECONDS, REFRESH_TOKEN_EXPIRE_DAYS};
 use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest, SendEmailCodeRequest};
 use chrono::{DateTime, Duration, Utc};
-use common::constants::RedisKeys;
-use common::constants::redis_keys;
+use constants::RedisKeys;
+use constants::redis_keys;
 use common::error::AppError;
 use common::ext::{BoolExt, OptionExt, RedisExt, ResultErrExt, log_err, log_warn};
 use common::models::ImageToken;
@@ -78,7 +78,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         .one(&state.db)
         .timed(metrics_timer_name!("login", "db_query"))
         .await
-        .to_internal_err("db_query_error", "查询用户时数据库错误")?;
+        .trace_internal_err("db_query_error", "查询用户时数据库错误")?;
 
     // 用户不存在时执行 dummy 验证，防止基于时序的用户枚举攻击
     let user = match user_result {
@@ -95,7 +95,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         let _permit = PASSWORD_VERIFY_SEM
             .acquire()
             .await
-            .to_internal_err("semaphore_error", "获取密码验证信号量失败")?;
+            .trace_internal_err("semaphore_error", "获取密码验证信号量失败")?;
 
         // 在 spawn_blocking 中验证密码，避免阻塞 async runtime
         let password_clone = req.password.clone();
@@ -105,8 +105,8 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         })
         .timed(metrics_timer_name!("login", "verify_password"))
         .await
-        .to_internal_err("spawn_blocking_error", "密码验证任务执行失败")?;
-        let verify_result = result.to_internal_err("verify_password_error", "密码验证内部错误")?;
+        .trace_internal_err("spawn_blocking_error", "密码验证任务执行失败")?;
+        let verify_result = result.trace_internal_err("verify_password_error", "密码验证内部错误")?;
 
         verify_result.0.ok_or_warn(
             "invalid_password",
@@ -119,7 +119,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
 
     // 检查是否需要迁移哈希算法（bcrypt -> argon2id）
     // 登录成功后异步迁移，不影响登录响应时间
-    if common::constants::PasswordHasher != old_alg {
+    if constants::PasswordHasher != old_alg {
         info!("更新用户密码哈希算法");
         let user_id_clone = user.id;
         let password_for_migration = req.password.clone();
@@ -128,12 +128,12 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
             let _: Result<(), AppError> = async {
                 user::ActiveModel {
                     id: Set(user_id_clone),
-                    password: Set(common::constants::PasswordHasher.hash(&password_for_migration)?),
+                    password: Set(constants::PasswordHasher.hash(&password_for_migration)?),
                     ..Default::default()
                 }
                 .update(&db_clone)
                 .await
-                .to_internal_err("db_update_error", "数据库更新密码哈希失败")?;
+                .trace_internal_err("db_update_error", "数据库更新密码哈希失败")?;
 
                 Ok(())
             }
@@ -156,7 +156,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
     .update(&state.db)
     .timed(metrics_timer_name!("login", "update_refresh_token"))
     .await
-    .to_internal_err("db_error", "向数据库更新refresh_token错误")?;
+    .trace_internal_err("db_error", "向数据库更新refresh_token错误")?;
 
     // 再写入 Redis，失败时回滚数据库中的 refresh_token
     if let Err(e) = state
@@ -168,7 +168,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         )
         .timed(metrics_timer_name!("login", "redis_set"))
         .await
-        .to_internal_err("redis_error", "向Redis存入access_token失败")
+        .trace_internal_err("redis_error", "向Redis存入access_token失败")
     {
         // 回滚数据库中的 refresh_token（恢复为更新前的旧值）
         if let Err(rollback_err) = (user::ActiveModel {
@@ -252,11 +252,11 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO
     // 加密密码（spawn_blocking 避免阻塞 async runtime）
     let password_clone = req.password.clone();
     let hashed_pw =
-        task::spawn_blocking(move || common::constants::PasswordHasher.hash(&password_clone))
+        task::spawn_blocking(move || constants::PasswordHasher.hash(&password_clone))
             .timed(metrics_timer_name!("register", "hash_password"))
             .await
-            .to_internal_err("spawn_blocking_error", "密码哈希任务执行失败")?
-            .to_internal_err("hash_password_error", "密码哈希计算失败")?;
+            .trace_internal_err("spawn_blocking_error", "密码哈希任务执行失败")?
+            .trace_internal_err("hash_password_error", "密码哈希计算失败")?;
 
     // 插入用户
     let user_model = user::ActiveModel {
@@ -277,7 +277,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO
         .redis
         .delete(&redis_keys::auth::email_verify_code(&user_model.email))
         .await
-        .to_internal_err("redis_error", "删除已使用邮箱验证码失败");
+        .trace_internal_err("redis_error", "删除已使用邮箱验证码失败");
 
     metrics_success!("register");
 
@@ -350,14 +350,14 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
         )
         .timed(metrics_timer_name!("send_email_code", "redis_set"))
         .await
-        .to_internal_err("redis_error", "在发送邮箱验证码时设置redis值错误")?;
+        .trace_internal_err("redis_error", "在发送邮箱验证码时设置redis值错误")?;
 
     // 在独立作用域内获取信号量并发送邮件，发送完成后立即释放信号量
     {
         let _permit = EMAIL_SEND_SEM
             .acquire()
             .await
-            .to_internal_err("semaphore_error", "获取邮件发送信号量失败")?;
+            .trace_internal_err("semaphore_error", "获取邮件发送信号量失败")?;
 
         let html_body = format!(
             "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 10 分钟。</p>",
@@ -369,7 +369,7 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
             .send_message(&req.email, "寻忆邮箱验证码", html_body)
             .timed(metrics_timer_name!("send_email_code", "send_message"))
             .await
-            .to_internal_err("send_email_error", "发送邮件失败")?;
+            .trace_internal_err("send_email_error", "发送邮件失败")?;
     } // _permit 在此释放，其他并发请求可继续发送
 
     metrics_success!("send_email_code");
@@ -434,7 +434,7 @@ async fn verify_email_verify_code(redis: &Pool, email: &str, code: &str) -> Resu
     let stored_code: Option<String> = redis
         .get_as(&RedisKeys::auth::email_verify_code(email))
         .await
-        .to_internal_err("redis_error", "验证邮箱验证码时 获取redis值错误")?;
+        .trace_internal_err("redis_error", "验证邮箱验证码时 获取redis值错误")?;
     let code_upper = code.to_uppercase();
     match stored_code {
         Some(v) if v == code_upper => Ok(()),
@@ -453,7 +453,7 @@ async fn verify_inviter_code(redis: &Pool, inviter_code: &str) -> Result<u32, Ap
     redis
         .get_as(&RedisKeys::auth::inviter_code(&code_upper))
         .await
-        .to_internal_err("redis_error", "验证邀请码时 获取redis值错误")?
+        .trace_internal_err("redis_error", "验证邀请码时 获取redis值错误")?
         .ok_or_warn(
             "invalid_inviter_code",
             "邀请码无效",
@@ -483,7 +483,7 @@ async fn verify_refresh_token(
         .into_model::<RefreshTokenValidation>()
         .one(db)
         .await
-        .to_internal_err(
+        .trace_internal_err(
             "db_error",
             "刷新access_token时 查询 数据库RefreshToken 失败",
         )?

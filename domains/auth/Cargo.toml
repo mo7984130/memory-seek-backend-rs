@@ -9,7 +9,8 @@ metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum", "dep:serde_json"]
 
 [dependencies]
-common = { path = "../../common" }
+common = { path = "../../common", features = ["validators"] }
+constants = { path = "../constants" }
 sea-orm = { workspace = true }
 entities = { path = "../../entities" }
 serde = { workspace = true }
@@ -17,25 +18,19 @@ serde_json = { workspace = true, optional = true }
 validator = { workspace = true }
 chrono = { workspace = true }
 email = { path = "../../libs/email" }
-rand = { workspace = true }
 deadpool-redis = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-anyhow = { version = "1", optional = true }
-futures = { workspace = true, optional = true }
 
 axum = { workspace = true, optional = true }
 metrics = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
 
 num_cpus = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
 hdrhistogram = { workspace = true }
-reqwest = { workspace = true }
 tokio-test = { workspace = true }
 wiremock = { workspace = true }
 uuid = { workspace = true }
-serde_json = { workspace = true }
 dotenvy = { workspace = true }
