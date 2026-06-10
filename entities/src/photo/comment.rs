@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct CommentId(pub i64);
 
 impl From<i64> for CommentId {

@@ -26,7 +26,7 @@ use common::Result;
 
 use entities::{
     auth::user::UserId,
-    photo::photo::{PhotoId, *},
+    photo::photo::{PhotoId, PhotoRecord, ActiveModel},
 };
 
 pub(crate) struct PhotoService;
@@ -46,7 +46,7 @@ impl PhotoService {
                 |id| RedisKeys::photo::photo::photo_info(*id),
                 24 * 60 * 60,
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
-                |photo| PhotoId::from(photo.id),
+                |photo| photo.id,
             ),
             CollectionPhotoMapper::exists_in_collection(
                 &state.db,
@@ -60,9 +60,8 @@ impl PhotoService {
             .into_iter()
             .flatten()
             .map(|p| {
-                let id = PhotoId(p.id);
-                PhotoVO::from(p)
-                    .with_favorited(favorited_photo_ids.contains(&id))
+                PhotoVO::from(p.clone())
+                    .with_favorited(favorited_photo_ids.contains(&p.id))
                     .with_tokens(&state.token_cipher)
             })
             .collect::<Vec<_>>()
@@ -260,7 +259,7 @@ impl PhotoService {
 
         metrics_success!("upload_photo");
 
-        PhotoVO::from(photo)
+        PhotoVO::from(PhotoRecord::from(photo))
             .with_tokens(&state.token_cipher)
             .to_ok()
     }

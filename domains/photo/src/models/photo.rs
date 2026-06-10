@@ -4,7 +4,7 @@ use common::Result;
 use common::ext::ResultErrExt;
 use common::models::ImageToken;
 use common::utils::TokenCipher;
-use entities::photo::photo::{Model, PhotoId};
+use entities::photo::photo::{PhotoId, PhotoRecord};
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
 
@@ -29,15 +29,15 @@ pub struct PhotoVO {
     pub original_token: Option<String>,
 }
 
-impl PhotoVO {
-    pub fn from(photo: Model) -> Self {
+impl From<PhotoRecord> for PhotoVO {
+    fn from(record: PhotoRecord) -> Self {
         Self {
-            id: photo.id.to_string(),
-            name: photo.name,
-            width: photo.width,
-            height: photo.height,
-            size: photo.size,
-            created_at: photo.created_at,
+            id: record.id.0.to_string(),
+            name: record.name,
+            width: record.width,
+            height: record.height,
+            size: record.size,
+            created_at: record.created_at,
             is_favorited: None,
             is_collected: None,
             thumbnail_token: None,
@@ -45,7 +45,9 @@ impl PhotoVO {
             original_token: None,
         }
     }
+}
 
+impl PhotoVO {
     pub fn with_favorited(mut self, is_favorited: bool) -> Self {
         self.is_favorited = Some(is_favorited);
         self
@@ -172,17 +174,17 @@ pub struct PhotoInfo {
     pub mime_type: String,
     pub created_at: DateTimeUtc,
 }
-impl From<Model> for PhotoInfo {
-    /// 从数据库照片实体转换为照片信息 DTO
-    fn from(m: Model) -> Self {
+impl From<PhotoRecord> for PhotoInfo {
+    /// 从数据库照片记录转换为照片信息 DTO
+    fn from(record: PhotoRecord) -> Self {
         Self {
-            id: m.id,
-            name: m.name,
-            size: m.size,
-            width: m.width,
-            height: m.height,
-            mime_type: m.mime_type,
-            created_at: m.created_at,
+            id: record.id.0,
+            name: record.name,
+            size: record.size,
+            width: record.width,
+            height: record.height,
+            mime_type: record.mime_type,
+            created_at: record.created_at,
         }
     }
 }

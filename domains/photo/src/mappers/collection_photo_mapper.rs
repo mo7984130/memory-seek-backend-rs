@@ -159,7 +159,7 @@ impl CollectionPhotoMapper {
         collection_id: CollectionId,
         cursor: Option<&CollectionPhotoCursor>,
         size: u64,
-    ) -> Result<Vec<Model>> {
+    ) -> Result<Vec<CollectionPhotoRecord>> {
         let mut query = Entity::find()
             .filter(Column::CollectionId.eq(collection_id.0))
             .filter(Column::UserId.eq(user_id.0))
@@ -183,6 +183,7 @@ impl CollectionPhotoMapper {
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询失败")
+            .map(|models| models.into_iter().map(CollectionPhotoRecord::from).collect())
     }
 
     pub async fn query_photo_id_by_collection_id(

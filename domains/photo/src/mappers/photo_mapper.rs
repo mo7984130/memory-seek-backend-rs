@@ -102,7 +102,7 @@ impl PhotoMapper {
             .to_ok()
     }
 
-    pub async fn query_by_ids(db: &impl ConnectionTrait, ids: &[PhotoId]) -> Result<Vec<Model>> {
+    pub async fn query_by_ids(db: &impl ConnectionTrait, ids: &[PhotoId]) -> Result<Vec<PhotoRecord>> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -111,9 +111,10 @@ impl PhotoMapper {
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询照片失败")
+            .map(|models| models.into_iter().map(PhotoRecord::from).collect())
     }
 
-    pub async fn query_by_id(db: &impl ConnectionTrait, id: PhotoId) -> Result<Model> {
+    pub async fn query_by_id(db: &impl ConnectionTrait, id: PhotoId) -> Result<PhotoRecord> {
         Entity::find_by_id(id.0)
             .one(db)
             .await
@@ -123,6 +124,7 @@ impl PhotoMapper {
                 "照片不存在",
                 AppError::not_found("照片不存在"),
             )
+            .map(PhotoRecord::from)
     }
 
     pub async fn delete_by_ids(db: &impl ConnectionTrait, ids: &[PhotoId]) -> Result<()> {

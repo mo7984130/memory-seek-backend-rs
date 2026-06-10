@@ -1,6 +1,6 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use common::models::ImageToken;
-use entities::photo::{collection::Model, photo::PhotoId};
+use entities::photo::{collection::CollectionRecord, photo::PhotoId};
 use img_url_generator::TokenCipher;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
@@ -17,19 +17,21 @@ pub struct CollectionVO {
     pub created_at: DateTimeUtc,
 }
 
-impl CollectionVO {
-    pub fn from(c: Model) -> Self {
+impl From<CollectionRecord> for CollectionVO {
+    fn from(record: CollectionRecord) -> Self {
         CollectionVO {
-            id: c.id.to_string(),
-            name: c.name,
-            description: c.description,
-            photo_count: c.photo_count,
+            id: record.id.0.to_string(),
+            name: record.name,
+            description: record.description,
+            photo_count: record.photo_count,
             cover_token: None,
-            is_favorite: c.is_favorite,
-            created_at: c.created_at,
+            is_favorite: record.is_favorite,
+            created_at: record.created_at,
         }
     }
+}
 
+impl CollectionVO {
     pub fn with_generate_cover_token(mut self, cipher: &TokenCipher) -> Self {
         self.cover_token = self.cover_token.as_ref().and_then(|fid| {
             cipher

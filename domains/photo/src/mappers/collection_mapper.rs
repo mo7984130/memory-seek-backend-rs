@@ -36,7 +36,7 @@ impl CollectionMapper {
     pub async fn query_by_user_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
-    ) -> Result<Vec<Model>> {
+    ) -> Result<Vec<CollectionRecord>> {
         Entity::find()
             .filter(Column::UserId.eq(user_id.0))
             .order_by_asc(Column::IsFavorite)
@@ -44,18 +44,20 @@ impl CollectionMapper {
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询收藏夹失败")
+            .map(|models| models.into_iter().map(CollectionRecord::from).collect())
     }
 
     pub async fn query_favorite_by_user_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
-    ) -> Result<Option<Model>> {
+    ) -> Result<Option<CollectionRecord>> {
         Entity::find()
             .filter(Column::UserId.eq(user_id.0))
             .filter(Column::IsFavorite.eq(true))
             .one(db)
             .await
             .trace_internal_err("db_query_err", "查询失败")
+            .map(|opt| opt.map(CollectionRecord::from))
     }
 
     pub async fn insert(
@@ -64,7 +66,7 @@ impl CollectionMapper {
         name: String,
         description: Option<String>,
         is_favorite: bool,
-    ) -> Result<Model> {
+    ) -> Result<CollectionRecord> {
         let now = Utc::now();
         ActiveModel {
             user_id: Set(user_id.0),
@@ -80,6 +82,7 @@ impl CollectionMapper {
         .insert(db)
         .await
         .trace_internal_err("db_insert_err", "创建收藏夹失败")
+        .map(CollectionRecord::from)
     }
 
     pub async fn update_photo_count(

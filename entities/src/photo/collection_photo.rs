@@ -1,7 +1,17 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use super::collection::CollectionId;
+use super::photo::PhotoId;
+
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct CollectionPhotoId(pub i64);
+
+impl From<i64> for CollectionPhotoId {
+    fn from(id: i64) -> Self {
+        Self(id)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "photo_collection_photo")]
@@ -13,6 +23,30 @@ pub struct Model {
     pub user_id: i64,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
+}
+
+/// 收藏夹照片记录，使用强类型 ID
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CollectionPhotoRecord {
+    pub id: CollectionPhotoId,
+    pub collection_id: CollectionId,
+    pub photo_id: PhotoId,
+    pub user_id: i64,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+}
+
+impl From<Model> for CollectionPhotoRecord {
+    fn from(model: Model) -> Self {
+        Self {
+            id: CollectionPhotoId(model.id),
+            collection_id: CollectionId(model.collection_id),
+            photo_id: PhotoId(model.photo_id),
+            user_id: model.user_id,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
