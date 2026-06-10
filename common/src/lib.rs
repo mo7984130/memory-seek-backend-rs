@@ -5,7 +5,6 @@
 //! - [`models`]：Sea-ORM 数据库模型定义
 //! - [`r`]：统一 API 响应格式
 //! - [`utils`]：通用工具函数（哈希、Redis、配置等）
-//! - [`constants`]：全局常量与 Redis 键生成
 //! - [`macros`]：性能监控宏
 
 pub mod error;
@@ -13,9 +12,9 @@ pub use error::Result;
 pub mod extractors;
 pub mod models;
 pub mod r;
+pub mod traits;
 pub mod utils;
 
-pub mod constants;
 pub mod macros;
 
 pub mod ext;

@@ -1,6 +1,6 @@
 //! 密码哈希器常量定义
 
-use crate::utils::{Argon2idConfig, HashAlgorithm};
+use common::utils::{Argon2idConfig, HashAlgorithm};
 
 /// 全局密码哈希器，使用 Argon2id 算法
 ///
