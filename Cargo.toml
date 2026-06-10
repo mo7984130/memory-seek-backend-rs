@@ -6,7 +6,11 @@ members = [
     "libs/email",
     "libs/img_url_generator",
     "libs/oss",
-    "domains/auth"
+    "domains/constants",
+    "domains/auth",
+    "domains/user",
+    "domains/photo"
+    # "server"
 ]
 
 [workspace.dependencies]
