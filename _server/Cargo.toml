@@ -1,0 +1,49 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "memory-seek-backend-rs"
+path = "src/main.rs"
+
+[features]
+default = []
+auth = ["dep:auth", "auth/controller", "auth/metrics"]
+user = ["dep:user", "user/controller", "user/metrics"]
+metrics = [
+    "common/metrics",
+    "dep:metrics",
+    "dep:metrics-exporter-prometheus",
+    "dep:metrics-tracing-context",
+    "dep:metrics-util",
+    "dep:metrics-process"
+]
+
+[dependencies]
+common = { path = "../common" }
+entities = { path = "../entities" }
+user = { path = "../domains/user", optional = true }
+auth = { path = "../domains/auth", optional = true }
+axum = { workspace = true, features = ["multipart"] }
+serde = { workspace = true }
+oss = { path = "../libs/oss" }
+email = { path = "../libs/email" }
+config = { workspace = true }
+dotenvy = { workspace = true }
+deadpool-redis = { workspace = true }
+sea-orm = { workspace = true }
+tokio = { workspace = true }
+tower-http = { version = "0.6.8", features = ["cors", "trace"] }
+log = "0.4.29"
+uuid = { version = "1.23.0", features = ["v4"] }
+
+## 性能监控
+metrics = { workspace = true, optional = true }
+metrics-exporter-prometheus = { version = "0.18.1", optional = true }
+metrics-tracing-context = { version = "0.18.1", optional = true }
+tracing = { version = "0.1.44", features = ["attributes", "std"] }
+tracing-subscriber = { version = "0.3.23", features = ["registry", "env-filter", "fmt", "json"] }
+metrics-util = { version = "0.20.1", optional = true }
+metrics-process = { version = "2.4.3", optional = true }
+tracing-appender = "0.2.4"
