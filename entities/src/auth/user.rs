@@ -1,3 +1,5 @@
+use std::fmt;
+
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -7,6 +9,12 @@ pub struct UserId(pub i64);
 impl From<i64> for UserId {
     fn from(id: i64) -> Self {
         Self(id)
+    }
+}
+
+impl fmt::Display for UserId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

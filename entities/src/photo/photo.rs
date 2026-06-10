@@ -4,6 +4,8 @@ use common::error::AppError;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::auth::user::UserId;
+
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize)]
 pub struct PhotoId(pub i64);
 impl From<i64> for PhotoId {
@@ -56,7 +58,7 @@ pub struct Model {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PhotoRecord {
     pub id: PhotoId,
-    pub user_id: i64,
+    pub user_id: UserId,
     pub name: String,
     pub size: i64,
     pub width: i32,
@@ -72,7 +74,7 @@ impl From<Model> for PhotoRecord {
     fn from(model: Model) -> Self {
         Self {
             id: PhotoId(model.id),
-            user_id: model.user_id,
+            user_id: UserId(model.user_id),
             name: model.name,
             size: model.size,
             width: model.width,

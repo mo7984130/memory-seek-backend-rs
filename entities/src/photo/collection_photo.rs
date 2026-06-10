@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::auth::user::UserId;
 use super::collection::CollectionId;
 use super::photo::PhotoId;
 
@@ -31,7 +32,7 @@ pub struct CollectionPhotoRecord {
     pub id: CollectionPhotoId,
     pub collection_id: CollectionId,
     pub photo_id: PhotoId,
-    pub user_id: i64,
+    pub user_id: UserId,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }
@@ -42,7 +43,7 @@ impl From<Model> for CollectionPhotoRecord {
             id: CollectionPhotoId(model.id),
             collection_id: CollectionId(model.collection_id),
             photo_id: PhotoId(model.photo_id),
-            user_id: model.user_id,
+            user_id: UserId(model.user_id),
             created_at: model.created_at,
             updated_at: model.updated_at,
         }

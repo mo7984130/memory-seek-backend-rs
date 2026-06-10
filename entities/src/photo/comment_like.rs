@@ -1,6 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::auth::user::UserId;
 use super::comment::CommentId;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
@@ -28,7 +29,7 @@ pub struct Model {
 pub struct CommentLikeRecord {
     pub id: CommentLikeId,
     pub comment_id: CommentId,
-    pub user_id: i64,
+    pub user_id: UserId,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }
@@ -38,7 +39,7 @@ impl From<Model> for CommentLikeRecord {
         Self {
             id: CommentLikeId(model.id),
             comment_id: CommentId(model.comment_id),
-            user_id: model.user_id,
+            user_id: UserId(model.user_id),
             created_at: model.created_at,
             updated_at: model.updated_at,
         }

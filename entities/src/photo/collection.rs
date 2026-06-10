@@ -4,6 +4,8 @@ use common::error::AppError;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::auth::user::UserId;
+
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct CollectionId(pub i64);
 impl From<i64> for CollectionId {
@@ -40,7 +42,7 @@ pub struct Model {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CollectionRecord {
     pub id: CollectionId,
-    pub user_id: i64,
+    pub user_id: UserId,
     pub name: String,
     pub description: Option<String>,
     pub photo_count: i64,
@@ -54,7 +56,7 @@ impl From<Model> for CollectionRecord {
     fn from(model: Model) -> Self {
         Self {
             id: CollectionId(model.id),
-            user_id: model.user_id,
+            user_id: UserId(model.user_id),
             name: model.name,
             description: model.description,
             photo_count: model.photo_count,
