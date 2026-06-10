@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use entities::photo::comment::Model;
+use entities::photo::comment::CommentRecord;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
 
@@ -19,15 +19,15 @@ pub struct PhotoCommentVO {
     pub is_liked: bool,
     pub created_at: DateTime<Utc>,
 }
-impl From<Model> for PhotoCommentVO {
-    fn from(model: Model) -> Self {
+impl From<CommentRecord> for PhotoCommentVO {
+    fn from(record: CommentRecord) -> Self {
         Self {
-            id: model.id.to_string(),
-            user_id: model.user_id.to_string(),
-            content: model.content,
-            like_count: model.like_count,
+            id: record.id.0.to_string(),
+            user_id: record.user_id.to_string(),
+            content: record.content,
+            like_count: record.like_count,
             is_liked: false,
-            created_at: model.created_at,
+            created_at: record.created_at,
         }
     }
 }

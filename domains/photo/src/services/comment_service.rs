@@ -13,7 +13,7 @@ use common::{
 };
 use entities::{
     auth::user::UserId,
-    photo::{comment::CommentId, photo::PhotoId},
+    photo::photo::PhotoId,
 };
 use sea_orm::entity::prelude::DateTimeUtc;
 
@@ -74,7 +74,7 @@ impl CommentService {
             photo_id,
             hot_comments
                 .iter()
-                .map(|comment| CommentId(comment.id))
+                .map(|comment| comment.id)
                 .collect(),
             cursor,
             size + 1,
@@ -96,9 +96,19 @@ impl CommentService {
         };
 
         // 获取评论是否点赞
+        let comment_ids: Vec<_> = comments.iter().map(|c| c.id).collect();
         let is_like = CommentLikeMapper::query_is_like_by_comment_ids(&state.db, user_id, comment_ids)
+            .await?;
 
-        let records = comments.into_iter().map(PhotoCommentVO::from).collect();
+        let records = comments
+            .into_iter()
+            .map(|c| {
+                let is_liked = is_like.contains(&c.id);
+                let mut vo = PhotoCommentVO::from(c);
+                vo.is_liked = is_liked;
+                vo
+            })
+            .collect();
 
         CursorPage {
             records,

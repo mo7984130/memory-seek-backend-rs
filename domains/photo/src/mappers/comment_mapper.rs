@@ -17,7 +17,7 @@ impl CommentMapper {
         photo_id: PhotoId,
         user_id: UserId,
         content: String,
-    ) -> Result<Model> {
+    ) -> Result<CommentRecord> {
         ActiveModel {
             photo_id: Set(photo_id.0),
             user_id: Set(user_id.0),
@@ -27,6 +27,7 @@ impl CommentMapper {
         .insert(db)
         .await
         .trace_internal_err("db_insert_err", "插入评论失败")
+        .map(CommentRecord::from)
     }
 }
 
@@ -40,7 +41,7 @@ impl CommentMapper {
         photo_id: PhotoId,
         min_likes: u64,
         size: u64,
-    ) -> Result<Vec<Model>> {
+    ) -> Result<Vec<CommentRecord>> {
         Entity::find()
             .filter(Column::PhotoId.eq(photo_id.0))
             .filter(Column::LikeCount.gt(min_likes))
@@ -49,6 +50,7 @@ impl CommentMapper {
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询失败")
+            .map(|models| models.into_iter().map(CommentRecord::from).collect())
     }
 
     pub async fn query_by_photo_id(
@@ -57,7 +59,7 @@ impl CommentMapper {
         exclude_ids: Vec<CommentId>,
         cursor: Option<DateTimeUtc>,
         size: u64,
-    ) -> Result<Vec<Model>> {
+    ) -> Result<Vec<CommentRecord>> {
         let mut query = Entity::find()
             .filter(Column::PhotoId.eq(photo_id.0))
             .order_by_desc(Column::CreatedAt)
@@ -75,6 +77,7 @@ impl CommentMapper {
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询失败")
+            .map(|models| models.into_iter().map(CommentRecord::from).collect())
     }
 }
 
