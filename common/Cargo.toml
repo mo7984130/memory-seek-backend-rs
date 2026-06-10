@@ -10,7 +10,6 @@ validators = ["dep:validator"]
 file_validator = ["dep:image"]
 
 [dependencies]
-entities = { path = "../entities" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 axum = { workspace = true }

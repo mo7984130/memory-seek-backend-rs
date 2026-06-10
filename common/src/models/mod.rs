@@ -7,4 +7,4 @@ pub mod image_token;
 pub use image_token::{FaceBBoxPixels, ImageToken, ImageTokenType};
 
 pub mod cursor_page;
-pub use cursor_page::CursorPageVO;
+pub use cursor_page::CursorPage;
