@@ -8,3 +8,4 @@ sea-orm = { workspace = true, features = ["sqlx-postgres"] }
 serde = { workspace = true }
 pgvector = { workspace = true }
 sqlx = { workspace = true }
+common = { path = "../common" }
