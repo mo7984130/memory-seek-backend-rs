@@ -1,10 +1,10 @@
-use crate::services::photo_service::PageDirection;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
+use common::Result;
+use common::ext::ResultErrExt;
 use common::models::ImageToken;
 use common::utils::TokenCipher;
-use common::{error::AppError, ext::ResultErrExt};
-use sea_orm::FromQueryResult;
+use entities::photo::photo::{Model, PhotoId};
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
 
@@ -30,154 +30,135 @@ pub struct PhotoVO {
 }
 
 impl PhotoVO {
-    /// 为照片生成缩略图、预览和原图三种加密访问令牌
-    ///
-    /// # 参数
-    /// - `file_id`: 文件唯一标识
-    /// - `token_cipher`: 加密器实例
-    ///
-    /// # 返回
-    /// 返回 `(thumbnail_token, preview_token, original_token)` 三元组，加密失败时对应位置为 `None`
-    pub fn generate_tokens(
-        file_id: &str,
-        token_cipher: &TokenCipher,
-    ) -> (Option<String>, Option<String>, Option<String>) {
-        let thumbnail_token = token_cipher
-            .encrypt(&ImageToken::thumbnail(file_id.to_string()), Some(file_id))
-            .ok();
-        let preview_token = token_cipher
-            .encrypt(&ImageToken::preview(file_id.to_string()), Some(file_id))
-            .ok();
-        let original_token = token_cipher
-            .encrypt(&ImageToken::original(file_id.to_string()), Some(file_id))
-            .ok();
-
-        (thumbnail_token, preview_token, original_token)
+    pub fn from(photo: Model) -> Self {
+        Self {
+            id: photo.id.to_string(),
+            name: photo.name,
+            width: photo.width,
+            height: photo.height,
+            size: photo.size,
+            created_at: photo.created_at,
+            is_favorited: None,
+            is_collected: None,
+            thumbnail_token: None,
+            preview_token: None,
+            original_token: None,
+        }
     }
 
-    /// 为指定文件生成缩略图访问令牌
-    ///
-    /// # 参数
-    /// - `file_id`: 文件唯一标识
-    /// - `token_cipher`: 加密器实例
-    ///
-    /// # 返回
-    /// 加密成功时返回令牌，失败时返回 `None`
-    pub fn generate_thumbnail_token(file_id: &str, token_cipher: &TokenCipher) -> Option<String> {
-        token_cipher
-            .encrypt(&ImageToken::thumbnail(file_id.to_string()), Some(file_id))
-            .ok()
+    pub fn with_favorited(mut self, is_favorited: bool) -> Self {
+        self.is_favorited = Some(is_favorited);
+        self
+    }
+
+    pub fn with_collected(mut self, is_collected: bool) -> Self {
+        self.is_collected = Some(is_collected);
+        self
+    }
+
+    pub fn with_tokens(mut self, token_cipher: &TokenCipher) -> Self {
+        self = self.with_original_token(token_cipher);
+        self = self.with_thumbnail_token(token_cipher);
+        self = self.with_preview_token(token_cipher);
+        self
+    }
+
+    pub fn with_thumbnail_token(mut self, token_cipher: &TokenCipher) -> Self {
+        self.thumbnail_token = token_cipher
+            .encrypt(&ImageToken::thumbnail(self.id.to_string()), Some(&self.id))
+            .ok();
+        self
+    }
+
+    pub fn with_preview_token(mut self, token_cipher: &TokenCipher) -> Self {
+        self.preview_token = token_cipher
+            .encrypt(&ImageToken::preview(self.id.to_string()), Some(&self.id))
+            .ok();
+        self
+    }
+
+    pub fn with_original_token(mut self, token_cipher: &TokenCipher) -> Self {
+        self.original_token = token_cipher
+            .encrypt(&ImageToken::original(self.id.to_string()), Some(&self.id))
+            .ok();
+        self
     }
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct PhotoCursorQuery {
     pub cursor: Option<String>,
-    #[serde(default = "default_size")]
-    pub size: u32,
-    #[serde(default = "default_direction")]
+    pub size: u64,
     pub direction: PageDirection,
     pub default_collection_id: Option<String>,
 }
 
-// 默认分页大小
-fn default_size() -> u32 {
-    100
-}
-
-// 默认翻页方向
-fn default_direction() -> PageDirection {
-    PageDirection::Next
+impl Default for PhotoCursorQuery {
+    fn default() -> Self {
+        Self {
+            cursor: None,
+            size: 128,
+            direction: PageDirection::Next,
+            default_collection_id: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhotoCursor {
-    pub created_at: DateTime<Utc>,
-    pub id: i64,
+    pub created_at: DateTimeUtc,
+    pub id: PhotoId,
 }
 
 impl PhotoCursor {
-    /// 将游标编码为 URL 安全的 Base64 字符串
-    ///
-    /// # 返回
-    /// 返回 Base64 编码后的游标字符串
     pub fn encode(&self) -> String {
         let json = serde_json::to_string(self).unwrap_or_default();
         URL_SAFE_NO_PAD.encode(json.as_bytes())
     }
 
-    /// 从 URL 安全的 Base64 字符串解码游标
-    ///
-    /// # 参数
-    /// - `s`: Base64 编码的游标字符串
-    ///
-    /// # 返回
-    /// 返回解码后的 `PhotoCursor`
-    ///
-    /// # 错误
-    /// - `AppError`: Base64 解码失败、UTF-8 转换失败或 JSON 反序列化失败
-    pub fn decode(s: impl AsRef<[u8]>) -> Result<Self, AppError> {
-        let bytes = URL_SAFE_NO_PAD
-            .decode(s)
-            .trace_to_bad_request_warn("photo::photo_cursor:decode_err", "解码photo_curosr错误")?;
-        let json = String::from_utf8(bytes).trace_to_bad_request_warn(
-            "photo::photo_cursor:from_utf8_err",
+    pub fn decode(s: impl AsRef<[u8]>) -> Result<Self> {
+        let bytes = URL_SAFE_NO_PAD.decode(s).trace_warn_bad_request(
+            "photo_cursor:decode_err",
+            "解码photo_curosr错误, base64解码失败",
             "解码photo_curosr错误",
         )?;
-        serde_json::from_str(&json)
-            .trace_to_bad_request_warn("photo::photo_cursor:from_str_err", "解码photo_curosr错误")
+        let json = String::from_utf8(bytes).trace_warn_bad_request(
+            "photo_cursor:from_utf8_err",
+            "解码photo_curosr错误, bytes转String错误",
+            "解码photo_curosr错误",
+        )?;
+        serde_json::from_str(&json).trace_warn_bad_request(
+            "photo_cursor:from_str_err",
+            "解码photo_curosr错误, json解析失败",
+            "解码photo_curosr错误",
+        )
     }
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CursorPageVO<T, C> {
-    pub records: Vec<T>,
-    pub next_cursor: Option<C>,
-    pub has_more: bool,
-}
-
-impl<T, C> CursorPageVO<T, C> {
-    /// 创建空的游标分页容器
-    ///
-    /// # 返回
-    /// 返回无记录、无游标的空分页结果
-    pub fn empty() -> Self {
-        Self {
-            records: vec![],
-            next_cursor: None,
-            has_more: false,
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PageDirection {
+    Next,
+    Prev,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadWithCreatedAtQuery {
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTimeUtc,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Md5Query {
-    pub md5: Vec<String>,
+pub struct Md5sExistParam {
+    pub md5s: Vec<String>,
 }
 
-#[derive(Serialize, FromQueryResult)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TimeRange {
-    pub min_time: Option<DateTimeUtc>,
-    pub max_time: Option<DateTimeUtc>,
-}
-impl Default for TimeRange {
-    /// 创建时间范围实例，最小和最大时间均为 `None`
-    fn default() -> Self {
-        Self {
-            min_time: None,
-            max_time: None,
-        }
-    }
+pub struct DeletePhotoParam {
+    pub photo_ids: Vec<PhotoId>,
 }
 
 #[derive(Debug, Serialize)]
@@ -191,9 +172,9 @@ pub struct PhotoInfo {
     pub mime_type: String,
     pub created_at: DateTimeUtc,
 }
-impl From<entities::photo::Model> for PhotoInfo {
+impl From<Model> for PhotoInfo {
     /// 从数据库照片实体转换为照片信息 DTO
-    fn from(m: entities::photo::Model) -> Self {
+    fn from(m: Model) -> Self {
         Self {
             id: m.id,
             name: m.name,

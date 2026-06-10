@@ -1,48 +1,180 @@
+use std::collections::{HashMap, HashSet};
+
 use chrono::Utc;
+use common::Result;
 use common::error::AppError;
-use common::ext::ResultErrExt;
-use entities::collection_photo;
+use common::ext::{OkExt, ResultErrExt, ToErr, log_warn};
+use entities::auth::user::UserId;
+use entities::photo::collection_photo::*;
+use entities::photo::{collection::CollectionId, photo::PhotoId};
+use sea_orm::ActiveValue::Set;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+    ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
 use crate::models::collection::CollectionPhotoCursor;
-use std::collections::HashMap;
 
-pub struct CollectionPhotoMapper;
+pub(crate) struct CollectionPhotoMapper;
 
 impl CollectionPhotoMapper {
-    /// 游标分页查询收藏夹中的照片关系
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `collection_id`: 收藏夹ID
-    /// - `cursor`: 复合游标（base64编码）
-    /// - `size`: 每页数量
-    ///
-    /// # 返回
-    /// 返回收藏夹-照片关系列表，按添加时间倒序、ID倒序
+    pub async fn exists_in_collection(
+        db: &impl ConnectionTrait,
+        collection_id: CollectionId,
+        photo_ids: &[PhotoId],
+    ) -> Result<HashSet<PhotoId>> {
+        if photo_ids.is_empty() {
+            return Ok(HashSet::new());
+        }
+
+        Entity::find()
+            .filter(Column::CollectionId.eq(collection_id.0))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+            .select_only()
+            .column(Column::PhotoId)
+            .into_values::<i64, Column>()
+            .all(db)
+            .await
+            .trace_internal_err("db_query_err", "查询失败")?
+            .into_iter()
+            .map(PhotoId::from)
+            .collect::<HashSet<_>>()
+            .to_ok()
+    }
+
+    pub async fn inserts(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        collection_id: CollectionId,
+        photo_ids: &[PhotoId],
+    ) -> Result<()> {
+        if photo_ids.is_empty() {
+            return Ok(());
+        }
+
+        let now = Utc::now();
+
+        let models: Vec<ActiveModel> = photo_ids
+            .iter()
+            .map(|photo_id| ActiveModel {
+                collection_id: Set(collection_id.0),
+                photo_id: Set(photo_id.0),
+                user_id: Set(user_id.0),
+                created_at: Set(now),
+                updated_at: Set(now),
+                ..Default::default()
+            })
+            .collect();
+
+        Entity::insert_many(models)
+            .exec(db)
+            .await
+            .trace_internal_err("db_insert_err", "批量添加到收藏夹失败")?;
+
+        Ok(())
+    }
+
+    pub async fn is_belong(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        collection_id: CollectionId,
+    ) -> Result<bool> {
+        let count = Entity::find()
+            .filter(Column::CollectionId.eq(collection_id.0))
+            .filter(Column::UserId.eq(user_id.0))
+            .count(db)
+            .await
+            .trace_internal_err("db_query_err", "查询失败")?;
+
+        Ok(count > 0)
+    }
+
+    pub async fn count_photo_by_collection_id(
+        db: &impl ConnectionTrait,
+        collection_id: CollectionId,
+    ) -> Result<u64> {
+        Entity::find()
+            .filter(Column::CollectionId.eq(collection_id.0))
+            .count(db)
+            .await
+            .trace_internal_err("db_query_err", "查询失败")
+    }
+
+    pub async fn delete_by_collection_id_and_photo_ids(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        collection_id: CollectionId,
+        photo_ids: &[PhotoId],
+    ) -> Result<u64> {
+        if photo_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let result = Entity::delete_many()
+            .filter(Column::CollectionId.eq(collection_id.0))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+            .filter(Column::UserId.eq(user_id.0))
+            .exec(db)
+            .await
+            .trace_internal_err("db_delete_err", "批量移除失败")?;
+
+        Ok(result.rows_affected as u64)
+    }
+
+    /// 根据photo_ids 删除收藏夹照片
+    /// 返回HashMap<受影响的收藏夹id, 该收藏夹删除的照片个数>
+    pub async fn delete_by_photo_ids(
+        db: &impl ConnectionTrait,
+        photo_ids: &[PhotoId],
+    ) -> Result<HashMap<CollectionId, u64>> {
+        if photo_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let affected: HashMap<CollectionId, u64> = Entity::find()
+            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+            .select_only()
+            .column(Column::CollectionId)
+            .into_values::<i64, Column>()
+            .all(db)
+            .await
+            .trace_internal_err("db_query_err", "获取受影响的收藏夹Id错误")?
+            .into_iter()
+            .fold(HashMap::new(), |mut map, collection_id| {
+                *map.entry(CollectionId(collection_id)).or_insert(0u64) += 1;
+                map
+            });
+
+        Entity::delete_many()
+            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+            .exec(db)
+            .await
+            .trace_internal_err("db_delete_err", "批量移除失败")?;
+
+        Ok(affected)
+    }
+
     pub async fn query_by_collection_id(
-        db: &DatabaseConnection,
-        collection_id: i64,
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        collection_id: CollectionId,
         cursor: Option<&CollectionPhotoCursor>,
         size: u64,
-    ) -> Result<Vec<collection_photo::Model>, AppError> {
-        let mut query = collection_photo::Entity::find()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .order_by_desc(collection_photo::Column::CreatedAt)
-            .order_by_desc(collection_photo::Column::Id)
+    ) -> Result<Vec<Model>> {
+        let mut query = Entity::find()
+            .filter(Column::CollectionId.eq(collection_id.0))
+            .filter(Column::UserId.eq(user_id.0))
+            .order_by_desc(Column::CreatedAt)
+            .order_by_desc(Column::Id)
             .limit(size);
 
         if let Some(c) = cursor {
             query = query.filter(
                 sea_orm::Condition::any()
-                    .add(collection_photo::Column::CreatedAt.lt(c.created_at))
+                    .add(Column::CreatedAt.lt(c.created_at))
                     .add(
                         sea_orm::Condition::all()
-                            .add(collection_photo::Column::CreatedAt.eq(c.created_at))
-                            .add(collection_photo::Column::Id.lt(c.id)),
+                            .add(Column::CreatedAt.eq(c.created_at))
+                            .add(Column::Id.lt(c.id.0)),
                     ),
             );
         }
@@ -50,309 +182,88 @@ impl CollectionPhotoMapper {
         query
             .all(db)
             .await
-            .trace_to_internal_err("db_query_err", "查询失败")
+            .trace_internal_err("db_query_err", "查询失败")
     }
 
-    /// 批量查询多个收藏夹中的照片关系
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `collection_ids`: 收藏夹ID列表
-    ///
-    /// # 返回
-    /// 返回所有匹配的收藏夹-照片关系
-    pub async fn query_by_collection_ids(
-        db: &DatabaseConnection,
-        collection_ids: Vec<i64>,
-    ) -> Result<Vec<collection_photo::Model>, AppError> {
-        if collection_ids.is_empty() {
-            return Ok(vec![]);
-        }
-        collection_photo::Entity::find()
-            .filter(collection_photo::Column::CollectionId.is_in(collection_ids))
-            .order_by_desc(collection_photo::Column::CreatedAt)
-            .all(db)
-            .await
-            .trace_to_internal_err("db_query_err", "查询失败")
-    }
+    pub async fn query_photo_id_by_collection_id(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        collection_id: CollectionId,
+        cursor: Option<&CollectionPhotoCursor>,
+        size: u64,
+    ) -> Result<Vec<PhotoId>> {
+        let mut query = Entity::find()
+            .filter(Column::CollectionId.eq(collection_id.0))
+            .filter(Column::UserId.eq(user_id.0))
+            .order_by_desc(Column::CreatedAt)
+            .order_by_desc(Column::Id)
+            .limit(size);
 
-    /// 查询照片所在的收藏夹ID列表
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `user_id`: 用户ID
-    /// - `photo_id`: 照片ID
-    ///
-    /// # 返回
-    /// 返回该照片所在的所有收藏夹ID列表
-    pub async fn query_collection_ids_by_photo(
-        db: &DatabaseConnection,
-        user_id: i64,
-        photo_id: i64,
-    ) -> Result<Vec<i64>, AppError> {
-        let relations = collection_photo::Entity::find()
-            .filter(collection_photo::Column::UserId.eq(user_id))
-            .filter(collection_photo::Column::PhotoId.eq(photo_id))
-            .all(db)
-            .await
-            .trace_to_internal_err("db_query_err", "查询失败")?;
-
-        Ok(relations.iter().map(|r| r.collection_id).collect())
-    }
-
-    /// 查询每个收藏夹的最新照片ID
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `collection_ids`: 收藏夹ID列表
-    ///
-    /// # 返回
-    /// 返回以收藏夹ID为键、最新照片ID为值的HashMap
-    pub async fn query_latest_photo_ids_by_collections(
-        db: &DatabaseConnection,
-        collection_ids: Vec<i64>,
-    ) -> Result<HashMap<i64, i64>, AppError> {
-        if collection_ids.is_empty() {
-            return Ok(HashMap::new());
+        if let Some(c) = cursor {
+            query = query.filter(
+                sea_orm::Condition::any()
+                    .add(Column::CreatedAt.lt(c.created_at))
+                    .add(
+                        sea_orm::Condition::all()
+                            .add(Column::CreatedAt.eq(c.created_at))
+                            .add(Column::Id.lt(c.id.0)),
+                    ),
+            );
         }
 
-        let relations = collection_photo::Entity::find()
-            .filter(collection_photo::Column::CollectionId.is_in(collection_ids))
-            .order_by_desc(collection_photo::Column::CreatedAt)
-            .all(db)
-            .await
-            .trace_to_internal_err("db_query_err", "查询失败")?;
-
-        let mut result = HashMap::new();
-        for cp in relations {
-            result.entry(cp.collection_id).or_insert(cp.photo_id);
-        }
-        Ok(result)
-    }
-
-    /// 检查照片是否在收藏夹中
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `collection_id`: 收藏夹ID
-    /// - `photo_ids`: 照片ID列表
-    ///
-    /// # 返回
-    /// 返回在收藏夹中的照片ID列表
-    ///
-    /// # 错误
-    /// - `AppError`: 数据库查询失败时返回错误
-    pub async fn exists_in_collection<C: ConnectionTrait>(
-        db: &C,
-        collection_id: i64,
-        photo_ids: &[i64],
-    ) -> Result<Vec<i64>, AppError> {
-        if photo_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let relations = collection_photo::Entity::find()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .filter(collection_photo::Column::PhotoId.is_in(photo_ids.iter().copied()))
+        query
             .select_only()
-            .column(collection_photo::Column::PhotoId)
-            .into_tuple()
+            .column(Column::PhotoId)
+            .into_values::<i64, Column>()
             .all(db)
             .await
-            .trace_to_internal_err("db_query_err", "查询失败")?;
-
-        Ok(relations)
-    }
-
-    /// 添加照片到收藏夹
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接或事务
-    /// - `collection_id`: 收藏夹ID
-    /// - `photo_id`: 照片ID
-    /// - `user_id`: 用户ID
-    ///
-    /// # 返回
-    /// 返回创建的收藏夹-照片关系模型
-    pub async fn insert<C: ConnectionTrait>(
-        db: &C,
-        collection_id: i64,
-        photo_id: i64,
-        user_id: i64,
-    ) -> Result<collection_photo::Model, AppError> {
-        let now = Utc::now();
-        let relation = collection_photo::ActiveModel {
-            collection_id: Set(collection_id),
-            photo_id: Set(photo_id),
-            user_id: Set(user_id),
-            created_at: Set(now),
-            updated_at: Set(now),
-            ..Default::default()
-        };
-
-        relation
-            .insert(db)
-            .await
-            .trace_conflict_warn("db_insert_confilct", "添加到收藏夹失败, 照片已存在")
-            .trace_to_internal_err("db_insert_err", "添加照片到收藏夹失败")
-    }
-
-    /// 从收藏夹移除照片
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接或事务
-    /// - `collection_id`: 收藏夹ID
-    /// - `photo_id`: 照片ID
-    /// - `user_id`: 用户ID
-    ///
-    /// # 返回
-    /// 成功移除返回true，未找到关系返回false
-    pub async fn delete<C: ConnectionTrait>(
-        db: &C,
-        collection_id: i64,
-        photo_id: i64,
-        user_id: i64,
-    ) -> Result<bool, AppError> {
-        let result = collection_photo::Entity::delete_many()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .filter(collection_photo::Column::PhotoId.eq(photo_id))
-            .filter(collection_photo::Column::UserId.eq(user_id))
-            .exec(db)
-            .await
-            .trace_to_internal_err("db_delete_err", "移除失败")?;
-
-        Ok(result.rows_affected > 0)
-    }
-
-    /// 删除收藏夹中的所有照片关系
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接或事务
-    /// - `collection_id`: 收藏夹ID
-    ///
-    /// # 返回
-    /// 成功返回空元组
-    ///
-    /// # 错误
-    /// - `AppError`: 数据库删除失败时返回错误
-    pub async fn delete_by_collection_id<C: ConnectionTrait>(
-        db: &C,
-        collection_id: i64,
-    ) -> Result<(), AppError> {
-        collection_photo::Entity::delete_many()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .exec(db)
-            .await
-            .trace_to_internal_err("db_delete_err", "删除收藏夹照片失败")?;
-        Ok(())
-    }
-
-    /// 删除照片的所有收藏关联
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接或事务
-    /// - `photo_id`: 照片ID
-    ///
-    /// # 返回
-    /// 返回受影响的收藏夹ID列表
-    ///
-    /// # 错误
-    /// - `AppError`: 数据库查询或删除失败时返回错误
-    pub async fn delete_by_photo_id<C: ConnectionTrait>(
-        db: &C,
-        photo_id: i64,
-    ) -> Result<Vec<i64>, AppError> {
-        let relations = collection_photo::Entity::find()
-            .filter(collection_photo::Column::PhotoId.eq(photo_id))
-            .all(db)
-            .await
-            .trace_to_internal_err("db_query_err", "查询失败")?;
-
-        let collection_ids: Vec<i64> = relations.iter().map(|r| r.collection_id).collect();
-
-        if !collection_ids.is_empty() {
-            collection_photo::Entity::delete_many()
-                .filter(collection_photo::Column::PhotoId.eq(photo_id))
-                .exec(db)
-                .await
-                .trace_to_internal_err("db_delete_err", "删除收藏关联失败")?;
-        }
-
-        Ok(collection_ids)
-    }
-
-    /// 批量添加照片到收藏夹
-    ///
-    /// 注意：调用方需确保照片ID有效且不在收藏夹中
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接或事务
-    /// - `collection_id`: 收藏夹ID
-    /// - `photo_ids`: 照片ID列表（应确保不存在重复和已存在）
-    /// - `user_id`: 用户ID
-    ///
-    /// # 返回
-    /// 返回成功插入的数量
-    pub async fn batch_insert<C: ConnectionTrait>(
-        db: &C,
-        collection_id: i64,
-        photo_ids: Vec<i64>,
-        user_id: i64,
-    ) -> Result<u32, AppError> {
-        if photo_ids.is_empty() {
-            return Ok(0);
-        }
-
-        let now = Utc::now();
-        let models: Vec<collection_photo::ActiveModel> = photo_ids
+            .trace_internal_err("db_query_err", "查询失败")?
             .into_iter()
-            .map(|photo_id| collection_photo::ActiveModel {
-                collection_id: Set(collection_id),
-                photo_id: Set(photo_id),
-                user_id: Set(user_id),
-                created_at: Set(now),
-                updated_at: Set(now),
-                ..Default::default()
-            })
-            .collect();
-
-        let count = models.len() as u32;
-        collection_photo::Entity::insert_many(models)
-            .exec(db)
-            .await
-            .trace_to_internal_err("db_insert_err", "批量添加到收藏夹失败")?;
-
-        Ok(count)
+            .map(|id| PhotoId(id))
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
-    /// 批量从收藏夹移除照片
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接或事务
-    /// - `collection_id`: 收藏夹ID
-    /// - `photo_ids`: 照片ID列表
-    /// - `user_id`: 用户ID
-    ///
-    /// # 返回
-    /// 返回成功删除的数量
-    pub async fn batch_delete<C: ConnectionTrait>(
-        db: &C,
-        collection_id: i64,
-        photo_ids: Vec<i64>,
-        user_id: i64,
-    ) -> Result<u32, AppError> {
-        if photo_ids.is_empty() {
-            return Ok(0);
-        }
+    pub async fn query_collection_ids_by_photo_id(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        photo_id: PhotoId,
+    ) -> Result<Vec<CollectionId>> {
+        let relations = Entity::find()
+            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::PhotoId.eq(photo_id.0))
+            .select_only()
+            .column(Column::CollectionId)
+            .into_values::<i64, Column>()
+            .all(db)
+            .await
+            .trace_internal_err("db_query_err", "查询失败")?;
 
-        let result = collection_photo::Entity::delete_many()
-            .filter(collection_photo::Column::CollectionId.eq(collection_id))
-            .filter(collection_photo::Column::PhotoId.is_in(photo_ids.iter().copied()))
-            .filter(collection_photo::Column::UserId.eq(user_id))
+        Ok(relations.into_iter().map(|r| CollectionId(r)).collect())
+    }
+
+    pub async fn delete_by_collection_id(
+        db: &impl ConnectionTrait,
+        collection_id: CollectionId,
+        user_id: UserId,
+    ) -> Result<u64> {
+        let res = Entity::delete_many()
+            .filter(Column::CollectionId.eq(collection_id.0))
+            .filter(Column::UserId.eq(user_id.0))
             .exec(db)
             .await
-            .trace_to_internal_err("db_delete_err", "批量移除失败")?;
+            .trace_internal_err("db_del_err", "删除收藏夹照片失败")?;
 
-        Ok(result.rows_affected as u32)
+        if res.rows_affected == 0 {
+            return log_warn(
+                "delete_rows_affected_zero",
+                "删除收藏夹照片影响行为零",
+                "",
+                AppError::bad_request("删除收藏夹照片失败"),
+            )
+            .to_err();
+        }
+
+        Ok(res.rows_affected as u64)
     }
 }

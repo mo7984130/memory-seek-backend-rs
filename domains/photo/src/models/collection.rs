@@ -1,11 +1,9 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use chrono::{DateTime, Utc};
-use entities::collection;
+use common::models::ImageToken;
+use entities::photo::{collection::Model, photo::PhotoId};
 use img_url_generator::TokenCipher;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
-
-use crate::photo::PhotoVO;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -20,32 +18,38 @@ pub struct CollectionVO {
 }
 
 impl CollectionVO {
-    pub fn from_collection(c: collection::Model, cipher: &TokenCipher) -> Self {
+    pub fn from(c: Model) -> Self {
         CollectionVO {
             id: c.id.to_string(),
             name: c.name,
             description: c.description,
             photo_count: c.photo_count,
-            cover_token: c
-                .cover_file_id
-                .as_ref()
-                .and_then(|fid| PhotoVO::generate_thumbnail_token(fid, cipher)),
+            cover_token: None,
             is_favorite: c.is_favorite,
             created_at: c.created_at,
         }
+    }
+
+    pub fn with_generate_cover_token(mut self, cipher: &TokenCipher) -> Self {
+        self.cover_token = self.cover_token.as_ref().and_then(|fid| {
+            cipher
+                .encrypt(&ImageToken::thumbnail(fid.to_string()), None)
+                .ok()
+        });
+        self
     }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CollectionCreateDTO {
+pub struct CollectionCreateParma {
     pub name: String,
     pub description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CollectionEditDTO {
+pub struct CollectionUpdateParam {
     pub name: Option<String>,
     pub description: Option<String>,
 }
@@ -54,20 +58,20 @@ pub struct CollectionEditDTO {
 #[serde(rename_all = "camelCase")]
 pub struct CollectionPhotoVO {
     pub photo: super::photo::PhotoVO,
-    pub collected_at: DateTime<Utc>,
+    pub collected_at: DateTimeUtc,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CollectionPhotoQuery {
+pub struct CollectionPhotoCursorPageQuery {
     pub cursor: Option<String>,
     pub size: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollectionPhotoCursor {
-    pub created_at: DateTime<Utc>,
-    pub id: i64,
+    pub created_at: DateTimeUtc,
+    pub id: PhotoId,
 }
 
 impl CollectionPhotoCursor {
@@ -96,16 +100,24 @@ impl CollectionPhotoCursor {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BatchPhotosDTO {
-    pub photo_ids: Vec<String>,
+pub struct CollectionPhotoAddBatchParam {
+    pub photo_ids: Vec<PhotoId>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct BatchOperationResultVO {
-    pub success_count: u32,
-    pub already_exists_count: u32,
-    pub already_exists_photo_ids: Vec<String>,
-    pub failed_count: u32,
-    pub failed_photo_ids: Vec<String>,
+pub struct CollectionPhotoAddBatchResult {
+    pub new_photo_count: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionPhotoRemoveBatchParam {
+    pub photo_ids: Vec<PhotoId>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionPhotoRemoveBatchResult {
+    pub removed_photo_count: u64,
 }
