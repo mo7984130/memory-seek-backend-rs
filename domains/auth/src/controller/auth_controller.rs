@@ -10,24 +10,29 @@ use common::error::AppError;
 use common::ext::{OptionExt, ResultErrExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
+use common::traits::controller::ControllerRouter;
 use entities::auth::user::UserDTO;
 use std::sync::Arc;
 
 pub struct AuthController;
 
-impl AuthController {
-    /// 构建认证模块的路由表
-    ///
-    /// # 返回
-    /// 返回包含所有认证相关端点的 `Router`，包括登录、注册、刷新 token 和发送邮箱验证码
-    pub fn routes() -> Router<Arc<AuthState>> {
+impl ControllerRouter for AuthController {
+    type State = AuthState;
+
+    fn protected_routes() -> Router<Arc<Self::State>> {
+        Router::new()
+    }
+
+    fn public_routes() -> Router<Arc<Self::State>> {
         Router::new()
             .route("/login", post(Self::login))
             .route("/register", post(Self::register))
             .route("/token", post(Self::refresh_access_token))
             .route("/verification-codes", post(Self::send_email_code))
     }
+}
 
+impl AuthController {
     /// 用户登录
     ///
     /// # 参数
