@@ -4,6 +4,8 @@ mod state;
 
 #[cfg(feature = "controller")]
 pub mod controller;
+#[cfg(feature = "controller")]
+pub use controller::Controller;
 
 mod config;
 

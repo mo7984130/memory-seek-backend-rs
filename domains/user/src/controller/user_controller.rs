@@ -6,6 +6,7 @@ use common::ext::ResultErrExt;
 use common::ext::{OptionExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
+use common::traits::controller::ControllerRouter;
 use entities::auth::user::{UserDTO, UserId};
 use std::sync::Arc;
 
@@ -19,12 +20,10 @@ use crate::services as user_service;
 /// 用户模块 HTTP 控制器，处理用户相关的 API 请求
 pub struct UserController;
 
-impl UserController {
-    /// 构建用户模块的路由表
-    ///
-    /// # 返回
-    /// 返回包含所有用户相关路由的 `Router`
-    pub fn routes() -> Router<Arc<UserState>> {
+impl ControllerRouter for UserController {
+    type State = UserState;
+
+    fn protected_routes() -> Router<Arc<Self::State>> {
         Router::new()
             .route("/me", get(Self::get_user_info))
             .route("/inviter-code", post(Self::generate_inviter_code))
@@ -35,6 +34,12 @@ impl UserController {
             .route("/batch", post(Self::get_user_info_batch))
     }
 
+    fn public_routes() -> Router<Arc<Self::State>> {
+        Router::new()
+    }
+}
+
+impl UserController {
     /// 获取当前登录用户的个人信息
     ///
     /// # 参数
