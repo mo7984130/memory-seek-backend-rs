@@ -1,0 +1,84 @@
+name: Test & Benchmark
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Start test services
+        run: |
+          docker compose -f tests/load/docker-compose.yml up -d postgres redis minio
+          sleep 10
+          docker compose -f tests/load/docker-compose.yml exec -T postgres pg_isready -U test
+          docker compose -f tests/load/docker-compose.yml exec -T redis redis-cli ping
+
+      - name: Run integration tests
+        run: cargo test --test integration --features "auth,user,photo"
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5433/memory_seek_test
+          REDIS_URL: redis://localhost:6380
+          MINIO_ENDPOINT: http://localhost:9000
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: target/test-results/
+
+  load-test:
+    runs-on: ubuntu-latest
+    needs: integration-test
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D68
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Start full environment
+        run: |
+          docker compose -f tests/load/docker-compose.yml --profile load up -d
+          sleep 30
+
+      - name: Run load tests
+        run: |
+          cd tests/load
+          k6 run scripts/auth.js --out json=results/auth.json
+          k6 run scripts/photo.js --out json=results/photo.json
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: tests/load/results/
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f tests/load/docker-compose.yml --profile load down -v
