@@ -18,7 +18,7 @@ use crate::{
         collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
         photo_mapper::PhotoMapper, timeline_stat_mapper::TimelineStatMapper,
     },
-    models::photo::{PhotoCursor, PhotoCursorQuery, PhotoInfo, PhotoVO},
+    models::photo::{PhotoCursor, PhotoCursorQuery, PhotoVO},
     services::collection_service::CollectionService,
     state::PhotoState,
 };
@@ -265,17 +265,6 @@ impl PhotoService {
     }
 
     const MD5_MAX_SIZE: u64 = 1024;
-
-    pub async fn get_photo_info_by_id(state: &PhotoState, photo_id: PhotoId) -> Result<PhotoInfo> {
-        metrics_group!("get_photo_info_by_id");
-
-        let res = PhotoMapper::query_by_id(&state.db, photo_id)
-            .await
-            .map(PhotoInfo::from);
-
-        metrics_success!("get_photo_info_by_id");
-        res
-    }
 
     pub async fn exists_by_md5_batch(state: &PhotoState, md5s: &[String]) -> Result<Vec<bool>> {
         metrics_group!("exists_by_md5_batch");

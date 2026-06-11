@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, State},
     routing::{get, patch},
 };
-use common::{Result, ext::ResultRExt, r::R, traits::controller::Controller};
+use common::{Result, ext::ResultRExt, r::R, traits::controller::ControllerRouter};
 use entities::{auth::user::UserId, photo::collection::CollectionId};
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
 
 pub struct CollectionController;
 
-impl Controller for CollectionController {
+impl ControllerRouter for CollectionController {
     type State = PhotoState;
 
     fn protected_routes() -> Router<Arc<Self::State>> {

@@ -17,7 +17,9 @@ use axum::{
     extract::{Path, Query, State},
     routing::{delete, get},
 };
-use common::{Result, ext::ResultRExt, models::CursorPage, r::R, traits::controller::Controller};
+use common::{
+    Result, ext::ResultRExt, models::CursorPage, r::R, traits::controller::ControllerRouter,
+};
 use entities::{
     auth::user::UserId,
     photo::{collection::CollectionId, photo::PhotoId},
@@ -25,7 +27,7 @@ use entities::{
 
 pub struct CollectionPhotoController;
 
-impl Controller for CollectionPhotoController {
+impl ControllerRouter for CollectionPhotoController {
     type State = PhotoState;
 
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {

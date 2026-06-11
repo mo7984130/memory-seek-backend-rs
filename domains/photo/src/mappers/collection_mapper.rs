@@ -47,19 +47,6 @@ impl CollectionMapper {
             .map(|models| models.into_iter().map(CollectionRecord::from).collect())
     }
 
-    pub async fn query_favorite_by_user_id(
-        db: &impl ConnectionTrait,
-        user_id: UserId,
-    ) -> Result<Option<CollectionRecord>> {
-        Entity::find()
-            .filter(Column::UserId.eq(user_id.0))
-            .filter(Column::IsFavorite.eq(true))
-            .one(db)
-            .await
-            .trace_internal_err("db_query_err", "查询失败")
-            .map(|opt| opt.map(CollectionRecord::from))
-    }
-
     pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,

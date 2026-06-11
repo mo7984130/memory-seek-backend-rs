@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use entities::photo::comment::CommentRecord;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};

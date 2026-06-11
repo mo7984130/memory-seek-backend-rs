@@ -1,4 +1,7 @@
-use common::{Result, ext::ResultErrExt};
+use common::{
+    Result,
+    ext::{OptionExt, ResultErrExt},
+};
 use entities::{
     auth::user::UserId,
     photo::{comment::*, photo::PhotoId},
@@ -93,6 +96,26 @@ impl CommentMapper {
             .await
             .trace_internal_err("db_query_err", "查询失败")
             .map(|models| models.into_iter().map(CommentRecord::from).collect())
+    }
+
+    pub async fn query_photo_id_by_id(
+        db: &impl ConnectionTrait,
+        comment_id: CommentId,
+    ) -> Result<PhotoId> {
+        Entity::find()
+            .filter(Column::Id.eq(comment_id.0))
+            .select_only()
+            .column(Column::PhotoId)
+            .into_values::<i64, Column>()
+            .one(db)
+            .await
+            .trace_internal_err("db_query_err", "通过评论id获取照片id数据库错误")?
+            .map(PhotoId)
+            .ok_or_error(
+                "db_query_err",
+                "评论的照片id为None",
+                common::error::AppError::InternalServerError,
+            )
     }
 }
 

@@ -3,9 +3,11 @@ use std::sync::Arc;
 use axum::{
     Extension, Json, Router,
     extract::{Path, Query, State},
-    routing::{delete, get},
+    routing::{delete, get, post},
 };
-use common::{Result, ext::ResultRExt, models::CursorPage, r::R, traits::controller::Controller};
+use common::{
+    Result, ext::ResultRExt, models::CursorPage, r::R, traits::controller::ControllerRouter,
+};
 use entities::{
     auth::user::UserId,
     photo::{comment::CommentId, photo::PhotoId},
@@ -14,22 +16,26 @@ use sea_orm::entity::prelude::DateTimeUtc;
 
 use crate::{
     models::comment::{CommentCursorPageQuery, CommentPublishParam, PhotoCommentVO},
-    services::comment_service::CommentService,
+    services::{comment_like_service::CommentLikeService, comment_service::CommentService},
     state::PhotoState,
 };
 
 pub struct CommentController;
 
-impl Controller for CommentController {
+impl ControllerRouter for CommentController {
     type State = PhotoState;
 
     fn protected_routes() -> Router<Arc<Self::State>> {
         Router::new()
             .route(
-                "/photos/{photo_id}/comments",
+                "/{photo_id}",
                 get(Self::get_cursor_page).post(Self::publish),
             )
-            .route("/{comment_id}", delete(Self::delete))
+            .route("/{photo_id}/{comment_id}", delete(Self::delete))
+            .route(
+                "/{photo_id}/{comment_id}/like",
+                post(Self::like).delete(Self::unlike),
+            )
     }
 
     fn public_routes() -> Router<Arc<Self::State>> {
@@ -73,9 +79,35 @@ impl CommentController {
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(comment_id): Path<CommentId>,
+        Path((photo_id, comment_id)): Path<(PhotoId, CommentId)>,
     ) -> Result<R<()>> {
+        let _ = photo_id;
         CommentService::delete(&state, user_id, comment_id)
+            .await
+            .to_r_ok()
+    }
+}
+
+// 点赞
+impl CommentController {
+    async fn like(
+        State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        Path((photo_id, comment_id)): Path<(PhotoId, CommentId)>,
+    ) -> Result<R<()>> {
+        let _ = photo_id;
+        CommentLikeService::like(&state, user_id, comment_id)
+            .await
+            .to_r_ok()
+    }
+
+    async fn unlike(
+        State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        Path((photo_id, comment_id)): Path<(PhotoId, CommentId)>,
+    ) -> Result<R<()>> {
+        let _ = photo_id;
+        CommentLikeService::unlike(&state, user_id, comment_id)
             .await
             .to_r_ok()
     }

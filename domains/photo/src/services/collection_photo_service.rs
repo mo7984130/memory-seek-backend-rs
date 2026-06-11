@@ -73,13 +73,6 @@ impl CollectionPhotoService {
         .to_ok()
     }
 
-    pub async fn query_collection_ids_by_photo_id(
-        state: &PhotoState,
-        user_id: UserId,
-        photo_id: PhotoId,
-    ) -> Result<Vec<CollectionId>> {
-        CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.db, user_id, photo_id).await
-    }
 }
 
 // 添加

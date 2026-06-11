@@ -5,14 +5,14 @@ use axum::{
     extract::{Path, State},
     routing::post,
 };
-use common::{Result, ext::ResultRExt, r::R, traits::controller::Controller};
+use common::{Result, ext::ResultRExt, r::R, traits::controller::ControllerRouter};
 use entities::{auth::user::UserId, photo::comment::CommentId};
 
 use crate::{services::comment_like_service::CommentLikeService, state::PhotoState};
 
 pub struct CommentLikeController;
 
-impl Controller for CommentLikeController {
+impl ControllerRouter for CommentLikeController {
     type State = PhotoState;
 
     fn protected_routes() -> Router<Arc<Self::State>> {

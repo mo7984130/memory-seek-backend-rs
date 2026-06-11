@@ -56,13 +56,6 @@ pub struct CollectionUpdateParam {
     pub description: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionPhotoVO {
-    pub photo: super::photo::PhotoVO,
-    pub collected_at: DateTimeUtc,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionPhotoCursorPageQuery {

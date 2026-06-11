@@ -12,7 +12,7 @@ use common::{
     Result,
     ext::{ResultErrExt, ResultRExt},
     models::{CursorPage, ImageToken, ImageTokenType},
-    traits::controller::Controller,
+    traits::controller::ControllerRouter,
 };
 use common::{ext::OptionExt, r::R};
 use entities::auth::user::UserId;
@@ -26,7 +26,7 @@ use crate::{
 
 pub struct PhotoController;
 
-impl Controller for PhotoController {
+impl ControllerRouter for PhotoController {
     type State = PhotoState;
 
     fn protected_routes() -> Router<Arc<PhotoState>> {

@@ -1,11 +1,7 @@
 use std::collections::HashSet;
 
 use common::Result;
-use common::ext::OptionExt;
-use common::{
-    error::AppError,
-    ext::{OkExt, ResultErrExt},
-};
+use common::ext::{OkExt, ResultErrExt};
 use sea_orm::sea_query::Expr;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 
@@ -144,18 +140,6 @@ impl PhotoMapper {
             .map(|models| models.into_iter().map(PhotoRecord::from).collect())
     }
 
-    pub async fn query_by_id(db: &impl ConnectionTrait, id: PhotoId) -> Result<PhotoRecord> {
-        Entity::find_by_id(id.0)
-            .one(db)
-            .await
-            .trace_internal_err("db_query_err", "查询照片失败")?
-            .ok_or_warn(
-                "photo_not_found",
-                "照片不存在",
-                AppError::not_found("照片不存在"),
-            )
-            .map(PhotoRecord::from)
-    }
 }
 
 // 删除

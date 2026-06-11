@@ -53,11 +53,6 @@ impl PhotoVO {
         self
     }
 
-    pub fn with_collected(mut self, is_collected: bool) -> Self {
-        self.is_collected = Some(is_collected);
-        self
-    }
-
     pub fn with_tokens(mut self, token_cipher: &TokenCipher) -> Self {
         self = self.with_original_token(token_cipher);
         self = self.with_thumbnail_token(token_cipher);
@@ -147,12 +142,6 @@ pub enum PageDirection {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UploadWithCreatedAtQuery {
-    pub created_at: DateTimeUtc,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Md5sExistParam {
     pub md5s: Vec<String>,
 }
@@ -163,28 +152,3 @@ pub struct DeletePhotoParam {
     pub photo_ids: Vec<PhotoId>,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PhotoInfo {
-    pub id: i64,
-    pub name: String,
-    pub size: i64,
-    pub width: i32,
-    pub height: i32,
-    pub mime_type: String,
-    pub created_at: DateTimeUtc,
-}
-impl From<PhotoRecord> for PhotoInfo {
-    /// 从数据库照片记录转换为照片信息 DTO
-    fn from(record: PhotoRecord) -> Self {
-        Self {
-            id: record.id.0,
-            name: record.name,
-            size: record.size,
-            width: record.width,
-            height: record.height,
-            mime_type: record.mime_type,
-            created_at: record.created_at,
-        }
-    }
-}

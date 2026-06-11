@@ -136,6 +136,8 @@ impl CommentService {
     pub async fn delete(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
+                let photo_id = CommentMapper::query_photo_id_by_id(txn, comment_id).await?;
+
                 // 先删除评论, 在删除评论的同时, 校验权限
                 let deleted = CommentMapper::delete(txn, user_id, comment_id).await?;
                 if !deleted {

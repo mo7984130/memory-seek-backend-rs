@@ -153,39 +153,6 @@ impl CollectionPhotoMapper {
         Ok(affected)
     }
 
-    pub async fn query_by_collection_id(
-        db: &impl ConnectionTrait,
-        user_id: UserId,
-        collection_id: CollectionId,
-        cursor: Option<&CollectionPhotoCursor>,
-        size: u64,
-    ) -> Result<Vec<CollectionPhotoRecord>> {
-        let mut query = Entity::find()
-            .filter(Column::CollectionId.eq(collection_id.0))
-            .filter(Column::UserId.eq(user_id.0))
-            .order_by_desc(Column::CreatedAt)
-            .order_by_desc(Column::Id)
-            .limit(size);
-
-        if let Some(c) = cursor {
-            query = query.filter(
-                sea_orm::Condition::any()
-                    .add(Column::CreatedAt.lt(c.created_at))
-                    .add(
-                        sea_orm::Condition::all()
-                            .add(Column::CreatedAt.eq(c.created_at))
-                            .add(Column::Id.lt(c.id.0)),
-                    ),
-            );
-        }
-
-        query
-            .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询失败")
-            .map(|models| models.into_iter().map(CollectionPhotoRecord::from).collect())
-    }
-
     pub async fn query_photo_id_by_collection_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -223,24 +190,6 @@ impl CollectionPhotoMapper {
             .map(|id| PhotoId(id))
             .collect::<Vec<_>>()
             .to_ok()
-    }
-
-    pub async fn query_collection_ids_by_photo_id(
-        db: &impl ConnectionTrait,
-        user_id: UserId,
-        photo_id: PhotoId,
-    ) -> Result<Vec<CollectionId>> {
-        let relations = Entity::find()
-            .filter(Column::UserId.eq(user_id.0))
-            .filter(Column::PhotoId.eq(photo_id.0))
-            .select_only()
-            .column(Column::CollectionId)
-            .into_values::<i64, Column>()
-            .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询失败")?;
-
-        Ok(relations.into_iter().map(|r| CollectionId(r)).collect())
     }
 
     pub async fn delete_by_collection_id(
