@@ -5,6 +5,7 @@
 **/logs
 config.json
 config.test.json
+!tests/load/config.test.json
 .env
 .env.test
 memo.md
