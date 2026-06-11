@@ -1,10 +1,10 @@
 {
   "database_config": {
-    "url": "postgres://test:test@localhost:5433/memory_seek_test",
+    "database_url": "postgres://test:test@localhost:5433/memory_seek_test",
     "max_connections": 10
   },
   "redis_config": {
-    "url": "redis://localhost:6380"
+    "redis_url": "redis://localhost:6380"
   },
   "oss_config": {
     "bucket": "test-bucket",
