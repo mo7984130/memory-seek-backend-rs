@@ -1,15 +1,17 @@
 # tests/load/Makefile
+# NOTE: Run from repo root with: make -f tests/load/Makefile <target>
+
+REPO_ROOT := $(shell cd ../.. && pwd)
 
 .PHONY: test-unit test-integration test-load test-all clean
 
 test-unit:
-	cargo test --lib
+	cd $(REPO_ROOT) && cargo test --lib
 
 test-integration:
 	docker compose up -d postgres redis minio
 	sleep 10
-	cargo test --test integration --features "auth,user,photo"
-	docker compose down -v
+	cd $(REPO_ROOT) && cargo test --test integration --features "auth,user,photo"; rc=$$?; docker compose down -v; exit $$rc
 
 test-load: test-load-auth test-load-photo
 
