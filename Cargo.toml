@@ -9,8 +9,8 @@ members = [
     "domains/constants",
     "domains/auth",
     "domains/user",
-    "domains/photo"
-    # "server"
+    "domains/photo",
+    "server"
 ]
 
 [workspace.dependencies]
@@ -69,7 +69,7 @@ pinyin = "0.11.0"
 metrics = "0.24.3"
 
 # HTTP & S3
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
 s3 = { package = "rust-s3", version = "0.37", default-features = false, features = ["tokio-rustls-tls"] }
 bytes = "1.10"
 axum-client-ip = "1.3.1"
