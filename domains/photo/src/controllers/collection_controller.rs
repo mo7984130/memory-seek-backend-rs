@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, Router,
+    Extension, Router,
     extract::{Path, State},
     routing::{get, patch},
 };
-use common::{Result, ext::ResultRExt, r::R, traits::controller::ControllerRouter};
+use common::{Result, ext::ResultRExt, extractors::ValidatedJson, r::R, traits::controller::ControllerRouter};
 use entities::{auth::user::UserId, photo::collection::CollectionId};
 
 use crate::{
@@ -35,7 +35,7 @@ impl CollectionController {
     async fn create(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Json(data): Json<CollectionCreateParma>,
+        ValidatedJson(data): ValidatedJson<CollectionCreateParma>,
     ) -> Result<R<CollectionVO>> {
         CollectionService::create_collection(&state, user_id, data.name, data.description, false)
             .await
@@ -61,7 +61,7 @@ impl CollectionController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(collection_id): Path<CollectionId>,
-        Json(param): Json<CollectionUpdateParam>,
+        ValidatedJson(param): ValidatedJson<CollectionUpdateParam>,
     ) -> Result<R<()>> {
         CollectionService::update_collection_info(
             &state,
