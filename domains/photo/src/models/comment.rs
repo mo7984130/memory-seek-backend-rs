@@ -1,6 +1,7 @@
 use entities::photo::comment::CommentRecord;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 pub const COMMENT_CURSOR_PAGE_MAX_SIZE: u64 = 128;
 
@@ -38,15 +39,90 @@ impl PhotoCommentVO {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CommentPublishParam {
+    #[validate(length(min = 1, max = 1024, message = "评论内容长度在 1 到 1024 个字符"))]
     pub content: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CommentCursorPageQuery {
     pub cursor: Option<DateTimeUtc>,
+    #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     pub size: Option<u64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_comment_publish_param_valid() {
+        let param = CommentPublishParam {
+            content: "This is a comment".to_string(),
+        };
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn test_comment_publish_param_empty() {
+        let param = CommentPublishParam {
+            content: "".to_string(),
+        };
+        assert!(param.validate().is_err());
+    }
+
+    #[test]
+    fn test_comment_publish_param_too_long() {
+        let param = CommentPublishParam {
+            content: "a".repeat(1025),
+        };
+        assert!(param.validate().is_err());
+    }
+
+    #[test]
+    fn test_comment_publish_param_exact_max() {
+        let param = CommentPublishParam {
+            content: "a".repeat(1024),
+        };
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn test_comment_cursor_page_query_valid() {
+        let param = CommentCursorPageQuery {
+            cursor: None,
+            size: Some(50),
+        };
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn test_comment_cursor_page_query_size_too_large() {
+        let param = CommentCursorPageQuery {
+            cursor: None,
+            size: Some(1025),
+        };
+        assert!(param.validate().is_err());
+    }
+
+    #[test]
+    fn test_comment_cursor_page_query_size_exact_max() {
+        let param = CommentCursorPageQuery {
+            cursor: None,
+            size: Some(1024),
+        };
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn test_comment_cursor_page_query_size_zero() {
+        let param = CommentCursorPageQuery {
+            cursor: None,
+            size: Some(0),
+        };
+        assert!(param.validate().is_err());
+    }
 }
