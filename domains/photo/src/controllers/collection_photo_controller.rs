@@ -4,10 +4,10 @@ use crate::{
     models::{
         collection::{
             CollectionPhotoAddBatchParam, CollectionPhotoAddBatchResult,
-            CollectionPhotoCursorPageQuery, CollectionPhotoRemoveBatchParam,
+            CollectionPhotoCursorPageParam, CollectionPhotoRemoveBatchParam,
             CollectionPhotoRemoveBatchResult,
         },
-        photo::PhotoVO,
+        photo::PhotoResult,
     },
     services::collection_photo_service::CollectionPhotoService,
     state::PhotoState,
@@ -67,9 +67,9 @@ impl CollectionPhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(collection_id): Path<CollectionId>,
-        ValidatedQuery(query): ValidatedQuery<CollectionPhotoCursorPageQuery>,
-    ) -> Result<R<CursorPage<PhotoVO, String>>> {
-        let CollectionPhotoCursorPageQuery { cursor, size } = query;
+        ValidatedQuery(query): ValidatedQuery<CollectionPhotoCursorPageParam>,
+    ) -> Result<R<CursorPage<PhotoResult, String>>> {
+        let CollectionPhotoCursorPageParam { cursor, size } = query;
         let size = size.unwrap_or(32) as u64;
 
         CollectionPhotoService::get_photos(&state, user_id, collection_id, cursor, size)

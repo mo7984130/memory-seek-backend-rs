@@ -9,7 +9,7 @@ use common::{Result, ext::ResultRExt, extractors::ValidatedJson, r::R, traits::c
 use entities::{auth::user::UserId, photo::collection::CollectionId};
 
 use crate::{
-    models::collection::{CollectionCreateParma, CollectionUpdateParam, CollectionVO},
+    models::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionResult},
     services::collection_service::CollectionService,
     state::PhotoState,
 };
@@ -35,8 +35,8 @@ impl CollectionController {
     async fn create(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedJson(data): ValidatedJson<CollectionCreateParma>,
-    ) -> Result<R<CollectionVO>> {
+        ValidatedJson(data): ValidatedJson<CollectionCreateParam>,
+    ) -> Result<R<CollectionResult>> {
         CollectionService::create_collection(&state, user_id, data.name, data.description, false)
             .await
             .to_r_ok()
@@ -48,7 +48,7 @@ impl CollectionController {
     async fn get_list(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<Vec<CollectionVO>>> {
+    ) -> Result<R<Vec<CollectionResult>>> {
         CollectionService::get_collection_list(&state, user_id)
             .await
             .to_r_ok()

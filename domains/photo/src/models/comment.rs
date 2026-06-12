@@ -11,7 +11,7 @@ pub const HOT_COMMENT_MAX_COUNT: u64 = 3;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct PhotoCommentVO {
+pub struct PhotoCommentResult {
     pub id: String,
     pub user_id: String,
     pub content: String,
@@ -19,7 +19,7 @@ pub struct PhotoCommentVO {
     pub is_liked: bool,
     pub created_at: DateTimeUtc,
 }
-impl From<CommentRecord> for PhotoCommentVO {
+impl From<CommentRecord> for PhotoCommentResult {
     fn from(record: CommentRecord) -> Self {
         Self {
             id: record.id.0.to_string(),
@@ -32,7 +32,7 @@ impl From<CommentRecord> for PhotoCommentVO {
     }
 }
 
-impl PhotoCommentVO {
+impl PhotoCommentResult {
     pub fn with_liked(mut self, is_like: bool) -> Self {
         self.is_liked = is_like;
         self
@@ -48,7 +48,7 @@ pub struct CommentPublishParam {
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct CommentCursorPageQuery {
+pub struct CommentCursorPageParam {
     pub cursor: Option<DateTimeUtc>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     pub size: Option<u64>,
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_comment_cursor_page_query_valid() {
-        let param = CommentCursorPageQuery {
+        let param = CommentCursorPageParam {
             cursor: None,
             size: Some(50),
         };
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_comment_cursor_page_query_size_too_large() {
-        let param = CommentCursorPageQuery {
+        let param = CommentCursorPageParam {
             cursor: None,
             size: Some(1025),
         };
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn test_comment_cursor_page_query_size_exact_max() {
-        let param = CommentCursorPageQuery {
+        let param = CommentCursorPageParam {
             cursor: None,
             size: Some(1024),
         };
@@ -119,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_comment_cursor_page_query_size_zero() {
-        let param = CommentCursorPageQuery {
+        let param = CommentCursorPageParam {
             cursor: None,
             size: Some(0),
         };

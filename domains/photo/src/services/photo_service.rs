@@ -18,7 +18,7 @@ use crate::{
         collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
         photo_mapper::PhotoMapper, timeline_stat_mapper::TimelineStatMapper,
     },
-    models::photo::{PhotoCursor, PhotoCursorQuery, PhotoVO},
+    models::photo::{PhotoCursor, PhotoCursorParam, PhotoResult},
     services::collection_service::CollectionService,
     state::PhotoState,
 };
@@ -26,7 +26,7 @@ use common::Result;
 
 use entities::{
     auth::user::UserId,
-    photo::photo::{PhotoId, PhotoRecord, ActiveModel},
+    photo::photo::{ActiveModel, PhotoId, PhotoRecord},
 };
 
 pub(crate) struct PhotoService;
@@ -37,12 +37,12 @@ impl PhotoService {
         state: &PhotoState,
         user_id: UserId,
         photo_ids: &[PhotoId],
-    ) -> Result<Vec<PhotoVO>> {
+    ) -> Result<Vec<PhotoResult>> {
         let favorite_collection_id =
             CollectionService::get_favorite_collection_id(state, user_id).await?;
         let (photos_result, favorited_photo_ids_result) = tokio::join!(
             state.redis.get_or_load_batch(
-                &photo_ids,
+                photo_ids,
                 |id| RedisKeys::photo::photo::photo_info(*id),
                 24 * 60 * 60,
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
@@ -51,7 +51,7 @@ impl PhotoService {
             CollectionPhotoMapper::exists_in_collection(
                 &state.db,
                 favorite_collection_id,
-                &photo_ids
+                photo_ids
             )
         );
         let photos = photos_result?;
@@ -60,7 +60,7 @@ impl PhotoService {
             .into_iter()
             .flatten()
             .map(|p| {
-                PhotoVO::from(p.clone())
+                PhotoResult::from(p.clone())
                     .with_favorited(favorited_photo_ids.contains(&p.id))
                     .with_tokens(&state.token_cipher)
             })
@@ -71,8 +71,8 @@ impl PhotoService {
     pub async fn get_photo_cursor_page(
         state: &PhotoState,
         user_id: UserId,
-        query: PhotoCursorQuery,
-    ) -> Result<CursorPage<PhotoVO, String>> {
+        query: PhotoCursorParam,
+    ) -> Result<CursorPage<PhotoResult, String>> {
         metrics_group!("get_photo_cursor_page");
 
         let size = query.size;
@@ -154,7 +154,7 @@ impl PhotoService {
         file_name: String,
         content_type: String,
         created_at: Option<DateTimeUtc>,
-    ) -> Result<PhotoVO> {
+    ) -> Result<PhotoResult> {
         metrics_group!("upload_photo");
 
         // 计算md5
@@ -259,7 +259,7 @@ impl PhotoService {
 
         metrics_success!("upload_photo");
 
-        PhotoVO::from(PhotoRecord::from(photo))
+        PhotoResult::from(PhotoRecord::from(photo))
             .with_tokens(&state.token_cipher)
             .to_ok()
     }

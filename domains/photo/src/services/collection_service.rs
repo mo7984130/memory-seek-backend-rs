@@ -1,6 +1,6 @@
 use crate::mappers::collection_mapper::CollectionMapper;
 use crate::mappers::collection_photo_mapper::CollectionPhotoMapper;
-use crate::models::collection::CollectionVO;
+use crate::models::collection::CollectionResult;
 use crate::state::PhotoState;
 use common::Result;
 use common::error::AppError;
@@ -63,7 +63,7 @@ impl CollectionService {
     pub async fn get_collection_list(
         state: &PhotoState,
         user_id: UserId,
-    ) -> Result<Vec<CollectionVO>> {
+    ) -> Result<Vec<CollectionResult>> {
         // 获取用户收藏夹
         let collections = CollectionMapper::query_by_user_id(&state.db, user_id).await?;
 
@@ -74,9 +74,9 @@ impl CollectionService {
         }
 
         // 组装结果
-        let result: Vec<CollectionVO> = collections
+        let result: Vec<CollectionResult> = collections
             .into_iter()
-            .map(|c| CollectionVO::from(c).with_generate_cover_token(&state.token_cipher))
+            .map(|c| CollectionResult::from(c).with_generate_cover_token(&state.token_cipher))
             .collect();
 
         Ok(result)
@@ -91,16 +91,16 @@ impl CollectionService {
         name: String,
         description: Option<String>,
         is_favorite: bool,
-    ) -> Result<CollectionVO> {
+    ) -> Result<CollectionResult> {
         let collection =
             CollectionMapper::insert(&state.db, user_id, name, description, is_favorite).await?;
-        CollectionVO::from(collection).to_ok()
+        CollectionResult::from(collection).to_ok()
     }
 
     async fn create_favorite_collection(
         state: &PhotoState,
         user_id: UserId,
-    ) -> Result<CollectionVO> {
+    ) -> Result<CollectionResult> {
         Self::create_collection(
             state,
             user_id,

@@ -2,8 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
 use common::Result;
-use common::error::AppError;
-use common::ext::{OkExt, ResultErrExt, ToErr, log_warn};
+use common::ext::{OkExt, ResultErrExt};
 use entities::auth::user::UserId;
 use entities::photo::collection_photo::*;
 use entities::photo::{collection::CollectionId, photo::PhotoId};
@@ -31,7 +30,7 @@ impl CollectionPhotoMapper {
             .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
             .select_only()
             .column(Column::PhotoId)
-            .into_values::<i64, Column>()
+            .into_tuple::<i64>()
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询失败")?
@@ -46,14 +45,25 @@ impl CollectionPhotoMapper {
         user_id: UserId,
         collection_id: CollectionId,
         photo_ids: &[PhotoId],
-    ) -> Result<()> {
+    ) -> Result<u64> {
         if photo_ids.is_empty() {
-            return Ok(());
+            return Ok(0);
+        }
+
+        // 先查询已存在的 photo_id，避免重复插入
+        let existing = Self::exists_in_collection(db, collection_id, photo_ids).await?;
+        let new_photo_ids: Vec<&PhotoId> = photo_ids
+            .iter()
+            .filter(|id| !existing.contains(id))
+            .collect();
+
+        if new_photo_ids.is_empty() {
+            return Ok(0);
         }
 
         let now = Utc::now();
 
-        let models: Vec<ActiveModel> = photo_ids
+        let models: Vec<ActiveModel> = new_photo_ids
             .iter()
             .map(|photo_id| ActiveModel {
                 collection_id: Set(collection_id.0),
@@ -65,12 +75,25 @@ impl CollectionPhotoMapper {
             })
             .collect();
 
+        let count = models.len() as u64;
+
         Entity::insert_many(models)
             .exec(db)
             .await
             .trace_internal_err("db_insert_err", "批量添加到收藏夹失败")?;
 
-        Ok(())
+        Ok(count)
+    }
+
+    pub async fn count_photo_by_collection_id(
+        db: &impl ConnectionTrait,
+        collection_id: CollectionId,
+    ) -> Result<u64> {
+        Entity::find()
+            .filter(Column::CollectionId.eq(collection_id.0))
+            .count(db)
+            .await
+            .trace_internal_err("db_query_err", "查询失败")
     }
 
     pub async fn is_belong(
@@ -86,17 +109,6 @@ impl CollectionPhotoMapper {
             .trace_internal_err("db_query_err", "查询失败")?;
 
         Ok(count > 0)
-    }
-
-    pub async fn count_photo_by_collection_id(
-        db: &impl ConnectionTrait,
-        collection_id: CollectionId,
-    ) -> Result<u64> {
-        Entity::find()
-            .filter(Column::CollectionId.eq(collection_id.0))
-            .count(db)
-            .await
-            .trace_internal_err("db_query_err", "查询失败")
     }
 
     pub async fn delete_by_collection_id_and_photo_ids(
@@ -134,7 +146,7 @@ impl CollectionPhotoMapper {
             .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
             .select_only()
             .column(Column::CollectionId)
-            .into_values::<i64, Column>()
+            .into_tuple::<i64>()
             .all(db)
             .await
             .trace_internal_err("db_query_err", "获取受影响的收藏夹Id错误")?
@@ -182,12 +194,12 @@ impl CollectionPhotoMapper {
         query
             .select_only()
             .column(Column::PhotoId)
-            .into_values::<i64, Column>()
+            .into_tuple::<i64>()
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询失败")?
             .into_iter()
-            .map(|id| PhotoId(id))
+            .map(PhotoId)
             .collect::<Vec<_>>()
             .to_ok()
     }
@@ -203,16 +215,6 @@ impl CollectionPhotoMapper {
             .exec(db)
             .await
             .trace_internal_err("db_del_err", "删除收藏夹照片失败")?;
-
-        if res.rows_affected == 0 {
-            return log_warn(
-                "delete_rows_affected_zero",
-                "删除收藏夹照片影响行为零",
-                "",
-                AppError::bad_request("删除收藏夹照片失败"),
-            )
-            .to_err();
-        }
 
         Ok(res.rows_affected as u64)
     }

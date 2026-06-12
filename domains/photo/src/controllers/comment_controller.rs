@@ -16,7 +16,7 @@ use entities::{
 use sea_orm::entity::prelude::DateTimeUtc;
 
 use crate::{
-    models::comment::{CommentCursorPageQuery, CommentPublishParam, PhotoCommentVO},
+    models::comment::{CommentCursorPageParam, CommentPublishParam, PhotoCommentResult},
     services::{comment_like_service::CommentLikeService, comment_service::CommentService},
     state::PhotoState,
 };
@@ -51,7 +51,7 @@ impl CommentController {
         Extension(user_id): Extension<UserId>,
         Path(photo_id): Path<PhotoId>,
         ValidatedJson(param): ValidatedJson<CommentPublishParam>,
-    ) -> Result<R<PhotoCommentVO>> {
+    ) -> Result<R<PhotoCommentResult>> {
         CommentService::publish(&state, photo_id, user_id, param.content)
             .await
             .to_r_ok()
@@ -67,8 +67,8 @@ impl CommentController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(photo_id): Path<PhotoId>,
-        ValidatedQuery(param): ValidatedQuery<CommentCursorPageQuery>,
-    ) -> Result<R<CursorPage<PhotoCommentVO, DateTimeUtc>>> {
+        ValidatedQuery(param): ValidatedQuery<CommentCursorPageParam>,
+    ) -> Result<R<CursorPage<PhotoCommentResult, DateTimeUtc>>> {
         CommentService::get_cursor_page(&state, photo_id, user_id, param.cursor, param.size)
             .await
             .to_r_ok()

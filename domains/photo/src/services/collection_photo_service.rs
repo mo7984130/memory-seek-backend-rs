@@ -6,7 +6,7 @@ use crate::{
         collection::{
             CollectionPhotoAddBatchResult, CollectionPhotoCursor, CollectionPhotoRemoveBatchResult,
         },
-        photo::PhotoVO,
+        photo::PhotoResult,
     },
     services::photo_service::PhotoService,
     state::PhotoState,
@@ -33,7 +33,7 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         cursor: Option<String>,
         size: u64,
-    ) -> Result<CursorPage<PhotoVO, String>> {
+    ) -> Result<CursorPage<PhotoResult, String>> {
         let decoded_cursor = cursor
             .as_ref()
             .and_then(|s| CollectionPhotoCursor::decode(s));
@@ -54,14 +54,12 @@ impl CollectionPhotoService {
 
         let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids).await?;
         let next_cursor = photo_vos.last().and_then(|vo| {
-            PhotoId::parse_from_str_or_none(&vo.id).and_then(|id| {
-                Some(
-                    CollectionPhotoCursor {
-                        created_at: vo.created_at,
-                        id,
-                    }
-                    .encode(),
-                )
+            PhotoId::parse_from_str_or_none(&vo.id).map(|id| {
+                CollectionPhotoCursor {
+                    created_at: vo.created_at,
+                    id,
+                }
+                .encode()
             })
         });
 
@@ -72,7 +70,6 @@ impl CollectionPhotoService {
         }
         .to_ok()
     }
-
 }
 
 // 添加

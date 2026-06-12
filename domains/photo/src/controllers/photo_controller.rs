@@ -20,7 +20,7 @@ use entities::auth::user::UserId;
 use futures::StreamExt;
 
 use crate::{
-    models::photo::{DeletePhotoParam, Md5sExistParam, PhotoCursorQuery, PhotoVO},
+    models::photo::{DeletePhotoParam, Md5sExistParam, PhotoCursorParam, PhotoResult},
     services::photo_service::PhotoService,
     state::PhotoState,
 };
@@ -51,7 +51,7 @@ impl PhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         mut multipart: Multipart,
-    ) -> Result<R<PhotoVO>> {
+    ) -> Result<R<PhotoResult>> {
         let field = multipart
             .next_field()
             .await
@@ -73,8 +73,8 @@ impl PhotoController {
     async fn get_photos_cursor(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(query): ValidatedQuery<PhotoCursorQuery>,
-    ) -> Result<R<CursorPage<PhotoVO, String>>> {
+        ValidatedQuery(query): ValidatedQuery<PhotoCursorParam>,
+    ) -> Result<R<CursorPage<PhotoResult, String>>> {
         PhotoService::get_photo_cursor_page(&state, user_id, query)
             .await
             .to_r_ok()

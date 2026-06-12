@@ -11,7 +11,7 @@ use validator::Validate;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct PhotoVO {
+pub struct PhotoResult {
     pub id: String,
     pub name: String,
     pub width: i32,
@@ -30,7 +30,7 @@ pub struct PhotoVO {
     pub original_token: Option<String>,
 }
 
-impl From<PhotoRecord> for PhotoVO {
+impl From<PhotoRecord> for PhotoResult {
     fn from(record: PhotoRecord) -> Self {
         Self {
             id: record.id.0.to_string(),
@@ -48,7 +48,7 @@ impl From<PhotoRecord> for PhotoVO {
     }
 }
 
-impl PhotoVO {
+impl PhotoResult {
     pub fn with_favorited(mut self, is_favorited: bool) -> Self {
         self.is_favorited = Some(is_favorited);
         self
@@ -85,7 +85,7 @@ impl PhotoVO {
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase", default)]
-pub struct PhotoCursorQuery {
+pub struct PhotoCursorParam {
     pub cursor: Option<String>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     pub size: u64,
@@ -93,7 +93,7 @@ pub struct PhotoCursorQuery {
     pub default_collection_id: Option<String>,
 }
 
-impl Default for PhotoCursorQuery {
+impl Default for PhotoCursorParam {
     fn default() -> Self {
         Self {
             cursor: None,
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_photo_cursor_query_valid() {
-        let param = PhotoCursorQuery {
+        let param = PhotoCursorParam {
             cursor: None,
             size: 50,
             direction: PageDirection::Next,
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_photo_cursor_query_size_zero() {
-        let param = PhotoCursorQuery {
+        let param = PhotoCursorParam {
             cursor: None,
             size: 0,
             direction: PageDirection::Next,
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_photo_cursor_query_size_too_large() {
-        let param = PhotoCursorQuery {
+        let param = PhotoCursorParam {
             cursor: None,
             size: 1025,
             direction: PageDirection::Next,
@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_photo_cursor_query_size_exact_max() {
-        let param = PhotoCursorQuery {
+        let param = PhotoCursorParam {
             cursor: None,
             size: 1024,
             direction: PageDirection::Next,

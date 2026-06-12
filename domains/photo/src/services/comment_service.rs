@@ -4,7 +4,7 @@ use crate::{
         photo_mapper::PhotoMapper,
     },
     models::comment::{
-        COMMENT_CURSOR_PAGE_MAX_SIZE, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES, PhotoCommentVO,
+        COMMENT_CURSOR_PAGE_MAX_SIZE, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES, PhotoCommentResult,
     },
     state::PhotoState,
 };
@@ -30,7 +30,7 @@ impl CommentService {
         photo_id: PhotoId,
         user_id: UserId,
         content: String,
-    ) -> Result<PhotoCommentVO> {
+    ) -> Result<PhotoCommentResult> {
         let comment = DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 // 插入评论
@@ -41,7 +41,7 @@ impl CommentService {
             })
         })
         .await?;
-        PhotoCommentVO::from(comment).to_ok()
+        PhotoCommentResult::from(comment).to_ok()
     }
 }
 
@@ -56,7 +56,7 @@ impl CommentService {
         user_id: UserId,
         cursor: Option<DateTimeUtc>,
         size: Option<u64>,
-    ) -> Result<CursorPage<PhotoCommentVO, DateTimeUtc>> {
+    ) -> Result<CursorPage<PhotoCommentResult, DateTimeUtc>> {
         // 校验 limit 参数
         let size = size.unwrap_or(32);
         if size > COMMENT_CURSOR_PAGE_MAX_SIZE {
@@ -118,7 +118,7 @@ impl CommentService {
             .into_iter()
             .map(|c| {
                 let is_liked = is_like.contains(&c.id);
-                PhotoCommentVO::from(c).with_liked(is_liked)
+                PhotoCommentResult::from(c).with_liked(is_liked)
             })
             .collect();
 

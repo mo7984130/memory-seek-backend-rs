@@ -8,7 +8,7 @@ use validator::Validate;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct CollectionVO {
+pub struct CollectionResult {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
@@ -18,9 +18,9 @@ pub struct CollectionVO {
     pub created_at: DateTimeUtc,
 }
 
-impl From<CollectionRecord> for CollectionVO {
+impl From<CollectionRecord> for CollectionResult {
     fn from(record: CollectionRecord) -> Self {
-        CollectionVO {
+        CollectionResult {
             id: record.id.0.to_string(),
             name: record.name,
             description: record.description,
@@ -32,7 +32,7 @@ impl From<CollectionRecord> for CollectionVO {
     }
 }
 
-impl CollectionVO {
+impl CollectionResult {
     pub fn with_generate_cover_token(mut self, cipher: &TokenCipher) -> Self {
         self.cover_token = self.cover_token.as_ref().and_then(|fid| {
             cipher
@@ -45,7 +45,7 @@ impl CollectionVO {
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct CollectionCreateParma {
+pub struct CollectionCreateParam {
     #[validate(length(min = 1, max = 128, message = "相册名长度在 1 到 128 个字符"))]
     pub name: String,
     #[validate(length(max = 512, message = "描述长度不能超过 512 个字符"))]
@@ -63,7 +63,7 @@ pub struct CollectionUpdateParam {
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct CollectionPhotoCursorPageQuery {
+pub struct CollectionPhotoCursorPageParam {
     pub cursor: Option<String>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     pub size: Option<u32>,
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_collection_create_param_valid() {
-        let param = CollectionCreateParma {
+        let param = CollectionCreateParam {
             name: "My Album".to_string(),
             description: Some("A test album".to_string()),
         };
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_collection_create_param_name_empty() {
-        let param = CollectionCreateParma {
+        let param = CollectionCreateParam {
             name: "".to_string(),
             description: None,
         };
@@ -149,7 +149,7 @@ mod tests {
 
     #[test]
     fn test_collection_create_param_name_too_long() {
-        let param = CollectionCreateParma {
+        let param = CollectionCreateParam {
             name: "a".repeat(129),
             description: None,
         };
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_collection_create_param_description_too_long() {
-        let param = CollectionCreateParma {
+        let param = CollectionCreateParam {
             name: "Album".to_string(),
             description: Some("a".repeat(513)),
         };
@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn test_collection_photo_cursor_page_query_valid() {
-        let param = CollectionPhotoCursorPageQuery {
+        let param = CollectionPhotoCursorPageParam {
             cursor: None,
             size: Some(50),
         };
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_collection_photo_cursor_page_query_size_too_large() {
-        let param = CollectionPhotoCursorPageQuery {
+        let param = CollectionPhotoCursorPageParam {
             cursor: None,
             size: Some(1025),
         };
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_collection_create_param_name_exact_max() {
-        let param = CollectionCreateParma {
+        let param = CollectionCreateParam {
             name: "a".repeat(128),
             description: None,
         };
@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn test_collection_photo_cursor_page_query_exact_max() {
-        let param = CollectionPhotoCursorPageQuery {
+        let param = CollectionPhotoCursorPageParam {
             cursor: None,
             size: Some(1024),
         };
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn test_collection_photo_cursor_page_query_size_zero() {
-        let param = CollectionPhotoCursorPageQuery {
+        let param = CollectionPhotoCursorPageParam {
             cursor: None,
             size: Some(0),
         };
