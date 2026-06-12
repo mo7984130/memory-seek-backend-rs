@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, Router,
-    extract::{Path, Query, State},
+    Extension, Router,
+    extract::{Path, State},
     routing::{delete, get, post},
 };
 use common::{
-    Result, ext::ResultRExt, models::CursorPage, r::R, traits::controller::ControllerRouter,
+    Result, ext::ResultRExt, extractors::{ValidatedJson, ValidatedQuery}, models::CursorPage, r::R,
+    traits::controller::ControllerRouter,
 };
 use entities::{
     auth::user::UserId,
@@ -49,7 +50,7 @@ impl CommentController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(photo_id): Path<PhotoId>,
-        Json(param): Json<CommentPublishParam>,
+        ValidatedJson(param): ValidatedJson<CommentPublishParam>,
     ) -> Result<R<PhotoCommentVO>> {
         CommentService::publish(&state, photo_id, user_id, param.content)
             .await
@@ -66,7 +67,7 @@ impl CommentController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(photo_id): Path<PhotoId>,
-        Query(param): Query<CommentCursorPageQuery>,
+        ValidatedQuery(param): ValidatedQuery<CommentCursorPageQuery>,
     ) -> Result<R<CursorPage<PhotoCommentVO, DateTimeUtc>>> {
         CommentService::get_cursor_page(&state, photo_id, user_id, param.cursor, param.size)
             .await
