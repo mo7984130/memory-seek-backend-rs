@@ -10,7 +10,7 @@ use validator::Validate;
 /// 修改密码请求体
 #[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct ChangePasswordRequest {
+pub struct ChangePasswordParam {
     #[validate(custom(function = "validate_password"))]
     pub old_password: String,
     #[validate(custom(function = "validate_password"))]
@@ -20,7 +20,7 @@ pub struct ChangePasswordRequest {
 /// 修改昵称请求体
 #[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct ChangeNicknameRequest {
+pub struct ChangeNicknameParam {
     #[validate(
         length(min = 1, max = 20, message = "昵称长度在 1 到 20 个字符"),
         custom(function = "validate_normal_char")
@@ -31,14 +31,14 @@ pub struct ChangeNicknameRequest {
 /// 批量获取用户信息请求体
 #[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
-pub struct GetUserInfoBatchRequest {
+pub struct GetUserInfoBatchParam {
     pub user_ids: Vec<String>
 }
 
 /// 邀请码数据传输对象，包含邀请码值和过期时间
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InviterCodeDTO {
+pub struct InviterCodeResult {
     pub inviter_code: String,
     pub expire_at: DateTime<Utc>,
 }
@@ -46,7 +46,7 @@ pub struct InviterCodeDTO {
 /// 用户信息数据库查询结果，直接映射数据库字段
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserInfoDTO {
+pub struct UserInfoRow {
     pub user_id: i64,
     pub nickname: String,
     pub avatar_file_id: Option<String>,
@@ -55,13 +55,13 @@ pub struct UserInfoDTO {
 /// 用户信息视图对象，用于 API 响应，头像字段已加密为 token
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct UserInfoVO {
+pub struct UserInfoResult {
     pub user_id: String,
     pub nickname: String,
     pub avatar_token: Option<String>,
 }
 
-impl UserInfoVO {
+impl UserInfoResult {
     /// 将数据库 DTO 转换为视图对象，对头像文件 ID 进行加密
     ///
     /// # 参数
@@ -70,7 +70,7 @@ impl UserInfoVO {
     ///
     /// # 返回
     /// 转换后的用户信息视图对象，`user_id` 转为字符串，头像字段加密为 token
-    pub fn from_dto(dto: UserInfoDTO, token_cipher: &TokenCipher) -> Self {
+    pub fn from_dto(dto: UserInfoRow, token_cipher: &TokenCipher) -> Self {
         let avatar_token = dto.avatar_file_id
             .as_ref()
             .and_then(|key| token_cipher.encrypt(&ImageToken::thumbnail(key.clone()), Some(key)).ok());
@@ -97,12 +97,12 @@ mod tests {
     #[test]
     fn test_user_info_vo_from_dto_with_avatar() {
         let cipher = create_test_cipher();
-        let dto = UserInfoDTO {
+        let dto = UserInfoRow {
             user_id: 42,
             nickname: "Alice".to_string(),
             avatar_file_id: Some("file123".to_string()),
         };
-        let vo = UserInfoVO::from_dto(dto, &cipher);
+        let vo = UserInfoResult::from_dto(dto, &cipher);
         assert_eq!(vo.user_id, "42");
         assert_eq!(vo.nickname, "Alice");
         assert!(vo.avatar_token.is_some());
@@ -111,12 +111,12 @@ mod tests {
     #[test]
     fn test_user_info_vo_from_dto_without_avatar() {
         let cipher = create_test_cipher();
-        let dto = UserInfoDTO {
+        let dto = UserInfoRow {
             user_id: 1,
             nickname: "Bob".to_string(),
             avatar_file_id: None,
         };
-        let vo = UserInfoVO::from_dto(dto, &cipher);
+        let vo = UserInfoResult::from_dto(dto, &cipher);
         assert_eq!(vo.user_id, "1");
         assert_eq!(vo.nickname, "Bob");
         assert!(vo.avatar_token.is_none());
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn test_change_nickname_request_valid() {
-        let req = ChangeNicknameRequest {
+        let req = ChangeNicknameParam {
             new_nickname: "Alice".to_string(),
         };
         assert!(req.validate().is_ok());
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_change_nickname_request_empty() {
-        let req = ChangeNicknameRequest {
+        let req = ChangeNicknameParam {
             new_nickname: "".to_string(),
         };
         assert!(req.validate().is_err());
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_change_nickname_request_too_long() {
-        let req = ChangeNicknameRequest {
+        let req = ChangeNicknameParam {
             new_nickname: "a".repeat(21),
         };
         assert!(req.validate().is_err());
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_change_nickname_request_special_chars() {
-        let req = ChangeNicknameRequest {
+        let req = ChangeNicknameParam {
             new_nickname: "test<script>".to_string(),
         };
         assert!(req.validate().is_err());
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_change_password_request_valid() {
-        let req = ChangePasswordRequest {
+        let req = ChangePasswordParam {
             old_password: "oldPass123".to_string(),
             new_password: "newPass456".to_string(),
         };
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_change_password_request_no_number() {
-        let req = ChangePasswordRequest {
+        let req = ChangePasswordParam {
             old_password: "oldPassword".to_string(),
             new_password: "onlyLetters".to_string(),
         };
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_change_password_request_too_short() {
-        let req = ChangePasswordRequest {
+        let req = ChangePasswordParam {
             old_password: "oldPass123".to_string(),
             new_password: "a1".to_string(),
         };

@@ -12,7 +12,7 @@ use tracing::info;
 
 use crate::UserState;
 use crate::config::GET_USER_INFO_BATCH_MAX_LEN;
-use crate::models::{ChangePasswordRequest, InviterCodeDTO, UserInfoDTO, UserInfoVO};
+use crate::models::{ChangePasswordParam, InviterCodeResult, UserInfoRow, UserInfoResult};
 use common::error::AppError;
 use common::ext::{CacheExtension, OptionExt, RedisExt, ResultErrExt, log_err, log_warn};
 use common::utils::{DbUtils, MetricsTimerExt};
@@ -84,7 +84,7 @@ pub async fn get_user_info(state: &UserState, user_id: i64) -> Result<user::User
 pub async fn generate_inviter_code(
     state: &UserState,
     user_id: i64,
-) -> Result<InviterCodeDTO, AppError> {
+) -> Result<InviterCodeResult, AppError> {
     metrics_group!("generate_inviter_code");
 
     // 循环生成邀请码, 防止冲突
@@ -114,7 +114,7 @@ pub async fn generate_inviter_code(
 
             info!(status = "success", "生成邀请码成功");
 
-            return Ok(InviterCodeDTO {
+            return Ok(InviterCodeResult {
                 inviter_code: code,
                 expire_at: Utc::now() + Duration::try_seconds(INVITER_CODE_TTL_SECONDS).unwrap(),
             });
@@ -328,7 +328,7 @@ pub async fn update_avatar(
 pub async fn change_password(
     state: &UserState,
     user_id: i64,
-    req: ChangePasswordRequest,
+    req: ChangePasswordParam,
 ) -> Result<(), AppError> {
     metrics_group!("change_password");
 
@@ -465,7 +465,7 @@ pub async fn logout(state: &UserState, user_id: i64) -> Result<(), AppError> {
 pub async fn get_user_info_batch(
     state: &UserState,
     user_ids: Vec<i64>,
-) -> Result<Vec<Option<UserInfoVO>>, AppError> {
+) -> Result<Vec<Option<UserInfoResult>>, AppError> {
     metrics_group!("get_user_info_batch");
 
     // 空列表直接返回
@@ -479,7 +479,7 @@ pub async fn get_user_info_batch(
     }
 
     // 带redis缓存的获取用户信息
-    let result: Vec<Option<UserInfoDTO>> = state
+    let result: Vec<Option<UserInfoRow>> = state
         .redis
         .get_or_load_batch(
             &user_ids,
@@ -494,7 +494,7 @@ pub async fn get_user_info_batch(
                         .column_as(user::Column::Id, "user_id")
                         .column(user::Column::Nickname)
                         .column(user::Column::AvatarFileId)
-                        .into_model::<UserInfoDTO>()
+                        .into_model::<UserInfoRow>()
                         .all(&state.db)
                         .timed(metrics_timer_name!("get_user_info_batch", "db_query"))
                         .await
@@ -511,6 +511,6 @@ pub async fn get_user_info_batch(
 
     Ok(result
         .into_iter()
-        .map(|opt| opt.map(|dto| UserInfoVO::from_dto(dto, &state.token_cipher)))
+        .map(|opt| opt.map(|dto| UserInfoResult::from_dto(dto, &state.token_cipher)))
         .collect())
 }

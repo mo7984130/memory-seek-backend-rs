@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 use crate::UserState;
 use crate::models::{
-    ChangeNicknameRequest, ChangePasswordRequest, GetUserInfoBatchRequest, InviterCodeDTO,
-    UserInfoVO,
+    ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeResult,
+    UserInfoResult,
 };
 use crate::services as user_service;
 
@@ -74,7 +74,7 @@ impl UserController {
     async fn generate_inviter_code(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<InviterCodeDTO>, AppError> {
+    ) -> Result<R<InviterCodeResult>, AppError> {
         user_service::generate_inviter_code(&state, user_id.0)
             .await
             .to_r_ok()
@@ -95,7 +95,7 @@ impl UserController {
     async fn change_nickname(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedJson(req): ValidatedJson<ChangeNicknameRequest>,
+        ValidatedJson(req): ValidatedJson<ChangeNicknameParam>,
     ) -> Result<R<String>, AppError> {
         user_service::change_nickname(&state, user_id.0, req.new_nickname)
             .await
@@ -159,7 +159,7 @@ impl UserController {
     async fn change_password(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedJson(req): ValidatedJson<ChangePasswordRequest>,
+        ValidatedJson(req): ValidatedJson<ChangePasswordParam>,
     ) -> Result<R<()>, AppError> {
         user_service::change_password(&state, user_id.0, req)
             .await
@@ -197,8 +197,8 @@ impl UserController {
     /// - `AppError`: ID 格式错误、超出批量查询限制或数据库查询失败时返回错误
     async fn get_user_info_batch(
         State(state): State<Arc<UserState>>,
-        ValidatedJson(req): ValidatedJson<GetUserInfoBatchRequest>,
-    ) -> Result<R<Vec<Option<UserInfoVO>>>, AppError> {
+        ValidatedJson(req): ValidatedJson<GetUserInfoBatchParam>,
+    ) -> Result<R<Vec<Option<UserInfoResult>>>, AppError> {
         let user_ids = req
             .user_ids
             .into_iter()
