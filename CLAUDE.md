@@ -190,9 +190,22 @@ pub enum AppError {
 }
 ```
 
+### 错误处理规范
+
+| 场景 | 方法 | 说明 |
+|------|------|------|
+| `Option<T>` → `Result` | `ok_or_warn()` | None 时记录 warn 日志 |
+| `Result<T, E>` → `AppError` | `trace_internal_err()` | Err 时记录 error 日志 |
+| `Result<T, E>` → 自定义错误 | `trace_err()` | Err 时记录 error 日志 |
+| `Result<T, E>` → 警告 | `trace_warn()` | Err 时记录 warn 日志 |
+| 类型转换 | `map_err(Into::into)` | 无需日志 |
+
 使用扩展 trait 处理错误：
-- `OptionExt::ok_or_warn()`: None → BadRequest + warn 日志
-- `ResultErrExt::trace_warn(): Err → warn 日志 + AppError
+- `OptionExt::ok_or_warn()`: None → AppError + warn 日志
+- `OptionExt::ok_or_warn_bad_request()`: None → BadRequest + warn 日志
+- `ResultErrExt::trace_err()`: Err → error 日志 + 自定义 AppError
+- `ResultErrExt::trace_internal_err()`: Err → error 日志 + InternalServerError
+- `ResultErrExt::trace_warn()`: Err → warn 日志 + AppError
 - `ResultRExt::to_r_ok()`: Ok(T) → Ok(R::ok(T))
 
 ## Feature Flags
