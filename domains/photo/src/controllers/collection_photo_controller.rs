@@ -13,12 +13,13 @@ use crate::{
     state::PhotoState,
 };
 use axum::{
-    Extension, Json, Router,
-    extract::{Path, Query, State},
+    Extension, Router,
+    extract::{Path, State},
     routing::{delete, get},
 };
 use common::{
-    Result, ext::ResultRExt, models::CursorPage, r::R, traits::controller::ControllerRouter,
+    Result, ext::ResultRExt, extractors::{ValidatedJson, ValidatedQuery}, models::CursorPage, r::R,
+    traits::controller::ControllerRouter,
 };
 use entities::{
     auth::user::UserId,
@@ -52,7 +53,7 @@ impl CollectionPhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(collection_id): Path<CollectionId>,
-        Json(param): Json<CollectionPhotoAddBatchParam>,
+        ValidatedJson(param): ValidatedJson<CollectionPhotoAddBatchParam>,
     ) -> Result<R<CollectionPhotoAddBatchResult>> {
         CollectionPhotoService::add_photos(&state, user_id, collection_id, param.photo_ids)
             .await
@@ -66,7 +67,7 @@ impl CollectionPhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(collection_id): Path<CollectionId>,
-        Query(query): Query<CollectionPhotoCursorPageQuery>,
+        ValidatedQuery(query): ValidatedQuery<CollectionPhotoCursorPageQuery>,
     ) -> Result<R<CursorPage<PhotoVO, String>>> {
         let CollectionPhotoCursorPageQuery { cursor, size } = query;
         let size = size.unwrap_or(32) as u64;
@@ -96,7 +97,7 @@ impl CollectionPhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         Path(collection_id): Path<CollectionId>,
-        Json(param): Json<CollectionPhotoRemoveBatchParam>,
+        ValidatedJson(param): ValidatedJson<CollectionPhotoRemoveBatchParam>,
     ) -> Result<R<CollectionPhotoRemoveBatchResult>> {
         CollectionPhotoService::remove_photos(&state, user_id, collection_id, param.photo_ids)
             .await
