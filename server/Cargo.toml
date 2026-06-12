@@ -1,0 +1,56 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["auth", "user", "photo", "s3"]
+auth = ["dep:auth"]
+user = ["dep:user"]
+photo = ["dep:photo"]
+metrics = ["dep:metrics"]
+s3 = ["dep:oss"]
+
+[dependencies]
+tokio = { workspace = true }
+axum = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = "1"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# 业务模块
+auth = { path = "../domains/auth", features = ["controller"], optional = true }
+user = { path = "../domains/user", features = ["controller"], optional = true }
+photo = { path = "../domains/photo", features = ["controller"], optional = true }
+
+# 基础设施
+common = { path = "../common" }
+constants = { path = "../domains/constants" }
+entities = { path = "../entities" }
+email = { path = "../libs/email" }
+config = { workspace = true }
+dotenvy = { workspace = true }
+
+# 性能监控
+metrics = { workspace = true, optional = true }
+
+# S3
+oss = { path = "../libs/oss", optional = true }
+
+# 数据库
+sea-orm = { workspace = true }
+redis = { workspace = true }
+deadpool-redis = { workspace = true }
+
+# 加密
+hmac = { workspace = true }
+sha2 = { workspace = true }
+
+# UUID
+uuid = { workspace = true }
+tracing-appender = "0.2.5"
+metrics-tracing-context = "0.18.1"

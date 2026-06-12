@@ -10,7 +10,7 @@ members = [
     "domains/auth",
     "domains/user",
     "domains/photo",
-    # "server"
+    "server"
 ]
 
 [workspace.dependencies]
