@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, Router,
+    Extension, Router,
     body::Body,
-    extract::{Multipart, Path, Query, State},
+    extract::{Multipart, Path, State},
     http::{StatusCode, header},
     response::Response,
     routing::{get, post},
@@ -11,6 +11,7 @@ use axum::{
 use common::{
     Result,
     ext::{ResultErrExt, ResultRExt},
+    extractors::{ValidatedJson, ValidatedQuery},
     models::{CursorPage, ImageToken, ImageTokenType},
     traits::controller::ControllerRouter,
 };
@@ -72,7 +73,7 @@ impl PhotoController {
     async fn get_photos_cursor(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Query(query): Query<PhotoCursorQuery>,
+        ValidatedQuery(query): ValidatedQuery<PhotoCursorQuery>,
     ) -> Result<R<CursorPage<PhotoVO, String>>> {
         PhotoService::get_photo_cursor_page(&state, user_id, query)
             .await
@@ -81,7 +82,7 @@ impl PhotoController {
 
     async fn md5s_exist(
         State(state): State<Arc<PhotoState>>,
-        Json(data): Json<Md5sExistParam>,
+        ValidatedJson(data): ValidatedJson<Md5sExistParam>,
     ) -> Result<R<Vec<bool>>> {
         PhotoService::exists_by_md5_batch(&state, &data.md5s)
             .await
@@ -174,7 +175,7 @@ impl PhotoController {
     async fn delete_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Json(data): Json<DeletePhotoParam>,
+        ValidatedJson(data): ValidatedJson<DeletePhotoParam>,
     ) -> Result<R<()>> {
         PhotoService::delete_photos(&state, user_id, data.photo_ids)
             .await
