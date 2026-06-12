@@ -7,8 +7,8 @@ use entities::{
     photo::{comment::*, photo::PhotoId},
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, entity::prelude::DateTimeUtc, sea_query::Expr,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, entity::prelude::DateTimeUtc, sea_query::Expr,
 };
 
 pub struct CommentMapper;
@@ -36,6 +36,15 @@ impl CommentMapper {
 
 // 修改
 impl CommentMapper {
+    pub async fn exists(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<bool> {
+        let count = Entity::find()
+            .filter(Column::Id.eq(comment_id.0))
+            .count(db)
+            .await
+            .trace_internal_err("db_query_err", "查询评论是否存在失败")?;
+        Ok(count > 0)
+    }
+
     pub async fn update_like_count_delta(
         db: &impl ConnectionTrait,
         comment_id: CommentId,
@@ -106,15 +115,15 @@ impl CommentMapper {
             .filter(Column::Id.eq(comment_id.0))
             .select_only()
             .column(Column::PhotoId)
-            .into_values::<i64, Column>()
+            .into_tuple::<i64>()
             .one(db)
             .await
             .trace_internal_err("db_query_err", "通过评论id获取照片id数据库错误")?
             .map(PhotoId)
-            .ok_or_error(
-                "db_query_err",
-                "评论的照片id为None",
-                common::error::AppError::InternalServerError,
+            .ok_or_warn_bad_request(
+                "comment_not_found",
+                "评论不存在",
+                "评论不存在",
             )
     }
 }

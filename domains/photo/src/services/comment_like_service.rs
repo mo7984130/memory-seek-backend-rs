@@ -16,6 +16,17 @@ pub(crate) struct CommentLikeService;
 // 创建
 impl CommentLikeService {
     pub async fn like(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
+        // 检查评论是否存在
+        if !CommentMapper::exists(&state.db, comment_id).await? {
+            return log_warn(
+                "comment_not_found",
+                "用户尝试点赞不存在的评论",
+                "",
+                AppError::not_found("评论不存在"),
+            )
+            .to_err();
+        }
+
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 let inserted = CommentLikeMapper::insert_ignore(txn, user_id, comment_id).await?;

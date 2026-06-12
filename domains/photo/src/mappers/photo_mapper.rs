@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use common::Result;
 use common::ext::{OkExt, ResultErrExt};
 use sea_orm::sea_query::Expr;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use entities::photo::photo::*;
 
@@ -37,6 +37,15 @@ impl PhotoMapper {
 
 // 查询
 impl PhotoMapper {
+    pub async fn exists(db: &impl ConnectionTrait, photo_id: PhotoId) -> Result<bool> {
+        let count = Entity::find()
+            .filter(Column::Id.eq(photo_id.0))
+            .count(db)
+            .await
+            .trace_internal_err("db_query_err", "查询照片是否存在失败")?;
+        Ok(count > 0)
+    }
+
     pub async fn exists_by_md5_batch(
         db: &impl ConnectionTrait,
         md5s: &[impl AsRef<str>],
@@ -115,7 +124,7 @@ impl PhotoMapper {
         Self::build_cursor_query(cursor.as_ref(), size, direction)
             .select_only()
             .column(Column::Id)
-            .into_values::<i64, Column>()
+            .into_tuple::<i64>()
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询 ID 列表失败")?

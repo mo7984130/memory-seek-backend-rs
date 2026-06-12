@@ -30,7 +30,7 @@ impl TimelineStatMapper {
         let mut on_conflict = OnConflict::column(Column::DateStr);
         on_conflict
             .update_columns([Column::AnchorTime, Column::UpdatedAt])
-            .value(Column::Count, Expr::col(Column::Count).add(1));
+            .value(Column::Count, Expr::col((Entity, Column::Count)).add(1));
 
         Entity::insert(insert)
             .on_conflict(on_conflict)

@@ -68,7 +68,7 @@ impl CommentLikeMapper {
             .column(Column::CommentId)
             .filter(Column::UserId.eq(user_id.0))
             .filter(Column::CommentId.is_in(comment_ids.into_iter().map(|id| id.0)))
-            .into_values::<i64, Column>()
+            .into_tuple::<i64>()
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询评论是否喜欢数据库错误")?
@@ -86,13 +86,14 @@ impl CommentLikeMapper {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<bool> {
-        let res = Entity::delete_by_id(comment_id.0)
+        let res = Entity::delete_many()
+            .filter(Column::CommentId.eq(comment_id.0))
             .filter(Column::UserId.eq(user_id.0))
             .exec(db)
             .await
             .trace_internal_err("db_delete_err", "尝试删除照片评论喜欢错误")?;
 
-        return Ok(res.rows_affected != 0);
+        Ok(res.rows_affected != 0)
     }
 
     pub async fn delete_all_by_comment_id(

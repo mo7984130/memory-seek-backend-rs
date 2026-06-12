@@ -1,19 +1,30 @@
 {
-  "database_config": {
-    "database_url": "postgres://test:test@localhost:5433/memory_seek_test",
-    "max_connections": 10
-  },
-  "redis_config": {
-    "redis_url": "redis://localhost:6380"
-  },
-  "oss_config": {
-    "bucket": "test-bucket",
-    "region": "us-east-1",
-    "endpoint": "http://localhost:9000",
-    "access_key": "minioadmin",
-    "secret_key": "minioadmin"
-  },
-  "token_cipher_config": {
-    "key": "test-secret-key-for-testing-only"
-  }
+    "database_config": {
+        "database_url": "postgres://test:test@localhost:5433/memory_seek_test",
+        "max_connections": 10
+    },
+    "redis_config": {
+        "redis_url": "redis://localhost:6380"
+    },
+    "smtp_config": {
+        "server": "localhost",
+        "port": 1025,
+        "username": "",
+        "password": "",
+        "from_email": "test@example.com",
+        "from_name": "Test"
+    },
+    "oss_config": {
+        "bucket": "test-bucket",
+        "region": "us-east-1",
+        "endpoint": "http://localhost:9000",
+        "public_url": "http://localhost:9000",
+        "access_key": "minioadmin",
+        "secret_key": "minioadmin",
+        "force_path_style": true
+    },
+    "token_cipher_config": {
+        "key": "test-secret-key-for-testing-only",
+        "salt": "salt"
+    }
 }

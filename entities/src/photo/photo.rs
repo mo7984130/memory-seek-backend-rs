@@ -6,8 +6,14 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::auth::user::UserId;
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 pub struct PhotoId(pub i64);
+
+impl Serialize for PhotoId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
 impl From<i64> for PhotoId {
     fn from(id: i64) -> Self {
         Self(id)

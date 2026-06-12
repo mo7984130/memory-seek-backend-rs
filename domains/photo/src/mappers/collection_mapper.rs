@@ -12,7 +12,7 @@ use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityName, EntityTrait, IdenStatic,
-    QueryFilter, QueryOrder, QuerySelect, Statement,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
 
 impl CollectionMapper {
@@ -190,5 +190,20 @@ impl CollectionMapper {
         }
 
         Ok(())
+    }
+
+    pub async fn is_belong(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        collection_id: CollectionId,
+    ) -> Result<bool> {
+        let count = Entity::find()
+            .filter(Column::Id.eq(collection_id.0))
+            .filter(Column::UserId.eq(user_id.0))
+            .count(db)
+            .await
+            .trace_internal_err("db_query_err", "查询失败")?;
+
+        Ok(count > 0)
     }
 }
