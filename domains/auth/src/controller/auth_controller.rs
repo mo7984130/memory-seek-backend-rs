@@ -1,6 +1,6 @@
 use crate::AuthState;
-use crate::models::SendEmailCodeRequest;
-use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest};
+use crate::models::SendEmailCodeParam;
+use crate::models::{AccessTokenResult, LoginParam, RegisterParam};
 use crate::services as auth_service;
 use axum::Router;
 use axum::extract::State;
@@ -47,7 +47,7 @@ impl AuthController {
     /// - `AppError::InternalServerError`: 数据库或 Redis 操作失败
     async fn login(
         State(state): State<Arc<AuthState>>,
-        ValidatedJson(req): ValidatedJson<LoginRequest>,
+        ValidatedJson(req): ValidatedJson<LoginParam>,
     ) -> Result<R<UserDTO>, AppError> {
         auth_service::login(&state, req).await.to_r_ok()
     }
@@ -66,7 +66,7 @@ impl AuthController {
     /// - `AppError::InternalServerError`: 数据库操作失败
     async fn register(
         State(state): State<Arc<AuthState>>,
-        ValidatedJson(payload): ValidatedJson<RegisterRequest>,
+        ValidatedJson(payload): ValidatedJson<RegisterParam>,
     ) -> Result<R<UserDTO>, AppError> {
         auth_service::register(&state, payload).await.to_r_ok()
     }
@@ -84,7 +84,7 @@ impl AuthController {
     /// - `AppError::InternalServerError`: Redis 操作或邮件发送失败
     async fn send_email_code(
         State(state): State<Arc<AuthState>>,
-        ValidatedJson(payload): ValidatedJson<SendEmailCodeRequest>,
+        ValidatedJson(payload): ValidatedJson<SendEmailCodeParam>,
     ) -> Result<R<()>, AppError> {
         auth_service::send_email_code(&state, payload)
             .await
@@ -108,7 +108,7 @@ impl AuthController {
     async fn refresh_access_token(
         State(state): State<Arc<AuthState>>,
         headers: HeaderMap,
-    ) -> Result<R<AccessTokenResponse>, AppError> {
+    ) -> Result<R<AccessTokenResult>, AppError> {
         let user_id = headers
             .get("x-user-id")
             .ok_or_warn(

@@ -9,7 +9,7 @@ use validator::Validate;
 
 #[derive(Debug, Validate, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LoginRequest {
+pub struct LoginParam {
     #[validate(custom(function = "validate_account"))]
     pub account: String,
     #[validate(custom(function = "validate_password"))]
@@ -18,7 +18,7 @@ pub struct LoginRequest {
 
 #[derive(Debug, Validate, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RegisterRequest {
+pub struct RegisterParam {
     #[validate(custom(function = "validate_username"))]
     pub username: String,
     #[validate(custom(function = "validate_email"))]
@@ -38,14 +38,14 @@ pub struct RegisterRequest {
 
 #[derive(Debug, Validate, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SendEmailCodeRequest {
+pub struct SendEmailCodeParam {
     #[validate(custom(function = "validate_email"))]
     pub email: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AccessTokenResponse {
+pub struct AccessTokenResult {
     pub access_token: String,
     pub access_token_expire_at: DateTime<Utc>,
 }

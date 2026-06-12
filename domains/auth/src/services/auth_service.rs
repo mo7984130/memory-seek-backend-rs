@@ -1,14 +1,14 @@
 use crate::AuthState;
 use crate::config::{ACCESS_TOKEN_EXPIRE_SECONDS, REFRESH_TOKEN_EXPIRE_DAYS};
-use crate::models::{AccessTokenResponse, LoginRequest, RegisterRequest, SendEmailCodeRequest};
+use crate::models::{AccessTokenResult, LoginParam, RegisterParam, SendEmailCodeParam};
 use chrono::{DateTime, Duration, Utc};
-use constants::RedisKeys;
-use constants::redis_keys;
 use common::error::AppError;
 use common::ext::{BoolExt, OptionExt, RedisExt, ResultErrExt, log_err, log_warn};
 use common::models::ImageToken;
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
+use constants::RedisKeys;
+use constants::redis_keys;
 use deadpool_redis::Pool;
 use entities::auth::user::{self, UserDTO};
 use sea_orm::error::DbErr;
@@ -49,7 +49,7 @@ static EMAIL_SEND_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(16)
         account = %req.account
     )
 )]
-pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppError> {
+pub async fn login(state: &AuthState, req: LoginParam) -> Result<UserDTO, AppError> {
     metrics_group!("login");
 
     // 获取用户Id, 密码, 头像FileId
@@ -106,7 +106,8 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         .timed(metrics_timer_name!("login", "verify_password"))
         .await
         .trace_internal_err("spawn_blocking_error", "密码验证任务执行失败")?;
-        let verify_result = result.trace_internal_err("verify_password_error", "密码验证内部错误")?;
+        let verify_result =
+            result.trace_internal_err("verify_password_error", "密码验证内部错误")?;
 
         verify_result.0.ok_or_warn(
             "invalid_password",
@@ -236,7 +237,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         email_code_prefix = %&req.email_verify_code[..2]
     )
 )]
-pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO, AppError> {
+pub async fn register(state: &AuthState, req: RegisterParam) -> Result<UserDTO, AppError> {
     metrics_group!("register");
 
     // 校验邮箱验证码
@@ -251,12 +252,11 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO
 
     // 加密密码（spawn_blocking 避免阻塞 async runtime）
     let password_clone = req.password.clone();
-    let hashed_pw =
-        task::spawn_blocking(move || constants::PasswordHasher.hash(&password_clone))
-            .timed(metrics_timer_name!("register", "hash_password"))
-            .await
-            .trace_internal_err("spawn_blocking_error", "密码哈希任务执行失败")?
-            .trace_internal_err("hash_password_error", "密码哈希计算失败")?;
+    let hashed_pw = task::spawn_blocking(move || constants::PasswordHasher.hash(&password_clone))
+        .timed(metrics_timer_name!("register", "hash_password"))
+        .await
+        .trace_internal_err("spawn_blocking_error", "密码哈希任务执行失败")?
+        .trace_internal_err("hash_password_error", "密码哈希计算失败")?;
 
     // 插入用户
     let user_model = user::ActiveModel {
@@ -302,7 +302,7 @@ fn handle_user_insert_err(e: DbErr) -> AppError {
             ("row_existed", "记录已存在")
         };
 
-        log_warn(reason, "注册失败", pg_err, AppError::bad_request(msg));
+        return log_warn(reason, "注册失败", pg_err, AppError::bad_request(msg));
     }
 
     log_err(
@@ -334,7 +334,7 @@ fn handle_user_insert_err(e: DbErr) -> AppError {
         email = %req.email
     )
 )]
-pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Result<(), AppError> {
+pub async fn send_email_code(state: &AuthState, req: SendEmailCodeParam) -> Result<(), AppError> {
     metrics_group!("send_email_code");
 
     // 生成大写字母+数字验证码
@@ -399,7 +399,7 @@ pub async fn refresh_access_token(
     state: &AuthState,
     user_id: i64,
     refresh_token: String,
-) -> Result<AccessTokenResponse, AppError> {
+) -> Result<AccessTokenResult, AppError> {
     metrics_group!("refresh_access_token");
 
     // 校验refresh_token
@@ -423,7 +423,7 @@ pub async fn refresh_access_token(
 
     info!(status = "success", "AccessToken刷新成功");
 
-    Ok(AccessTokenResponse {
+    Ok(AccessTokenResult {
         access_token: new_access_token,
         access_token_expire_at: Utc::now() + chrono::Duration::seconds(ACCESS_TOKEN_EXPIRE_SECONDS),
     })
