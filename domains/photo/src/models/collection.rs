@@ -128,7 +128,6 @@ pub struct CollectionPhotoRemoveBatchResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use validator::Validate;
 
     #[test]
     fn test_collection_create_param_valid() {
@@ -214,6 +213,57 @@ mod tests {
         let param = CollectionPhotoCursorPageQuery {
             cursor: None,
             size: Some(1025),
+        };
+        assert!(param.validate().is_err());
+    }
+
+    #[test]
+    fn test_collection_photo_remove_batch_param_valid() {
+        let param = CollectionPhotoRemoveBatchParam {
+            photo_ids: vec![PhotoId(1), PhotoId(2)],
+        };
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn test_collection_photo_remove_batch_param_empty() {
+        let param = CollectionPhotoRemoveBatchParam {
+            photo_ids: vec![],
+        };
+        assert!(param.validate().is_err());
+    }
+
+    #[test]
+    fn test_collection_create_param_name_exact_max() {
+        let param = CollectionCreateParma {
+            name: "a".repeat(128),
+            description: None,
+        };
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn test_collection_photo_add_batch_param_exact_max() {
+        let param = CollectionPhotoAddBatchParam {
+            photo_ids: (0..128).map(|i| PhotoId(i)).collect(),
+        };
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn test_collection_photo_cursor_page_query_exact_max() {
+        let param = CollectionPhotoCursorPageQuery {
+            cursor: None,
+            size: Some(1024),
+        };
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn test_collection_photo_cursor_page_query_size_zero() {
+        let param = CollectionPhotoCursorPageQuery {
+            cursor: None,
+            size: Some(0),
         };
         assert!(param.validate().is_err());
     }
