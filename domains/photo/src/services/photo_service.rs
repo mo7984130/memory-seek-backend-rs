@@ -296,17 +296,6 @@ impl PhotoService {
     ) -> Result<()> {
         metrics_group!("delete_photos");
 
-        // 鉴权
-        if user_id.0 != 0 {
-            return log_warn(
-                "delete_photos_not_admin",
-                "用户想要删除照片, 不是管理员",
-                "",
-                AppError::forbidden("非管理员用户无法删除照片"),
-            )
-            .to_err();
-        }
-
         if photo_ids.is_empty() {
             return Ok(());
         }
@@ -316,6 +305,17 @@ impl PhotoService {
             Box::pin(async move {
                 // 查询照片信息
                 let photos = PhotoMapper::query_by_ids(txn, &photo_ids).await?;
+
+                // 鉴权
+                if photos.iter().any(|p| p.user_id != user_id) {
+                    return log_warn(
+                        "del_photos_not_belong",
+                        "用户尝试删除不属于它的照片",
+                        "",
+                        AppError::bad_request("无法删除不属于自己的照片"),
+                    )
+                    .to_err();
+                }
 
                 // 删除收藏夹照片
                 let affected_collections =

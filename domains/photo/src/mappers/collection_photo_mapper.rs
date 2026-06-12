@@ -96,21 +96,6 @@ impl CollectionPhotoMapper {
             .trace_internal_err("db_query_err", "查询失败")
     }
 
-    pub async fn is_belong(
-        db: &impl ConnectionTrait,
-        user_id: UserId,
-        collection_id: CollectionId,
-    ) -> Result<bool> {
-        let count = Entity::find()
-            .filter(Column::CollectionId.eq(collection_id.0))
-            .filter(Column::UserId.eq(user_id.0))
-            .count(db)
-            .await
-            .trace_internal_err("db_query_err", "查询失败")?;
-
-        Ok(count > 0)
-    }
-
     pub async fn delete_by_collection_id_and_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,

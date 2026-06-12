@@ -4,7 +4,8 @@ use crate::{
         photo_mapper::PhotoMapper,
     },
     models::comment::{
-        COMMENT_CURSOR_PAGE_MAX_SIZE, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES, PhotoCommentResult,
+        COMMENT_CURSOR_PAGE_MAX_SIZE, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES,
+        PhotoCommentResult,
     },
     state::PhotoState,
 };
@@ -33,6 +34,16 @@ impl CommentService {
     ) -> Result<PhotoCommentResult> {
         let comment = DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
+                // 查询照片是否存在
+                if PhotoMapper::exists(txn, photo_id).await? {
+                    return log_warn(
+                        "comment_publish_photo_not_exists",
+                        "用户尝试评论不存在的照片",
+                        "",
+                        AppError::bad_request("无法评论不存在的照片"),
+                    )
+                    .to_err();
+                }
                 // 插入评论
                 let comment = CommentMapper::insert(txn, photo_id, user_id, content).await?;
                 // 更新评论总数

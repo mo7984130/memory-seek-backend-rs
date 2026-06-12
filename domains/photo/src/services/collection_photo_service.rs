@@ -85,7 +85,7 @@ impl CollectionPhotoService {
         }
 
         // 插入前, 需要鉴权
-        if !CollectionPhotoMapper::is_belong(&state.db, user_id, collection_id).await? {
+        if !CollectionMapper::is_belong(&state.db, user_id, collection_id).await? {
             return log_warn(
                 "collection_not_belong_user",
                 "用户尝试添加照片到不是用户的收藏夹",

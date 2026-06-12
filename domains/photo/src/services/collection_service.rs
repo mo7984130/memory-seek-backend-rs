@@ -4,11 +4,11 @@ use crate::models::collection::CollectionResult;
 use crate::state::PhotoState;
 use common::Result;
 use common::error::AppError;
-use common::ext::{CacheExtension, OkExt, OptionExt, ToErr, log_warn};
+use common::ext::{CacheExtension, OkExt, ToErr, log_warn};
 use common::utils::DbUtils;
 use constants::RedisKeys;
 use entities::auth::user::UserId;
-use entities::photo::collection::CollectionId;
+use entities::photo::collection::{CollectionId, CollectionRecord};
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 
@@ -42,14 +42,13 @@ impl CollectionService {
                 24 * 60 * 60,
                 || async move {
                     // 从数据库中获取
-                    CollectionMapper::query_favorite_collection_id(&state.db, user_id)
-                        .await?
-                        .ok_or_warn_bad_request(
-                            "favorite_collection_not_found",
-                            "没有找到我喜欢收藏夹",
-                            "我喜欢未找到",
-                        )?
-                        .to_ok()
+                    let collection_id =
+                        CollectionMapper::query_favorite_collection_id(&state.db, user_id).await?;
+                    match collection_id {
+                        Some(id) => id,
+                        None => Self::create_favorite_collection(state, user_id).await?.id,
+                    }
+                    .to_ok()
                 },
             )
             .await?;
@@ -69,7 +68,8 @@ impl CollectionService {
 
         // 如果收藏夹为空, 创建默认的我喜欢收藏夹
         if collections.is_empty() {
-            let vo = Self::create_favorite_collection(state, user_id).await?;
+            let record = Self::create_favorite_collection(state, user_id).await?;
+            let vo = CollectionResult::from(record);
             return Ok(vec![vo]);
         }
 
@@ -100,15 +100,8 @@ impl CollectionService {
     async fn create_favorite_collection(
         state: &PhotoState,
         user_id: UserId,
-    ) -> Result<CollectionResult> {
-        Self::create_collection(
-            state,
-            user_id,
-            "我喜欢".to_string(),
-            Some("喜欢收藏夹".to_string()),
-            true,
-        )
-        .await
+    ) -> Result<CollectionRecord> {
+        CollectionMapper::insert(&state.db, user_id, "我喜欢".into(), None, true).await
     }
 }
 
