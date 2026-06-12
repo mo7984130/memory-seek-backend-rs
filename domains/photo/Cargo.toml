@@ -10,7 +10,7 @@ controller = ["dep:axum"]
 file_validator = ["common/file_validator"]
 
 [dependencies]
-common = { path = "../../common" }
+common = { path = "../../common", features = ["validators"] }
 constants = { path = "../constants" }
 entities = { path = "../../entities" }
 oss = { path = "../../libs/oss" }
