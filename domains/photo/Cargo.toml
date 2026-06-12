@@ -7,6 +7,7 @@ edition = "2024"
 default = []
 metrics = ["common/metrics"]
 controller = ["dep:axum"]
+file_validator = ["common/file_validator"]
 
 [dependencies]
 common = { path = "../../common" }
@@ -35,6 +36,7 @@ tokio-util = { workspace = true }
 moka = { workspace = true }
 bytes = { workspace = true }
 once_cell = { workspace = true }
+validator = { workspace = true }
 
 indexmap = { workspace = true }
 const_format = { workspace = true }
