@@ -35,7 +35,7 @@ impl CommentService {
         let comment = DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 // 查询照片是否存在
-                if PhotoMapper::exists(txn, photo_id).await? {
+                if !PhotoMapper::exists(txn, photo_id).await? {
                     return log_warn(
                         "comment_publish_photo_not_exists",
                         "用户尝试评论不存在的照片",
