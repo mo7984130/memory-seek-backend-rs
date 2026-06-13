@@ -1188,7 +1188,7 @@ Expected: All tests pass
 
 - [ ] **Step 3: Run integration tests (if available)**
 
-Run: `cargo test --test integration --features "auth,user,photo" -- --test-threads=1`
+Run: `cargo test -p server --features "auth,user,photo" -- --test-threads=1`
 Expected: All integration tests pass
 
 - [ ] **Step 4: Final commit**

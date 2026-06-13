@@ -846,7 +846,7 @@ Expected: 服务启动成功
 
 - [ ] **Step 4: 运行集成测试**
 
-Run: `cargo test --test integration --features "auth,user,photo" -- --test-threads=1`
+Run: `cargo test -p server --features "auth,user,photo" -- --test-threads=1`
 Expected: 所有集成测试通过
 
 - [ ] **Step 5: 提交最终版本**

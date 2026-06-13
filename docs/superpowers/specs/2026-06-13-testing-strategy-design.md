@@ -102,7 +102,7 @@ cargo test --lib
 
 # 集成测试（需要先启动基础设施）
 podman compose -f tests/load/docker-compose.yml up -d postgres redis minio
-cargo test --test integration auth --features auth -- --test-threads=1
+cargo test -p server --features auth -- --test-threads=1
 ```
 
 ## 试点计划

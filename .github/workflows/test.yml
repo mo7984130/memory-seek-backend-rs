@@ -58,7 +58,7 @@ jobs:
                   echo "✅ redis 就绪"
 
             - name: Run integration tests
-              run: cargo test --test integration --features "auth,user,photo"
+              run: cargo test -p server --features "auth,user,photo" -- --test-threads=1
               env:
                   DATABASE_URL: postgres://test:test@localhost:5433/memory_seek_test
                   REDIS_URL: redis://localhost:6380

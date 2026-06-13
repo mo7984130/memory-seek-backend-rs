@@ -418,7 +418,7 @@ test-unit:
 test-integration:
 	docker compose up -d postgres redis minio
 	sleep 10
-	cargo test --test integration --features "auth,user,photo"
+	cargo test -p server --features "auth,user,photo" -- --test-threads=1
 	docker compose down -v
 
 test-load: test-load-auth test-load-photo
@@ -481,7 +481,7 @@ jobs:
           docker compose -f tests/load/docker-compose.yml exec -T redis redis-cli ping
 
       - name: Run integration tests
-        run: cargo test --test integration --features "auth,user,photo"
+        run: cargo test -p server --features "auth,user,photo" -- --test-threads=1
         env:
           DATABASE_URL: postgres://test:test@localhost:5433/memory_seek_test
           REDIS_URL: redis://localhost:6380

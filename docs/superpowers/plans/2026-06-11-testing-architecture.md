@@ -173,7 +173,7 @@ test-unit:
 test-integration:
 	docker compose up -d postgres redis minio
 	sleep 10
-	cargo test --test integration --features "auth,user,photo"
+	cargo test -p server --features "auth,user,photo" -- --test-threads=1
 	docker compose down -v
 
 test-load: test-load-auth test-load-photo
@@ -258,7 +258,7 @@ axum = { workspace = true }
 - [ ] **Step 3: 验证依赖可以编译**
 
 ```bash
-cargo check --test integration
+cargo check -p server
 ```
 
 Expected: 编译成功（可能有未实现的测试文件警告）
@@ -356,7 +356,7 @@ impl Drop for CleanupGuard {
 - [ ] **Step 4: 验证编译**
 
 ```bash
-cargo check --test integration
+cargo check -p server
 ```
 
 - [ ] **Step 5: 提交**
@@ -419,7 +419,7 @@ pub async fn build_test_state_with_minio(minio_endpoint: &str) -> (AppState, Cle
 - [ ] **Step 2: 验证编译**
 
 ```bash
-cargo check --test integration
+cargo check -p server
 ```
 
 - [ ] **Step 3: 提交**
@@ -516,7 +516,7 @@ pub async fn get_test_token(
 - [ ] **Step 2: 验证编译**
 
 ```bash
-cargo check --test integration
+cargo check -p server
 ```
 
 - [ ] **Step 3: 提交**
@@ -581,7 +581,7 @@ pub async fn clear_test_bucket(
 - [ ] **Step 2: 验证编译**
 
 ```bash
-cargo check --test integration
+cargo check -p server
 ```
 
 - [ ] **Step 3: 提交**
@@ -1733,7 +1733,7 @@ jobs:
           docker compose -f tests/load/docker-compose.yml exec -T redis redis-cli ping
 
       - name: Run integration tests
-        run: cargo test --test integration --features "auth,user,photo"
+        run: cargo test -p server --features "auth,user,photo" -- --test-threads=1
         env:
           DATABASE_URL: postgres://test:test@localhost:5433/memory_seek_test
           REDIS_URL: redis://localhost:6380
@@ -1820,7 +1820,7 @@ Expected: 所有容器启动成功
 - [ ] **Step 2: 运行集成测试**
 
 ```bash
-cargo test --test integration --features "auth,user,photo" -- --nocapture
+cargo test -p server --features "auth,user,photo" -- --test-threads=1
 ```
 
 Expected: 所有测试通过

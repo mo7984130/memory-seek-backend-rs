@@ -26,15 +26,15 @@ cargo build --features "auth,photo"
 podman compose -f tests/load/docker-compose.yml up -d postgres redis minio
 
 # 运行集成测试（必须串行执行）
-cargo test --test integration auth --features auth -- --test-threads=1
-cargo test --test integration photo --features "auth,photo" -- --test-threads=1
-cargo test --test integration user --features "auth,user" -- --test-threads=1
+cargo test -p server --features auth -- --test-threads=1
+cargo test -p server --features "auth,photo" -- --test-threads=1
+cargo test -p server --features "auth,user" -- --test-threads=1
 
 # 运行单个测试
-cargo test --test integration auth::register::test_register_success --features auth -- --test-threads=1
+cargo test -p server auth::register::test_register_success --features auth -- --test-threads=1
 
 # 运行所有集成测试
-cargo test --test integration --features "auth,user,photo" -- --test-threads=1
+cargo test -p server --features "auth,user,photo" -- --test-threads=1
 
 # 运行单元测试
 cargo test --lib
