@@ -87,3 +87,150 @@ impl IntoResponse for AppError {
         R::err(self.status_code().as_u16(), self.to_string().as_str()).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- status_code tests ---
+
+    #[test]
+    fn status_code_unauthorized() {
+        assert_eq!(AppError::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn status_code_bad_request() {
+        assert_eq!(
+            AppError::BadRequest("msg".into()).status_code(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn status_code_not_found() {
+        assert_eq!(
+            AppError::NotFound("msg".into()).status_code(),
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    #[test]
+    fn status_code_forbidden() {
+        assert_eq!(
+            AppError::Forbidden("msg".into()).status_code(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[test]
+    fn status_code_conflict() {
+        assert_eq!(
+            AppError::Conflict("msg".into()).status_code(),
+            StatusCode::CONFLICT
+        );
+    }
+
+    #[test]
+    fn status_code_internal_server_error() {
+        assert_eq!(
+            AppError::InternalServerError.status_code(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test]
+    fn status_code_ignore() {
+        assert_eq!(AppError::Ignore.status_code(), StatusCode::OK);
+    }
+
+    // --- constructor tests ---
+
+    #[test]
+    fn bad_request_constructor() {
+        let err = AppError::bad_request("invalid input");
+        match err {
+            AppError::BadRequest(msg) => assert_eq!(msg, "invalid input"),
+            _ => panic!("expected BadRequest"),
+        }
+    }
+
+    #[test]
+    fn bad_request_constructor_with_string() {
+        let err = AppError::bad_request(String::from("owned string"));
+        match err {
+            AppError::BadRequest(msg) => assert_eq!(msg, "owned string"),
+            _ => panic!("expected BadRequest"),
+        }
+    }
+
+    #[test]
+    fn not_found_constructor() {
+        let err = AppError::not_found("missing resource");
+        match err {
+            AppError::NotFound(msg) => assert_eq!(msg, "missing resource"),
+            _ => panic!("expected NotFound"),
+        }
+    }
+
+    #[test]
+    fn conflict_constructor() {
+        let err = AppError::conflict("already exists");
+        match err {
+            AppError::Conflict(msg) => assert_eq!(msg, "already exists"),
+            _ => panic!("expected Conflict"),
+        }
+    }
+
+    #[test]
+    fn forbidden_constructor() {
+        let err = AppError::forbidden("no access");
+        match err {
+            AppError::Forbidden(msg) => assert_eq!(msg, "no access"),
+            _ => panic!("expected Forbidden"),
+        }
+    }
+
+    #[test]
+    fn unauthorized_is_variant() {
+        let err = AppError::Unauthorized;
+        assert!(matches!(err, AppError::Unauthorized));
+    }
+
+    #[test]
+    fn internal_server_error_is_variant() {
+        let err = AppError::InternalServerError;
+        assert!(matches!(err, AppError::InternalServerError));
+    }
+
+    #[test]
+    fn ignore_is_variant() {
+        let err = AppError::Ignore;
+        assert!(matches!(err, AppError::Ignore));
+    }
+
+    // --- Display (thiserror) tests ---
+
+    #[test]
+    fn display_unauthorized() {
+        assert_eq!(AppError::Unauthorized.to_string(), "认证失败");
+    }
+
+    #[test]
+    fn display_bad_request() {
+        assert_eq!(
+            AppError::BadRequest("msg".into()).to_string(),
+            "msg"
+        );
+    }
+
+    #[test]
+    fn display_internal_server_error() {
+        assert_eq!(AppError::InternalServerError.to_string(), "服务器内部错误");
+    }
+
+    #[test]
+    fn display_ignore() {
+        assert_eq!(AppError::Ignore.to_string(), "忽略的错误, 不应该输出");
+    }
+}
