@@ -146,3 +146,179 @@ impl TokenCipher {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{FaceBBoxPixels, ImageTokenType};
+
+    fn test_cipher() -> TokenCipher {
+        TokenCipher::new("test-key-for-unit-tests", "test-salt")
+    }
+
+    fn test_image_token() -> ImageToken {
+        ImageToken::thumbnail("abc123")
+    }
+
+    // --- 加密解密往返 ---
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip_string() {
+        let cipher = test_cipher();
+        let payload = "hello world".to_string();
+        let token = cipher.encrypt(&payload, Some("seed")).unwrap();
+        let decrypted: String = cipher.decrypt(&token).unwrap();
+        assert_eq!(decrypted, payload);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip_image_token() {
+        let cipher = test_cipher();
+        let payload = test_image_token();
+        let token = cipher.encrypt(&payload, Some("seed")).unwrap();
+        let decrypted: ImageToken = cipher.decrypt(&token).unwrap();
+        assert_eq!(decrypted.file_id, payload.file_id);
+        assert_eq!(decrypted.token_type, payload.token_type);
+        assert!(decrypted.bbox.is_none());
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip_complex_payload() {
+        let cipher = test_cipher();
+        let payload = ImageToken::crop(
+            "file-xyz",
+            FaceBBoxPixels {
+                x: 10,
+                y: 20,
+                w: 100,
+                h: 150,
+            },
+        );
+        let token = cipher.encrypt(&payload, Some("crop-seed")).unwrap();
+        let decrypted: ImageToken = cipher.decrypt(&token).unwrap();
+        assert_eq!(decrypted.file_id, "file-xyz");
+        assert_eq!(decrypted.token_type, ImageTokenType::Crop);
+        let bbox = decrypted.bbox.unwrap();
+        assert_eq!(bbox.x, 10);
+        assert_eq!(bbox.y, 20);
+        assert_eq!(bbox.w, 100);
+        assert_eq!(bbox.h, 150);
+    }
+
+    // --- 确定性 nonce ---
+
+    #[test]
+    fn test_deterministic_nonce_same_seed() {
+        let cipher = test_cipher();
+        let payload = "deterministic".to_string();
+        let token1 = cipher.encrypt(&payload, Some("same-seed")).unwrap();
+        let token2 = cipher.encrypt(&payload, Some("same-seed")).unwrap();
+        assert_eq!(token1, token2);
+    }
+
+    #[test]
+    fn test_deterministic_nonce_different_seed() {
+        let cipher = test_cipher();
+        let payload = "deterministic".to_string();
+        let token1 = cipher.encrypt(&payload, Some("seed-a")).unwrap();
+        let token2 = cipher.encrypt(&payload, Some("seed-b")).unwrap();
+        assert_ne!(token1, token2);
+    }
+
+    // --- 随机 nonce ---
+
+    #[test]
+    fn test_random_nonce_no_seed() {
+        let cipher = test_cipher();
+        let payload = "random".to_string();
+        let token1 = cipher.encrypt(&payload, None).unwrap();
+        let token2 = cipher.encrypt(&payload, None).unwrap();
+        assert_ne!(token1, token2);
+    }
+
+    // --- 不同 key 解密失败 ---
+
+    #[test]
+    fn test_decrypt_with_wrong_key() {
+        let cipher1 = TokenCipher::new("key-1", "salt");
+        let cipher2 = TokenCipher::new("key-2", "salt");
+        let payload = "secret".to_string();
+        let token = cipher1.encrypt(&payload, Some("seed")).unwrap();
+        let result: Result<String, _> = cipher2.decrypt(&token);
+        assert!(result.is_err());
+    }
+
+    // --- 无效 token 处理 ---
+
+    #[test]
+    fn test_decrypt_invalid_base64() {
+        let cipher = test_cipher();
+        let result: Result<String, _> = cipher.decrypt("not-valid-base64!!!");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decrypt_token_too_short() {
+        let cipher = test_cipher();
+        // 编码一个长度 <= NONCE_LEN 的 bytes
+        let short_bytes = vec![0u8; NONCE_LEN]; // 刚好等于 NONCE_LEN，应该 <= NONCE_LEN
+        let short_token = URL_SAFE_NO_PAD.encode(&short_bytes);
+        let result: Result<String, _> = cipher.decrypt(&short_token);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decrypt_empty_token() {
+        let cipher = test_cipher();
+        let result: Result<String, _> = cipher.decrypt("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decrypt_corrupted_ciphertext() {
+        let cipher = test_cipher();
+        let payload = "data".to_string();
+        let token = cipher.encrypt(&payload, Some("seed")).unwrap();
+        // 篡改 token 的最后几个字符
+        let mut corrupted = token.clone();
+        let last = corrupted.pop().unwrap();
+        corrupted.push(if last == 'A' { 'B' } else { 'A' });
+        let result: Result<String, _> = cipher.decrypt(&corrupted);
+        assert!(result.is_err());
+    }
+
+    // --- from_config ---
+
+    #[test]
+    fn test_from_config() {
+        let config = TokenCipherConfig {
+            key: "config-key".to_string(),
+            salt: "config-salt".to_string(),
+        };
+        let cipher = TokenCipher::from_config(&config);
+        let payload = "test".to_string();
+        let token = cipher.encrypt(&payload, Some("seed")).unwrap();
+        let decrypted: String = cipher.decrypt(&token).unwrap();
+        assert_eq!(decrypted, payload);
+    }
+
+    // --- encrypt_avatar_token ---
+
+    #[test]
+    fn test_encrypt_avatar_token_some() {
+        let cipher = test_cipher();
+        let token = cipher.encrypt_avatar_token(Some("avatar-file-id"));
+        assert!(token.is_some());
+        // 验证能解密回来
+        let decrypted: ImageToken = cipher.decrypt(&token.unwrap()).unwrap();
+        assert_eq!(decrypted.file_id, "avatar-file-id");
+        assert_eq!(decrypted.token_type, ImageTokenType::Thumbnail);
+    }
+
+    #[test]
+    fn test_encrypt_avatar_token_none() {
+        let cipher = test_cipher();
+        let token = cipher.encrypt_avatar_token(None);
+        assert!(token.is_none());
+    }
+}

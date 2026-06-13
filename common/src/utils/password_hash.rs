@@ -156,3 +156,109 @@ impl HashAlgorithm {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detect_bcrypt_hash() {
+        let alg = HashAlgorithm::Bcrypt(BcryptConfig { cost: 12 });
+        let hash = alg.hash("test_password").unwrap();
+        let detected = HashAlgorithm::detect(&hash);
+        assert_eq!(detected, Some(HashAlgorithm::Bcrypt(BcryptConfig { cost: 12 })));
+    }
+
+    #[test]
+    fn detect_argon2id_hash() {
+        let alg = HashAlgorithm::Argon2id(Argon2idConfig {
+            m_cost: 16384,
+            t_cost: 2,
+            p_cost: 1,
+        });
+        let hash = alg.hash("test_password").unwrap();
+        let detected = HashAlgorithm::detect(&hash);
+        assert_eq!(
+            detected,
+            Some(HashAlgorithm::Argon2id(Argon2idConfig {
+                m_cost: 16384,
+                t_cost: 2,
+                p_cost: 1,
+            }))
+        );
+    }
+
+    #[test]
+    fn detect_invalid_hash_returns_none() {
+        assert_eq!(HashAlgorithm::detect("not_a_valid_hash"), None);
+        assert_eq!(HashAlgorithm::detect(""), None);
+        assert_eq!(HashAlgorithm::detect("$scrypt$foo"), None);
+    }
+
+    #[test]
+    fn bcrypt_hash_and_verify_roundtrip() {
+        let alg = HashAlgorithm::Bcrypt(BcryptConfig { cost: 4 });
+        let hash = alg.hash("my_secret").unwrap();
+        assert!(alg.verify("my_secret", &hash).unwrap());
+    }
+
+    #[test]
+    fn argon2id_hash_and_verify_roundtrip() {
+        let alg = HashAlgorithm::Argon2id(Argon2idConfig {
+            m_cost: 16384,
+            t_cost: 2,
+            p_cost: 1,
+        });
+        let hash = alg.hash("my_secret").unwrap();
+        assert!(alg.verify("my_secret", &hash).unwrap());
+    }
+
+    #[test]
+    fn verify_wrong_password_returns_false() {
+        let bcrypt_alg = HashAlgorithm::Bcrypt(BcryptConfig { cost: 4 });
+        let bcrypt_hash = bcrypt_alg.hash("correct_password").unwrap();
+        assert!(!bcrypt_alg.verify("wrong_password", &bcrypt_hash).unwrap());
+
+        let argon2_alg = HashAlgorithm::Argon2id(Argon2idConfig {
+            m_cost: 16384,
+            t_cost: 2,
+            p_cost: 1,
+        });
+        let argon2_hash = argon2_alg.hash("correct_password").unwrap();
+        assert!(!argon2_alg.verify("wrong_password", &argon2_hash).unwrap());
+    }
+
+    #[test]
+    fn verify_and_detect_bcrypt() {
+        let alg = HashAlgorithm::Bcrypt(BcryptConfig { cost: 4 });
+        let hash = alg.hash("detect_me").unwrap();
+        let (matched, detected_alg) = HashAlgorithm::verify_and_detect("detect_me", &hash).unwrap();
+        assert!(matched);
+        assert_eq!(detected_alg, HashAlgorithm::Bcrypt(BcryptConfig { cost: 4 }));
+    }
+
+    #[test]
+    fn verify_and_detect_argon2id() {
+        let alg = HashAlgorithm::Argon2id(Argon2idConfig {
+            m_cost: 16384,
+            t_cost: 2,
+            p_cost: 1,
+        });
+        let hash = alg.hash("detect_me").unwrap();
+        let (matched, detected_alg) = HashAlgorithm::verify_and_detect("detect_me", &hash).unwrap();
+        assert!(matched);
+        assert_eq!(
+            detected_alg,
+            HashAlgorithm::Argon2id(Argon2idConfig {
+                m_cost: 16384,
+                t_cost: 2,
+                p_cost: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn dummy_verify_does_not_panic() {
+        HashAlgorithm::dummy_verify();
+    }
+}
