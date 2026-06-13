@@ -2,8 +2,8 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use tower::ServiceExt;
 
-use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 use super::super::common::create_collection;
+use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 
 /// Test getting collection list when empty
 #[tokio::test]

@@ -193,9 +193,7 @@ mod tests {
 
     #[test]
     fn test_collection_photo_add_batch_param_empty() {
-        let param = CollectionPhotoAddBatchParam {
-            photo_ids: vec![],
-        };
+        let param = CollectionPhotoAddBatchParam { photo_ids: vec![] };
         assert!(param.validate().is_err());
     }
 
@@ -227,9 +225,7 @@ mod tests {
 
     #[test]
     fn test_collection_photo_remove_batch_param_empty() {
-        let param = CollectionPhotoRemoveBatchParam {
-            photo_ids: vec![],
-        };
+        let param = CollectionPhotoRemoveBatchParam { photo_ids: vec![] };
         assert!(param.validate().is_err());
     }
 

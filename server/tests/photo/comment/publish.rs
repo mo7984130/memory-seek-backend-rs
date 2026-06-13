@@ -2,8 +2,8 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use tower::ServiceExt;
 
-use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 use super::super::common::upload_photo;
+use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 
 /// Test publishing a comment successfully
 #[tokio::test]
@@ -67,12 +67,7 @@ async fn test_publish_comment_empty_content() {
     };
 
     let uri = format!("/photo/comment/{}", photo_id);
-    let req = auth::auth_request(
-        "POST",
-        &uri,
-        &user,
-        serde_json::json!({ "content": "" }),
-    );
+    let req = auth::auth_request("POST", &uri, &user, serde_json::json!({ "content": "" }));
     let res = app.oneshot(req).await.unwrap();
 
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);

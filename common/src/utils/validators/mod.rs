@@ -10,10 +10,10 @@
 /// - `password`: 密码强度验证（8-64 位，必须包含字母和数字）
 /// - `normal_chars`: 常规字符验证（禁止 `< > / \ " ' & @` 等特殊符号）
 mod account;
-mod username;
 mod email;
-mod password;
 mod normal_chars;
+mod password;
+mod username;
 
 pub use account::validate_account;
 pub use email::validate_email;

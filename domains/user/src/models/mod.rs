@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use common::models::ImageToken;
+use common::utils::TokenCipher;
 use common::utils::validators::validate_normal_char;
 use common::utils::validators::validate_password;
-use common::utils::TokenCipher;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -14,7 +14,7 @@ pub struct ChangePasswordParam {
     #[validate(custom(function = "validate_password"))]
     pub old_password: String,
     #[validate(custom(function = "validate_password"))]
-    pub new_password: String
+    pub new_password: String,
 }
 
 /// 修改昵称请求体
@@ -25,14 +25,14 @@ pub struct ChangeNicknameParam {
         length(min = 1, max = 20, message = "昵称长度在 1 到 20 个字符"),
         custom(function = "validate_normal_char")
     )]
-    pub new_nickname: String
+    pub new_nickname: String,
 }
 
 /// 批量获取用户信息请求体
 #[derive(Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct GetUserInfoBatchParam {
-    pub user_ids: Vec<String>
+    pub user_ids: Vec<String>,
 }
 
 /// 邀请码数据传输对象，包含邀请码值和过期时间
@@ -71,10 +71,12 @@ impl UserInfoResult {
     /// # 返回
     /// 转换后的用户信息视图对象，`user_id` 转为字符串，头像字段加密为 token
     pub fn from_dto(dto: UserInfoRow, token_cipher: &TokenCipher) -> Self {
-        let avatar_token = dto.avatar_file_id
-            .as_ref()
-            .and_then(|key| token_cipher.encrypt(&ImageToken::thumbnail(key.clone()), Some(key)).ok());
-        
+        let avatar_token = dto.avatar_file_id.as_ref().and_then(|key| {
+            token_cipher
+                .encrypt(&ImageToken::thumbnail(key.clone()), Some(key))
+                .ok()
+        });
+
         Self {
             user_id: dto.user_id.to_string(),
             nickname: dto.nickname,

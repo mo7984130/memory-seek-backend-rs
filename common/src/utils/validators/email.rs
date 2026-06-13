@@ -4,7 +4,9 @@ use regex::Regex;
 use validator::ValidationError;
 
 /// 邮箱正则表达式，匹配 `local@domain.tld` 格式，支持子域名和 `+` 标签
-pub static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z0-9-]+$").unwrap() );
+pub static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z0-9-]+$").unwrap()
+});
 
 /// 验证邮箱地址格式
 ///
@@ -23,12 +25,12 @@ pub fn validate_email(email: &str) -> Result<(), ValidationError> {
     if email.is_empty() {
         return Err(ValidationError::new("invalid_email").with_message("邮箱格式不正确".into()));
     }
-    
+
     // 检查是否有连续的点
     if email.contains("..") {
         return Err(ValidationError::new("invalid_email").with_message("邮箱格式不正确".into()));
     }
-    
+
     if !EMAIL_REGEX.is_match(email) {
         return Err(ValidationError::new("invalid_email").with_message("邮箱格式不正确".into()));
     }

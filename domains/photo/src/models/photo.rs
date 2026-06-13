@@ -214,9 +214,7 @@ mod tests {
 
     #[test]
     fn test_md5s_exist_param_empty() {
-        let param = Md5sExistParam {
-            md5s: vec![],
-        };
+        let param = Md5sExistParam { md5s: vec![] };
         assert!(param.validate().is_err());
     }
 
@@ -246,9 +244,7 @@ mod tests {
 
     #[test]
     fn test_delete_photo_param_empty() {
-        let param = DeletePhotoParam {
-            photo_ids: vec![],
-        };
+        let param = DeletePhotoParam { photo_ids: vec![] };
         assert!(param.validate().is_err());
     }
 
@@ -260,4 +256,3 @@ mod tests {
         assert!(param.validate().is_ok());
     }
 }
-

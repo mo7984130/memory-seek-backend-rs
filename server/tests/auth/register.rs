@@ -1,9 +1,11 @@
 use axum::body::Body;
-use axum::http::{Request, StatusCode, header};
+use axum::http::{header, Request, StatusCode};
 use serde_json::json;
 use tower::ServiceExt;
 
-use crate::helpers::{app::build_test_router, auth::register_and_login, db::CleanupGuard};
+use crate::helpers::{
+    app::build_test_router, auth::register_and_login, db::CleanupGuard, test_config,
+};
 
 /// 测试正常注册
 #[tokio::test]
@@ -187,9 +189,9 @@ async fn test_register_invalid_inviter_code() {
 async fn setup_email_verify_code(email: &str, code: &str) {
     use deadpool_redis::redis::AsyncCommands;
 
-    let redis_url = "redis://localhost:6380";
-    let cfg = deadpool_redis::Config::from_url(redis_url);
-    let pool = cfg
+    let cfg = test_config();
+    let redis_cfg = deadpool_redis::Config::from_url(&cfg.redis.url);
+    let pool = redis_cfg
         .create_pool(Some(deadpool_redis::Runtime::Tokio1))
         .expect("创建 Redis 连接池失败");
     let mut conn = pool.get().await.expect("获取 Redis 连接失败");

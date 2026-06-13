@@ -1,3 +1,4 @@
+pub mod client_ip;
 /// 请求提取器模块
 ///
 /// 提供自定义的 axum 请求提取器：
@@ -8,10 +9,9 @@
 pub mod validated_json;
 #[cfg(feature = "validators")]
 pub mod validated_query;
-pub mod client_ip;
 
+pub use client_ip::ClientIp;
 #[cfg(feature = "validators")]
 pub use validated_json::ValidatedJson;
 #[cfg(feature = "validators")]
 pub use validated_query::ValidatedQuery;
-pub use client_ip::ClientIp;

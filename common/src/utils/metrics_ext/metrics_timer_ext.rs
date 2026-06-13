@@ -1,6 +1,6 @@
+use crate::utils::MetricsTimer;
 /// Future 耗时监控扩展 trait
 use std::future::Future;
-use crate::utils::MetricsTimer;
 
 /// 为所有 `Future` 类型提供 `.timed()` 方法，用于自动记录异步任务的执行耗时
 ///
@@ -17,7 +17,7 @@ pub trait MetricsTimerExt: Future + Sized {
     #[inline]
     fn timed(self, name: &'static str) -> impl Future<Output = Self::Output> + Send
     where
-        Self: Send
+        Self: Send,
     {
         async move {
             #[cfg(feature = "metrics")]

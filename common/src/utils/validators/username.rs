@@ -14,7 +14,8 @@ impl UsernameValidConfig {
     pub const LEN_ERROR_MSG: &str = "账号长度需在 4-20 之间";
     pub const PATTERN: &str = r"^[a-zA-Z0-9_-]+$";
 }
-pub static USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(UsernameValidConfig::PATTERN).unwrap());
+pub static USERNAME_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(UsernameValidConfig::PATTERN).unwrap());
 
 /// 验证用户名格式
 ///
@@ -32,10 +33,12 @@ pub static USERNAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(UsernameValidCo
 pub fn validate_username(username: &str) -> Result<(), ValidationError> {
     let len = username.chars().count();
     if !(UsernameValidConfig::MIN_LENGTH..=UsernameValidConfig::MAX_LENGTH).contains(&len) {
-        return Err(ValidationError::new("invalid_length").with_message(UsernameValidConfig::LEN_ERROR_MSG.into()))
+        return Err(ValidationError::new("invalid_length")
+            .with_message(UsernameValidConfig::LEN_ERROR_MSG.into()));
     }
     if !USERNAME_REGEX.is_match(username) {
-        return Err(ValidationError::new("invalid_username").with_message(UsernameValidConfig::CHAR_ERROR_MSG.into()))
+        return Err(ValidationError::new("invalid_username")
+            .with_message(UsernameValidConfig::CHAR_ERROR_MSG.into()));
     }
     Ok(())
 }
@@ -64,7 +67,7 @@ mod tests {
         assert!(validate_username("abc").is_err());
         assert!(validate_username("").is_err());
         assert!(validate_username("a").is_err());
-        
+
         // 长度过长
         assert!(validate_username("123456789012345678901").is_err()); // 21 字符
         assert!(validate_username("123456789012345678901234567890").is_err()); // 30 字符

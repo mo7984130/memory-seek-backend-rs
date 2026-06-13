@@ -3,7 +3,9 @@ use std::collections::HashSet;
 use common::Result;
 use common::ext::{OkExt, ResultErrExt};
 use sea_orm::sea_query::Expr;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+};
 
 use entities::photo::photo::*;
 
@@ -148,7 +150,6 @@ impl PhotoMapper {
             .trace_internal_err("db_query_err", "查询照片失败")
             .map(|models| models.into_iter().map(PhotoRecord::from).collect())
     }
-
 }
 
 // 删除

@@ -16,9 +16,8 @@ impl PasswordValidConfig {
     pub const PATTERN_MSG: &'static str = "需包含字母和数字 (包含特殊字符)";
 }
 
-static PASSWORD_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(PasswordValidConfig::PATTERN).unwrap()
-});
+static PASSWORD_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(PasswordValidConfig::PATTERN).unwrap());
 
 /// 验证密码强度
 ///
@@ -51,7 +50,8 @@ pub fn validate_password(password: &str) -> Result<(), ValidationError> {
     // 3. 复杂性检查 (Pattern: 字母 + 数字)
     match PASSWORD_REGEX.is_match(password) {
         Ok(true) => Ok(()),
-        Ok(false) => Err(ValidationError::new("invalid_password").with_message(PasswordValidConfig::PATTERN_MSG.into())),
+        Ok(false) => Err(ValidationError::new("invalid_password")
+            .with_message(PasswordValidConfig::PATTERN_MSG.into())),
         Err(e) => {
             error!("密码正则解析时出现问题：{:?}", e);
             Err(ValidationError::new("internal_error").with_message("服务器内部校验错误".into()))
@@ -91,7 +91,7 @@ mod tests {
         assert!(validate_password("Aa1").is_err());
         assert!(validate_password("Pass1").is_err());
         assert!(validate_password("1234567").is_err()); // 7 位
-        
+
         // 长度过长
         let long_password = "a".repeat(65);
         assert!(validate_password(&long_password).is_err());
@@ -122,7 +122,7 @@ mod tests {
         assert!(validate_password("Aa123456").is_ok()); // 最小长度 8
         let valid_64 = "Aa123456".repeat(8); // 64 位
         assert!(validate_password(&valid_64).is_ok());
-        
+
         let invalid_65 = "Aa1234567".repeat(8); // 72 位
         assert!(validate_password(&invalid_65).is_err());
     }
@@ -137,4 +137,3 @@ mod tests {
         assert!(validate_password("Abc!@#123").is_ok());
     }
 }
-

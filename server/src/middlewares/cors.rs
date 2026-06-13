@@ -1,5 +1,5 @@
-use tower_http::cors::{Any, CorsLayer};
 use axum::http::{HeaderName, Method};
+use tower_http::cors::{Any, CorsLayer};
 
 /// 创建 CORS 中间件
 pub fn layer() -> CorsLayer {

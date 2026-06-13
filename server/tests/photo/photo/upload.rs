@@ -2,8 +2,8 @@ use axum::http::{header, Request, StatusCode};
 use serde_json::Value;
 use tower::ServiceExt;
 
+use super::super::common::{multipart_upload_request, MINIMAL_JPEG};
 use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
-use super::super::common::{MINIMAL_JPEG, multipart_upload_request};
 
 /// Test uploading a photo successfully
 #[tokio::test]
@@ -32,10 +32,7 @@ async fn test_upload_photo_success() {
     assert_eq!(status, StatusCode::OK, "Upload failed: {}", json);
     assert_eq!(json["code"], 200);
     assert!(json["data"]["id"].as_str().is_some(), "应返回 photo id");
-    assert!(
-        json["data"]["name"].as_str().is_some(),
-        "应返回 photo name"
-    );
+    assert!(json["data"]["name"].as_str().is_some(), "应返回 photo name");
     assert!(json["data"]["width"].as_i64().is_some(), "应返回 width");
     assert!(json["data"]["height"].as_i64().is_some(), "应返回 height");
     assert!(json["data"]["size"].as_i64().is_some(), "应返回 size");

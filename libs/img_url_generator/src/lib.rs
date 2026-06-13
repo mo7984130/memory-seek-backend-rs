@@ -105,15 +105,14 @@ impl ImageUrlProvider {
                 Self::ImgProxy(ImgProxyGenerator {
                     base_url: config.oss_url,
                     key: hex::decode(key_hex).expect("【格式错误】ImgProxy KEY 必须是合法的 Hex"),
-                    salt: hex::decode(salt_hex).expect("【格式错误】ImgProxy SALT 必须是合法的 Hex"),
+                    salt: hex::decode(salt_hex)
+                        .expect("【格式错误】ImgProxy SALT 必须是合法的 Hex"),
                     bucket: config.bucket,
                 })
             }
             ProxyType::Oss => {
                 let client = s3_client.expect("【配置错误】使用 Oss 模式必须注入 S3Client 实例");
-                Self::AliyunOss(AliyunOssGenerator {
-                    s3_client: client,
-                })
+                Self::AliyunOss(AliyunOssGenerator { s3_client: client })
             }
         }
     }

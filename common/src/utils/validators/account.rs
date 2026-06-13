@@ -2,7 +2,7 @@
 ///
 /// 支持用户名和邮箱两种账号格式的自动识别与验证。
 use crate::utils::validators::email::EMAIL_REGEX;
-use crate::utils::validators::username::{UsernameValidConfig, USERNAME_REGEX};
+use crate::utils::validators::username::{USERNAME_REGEX, UsernameValidConfig};
 use validator::ValidationError;
 
 /// 验证账号格式，支持用户名或邮箱两种形式
@@ -23,15 +23,19 @@ use validator::ValidationError;
 pub fn validate_account(value: &str) -> Result<(), ValidationError> {
     if value.contains('@') {
         if !EMAIL_REGEX.is_match(value) {
-            return Err(ValidationError::new("invalid_email").with_message("请输入正确的邮箱地址".into()));
+            return Err(
+                ValidationError::new("invalid_email").with_message("请输入正确的邮箱地址".into())
+            );
         }
     } else {
         if !USERNAME_REGEX.is_match(value) {
-            return Err(ValidationError::new("invalid_username").with_message(UsernameValidConfig::CHAR_ERROR_MSG.into()));
+            return Err(ValidationError::new("invalid_username")
+                .with_message(UsernameValidConfig::CHAR_ERROR_MSG.into()));
         }
         let len = value.chars().count();
         if !(UsernameValidConfig::MIN_LENGTH..=UsernameValidConfig::MAX_LENGTH).contains(&len) {
-            return Err(ValidationError::new("invalid_length").with_message(UsernameValidConfig::LEN_ERROR_MSG.into()));
+            return Err(ValidationError::new("invalid_length")
+                .with_message(UsernameValidConfig::LEN_ERROR_MSG.into()));
         }
     }
     Ok(())

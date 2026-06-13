@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
-use constants::{PasswordHasher, RedisKeys};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
+use constants::{PasswordHasher, RedisKeys};
 use entities::auth::user::UserDTO;
 use sea_orm::sea_query::Expr;
 use sea_orm::sqlx::types::uuid;
@@ -12,7 +12,7 @@ use tracing::info;
 
 use crate::UserState;
 use crate::config::GET_USER_INFO_BATCH_MAX_LEN;
-use crate::models::{ChangePasswordParam, InviterCodeResult, UserInfoRow, UserInfoResult};
+use crate::models::{ChangePasswordParam, InviterCodeResult, UserInfoResult, UserInfoRow};
 use common::error::AppError;
 use common::ext::{CacheExtension, OptionExt, RedisExt, ResultErrExt, log_err, log_warn};
 use common::utils::{DbUtils, MetricsTimerExt};
@@ -498,7 +498,10 @@ pub async fn get_user_info_batch(
                         .all(&state.db)
                         .timed(metrics_timer_name!("get_user_info_batch", "db_query"))
                         .await
-                        .trace_internal_err("db_query_error", "在批量获取用户信息时, 从数据库获取失败")
+                        .trace_internal_err(
+                            "db_query_error",
+                            "在批量获取用户信息时, 从数据库获取失败",
+                        )
                 })
             },
             |dto| dto.user_id,

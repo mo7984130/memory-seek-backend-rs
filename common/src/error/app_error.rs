@@ -96,7 +96,10 @@ mod tests {
 
     #[test]
     fn status_code_unauthorized() {
-        assert_eq!(AppError::Unauthorized.status_code(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            AppError::Unauthorized.status_code(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[test]
@@ -218,10 +221,7 @@ mod tests {
 
     #[test]
     fn display_bad_request() {
-        assert_eq!(
-            AppError::BadRequest("msg".into()).to_string(),
-            "msg"
-        );
+        assert_eq!(AppError::BadRequest("msg".into()).to_string(), "msg");
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use axum::Router;
 use server::config::AppConfig;
-use server::setup::AppSetup;
 use server::middlewares;
+use server::setup::AppSetup;
 
 /// 构建测试用 Router
 ///
@@ -17,9 +17,7 @@ pub async fn build_test_router() -> Router {
 
     // 加载配置并初始化应用
     let cfg = AppConfig::load().expect("加载测试配置失败");
-    let app_setup = AppSetup::init(&cfg)
-        .await
-        .expect("初始化测试应用失败");
+    let app_setup = AppSetup::init(&cfg).await.expect("初始化测试应用失败");
 
     // 合并路由并添加中间件（与 main.rs 一致）
     app_setup

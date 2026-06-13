@@ -35,7 +35,7 @@ pub fn validate_normal_char(value: &str) -> Result<(), ValidationError> {
         return Err(ValidationError::new("invalid_characters")
             .with_message(CommonValidConfig::NORMAL_CHAR_MSG.into()));
     }
-    
+
     if !NORMAL_CHAR_REGEX.is_match(value) {
         return Err(ValidationError::new("invalid_characters")
             .with_message(CommonValidConfig::NORMAL_CHAR_MSG.into()));
@@ -87,7 +87,7 @@ mod tests {
     fn test_validate_normal_char_empty() {
         // 空字符串应该失败（长度为 0）
         assert!(validate_normal_char("").is_err());
-        
+
         // 全为空格也应该失败
         assert!(validate_normal_char(" ").is_err());
         assert!(validate_normal_char("   ").is_err());

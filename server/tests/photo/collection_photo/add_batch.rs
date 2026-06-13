@@ -2,8 +2,8 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use tower::ServiceExt;
 
+use super::super::common::{create_collection, upload_photo};
 use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
-use super::super::common::{upload_photo, create_collection};
 
 /// Test adding photos to a collection successfully
 #[tokio::test]
@@ -61,12 +61,7 @@ async fn test_add_batch_empty_list() {
     let collection_id = collection["id"].as_str().unwrap();
 
     let uri = format!("/photo/collections/{}/photos", collection_id);
-    let req = auth::auth_request(
-        "POST",
-        &uri,
-        &user,
-        serde_json::json!({ "photoIds": [] }),
-    );
+    let req = auth::auth_request("POST", &uri, &user, serde_json::json!({ "photoIds": [] }));
     let res = app.oneshot(req).await.unwrap();
 
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);

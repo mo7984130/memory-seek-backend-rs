@@ -35,14 +35,8 @@ async fn test_get_user_info_batch_success() {
 
     // 验证每个用户信息包含必要字段
     for item in data {
-        assert!(
-            item["userId"].as_str().is_some(),
-            "应包含 userId 字段"
-        );
-        assert!(
-            item["nickname"].as_str().is_some(),
-            "应包含 nickname 字段"
-        );
+        assert!(item["userId"].as_str().is_some(), "应包含 userId 字段");
+        assert!(item["nickname"].as_str().is_some(), "应包含 nickname 字段");
     }
 
     guard.cleanup().await;

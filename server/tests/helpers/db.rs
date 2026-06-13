@@ -1,5 +1,7 @@
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 
+use super::test_config;
+
 /// 测试清理守卫
 ///
 /// 提供手动清理方法，测试结束时调用 `cleanup()` 清理测试数据。
@@ -11,8 +13,8 @@ pub struct CleanupGuard {
 impl CleanupGuard {
     /// 创建新的清理守卫
     pub async fn new() -> Self {
-        let db_url = "postgres://test:test@localhost:5433/memory_seek_test";
-        let db = Database::connect(db_url)
+        let cfg = test_config();
+        let db = Database::connect(&cfg.database.url)
             .await
             .expect("连接测试数据库失败");
 

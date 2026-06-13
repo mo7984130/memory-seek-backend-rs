@@ -2,8 +2,8 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use tower::ServiceExt;
 
-use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 use super::super::common::create_collection;
+use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 
 /// Test updating collection name
 #[tokio::test]
@@ -85,12 +85,7 @@ async fn test_update_collection_empty_name() {
     let collection_id = collection["id"].as_str().unwrap();
 
     let uri = format!("/photo/collections/{}", collection_id);
-    let req = auth::auth_request(
-        "PATCH",
-        &uri,
-        &user,
-        serde_json::json!({ "name": "" }),
-    );
+    let req = auth::auth_request("PATCH", &uri, &user, serde_json::json!({ "name": "" }));
     let res = app.oneshot(req).await.unwrap();
 
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);

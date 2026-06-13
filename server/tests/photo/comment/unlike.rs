@@ -2,8 +2,8 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use tower::ServiceExt;
 
+use super::super::common::{publish_comment, upload_photo};
 use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
-use super::super::common::{upload_photo, publish_comment};
 
 /// Test unliking a comment successfully
 #[tokio::test]

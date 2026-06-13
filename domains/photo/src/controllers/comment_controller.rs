@@ -6,7 +6,11 @@ use axum::{
     routing::{delete, get, post},
 };
 use common::{
-    Result, ext::ResultRExt, extractors::{ValidatedJson, ValidatedQuery}, models::CursorPage, r::R,
+    Result,
+    ext::ResultRExt,
+    extractors::{ValidatedJson, ValidatedQuery},
+    models::CursorPage,
+    r::R,
     traits::controller::ControllerRouter,
 };
 use entities::{

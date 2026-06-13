@@ -2,8 +2,8 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use tower::ServiceExt;
 
-use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 use super::super::common::create_collection;
+use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 
 /// Test deleting a collection successfully
 #[tokio::test]
@@ -54,8 +54,7 @@ async fn test_delete_collection_not_found() {
 
     // Should return 404 or 500 depending on service implementation
     assert!(
-        res.status() == StatusCode::NOT_FOUND
-            || res.status() == StatusCode::INTERNAL_SERVER_ERROR,
+        res.status() == StatusCode::NOT_FOUND || res.status() == StatusCode::INTERNAL_SERVER_ERROR,
         "删除不存在的相册应返回错误, got: {}",
         res.status()
     );

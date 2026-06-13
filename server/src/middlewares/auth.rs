@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crate::state::AppState;
 use axum::{extract::Request, middleware::Next, response::Response};
 use common::{error::AppError, ext::OptionExt};
 use entities::auth::user::UserId;
-use crate::state::AppState;
+use std::sync::Arc;
 
 /// 认证中间件
 ///
@@ -34,15 +34,23 @@ fn extract_bearer(request: &Request) -> Result<(i64, &str), AppError> {
         .headers()
         .get("Authorization")
         .and_then(|v| v.to_str().ok())
-        .ok_or_warn("auth_err", "请求缺少 Authorization header", AppError::Unauthorized)?;
+        .ok_or_warn(
+            "auth_err",
+            "请求缺少 Authorization header",
+            AppError::Unauthorized,
+        )?;
 
-    let content = header
-        .strip_prefix("Bearer ")
-        .ok_or_warn("auth_err", "Authorization header 格式错误，缺少 Bearer 前缀", AppError::Unauthorized)?;
+    let content = header.strip_prefix("Bearer ").ok_or_warn(
+        "auth_err",
+        "Authorization header 格式错误，缺少 Bearer 前缀",
+        AppError::Unauthorized,
+    )?;
 
-    let (user_id_str, token) = content
-        .split_once(' ')
-        .ok_or_warn("auth_err", "Authorization header 格式错误，应为: Bearer user_id access_token", AppError::Unauthorized)?;
+    let (user_id_str, token) = content.split_once(' ').ok_or_warn(
+        "auth_err",
+        "Authorization header 格式错误，应为: Bearer user_id access_token",
+        AppError::Unauthorized,
+    )?;
 
     let user_id: i64 = user_id_str.parse().map_err(|_| {
         tracing::warn!(user_id_str, "user_id 不是有效的数字");
@@ -56,8 +64,8 @@ fn extract_bearer(request: &Request) -> Result<(i64, &str), AppError> {
 ///
 /// 从 Redis 获取 `a:u:at:{user_id}` 对应的 token，与请求中的 token 比对
 async fn verify_token(state: &AppState, user_id: i64, token: &str) -> Result<(), AppError> {
-    use deadpool_redis::redis::AsyncCommands;
     use constants::RedisKeys;
+    use deadpool_redis::redis::AsyncCommands;
 
     let mut conn = state.redis.get().await.map_err(|e| {
         tracing::error!("获取 Redis 连接失败: {}", e);

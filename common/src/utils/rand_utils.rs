@@ -1,4 +1,4 @@
-use rand::{rng, Rng, RngExt};
+use rand::{Rng, RngExt, rng};
 
 /// 生成随机十六进制小写字符串
 ///
@@ -98,7 +98,10 @@ mod tests {
     fn test_generate_random_uppercase_str_format() {
         let s = generate_random_uppercase_str(100);
         assert!(s.chars().all(|c| c.is_ascii_alphanumeric()));
-        assert!(s.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()));
+        assert!(
+            s.chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+        );
     }
 
     #[test]

@@ -7,15 +7,18 @@ pub mod user;
 #[cfg(feature = "photo")]
 pub mod photo;
 
-use std::sync::Arc;
-use axum::Router;
 use crate::config::AppConfig;
 use crate::state::AppState;
+use axum::Router;
+use std::sync::Arc;
 
 pub struct AppDomains;
 
 impl AppDomains {
-    pub fn init(state: &Arc<AppState>, cfg: &AppConfig) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
+    pub fn init(
+        state: &Arc<AppState>,
+        cfg: &AppConfig,
+    ) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
         let mut public_router = Router::new();
         let mut protected_router = Router::new();
 

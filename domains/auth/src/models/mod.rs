@@ -16,7 +16,7 @@ pub struct LoginParam {
     #[validate(custom(function = "validate_account"))]
     pub account: String,
     #[validate(custom(function = "validate_password"))]
-    pub password: String
+    pub password: String,
 }
 
 #[derive(Debug, Validate, Serialize, Deserialize)]
@@ -36,7 +36,7 @@ pub struct RegisterParam {
     #[validate(length(min = 6, max = 6, message = "邀请码长度为6个字符"))]
     pub inviter_code: String,
     #[validate(length(min = 6, max = 6, message = "邮箱验证码长度为6个字符"))]
-    pub email_verify_code: String
+    pub email_verify_code: String,
 }
 
 #[derive(Debug, Validate, Serialize, Deserialize)]

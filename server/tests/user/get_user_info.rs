@@ -31,7 +31,10 @@ async fn test_get_user_info_success() {
     assert_eq!(data["username"].as_str().unwrap(), user.username);
     assert_eq!(data["email"].as_str().unwrap(), user.email);
     assert!(data["nickname"].as_str().is_some(), "应返回 nickname 字段");
-    assert!(data["createdAt"].as_str().is_some(), "应返回 createdAt 字段");
+    assert!(
+        data["createdAt"].as_str().is_some(),
+        "应返回 createdAt 字段"
+    );
 
     guard.cleanup().await;
 }

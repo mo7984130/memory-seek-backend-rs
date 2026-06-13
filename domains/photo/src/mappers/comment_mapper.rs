@@ -120,11 +120,7 @@ impl CommentMapper {
             .await
             .trace_internal_err("db_query_err", "通过评论id获取照片id数据库错误")?
             .map(PhotoId)
-            .ok_or_warn_bad_request(
-                "comment_not_found",
-                "评论不存在",
-                "评论不存在",
-            )
+            .ok_or_warn_bad_request("comment_not_found", "评论不存在", "评论不存在")
     }
 }
 

@@ -127,8 +127,8 @@ impl FileValidator {
         for (i, chunk) in expected_bytes.chunks(2).enumerate() {
             let hex_str =
                 std::str::from_utf8(chunk).map_err(|_| FileValidationError::InvalidHeader)?;
-            let expected = u8::from_str_radix(hex_str, 16)
-                .map_err(|_| FileValidationError::InvalidHeader)?;
+            let expected =
+                u8::from_str_radix(hex_str, 16).map_err(|_| FileValidationError::InvalidHeader)?;
             if file_data[i] != expected {
                 return Err(FileValidationError::InvalidHeader);
             }

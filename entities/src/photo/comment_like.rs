@@ -1,8 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::user::UserId;
 use super::comment::CommentId;
+use crate::auth::user::UserId;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct CommentLikeId(pub i64);

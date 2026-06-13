@@ -1,11 +1,11 @@
 pub mod bases;
-pub mod libs;
 pub mod domains;
+pub mod libs;
 
-use std::sync::Arc;
-use axum::Router;
 use crate::config::AppConfig;
 use crate::state::AppState;
+use axum::Router;
+use std::sync::Arc;
 
 pub struct AppSetup {
     pub state: Arc<AppState>,

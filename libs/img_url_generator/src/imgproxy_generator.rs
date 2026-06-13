@@ -1,7 +1,7 @@
 use crate::{ImageUrl, ImageUrlGenerator};
 use async_trait::async_trait;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
@@ -22,7 +22,7 @@ impl ImgProxyGenerator {
         mac.update(path.as_bytes());
         URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
     }
-    
+
     // 构建 imgproxy URL：将 S3 源地址编码，拼接处理参数和签名
     fn build_proxy_url(&self, file_id: &str, options: &str, ext: &str) -> ImageUrl {
         let source_url = format!("s3://{}/{}", self.bucket, file_id);
@@ -30,8 +30,11 @@ impl ImgProxyGenerator {
         let path = format!("/{}/{}.{}", options, encoded, ext);
         let signature = self.sign(&path);
         let url = format!("{}/{}{}", self.base_url, signature, path);
-        
-        ImageUrl { url, cache_age: CACHE_AGE }
+
+        ImageUrl {
+            url,
+            cache_age: CACHE_AGE,
+        }
     }
 }
 

@@ -1,7 +1,9 @@
 use axum::body::Body;
-use axum::http::{Request, header};
-use serde_json::{Value, json};
+use axum::http::{header, Request};
+use serde_json::{json, Value};
 use tower::ServiceExt;
+
+use super::test_config;
 
 /// 测试用户
 pub struct TestUser {
@@ -54,12 +56,9 @@ pub async fn register_and_login(app: &axum::Router, suffix: &str) -> TestUser {
         .unwrap();
 
     let register_status = register_response.status();
-    let register_body = axum::body::to_bytes(
-        register_response.into_body(),
-        1024 * 1024,
-    )
-    .await
-    .unwrap();
+    let register_body = axum::body::to_bytes(register_response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
     let register_json: Value = serde_json::from_slice(&register_body).unwrap();
 
     assert!(
@@ -94,12 +93,9 @@ pub async fn register_and_login(app: &axum::Router, suffix: &str) -> TestUser {
         .unwrap();
 
     let login_status = login_response.status();
-    let login_body_bytes = axum::body::to_bytes(
-        login_response.into_body(),
-        1024 * 1024,
-    )
-    .await
-    .unwrap();
+    let login_body_bytes = axum::body::to_bytes(login_response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
     let login_json: Value = serde_json::from_slice(&login_body_bytes).unwrap();
 
     assert!(
@@ -147,9 +143,9 @@ pub fn auth_request(method: &str, uri: &str, user: &TestUser, body: Value) -> Re
 async fn setup_email_verify_code(email: &str, code: &str) {
     use deadpool_redis::redis::AsyncCommands;
 
-    let redis_url = "redis://localhost:6380";
-    let cfg = deadpool_redis::Config::from_url(redis_url);
-    let pool = cfg
+    let cfg = test_config();
+    let redis_cfg = deadpool_redis::Config::from_url(&cfg.redis.url);
+    let pool = redis_cfg
         .create_pool(Some(deadpool_redis::Runtime::Tokio1))
         .expect("创建 Redis 连接池失败");
     let mut conn = pool.get().await.expect("获取 Redis 连接失败");

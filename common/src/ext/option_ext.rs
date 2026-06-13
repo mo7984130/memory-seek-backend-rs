@@ -89,13 +89,21 @@ mod tests {
 
     #[test]
     fn some_ok_or_warn_returns_value() {
-        let result = Some(42).ok_or_warn("test_reason", "test_context", AppError::BadRequest("bad".into()));
+        let result = Some(42).ok_or_warn(
+            "test_reason",
+            "test_context",
+            AppError::BadRequest("bad".into()),
+        );
         assert_eq!(result.unwrap(), 42);
     }
 
     #[test]
     fn none_ok_or_warn_returns_err() {
-        let result: Result<i32, AppError> = None.ok_or_warn("test_reason", "test_context", AppError::BadRequest("bad".into()));
+        let result: Result<i32, AppError> = None.ok_or_warn(
+            "test_reason",
+            "test_context",
+            AppError::BadRequest("bad".into()),
+        );
         assert!(result.is_err());
     }
 
@@ -107,19 +115,22 @@ mod tests {
 
     #[test]
     fn none_ok_or_warn_bad_request_returns_bad_request() {
-        let result: Result<i32, AppError> = None.ok_or_warn_bad_request("test_reason", "test_context", "bad request");
+        let result: Result<i32, AppError> =
+            None.ok_or_warn_bad_request("test_reason", "test_context", "bad request");
         assert!(matches!(result.unwrap_err(), AppError::BadRequest(_)));
     }
 
     #[test]
     fn some_ok_or_error_returns_value() {
-        let result = Some(42).ok_or_error("test_reason", "test_context", AppError::InternalServerError);
+        let result =
+            Some(42).ok_or_error("test_reason", "test_context", AppError::InternalServerError);
         assert_eq!(result.unwrap(), 42);
     }
 
     #[test]
     fn none_ok_or_error_returns_err() {
-        let result: Result<i32, AppError> = None.ok_or_error("test_reason", "test_context", AppError::InternalServerError);
+        let result: Result<i32, AppError> =
+            None.ok_or_error("test_reason", "test_context", AppError::InternalServerError);
         assert!(result.is_err());
     }
 }

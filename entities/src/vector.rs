@@ -137,8 +137,9 @@ impl<const N: usize> TryGetable for PostgreVector<N> {
             .map_err(|e| TryGetError::DbErr(sea_orm::DbErr::Type(format!("Vector decode: {e}"))))?;
         match value {
             Some(bytes) => {
-                let vec = parse_vector_bytes(&bytes)
-                    .map_err(|e| TryGetError::DbErr(sea_orm::DbErr::Type(format!("Vector parse: {e}"))))?;
+                let vec = parse_vector_bytes(&bytes).map_err(|e| {
+                    TryGetError::DbErr(sea_orm::DbErr::Type(format!("Vector parse: {e}")))
+                })?;
                 Ok(PostgreVector::new(vec))
             }
             None => Err(TryGetError::Null(String::new())),

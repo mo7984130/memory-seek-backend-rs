@@ -2,8 +2,8 @@ use axum::http::StatusCode;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
-use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 use super::super::common::upload_photo;
+use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 
 /// Test deleting photos successfully
 #[tokio::test]
@@ -25,12 +25,7 @@ async fn test_delete_photos_success() {
     };
 
     // Delete the photo
-    let req = auth::auth_request(
-        "DELETE",
-        "/photo",
-        &user,
-        json!({ "photoIds": [photo_id] }),
-    );
+    let req = auth::auth_request("DELETE", "/photo", &user, json!({ "photoIds": [photo_id] }));
     let res = app.oneshot(req).await.unwrap();
 
     assert_eq!(res.status(), StatusCode::OK);

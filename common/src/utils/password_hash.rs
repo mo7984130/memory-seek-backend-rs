@@ -166,7 +166,10 @@ mod tests {
         let alg = HashAlgorithm::Bcrypt(BcryptConfig { cost: 12 });
         let hash = alg.hash("test_password").unwrap();
         let detected = HashAlgorithm::detect(&hash);
-        assert_eq!(detected, Some(HashAlgorithm::Bcrypt(BcryptConfig { cost: 12 })));
+        assert_eq!(
+            detected,
+            Some(HashAlgorithm::Bcrypt(BcryptConfig { cost: 12 }))
+        );
     }
 
     #[test]
@@ -234,7 +237,10 @@ mod tests {
         let hash = alg.hash("detect_me").unwrap();
         let (matched, detected_alg) = HashAlgorithm::verify_and_detect("detect_me", &hash).unwrap();
         assert!(matched);
-        assert_eq!(detected_alg, HashAlgorithm::Bcrypt(BcryptConfig { cost: 4 }));
+        assert_eq!(
+            detected_alg,
+            HashAlgorithm::Bcrypt(BcryptConfig { cost: 4 })
+        );
     }
 
     #[test]

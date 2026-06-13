@@ -1,9 +1,9 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::user::UserId;
 use super::collection::CollectionId;
 use super::photo::PhotoId;
+use crate::auth::user::UserId;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct CollectionPhotoId(pub i64);

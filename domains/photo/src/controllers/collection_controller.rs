@@ -5,11 +5,13 @@ use axum::{
     extract::{Path, State},
     routing::{get, patch},
 };
-use common::{Result, ext::ResultRExt, extractors::ValidatedJson, r::R, traits::controller::ControllerRouter};
+use common::{
+    Result, ext::ResultRExt, extractors::ValidatedJson, r::R, traits::controller::ControllerRouter,
+};
 use entities::{auth::user::UserId, photo::collection::CollectionId};
 
 use crate::{
-    models::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionResult},
+    models::collection::{CollectionCreateParam, CollectionResult, CollectionUpdateParam},
     services::collection_service::CollectionService,
     state::PhotoState,
 };
