@@ -9,7 +9,7 @@ metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum"]
 
 [dependencies]
-common = { path = "../../common", features = ["file_validator"] }
+common = { path = "../../common", features = ["file_validator", "validators"] }
 constants = { path = "../constants" }
 entities = { path = "../../entities" }
 oss = { path = "../../libs/oss" }

@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["auth", "user", "photo", "s3"]
+default = []
 auth = ["dep:auth"]
 user = ["dep:user"]
-photo = ["dep:photo"]
+photo = ["dep:photo", "s3"]
 metrics = ["dep:metrics"]
 s3 = ["dep:oss"]
 
@@ -54,3 +54,9 @@ sha2 = { workspace = true }
 uuid = { workspace = true }
 tracing-appender = "0.2.5"
 metrics-tracing-context = "0.18.1"
+
+[dev-dependencies]
+serde_json = { workspace = true }
+serde = { workspace = true }
+sea-orm = { workspace = true }
+deadpool-redis = { workspace = true }

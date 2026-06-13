@@ -1,5 +1,6 @@
-use serde::Deserialize;
 use config::{Config, ConfigError, Environment, File};
+use serde::Deserialize;
+use tracing::info;
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
@@ -7,6 +8,7 @@ pub struct AppConfig {
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
     pub smtp: SmtpConfig,
+    #[cfg(feature = "s3")]
     pub s3: Option<S3Config>,
     pub token_cipher: TokenCipherConfig,
 }
@@ -39,6 +41,7 @@ pub struct SmtpConfig {
     pub from_name: String,
 }
 
+#[cfg(feature = "s3")]
 #[derive(Debug, Deserialize)]
 pub struct S3Config {
     pub endpoint: String,
@@ -57,11 +60,13 @@ pub struct TokenCipherConfig {
 
 impl AppConfig {
     pub fn load() -> Result<Self, ConfigError> {
+        info!("加载配置文件");
         // 加载 .env 文件
         let _ = dotenvy::dotenv();
 
-        let config_path = std::env::var("MEMORY_SEEK_CONFIG_PATH")
-            .unwrap_or_else(|_| "config.json".to_string());
+        let config_path =
+            std::env::var("MEMORY_SEEK_CONFIG_PATH").unwrap_or_else(|_| "config.json".to_string());
+        info!("配置文件路径: {}", config_path);
 
         let cfg = Config::builder()
             .add_source(File::with_name(&config_path))
