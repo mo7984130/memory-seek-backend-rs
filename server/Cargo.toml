@@ -6,7 +6,7 @@ edition = "2021"
 [features]
 default = []
 auth = ["dep:auth"]
-user = ["dep:user"]
+user = ["dep:user", "s3"]
 photo = ["dep:photo", "s3"]
 metrics = ["dep:metrics"]
 s3 = ["dep:oss"]
