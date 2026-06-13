@@ -88,8 +88,36 @@ impl<const N: usize> From<PostgreVector<N>> for Vector {
     }
 }
 
+/// 从 pgvector 二进制格式解析向量数据
+///
+/// 二进制格式：
+/// - 2 字节：维度（big-endian u16）
+/// - 2 字节：保留字段（unused）
+/// - 后续每 4 字节为一个 f32 元素（big-endian）
+fn parse_vector_bytes(bytes: &[u8]) -> Result<Vec<f32>, String> {
+    if bytes.len() < 4 {
+        return Err("vector data too short".into());
+    }
+    let dim = u16::from_be_bytes([bytes[0], bytes[1]]) as usize;
+    let expected = 4 + dim * 4;
+    if bytes.len() < expected {
+        return Err(format!(
+            "vector data truncated: expected {expected} bytes, got {}",
+            bytes.len()
+        ));
+    }
+    let data = bytes[4..expected]
+        .chunks_exact(4)
+        .map(|chunk| f32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect();
+    Ok(data)
+}
+
 impl<const N: usize> TryGetable for PostgreVector<N> {
     /// 从 PostgreSQL 查询结果中提取向量列
+    ///
+    /// 手动解析 pgvector 二进制格式，避免 pgvector crate 的 sqlx 版本
+    /// 与项目使用的 sqlx 版本不一致导致的 `Decode` trait 冲突。
     ///
     /// # 参数
     /// - `res`: Sea-ORM 查询结果
@@ -104,12 +132,17 @@ impl<const N: usize> TryGetable for PostgreVector<N> {
         let pg_row = res.try_as_pg_row().ok_or_else(|| {
             TryGetError::DbErr(sea_orm::DbErr::Type("Not a PostgreSQL row".into()))
         })?;
-        let value: Option<Vector> = pg_row
+        let value: Option<Vec<u8>> = pg_row
             .try_get(index.as_sqlx_postgres_index())
             .map_err(|e| TryGetError::DbErr(sea_orm::DbErr::Type(format!("Vector decode: {e}"))))?;
-        value
-            .map(PostgreVector::from)
-            .ok_or_else(|| TryGetError::Null(String::new()))
+        match value {
+            Some(bytes) => {
+                let vec = parse_vector_bytes(&bytes)
+                    .map_err(|e| TryGetError::DbErr(sea_orm::DbErr::Type(format!("Vector parse: {e}"))))?;
+                Ok(PostgreVector::new(vec))
+            }
+            None => Err(TryGetError::Null(String::new())),
+        }
     }
 }
 
