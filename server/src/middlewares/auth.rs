@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use axum::{extract::Request, middleware::Next, response::Response};
 use common::{error::AppError, ext::OptionExt};
+use entities::auth::user::UserId;
 use crate::state::AppState;
 
 /// 认证中间件
@@ -20,7 +21,7 @@ pub async fn auth_middleware(
 
     // 将 user_id 注入到请求扩展中
     let mut request = request;
-    request.extensions_mut().insert(user_id);
+    request.extensions_mut().insert(UserId(user_id));
 
     Ok(next.run(request).await)
 }
