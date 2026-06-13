@@ -9,10 +9,6 @@ on:
 jobs:
     integration-test:
         runs-on: ubuntu-latest
-        # 等待 CI 检查通过后再运行集成测试
-        # 注意：PR 时 ci.yml 和 test.yml 并行运行，不阻塞
-        # 如需串行，取消下行注释
-        # needs: [fmt, clippy, unit-test, build]
         steps:
             - uses: actions/checkout@v4
 

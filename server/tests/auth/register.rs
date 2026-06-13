@@ -11,7 +11,7 @@ use crate::helpers::{
 #[tokio::test]
 async fn test_register_success() {
     let app = build_test_router().await;
-    let mut guard = CleanupGuard::new().await;
+    let mut guard = CleanupGuard::new_with_cleanup(&["testuser_rok"]).await;
 
     let suffix = "rok";
     let user = register_and_login(&app, suffix).await;
@@ -28,7 +28,7 @@ async fn test_register_success() {
 #[tokio::test]
 async fn test_register_duplicate_email() {
     let app = build_test_router().await;
-    let mut guard = CleanupGuard::new().await;
+    let mut guard = CleanupGuard::new_with_cleanup(&["testuser_dem"]).await;
 
     let suffix = "dem";
     let user = register_and_login(&app, suffix).await;
