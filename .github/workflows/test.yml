@@ -9,6 +9,10 @@ on:
 jobs:
     integration-test:
         runs-on: ubuntu-latest
+        # 等待 CI 检查通过后再运行集成测试
+        # 注意：PR 时 ci.yml 和 test.yml 并行运行，不阻塞
+        # 如需串行，取消下行注释
+        # needs: [fmt, clippy, unit-test, build]
         steps:
             - uses: actions/checkout@v4
 
@@ -23,6 +27,8 @@ jobs:
                       ~/.cargo/git
                       target
                   key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-cargo-
 
             - name: Start test services
               run: |
@@ -56,6 +62,21 @@ jobs:
                     exit 1
                   }
                   echo "✅ redis 就绪"
+
+                  # 等待 minio 健康
+                  echo "⏳ 等待 minio 就绪..."
+                  timeout 30 bash -c '
+                    until docker compose -f tests/load/docker-compose.yml \
+                      exec -T minio mc ready local 2>/dev/null; do
+                      echo "  minio 未就绪，2s 后重试..."
+                      sleep 2
+                    done
+                  ' || {
+                    echo "❌ minio 启动超时，容器日志如下："
+                    docker compose -f tests/load/docker-compose.yml logs minio
+                    exit 1
+                  }
+                  echo "✅ minio 就绪"
 
             - name: Run integration tests
               run: cargo test -p server --features "auth,user,photo" -- --test-threads=1
