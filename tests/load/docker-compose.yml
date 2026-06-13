@@ -1,11 +1,13 @@
 # tests/load/docker-compose.yml
 services:
     postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         environment:
             POSTGRES_USER: test
             POSTGRES_PASSWORD: test
             POSTGRES_DB: memory_seek_test
+        volumes:
+            - ../../docs/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
         ports:
             - "5433:5432"
         healthcheck:
