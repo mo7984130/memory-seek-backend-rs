@@ -47,7 +47,7 @@ async fn test_delete_comment_not_found() {
     let app = build_test_router().await;
     let mut guard = CleanupGuard::new().await;
 
-    let suffix = "cdelnf";
+    let suffix = "cmdelnf";
     let user = auth::register_and_login(&app, suffix).await;
     guard.track_user(&user.id);
 
