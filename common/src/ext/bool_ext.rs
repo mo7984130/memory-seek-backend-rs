@@ -46,3 +46,20 @@ impl BoolExt for bool {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn true_ok_or_warn_returns_ok() {
+        let result = true.ok_or_warn("test_reason", "test_context", AppError::BadRequest("bad".into()));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn false_ok_or_warn_returns_err() {
+        let result = false.ok_or_warn("test_reason", "test_context", AppError::BadRequest("bad".into()));
+        assert!(result.is_err());
+    }
+}

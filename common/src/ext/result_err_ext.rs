@@ -65,3 +65,44 @@ impl<T, E: Debug + Display> ResultErrExt<T, E> for Result<T, E> {
         self.trace_warn(reason, context, AppError::bad_request(msg))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ok_trace_err_returns_value() {
+        let result = Ok::<i32, String>(42).trace_err("test_reason", "test_context", AppError::BadRequest("custom".into()));
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn err_trace_err_returns_custom_app_err() {
+        let result = Err::<i32, String>("e".into()).trace_err("test_reason", "test_context", AppError::BadRequest("custom".into()));
+        assert!(matches!(result.unwrap_err(), AppError::BadRequest(_)));
+    }
+
+    #[test]
+    fn ok_trace_internal_err_returns_value() {
+        let result = Ok::<i32, String>(42).trace_internal_err("test_reason", "test_context");
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn err_trace_internal_err_returns_internal_server_error() {
+        let result = Err::<i32, String>("e".into()).trace_internal_err("test_reason", "test_context");
+        assert!(matches!(result.unwrap_err(), AppError::InternalServerError));
+    }
+
+    #[test]
+    fn ok_trace_warn_returns_value() {
+        let result = Ok::<i32, String>(42).trace_warn("test_reason", "test_context", AppError::BadRequest("custom".into()));
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn err_trace_warn_returns_custom_app_err() {
+        let result = Err::<i32, String>("e".into()).trace_warn("test_reason", "test_context", AppError::BadRequest("custom".into()));
+        assert!(matches!(result.unwrap_err(), AppError::BadRequest(_)));
+    }
+}
