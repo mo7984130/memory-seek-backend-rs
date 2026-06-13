@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn test_collection_photo_add_batch_param_exact_max() {
         let param = CollectionPhotoAddBatchParam {
-            photo_ids: (0..128).map(|i| PhotoId(i)).collect(),
+            photo_ids: (0..128).map(PhotoId).collect(),
         };
         assert!(param.validate().is_ok());
     }

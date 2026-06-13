@@ -251,7 +251,7 @@ mod tests {
     #[test]
     fn test_delete_photo_param_exact_max() {
         let param = DeletePhotoParam {
-            photo_ids: (0..128).map(|i| PhotoId(i)).collect(),
+            photo_ids: (0..128).map(PhotoId).collect(),
         };
         assert!(param.validate().is_ok());
     }

@@ -50,7 +50,7 @@ pub fn multipart_upload_request(
 ///
 /// Returns `None` if S3/MinIO is not available (500).
 pub async fn upload_photo(app: &axum::Router, user: &auth::TestUser) -> Option<String> {
-    let req = multipart_upload_request("/photo", &user, MINIMAL_JPEG, "test.png");
+    let req = multipart_upload_request("/photo", user, MINIMAL_JPEG, "test.png");
     let res = app.clone().oneshot(req).await.unwrap();
 
     if res.status() == StatusCode::INTERNAL_SERVER_ERROR {

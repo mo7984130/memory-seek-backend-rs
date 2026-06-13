@@ -252,18 +252,4 @@ mod tests {
         assert_eq!(bbox.w, 200);
         assert_eq!(bbox.h, 200);
     }
-
-    #[test]
-    fn test_face_bbox_pixels_clone_copy() {
-        let bbox = FaceBBoxPixels {
-            x: 1,
-            y: 2,
-            w: 3,
-            h: 4,
-        };
-        let copied = bbox;
-        let cloned = bbox.clone();
-        assert_eq!(copied.x, 1);
-        assert_eq!(cloned.w, 3);
-    }
 }

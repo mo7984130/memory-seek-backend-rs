@@ -1,7 +1,8 @@
 use axum::Router;
-use server::config::AppConfig;
 use server::middlewares;
 use server::setup::AppSetup;
+
+use super::test_config;
 
 /// 构建测试用 Router
 ///
@@ -10,13 +11,8 @@ use server::setup::AppSetup;
 ///
 /// 返回 `Router<()>`（state 已通过 `with_state()` 消费）。
 pub async fn build_test_router() -> Router {
-    // 设置配置文件路径（使用 CARGO_MANIFEST_DIR 定位）
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let config_path = format!("{}/tests/test.config.json", manifest_dir);
-    std::env::set_var("MEMORY_SEEK_CONFIG_PATH", &config_path);
-
     // 加载配置并初始化应用
-    let cfg = AppConfig::load().expect("加载测试配置失败");
+    let cfg = test_config();
     let app_setup = AppSetup::init(&cfg).await.expect("初始化测试应用失败");
 
     // 合并路由并添加中间件（与 main.rs 一致）
