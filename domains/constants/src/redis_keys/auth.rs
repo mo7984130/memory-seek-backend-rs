@@ -43,7 +43,7 @@ pub fn inviter_code(code: &str) -> String {
 /// - `user_id`: 用户 ID
 ///
 /// # 返回
-/// 格式为 `u:i:{user_id}` 的缓存键
+/// 格式为 `a:u:i:{user_id}` 的缓存键
 #[inline]
 pub fn user_info_cache(user_id: i64) -> String {
     //auth:user:info
@@ -76,6 +76,6 @@ mod tests {
         assert_eq!(inviter_code(""), "a:i:c:"); // 边界测试：空字符串
 
         // 4. 测试 user_info_cache (i64)
-        assert_eq!(user_info_cache(123456789), "u:i:123456789");
+        assert_eq!(user_info_cache(123456789), "a:u:i:123456789");
     }
 }
