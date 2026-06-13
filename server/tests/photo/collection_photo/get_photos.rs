@@ -3,20 +3,23 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
+use super::super::common::{upload_photo, create_collection};
 
-use super::upload::{MINIMAL_JPEG, multipart_upload_request};
-
-/// Test getting photos when no photos exist (empty list)
+/// Test getting photos from an empty collection
 #[tokio::test]
 async fn test_get_photos_empty() {
     let app = build_test_router().await;
     let mut guard = CleanupGuard::new().await;
 
-    let suffix = "pget";
+    let suffix = "cpgpe";
     let user = auth::register_and_login(&app, suffix).await;
     guard.track_user(&user.id);
 
-    let req = auth::auth_request("GET", "/photo?size=10", &user, serde_json::json!(null));
+    let collection = create_collection(&app, &user, "Album", None).await;
+    let collection_id = collection["id"].as_str().unwrap();
+
+    let uri = format!("/photo/collections/{}/photos?size=10", collection_id);
+    let req = auth::auth_request("GET", &uri, &user, serde_json::json!(null));
     let res = app.oneshot(req).await.unwrap();
 
     assert_eq!(res.status(), StatusCode::OK);
@@ -29,43 +32,47 @@ async fn test_get_photos_empty() {
     assert_eq!(json["code"], 200);
     assert!(
         json["data"]["records"].as_array().unwrap().is_empty(),
-        "无照片时 records 应为空数组"
+        "空相册应返回空记录"
     );
-    assert_eq!(json["data"]["hasMore"], false);
 
     guard.cleanup().await;
 }
 
-/// Test getting photos after uploading one
+/// Test getting photos after adding to collection
 #[tokio::test]
-async fn test_get_photos_after_upload() {
+async fn test_get_photos_after_add() {
     let app = build_test_router().await;
     let mut guard = CleanupGuard::new().await;
 
-    let suffix = "pga";
+    let suffix = "cpgpa";
     let user = auth::register_and_login(&app, suffix).await;
     guard.track_user(&user.id);
 
-    // Upload a photo first
-    let upload_req = multipart_upload_request("/photo", &user, MINIMAL_JPEG, "test.png");
-    let upload_res = app.clone().oneshot(upload_req).await.unwrap();
+    let photo_id = match upload_photo(&app, &user).await {
+        Some(id) => id,
+        None => {
+            guard.cleanup().await;
+            return;
+        }
+    };
 
-    // If S3/MinIO is not available, skip this test
-    if upload_res.status() == StatusCode::INTERNAL_SERVER_ERROR {
-        guard.cleanup().await;
-        return;
-    }
+    let collection = create_collection(&app, &user, "Album", None).await;
+    let collection_id = collection["id"].as_str().unwrap();
 
-    assert_eq!(upload_res.status(), StatusCode::OK);
+    // Add photo to collection
+    let add_uri = format!("/photo/collections/{}/photos", collection_id);
+    let req = auth::auth_request(
+        "POST",
+        &add_uri,
+        &user,
+        serde_json::json!({ "photoIds": [photo_id] }),
+    );
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
 
-    let upload_body = axum::body::to_bytes(upload_res.into_body(), 1024 * 1024)
-        .await
-        .unwrap();
-    let upload_json: Value = serde_json::from_slice(&upload_body).unwrap();
-    let photo_id = upload_json["data"]["id"].as_str().unwrap();
-
-    // Get photos
-    let req = auth::auth_request("GET", "/photo?size=10", &user, serde_json::json!(null));
+    // Get photos from collection
+    let get_uri = format!("/photo/collections/{}/photos?size=10", collection_id);
+    let req = auth::auth_request("GET", &get_uri, &user, serde_json::json!(null));
     let res = app.oneshot(req).await.unwrap();
 
     assert_eq!(res.status(), StatusCode::OK);

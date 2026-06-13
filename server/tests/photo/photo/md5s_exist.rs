@@ -60,3 +60,35 @@ async fn test_md5s_exist_not_found() {
 
     guard.cleanup().await;
 }
+
+/// Test checking MD5 existence with multiple hashes
+#[tokio::test]
+async fn test_md5s_exist_multiple() {
+    let app = build_test_router().await;
+    let mut guard = CleanupGuard::new().await;
+
+    let suffix = "pmd5m";
+    let user = auth::register_and_login(&app, suffix).await;
+    guard.track_user(&user.id);
+
+    let req = auth::auth_request(
+        "POST",
+        "/photo/check-existence",
+        &user,
+        json!({ "md5s": ["hash_aaa", "hash_bbb", "hash_ccc"] }),
+    );
+    let res = app.oneshot(req).await.unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body_bytes = axum::body::to_bytes(res.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let json: Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    assert_eq!(json["code"], 200);
+    let results = json["data"].as_array().unwrap();
+    assert_eq!(results.len(), 3, "应返回 3 个结果");
+
+    guard.cleanup().await;
+}

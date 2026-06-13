@@ -9,6 +9,7 @@ metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum", "dep:serde_json"]
 
 [dependencies]
+memory-seek-type = { workspace = true }
 common = { path = "../../common", features = ["validators"] }
 constants = { path = "../constants" }
 sea-orm = { workspace = true }

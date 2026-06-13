@@ -7,6 +7,9 @@ use common::utils::validators::validate_username;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
+// 重新导出共享类型
+pub use memory_seek_type::auth::*;
+
 #[derive(Debug, Validate, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginParam {

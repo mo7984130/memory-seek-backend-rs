@@ -14,6 +14,7 @@ members = [
 ]
 
 [workspace.dependencies]
+memory-seek-type = { path = "../memory-seek-type" }
 axum = { version = "0.8.8", features = ["macros", "multipart"] }
 tokio = { version = "1.49.0", features = ["full"] }
 

@@ -3,8 +3,7 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
-
-use super::upload::{MINIMAL_JPEG, multipart_upload_request};
+use super::super::common::upload_photo;
 
 /// Test deleting photos successfully
 #[tokio::test]
@@ -17,22 +16,13 @@ async fn test_delete_photos_success() {
     guard.track_user(&user.id);
 
     // Upload a photo first
-    let upload_req = multipart_upload_request("/photo", &user, MINIMAL_JPEG, "test.png");
-    let upload_res = app.clone().oneshot(upload_req).await.unwrap();
-
-    // If S3/MinIO is not available, skip this test
-    if upload_res.status() == StatusCode::INTERNAL_SERVER_ERROR {
-        guard.cleanup().await;
-        return;
-    }
-
-    assert_eq!(upload_res.status(), StatusCode::OK);
-
-    let upload_body = axum::body::to_bytes(upload_res.into_body(), 1024 * 1024)
-        .await
-        .unwrap();
-    let upload_json: Value = serde_json::from_slice(&upload_body).unwrap();
-    let photo_id = upload_json["data"]["id"].as_str().unwrap().to_string();
+    let photo_id = match upload_photo(&app, &user).await {
+        Some(id) => id,
+        None => {
+            guard.cleanup().await;
+            return;
+        }
+    };
 
     // Delete the photo
     let req = auth::auth_request(
