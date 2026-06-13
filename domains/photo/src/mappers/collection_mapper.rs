@@ -184,7 +184,7 @@ impl CollectionMapper {
                 "delete_rows_affected",
                 "删除的影响行为零",
                 "",
-                AppError::bad_request("删除收藏夹失败"),
+                AppError::not_found("收藏夹不存在"),
             )
             .to_err();
         }

@@ -27,7 +27,9 @@ async fn test_get_collection_list_empty() {
 
     assert_eq!(json["code"], 200);
     let list = json["data"].as_array().unwrap();
-    assert!(list.is_empty(), "无相册时列表应为空");
+    // 服务层会自动为新用户创建"我喜欢"收藏夹，所以列表不为空
+    assert_eq!(list.len(), 1, "新用户应自动创建 1 个我喜欢收藏夹");
+    assert_eq!(list[0]["name"], "我喜欢");
 
     guard.cleanup().await;
 }
