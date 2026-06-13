@@ -72,11 +72,13 @@ tests/
 
 ### 测试基础设施
 
-**build_test_router()** — 构建包含所有已启用模块的 Router，使用 test_auth_middleware（通过 `x-test-user-id` header 注入用户 ID）。
+**build_test_router()** — 构建包含所有已启用模块的 Router，使用**生产环境的 auth_middleware**。测试通过真实登录流程获取 token，后续请求通过 `Authorization: Bearer user_id token` header 传递认证信息。
 
 **CleanupGuard** — 实现 `Drop` trait，测试结束时清理数据库中的测试数据。
 
-**TestUser** — 测试用户结构体，包含 id、email、password 等字段。
+**TestUser** — 测试用户结构体，包含 id、email、password、token 等字段。通过 `register_and_login()` 创建，返回已登录的用户实例。
+
+**关键行为：** 用户登录时，该用户之前的所有 token 作废（单会话机制）。测试需覆盖此场景。
 
 ### Auth 模块测试用例
 
@@ -90,6 +92,7 @@ tests/
 | `test_login_wrong_password` | 错误密码 | 401 Unauthorized |
 | `test_login_nonexistent_user` | 不存在的用户 | 401 Unauthorized |
 | `test_token_refresh` | 刷新 token | 200，新旧 token 不同 |
+| `test_login_invalidates_old_token` | 登录后旧 token 失效 | 用旧 token 请求返回 401 |
 
 ### 测试运行命令
 
