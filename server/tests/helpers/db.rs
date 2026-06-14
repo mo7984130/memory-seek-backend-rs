@@ -31,8 +31,30 @@ impl CleanupGuard {
     /// 创建清理守卫并预先清理指定用户名的残留数据
     pub async fn new_with_cleanup(usernames: &[&str]) -> Self {
         let mut guard = Self::new().await;
+
+        // 先查询这些用户名对应的 user_id，用于级联清理 photo 数据
         for &name in usernames {
             guard.user_names.push(name.to_string());
+
+            // 查询已有 user_id
+            if let Ok(result) = guard
+                .db
+                .query_one(Statement::from_string(
+                    sea_orm::DatabaseBackend::Postgres,
+                    format!(
+                        "SELECT id FROM auth_user WHERE username = '{}'",
+                        name.replace('\'', "''")
+                    ),
+                ))
+                .await
+            {
+                if let Some(row) = result {
+                    if let Ok(id) = row.try_get::<i64>("", "id") {
+                        guard.delete_cascade(&[id]).await;
+                    }
+                }
+            }
+
             let _ = guard
                 .db
                 .execute(Statement::from_string(
@@ -57,6 +79,8 @@ impl CleanupGuard {
             return;
         }
 
+        self.delete_cascade(&self.user_ids).await;
+
         let ids_str = self
             .user_ids
             .iter()
@@ -69,6 +93,60 @@ impl CleanupGuard {
             .execute(Statement::from_string(
                 sea_orm::DatabaseBackend::Postgres,
                 format!("DELETE FROM auth_user WHERE id IN ({})", ids_str),
+            ))
+            .await;
+    }
+
+    /// 级联删除用户关联的 photo 数据
+    async fn delete_cascade(&self, user_ids: &[i64]) {
+        if user_ids.is_empty() {
+            return;
+        }
+
+        let ids_str = user_ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        // 按依赖顺序删除 photo 关联表
+        let tables_with_user_id = [
+            "photo_comment_like",
+            "photo_comment",
+            "photo_collection_photo",
+            "photo_collection",
+            "photo_photo",
+        ];
+
+        for table in tables_with_user_id {
+            let _ = self
+                .db
+                .execute(Statement::from_string(
+                    sea_orm::DatabaseBackend::Postgres,
+                    format!("DELETE FROM {} WHERE user_id IN ({})", table, ids_str),
+                ))
+                .await;
+        }
+
+        // photo_face_feature 通过 photo_id 子查询删除
+        let _ = self
+            .db
+            .execute(Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                format!(
+                    "DELETE FROM photo_face_feature WHERE photo_id IN \
+                     (SELECT id FROM photo_photo WHERE user_id IN ({}))",
+                    ids_str
+                ),
+            ))
+            .await;
+
+        // photo_timeline_stat 是聚合表，测试中直接清空
+        let _ = self
+            .db
+            .execute(Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                "TRUNCATE TABLE photo_timeline_stat".to_string(),
             ))
             .await;
     }

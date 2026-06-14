@@ -18,7 +18,8 @@ create table if not exists "auth_user"
     refresh_token_expire_at TIMESTAMPTZ null,
     updated_at              TIMESTAMPTZ DEFAULT NOW() not null,
     created_at              TIMESTAMPTZ DEFAULT NOW() not null,
-    constraint user_username_index unique (username)
+    constraint user_username_index unique (username),
+    constraint user_email_index unique (email)
     );
 COMMENT ON TABLE "auth_user" IS '用户表';
 COMMENT ON COLUMN "auth_user".id IS '主键ID';
