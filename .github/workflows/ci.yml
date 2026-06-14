@@ -81,6 +81,10 @@ jobs:
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
 
+            - name: Normalize feature key
+              id: cache-key
+              run: echo "key=$(echo '${{ matrix.features }}' | tr ',' '-')" >> $GITHUB_OUTPUT
+
             - name: Cache dependencies
               uses: actions/cache@v4
               with:
@@ -88,7 +92,7 @@ jobs:
                       ~/.cargo/registry
                       ~/.cargo/git
                       target
-                  key: ${{ runner.os }}-build-${{ matrix.features }}-${{ hashFiles('**/Cargo.lock') }}
+                  key: ${{ runner.os }}-build-${{ steps.cache-key.outputs.key }}-${{ hashFiles('**/Cargo.lock') }}
 
             - name: Build
               run: cargo build --features "${{ matrix.features }}"
