@@ -2,7 +2,7 @@ name: Test & Benchmark
 
 on:
     push:
-        branches: [main]
+        branches: [develop, release, main]
     pull_request:
         branches: [main]
 
@@ -15,16 +15,8 @@ jobs:
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
 
-            - name: Cache dependencies
-              uses: actions/cache@v4
-              with:
-                  path: |
-                      ~/.cargo/registry
-                      ~/.cargo/git
-                      target
-                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-                  restore-keys: |
-                      ${{ runner.os }}-cargo-
+            - name: Cache Rust dependencies
+              uses: Swatinem/rust-cache@v2
 
             - name: Start test services
               run: |
@@ -75,7 +67,7 @@ jobs:
                   echo "✅ minio 就绪"
 
             - name: Run integration tests
-              run: cargo test -p server --features "auth,user,photo" -- --test-threads=1
+              run: cargo test -p server --all-features -- --test-threads=1
               env:
                   DATABASE_URL: postgres://test:test@localhost:5433/memory_seek_test
                   REDIS_URL: redis://localhost:6380
@@ -100,11 +92,11 @@ jobs:
                   path: target/test-results/
                   if-no-files-found: ignore # 路径不存在时静默跳过，不报错
 
+    # release 才进行负载测试
     load-test:
         runs-on: ubuntu-latest
         needs: integration-test
-        # 与 on.push.branches 保持一致，去掉不可能触发的 master
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/release'
         steps:
             - uses: actions/checkout@v4
 

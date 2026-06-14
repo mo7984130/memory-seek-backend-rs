@@ -37,7 +37,7 @@ impl CleanupGuard {
             guard.user_names.push(name.to_string());
 
             // 查询已有 user_id
-            if let Ok(result) = guard
+            if let Ok(Some(row)) = guard
                 .db
                 .query_one(Statement::from_string(
                     sea_orm::DatabaseBackend::Postgres,
@@ -48,10 +48,8 @@ impl CleanupGuard {
                 ))
                 .await
             {
-                if let Some(row) = result {
-                    if let Ok(id) = row.try_get::<i64>("", "id") {
-                        guard.delete_cascade(&[id]).await;
-                    }
+                if let Ok(id) = row.try_get::<i64>("", "id") {
+                    guard.delete_cascade(&[id]).await;
                 }
             }
 
