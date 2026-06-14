@@ -35,6 +35,9 @@ jobs:
             - name: Build release binary
               run: cargo build --release --target x86_64-unknown-linux-gnu
 
+            - name: List release binaries
+              run: ls target/x86_64-unknown-linux-gnu/release/ | grep -v '\.d\|\.rlib\|deps\|build\|incremental'
+
             # 上传二进制作为 artifact，传给下一个 job
             - name: Upload binary artifact
               uses: actions/upload-artifact@v4
