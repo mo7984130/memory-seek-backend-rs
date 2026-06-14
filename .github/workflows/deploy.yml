@@ -28,8 +28,6 @@ jobs:
             # 缓存 Cargo 依赖
             - name: Cache Cargo
               uses: Swatinem/rust-cache@v2
-              with:
-                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
             - name: Install system dependencies
               run: sudo apt-get install -y pkg-config libssl-dev
@@ -63,31 +61,32 @@ jobs:
                   mkdir -p ~/.ssh
                   echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
                   chmod 600 ~/.ssh/deploy_key
-                  ssh-keyscan -p ${{ secrets.SERVER_PORT || 22 }} ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+                  ssh-keyscan -p ${{ secrets.SERVER_PORT }} ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
             - name: Upload binary to server
               run: |
                   chmod +x ${{ env.BINARY_NAME }}
                   scp -i ~/.ssh/deploy_key \
-                      -P ${{ secrets.SERVER_PORT || 22 }} \
+                      -P ${{ secrets.SERVER_PORT }} \
                       ${{ env.BINARY_NAME }} \
                       ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ env.DEPLOY_PATH }}/${{ env.BINARY_NAME }}.new
 
             - name: Swap binary & restart service
               run: |
                   ssh -i ~/.ssh/deploy_key \
-                      -p ${{ secrets.SERVER_PORT || 22 }} \
+                      -p ${{ secrets.SERVER_PORT }} \
                       ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-                    set -e
-                    cd ${{ env.DEPLOY_PATH }}
-
-                    # 原子替换：先停服务，换二进制，再启动
-                    sudo systemctl stop memory-seek-server
-                    mv ${{ env.BINARY_NAME }}.new ${{ env.BINARY_NAME }}
-                    chmod +x ${{ env.BINARY_NAME }}
-                    sudo systemctl start memory-seek-server
-
-                    # 检查服务是否正常启动
-                    sleep 3
-                    sudo systemctl is-active --quiet memory-seek-server && echo "✅ Deploy success" || (echo "❌ Deploy failed"; sudo journalctl -u memory-seek-server -n 30; exit 1)
+                      set -e
+                      cd ${{ env.DEPLOY_PATH }}
+                      mv ${{ env.BINARY_NAME }}.new ${{ env.BINARY_NAME }}
+                      chmod +x ${{ env.BINARY_NAME }}
+                      sudo systemctl restart memory-seek-server
+                      sleep 3
+                      sudo systemctl is-active --quiet memory-seek-server \
+                          && echo "✅ Deploy success" \
+                          || (echo "❌ Deploy failed"; sudo journalctl -u memory-seek-server -n 30; exit 1)
                   EOF
+
+            - name: Cleanup SSH key
+              if: always()
+              run: rm -f ~/.ssh/deploy_key
