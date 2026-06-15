@@ -10,8 +10,7 @@
 tests/load/
 ├── Makefile                    # 自动化入口
 ├── config/
-│   ├── remote.json             # 远程测试环境配置
-│   └── local.json              # 本地测试环境配置（保留兼容）
+│   └── remote.json             # 远程测试环境配置
 ├── scripts/
 │   ├── k6.config.js            # k6 公共配置（阈值、标签）
 │   ├── auth.js                 # 认证模块压测（重构）
@@ -22,7 +21,7 @@ tests/load/
 │   ├── cleanup.sql             # 压测后清理
 │   └── verify.sql              # 验证数据就绪
 ├── helpers/
-│   └── db.sh                   # SSH 远程执行 SQL 的封装
+│   └── common.js               # k6 公共函数（登录、请求封装）
 ├── fixtures/
 │   └── test.jpg                # 上传用测试图片
 └── docker-compose.yml          # 保留，本地开发用
@@ -72,19 +71,29 @@ DELETE FROM auth_user WHERE email LIKE '%@test.com';
 
 ### verify.sql
 
-检查数据量是否正确。
+```sql
+SELECT count(*) AS auth_users FROM auth_user WHERE email LIKE '%@test.com';
+```
+
+确认预置用户数量正确。
 
 ## k6 脚本设计
 
 ### 公共配置 k6.config.js
 
-```javascript
-export const THRESHOLDS = {
-  http_req_duration: ['p(95)<200'],
-  http_req_failed: ['rate<0.01'],
-};
+k6 不支持跨文件 ES module import，公共配置通过环境变量注入。每个脚本内部定义阈值，BASE_URL 统一从 `__ENV.BASE_URL` 读取。
 
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
+```javascript
+// 每个脚本内部
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
+
+export const options = {
+  thresholds: {
+    http_req_duration: ['p(95)<200'],
+    http_req_failed: ['rate<0.01'],
+  },
+  // ... scenarios
+};
 ```
 
 ### 阈值标准
