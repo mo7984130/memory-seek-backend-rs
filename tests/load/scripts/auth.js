@@ -1,6 +1,10 @@
+// tests/load/scripts/auth.js
+// 认证模块端到端压测
+
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate, Trend } from 'k6/metrics';
+import { login, getTestUserCredentials, authHeaders, BASE_URL } from '../helpers/common.js';
 
 // 自定义指标
 const loginErrorRate = new Rate('login_errors');
@@ -15,51 +19,19 @@ export const options = {
     { duration: '30s', target: 0 },    // 逐步降压
   ],
   thresholds: {
-    http_req_duration: ['p(95)<500'],  // 95% 请求 < 500ms
-    login_errors: ['rate<0.1'],        // 错误率 < 10%
+    http_req_duration: ['p(95)<200'],  // 95% 请求 < 200ms
+    http_req_failed: ['rate<0.01'],    // 错误率 < 1%
+    login_errors: ['rate<0.01'],       // 登录错误率 < 1%
   },
 };
 
-const BASE_URL = __ENV.APP_URL || 'http://localhost:3000';
-
-// 用户池隔离：每个 VU*1000+ITER 生成唯一用户
-function getUserCredentials(vuId, iterId) {
-  const userId = vuId * 1000 + iterId;
-  return {
-    account: `loadtest_user_${userId}@test.com`,
-    password: 'Test123456',
-  };
-}
-
-// 预注册用户（setup 阶段只执行一次）
 export function setup() {
-  const totalUsers = 100 * 1000; // max_vus * max_iterations
-  const registered = [];
-
-  for (let i = 0; i < totalUsers; i++) {
-    const { account, password } = getUserCredentials(0, i);
-    const res = http.post(`${BASE_URL}/register`, JSON.stringify({
-      username: `loadtest_${i}`,
-      email: account,
-      password: password,
-      nickname: `Test User ${i}`,
-      inviterCode: 'TEST01',
-      emailVerifyCode: 'TEST01',
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    if (res.status === 200) {
-      registered.push(account);
-    }
-  }
-
-  return { registeredCount: registered.length };
+  // 数据已通过 seed.sql 预置，setup 无需操作
+  return {};
 }
 
 export default function (data) {
-  // 每次迭代使用不同用户，确保 token 唯一
-  const { account, password } = getUserCredentials(__VU, __ITER);
+  const { account, password } = getTestUserCredentials(__VU);
 
   // 登录
   const loginRes = http.post(`${BASE_URL}/login`, JSON.stringify({
@@ -81,6 +53,17 @@ export default function (data) {
     console.error(`Login failed for ${account}: ${loginRes.body}`);
     return;
   }
+
+  const token = loginRes.json('data.accessToken');
+
+  // 访问受保护接口（获取当前用户信息）
+  const profileRes = http.get(`${BASE_URL}/user/profile`, {
+    headers: authHeaders(token),
+  });
+
+  check(profileRes, {
+    'profile status is 200': (r) => r.status === 200,
+  });
 
   sleep(1);
 }
