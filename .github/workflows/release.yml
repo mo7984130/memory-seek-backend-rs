@@ -46,7 +46,7 @@ jobs:
         name: Deploy to Server
         runs-on: ubuntu-latest
         needs: build
-        environment: loadtest
+        environment: test
 
         steps:
             - name: Download binary artifact
@@ -94,7 +94,7 @@ jobs:
         name: Load Test
         runs-on: ubuntu-latest
         needs: deploy
-        environment: loadtest
+        environment: test
 
         steps:
             - name: Checkout
