@@ -107,8 +107,8 @@ CREATE TABLE IF NOT EXISTS photo_collection (
     photo_count BIGINT DEFAULT 0 NOT NULL,
     cover_file_id VARCHAR,
     is_favorite BOOLEAN NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 表与字段注释
