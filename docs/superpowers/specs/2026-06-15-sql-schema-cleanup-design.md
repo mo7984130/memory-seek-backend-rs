@@ -57,20 +57,14 @@ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 ```
 
-#### 2.2 删除冗余索引
-```sql
--- 删除：被 idx_feature_person_score 覆盖
--- CREATE INDEX idx_photo_face_feature_person_id ON photo_face_feature USING btree (person_id);
-```
-
-#### 2.3 添加缺失索引
+#### 2.2 添加缺失索引
 ```sql
 CREATE INDEX idx_photo_user_id ON photo_photo (user_id);
 CREATE INDEX idx_comment_user_id ON photo_comment (user_id);
 CREATE INDEX idx_fp_photo_id ON photo_collection_photo (photo_id);
 ```
 
-#### 2.4 删除内容
+#### 2.3 删除内容
 - `CREATE EXTENSION IF NOT EXISTS vector;`
 - `photo_face_person` 表定义及索引
 - `photo_face_feature` 表定义及索引
