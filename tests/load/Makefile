@@ -1,37 +1,64 @@
 # tests/load/Makefile
-# NOTE: Run from repo root with: make -f tests/load/Makefile <target>
+# 端到端压测自动化入口
 
-REPO_ROOT := $(shell cd ../.. && pwd)
+CONFIG_FILE ?= config/remote.json
+BASE_URL    ?= $(shell jq -r .baseUrl $(CONFIG_FILE))
+SSH_HOST    ?= $(shell jq -r .ssh.host $(CONFIG_FILE))
+SSH_PORT    ?= $(shell jq -r .ssh.port $(CONFIG_FILE))
+SSH_USER    ?= $(shell jq -r .ssh.user $(CONFIG_FILE))
+SSH_KEY     ?= $(shell jq -r .ssh.keyFile $(CONFIG_FILE))
+DB_NAME     ?= $(shell jq -r .db.database $(CONFIG_FILE))
+DB_USER     ?= $(shell jq -r .db.user $(CONFIG_FILE))
 
-.PHONY: test-unit test-integration test-load test-all clean
+SSH_CMD = ssh -i $(SSH_KEY) -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
+PSQL_CMD = $(SSH_CMD) "psql -U $(DB_USER) -d $(DB_NAME)"
 
-test-unit:
-	cd $(REPO_ROOT) && cargo test --lib
+.PHONY: seed cleanup verify loadtest loadtest-auth loadtest-user loadtest-photo help
 
-test-integration:
-	podman compose up -d postgres redis minio
-	sleep 10
-	@echo "初始化测试数据库..."
-	@podman exec load_postgres_1 psql -U test -d memory_seek_test -c 'CREATE TABLE IF NOT EXISTS "auth_user" (id BIGSERIAL PRIMARY KEY, username VARCHAR(255) NOT NULL, email VARCHAR(255) NOT NULL, password VARCHAR(255) NOT NULL, nickname VARCHAR(255) NOT NULL, avatar_file_id VARCHAR(2000), inviter BIGINT NOT NULL, refresh_token CHAR(32), refresh_token_expire_at TIMESTAMPTZ, updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL, CONSTRAINT user_username_index UNIQUE (username), CONSTRAINT user_email_index UNIQUE (email));' || true
-	@podman exec load_redis_1 redis-cli FLUSHALL
-	cd $(REPO_ROOT) && cargo test --test integration --features "auth" -- --test-threads=1; rc=$$?; exit $$rc
+help: ## 显示帮助信息
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-test-load: test-load-auth test-load-photo
+seed: ## 预置压测数据
+	@echo "📦 预置压测数据..."
+	$(PSQL_CMD) < setup/seed.sql
+	@echo "✅ 数据预置完成"
 
-test-load-auth:
-	podman compose --profile load up -d
-	sleep 30
-	k6 run scripts/auth.js --out json=results/auth.json
-	podman compose --profile load down -v
+cleanup: ## 清理压测数据
+	@echo "🧹 清理压测数据..."
+	$(PSQL_CMD) < setup/cleanup.sql
+	@echo "✅ 数据清理完成"
 
-test-load-photo:
-	podman compose --profile load up -d
-	sleep 30
-	k6 run scripts/photo.js --out json=results/photo.json
-	podman compose --profile load down -v
+verify: ## 验证压测数据
+	@echo "🔍 验证压测数据..."
+	$(PSQL_CMD) < setup/verify.sql
 
-test-all: test-unit test-integration test-load
+loadtest: seed ## 全量压测 (auth + user + photo)
+	@echo "🚀 开始全量压测..."
+	k6 run -e BASE_URL=$(BASE_URL) scripts/auth.js
+	k6 run -e BASE_URL=$(BASE_URL) scripts/user.js
+	k6 run -e BASE_URL=$(BASE_URL) scripts/photo.js
+	@$(MAKE) cleanup
+	@echo "✅ 全量压测完成"
 
-clean:
-	podman compose --profile load down -v
-	rm -rf results/*.json results/*.csv
+loadtest-auth: seed ## 仅认证模块压测
+	@echo "🚀 开始认证模块压测..."
+	k6 run -e BASE_URL=$(BASE_URL) scripts/auth.js
+	@$(MAKE) cleanup
+	@echo "✅ 认证模块压测完成"
+
+loadtest-user: seed ## 仅用户模块压测
+	@echo "🚀 开始用户模块压测..."
+	k6 run -e BASE_URL=$(BASE_URL) scripts/user.js
+	@$(MAKE) cleanup
+	@echo "✅ 用户模块压测完成"
+
+loadtest-photo: seed ## 仅照片模块压测
+	@echo "🚀 开始照片模块压测..."
+	k6 run -e BASE_URL=$(BASE_URL) scripts/photo.js
+	@$(MAKE) cleanup
+	@echo "✅ 照片模块压测完成"
+
+loadtest-quick: ## 快速压测 (不预置数据，不清理)
+	@echo "⚡ 开始快速压测..."
+	k6 run -e BASE_URL=$(BASE_URL) --duration 30s --vus 10 scripts/auth.js
+	@echo "✅ 快速压测完成"
