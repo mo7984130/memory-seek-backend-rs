@@ -4,7 +4,7 @@ on:
     push:
         branches: [develop, release, main]
     pull_request:
-        branches: [main]
+        branches: [develop, release, main]
 
 jobs:
     fmt:
@@ -33,6 +33,9 @@ jobs:
                   components: clippy
 
             - uses: Swatinem/rust-cache@v2
+
+            - name: Run clippy
+              run: cargo clippy --all-targets -- -D warnings
 
     unit-test:
         name: 单元测试
