@@ -66,6 +66,7 @@ CREATE UNIQUE INDEX uk_photo_file_id ON photo_photo (file_id);
 CREATE INDEX idx_photo_created_at ON "photo_photo" (created_at DESC);
 -- 哈希索引：用于秒传/去重
 CREATE INDEX idx_photo_md5 ON photo_photo (md5);
+CREATE INDEX idx_photo_user_id ON photo_photo (user_id);
 COMMENT ON TABLE photo_photo IS '用户相册表';
 COMMENT ON COLUMN photo_photo.id IS '主键ID';
 COMMENT ON COLUMN photo_photo.user_id IS '上传者ID';
@@ -148,6 +149,7 @@ COMMENT ON COLUMN photo_collection_photo.updated_at IS '关系更新时间';
 -- 3. 物理索引 (优化查询)
 CREATE INDEX idx_collection_user_id ON photo_collection(user_id);
 CREATE INDEX idx_fp_collection_id_created_id ON photo_collection_photo(collection_id, created_at DESC, id DESC);
+CREATE INDEX idx_fp_photo_id ON photo_collection_photo (photo_id);
 COMMENT ON INDEX idx_collection_user_id IS '优化：按用户查询收藏夹列表';
 COMMENT ON INDEX idx_fp_collection_id_created_id IS '优化：按收藏时间倒序查询收藏夹内容（复合游标）';
 
@@ -177,6 +179,8 @@ COMMENT ON INDEX idx_comment_photo_time IS '优化：按照片查询评论';
 
 CREATE INDEX idx_comment_photo_likes ON photo_comment (photo_id, like_count DESC);
 COMMENT ON INDEX idx_comment_photo_likes IS '优化：按照片查询高赞评论';
+
+CREATE INDEX idx_comment_user_id ON photo_comment (user_id);
 
 -- 评论点赞记录表
 CREATE TABLE IF NOT EXISTS photo_comment_like (
