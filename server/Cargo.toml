@@ -50,10 +50,6 @@ sea-orm = { workspace = true }
 redis = { workspace = true }
 deadpool-redis = { workspace = true }
 
-# 加密
-hmac = { workspace = true }
-sha2 = { workspace = true }
-
 # UUID
 uuid = { workspace = true }
 tracing-appender = "0.2.5"
