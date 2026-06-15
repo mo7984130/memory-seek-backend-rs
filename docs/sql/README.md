@@ -30,6 +30,8 @@ Memory Seek 数据库使用 PostgreSQL 16。
 
 | 查询场景 | 使用的索引 |
 |---------|-----------|
+| 用户名唯一性 | user_username_index |
+| 邮箱唯一性 | user_email_index |
 | 用户的照片列表 | idx_photo_user_id |
 | 按时间排序的照片 | idx_photo_created_at |
 | 文件去重/秒传 | idx_photo_md5 |
