@@ -1,16 +1,24 @@
 {
-  "baseUrl": "https://your-server.com",
-  "db": {
-    "host": "localhost",
-    "port": 5432,
-    "database": "memory_seek_test",
-    "user": "test",
-    "password": "YOUR_DB_PASSWORD"
-  },
-  "ssh": {
-    "host": "your-server.com",
-    "port": 22,
-    "user": "deploy",
-    "keyFile": "~/.ssh/deploy_key"
-  }
+    "ssh": {
+        "host": "YOUR_SERVER_IP",
+        "port": 22,
+        "user": "root"
+    },
+    "db": {
+        "user": "postgres",
+        "pass": "YOUR_DB_PASS"
+    },
+    "server_bin": "/opt/memory-seek/server",
+    "s3": {
+        "endpoint": "YOUR_S3_ENDPOINT",
+        "access_key": "YOUR_S3_ACCESS_KEY",
+        "secret_key": "YOUR_S3_SECRET_KEY",
+        "region": "YOUR_S3_REGION",
+        "bucket": "YOUR_S3_BUCKET",
+        "public_url": "YOUR_S3_PUBLIC_URL"
+    },
+    "token_cipher": {
+        "key": "YOUR_TOKEN_KEY",
+        "salt": "YOUR_TOKEN_SALT"
+    }
 }

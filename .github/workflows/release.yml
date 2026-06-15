@@ -116,27 +116,44 @@ jobs:
                   chmod 600 ~/.ssh/deploy_key
                   ssh-keyscan -p ${{ secrets.SERVER_PORT }} ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
-            - name: Seed test data
+            - name: Seed & Start loadtest server
               run: |
                   ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }} \
                     ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-                    "psql -U ${{ secrets.LOADTEST_DB_USER }} -d ${{ secrets.LOADTEST_DB_NAME }}" \
-                    < tests/load/setup/seed.sql
+                    "bash -s" < tests/load/setup/start-loadtest.sh \
+                    "${{ secrets.LOADTEST_DB_USER }}" \
+                    "${{ secrets.LOADTEST_DB_PASS }}" \
+                    "10000" "20" "100000" \
+                    "${{ secrets.LOADTEST_S3_ENDPOINT }}" \
+                    "${{ secrets.LOADTEST_S3_ACCESS_KEY }}" \
+                    "${{ secrets.LOADTEST_S3_SECRET_KEY }}" \
+                    "${{ secrets.LOADTEST_S3_REGION }}" \
+                    "${{ secrets.LOADTEST_S3_BUCKET }}" \
+                    "${{ secrets.LOADTEST_S3_PUBLIC_URL }}" \
+                    "${{ secrets.LOADTEST_TOKEN_KEY }}" \
+                    "${{ secrets.LOADTEST_TOKEN_SALT }}" \
+                    "/opt/memory-seek-server/server"
 
             - name: Run load tests
               working-directory: tests/load
+              env:
+                  BASE_URL: http://${{ secrets.SERVER_HOST }}:7985
               run: |
-                  k6 run -e BASE_URL=${{ secrets.LOADTEST_BASE_URL }} scripts/auth.js
-                  k6 run -e BASE_URL=${{ secrets.LOADTEST_BASE_URL }} scripts/user.js
-                  k6 run -e BASE_URL=${{ secrets.LOADTEST_BASE_URL }} scripts/photo.js
+                  k6 run -e BASE_URL=$BASE_URL scripts/auth/auth_service.js
+                  k6 run -e BASE_URL=$BASE_URL scripts/user/user_service.js
+                  k6 run -e BASE_URL=$BASE_URL scripts/photo/photo_service.js
+                  k6 run -e BASE_URL=$BASE_URL scripts/photo/comment_service.js
+                  k6 run -e BASE_URL=$BASE_URL scripts/photo/collection_service.js
+                  k6 run -e BASE_URL=$BASE_URL scripts/photo/collection_photo_service.js
 
-            - name: Cleanup test data
+            - name: Teardown loadtest environment
               if: always()
               run: |
                   ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }} \
                     ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-                    "psql -U ${{ secrets.LOADTEST_DB_USER }} -d ${{ secrets.LOADTEST_DB_NAME }}" \
-                    < tests/load/setup/cleanup.sql
+                    "bash -s" < tests/load/setup/stop-loadtest.sh \
+                    "${{ secrets.LOADTEST_DB_USER }}" \
+                    "${{ secrets.LOADTEST_DB_PASS }}"
 
             - name: Cleanup SSH key
               if: always()

@@ -3,7 +3,15 @@
 
 import http from 'k6/http';
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
+// BASE_URL 必须通过 -e BASE_URL=... 显式传入
+const BASE_URL = __ENV.BASE_URL;
+if (!BASE_URL) {
+  throw new Error('BASE_URL is required. Pass via: k6 run -e BASE_URL=http://host:port script.js');
+}
+
+// 数据量配置（与 seed.sql 的 psql 变量对齐）
+const AUTH_USERS = parseInt(__ENV.AUTH_USERS || '10000');
+const PHOTO_USERS = parseInt(__ENV.PHOTO_USERS || '20');
 
 /**
  * 用户登录并返回 accessToken
@@ -28,13 +36,12 @@ export function login(account, password) {
 }
 
 /**
- * 生成测试用户凭据
+ * 生成 auth 测试用户凭据
  * @param {number} vuId - VU ID
- * @param {number} maxUsers - 最大用户数
  * @returns {{ account: string, password: string }}
  */
-export function getTestUserCredentials(vuId, maxUsers = 1000) {
-  const userId = (vuId % maxUsers) + 1;
+export function getTestUserCredentials(vuId) {
+  const userId = (vuId % AUTH_USERS) + 1;
   return {
     account: `loadtest_${userId}@test.com`,
     password: 'Test123456',
@@ -47,7 +54,7 @@ export function getTestUserCredentials(vuId, maxUsers = 1000) {
  * @returns {{ account: string, password: string }}
  */
 export function getPhotoUserCredentials(vuId) {
-  const userId = (vuId % 20) + 1;
+  const userId = (vuId % PHOTO_USERS) + 1;
   return {
     account: `loadtest_photo_${userId}@test.com`,
     password: 'Test123456',
