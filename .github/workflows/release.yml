@@ -41,14 +41,17 @@ jobs:
                   path: target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }}
                   retention-days: 1
 
-    # ── 第二步：部署 ──────────────────────────────
-    deploy:
-        name: Deploy to Server
+    # ── 第二步：压测 ──────────────────────────────
+    loadtest:
+        name: Load Test
         runs-on: ubuntu-latest
         needs: build
         environment: test
 
         steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
             - name: Download binary artifact
               uses: actions/download-artifact@v4
               with:
@@ -57,48 +60,43 @@ jobs:
             - name: Setup SSH
               run: |
                   mkdir -p ~/.ssh
-                  echo "${{ secrets.LOADTEST_SSH_KEY }}" > ~/.ssh/deploy_key
-                  chmod 600 ~/.ssh/deploy_key
+                  echo "${{ secrets.SSH_KEY }}" > ~/.ssh/test_key
+                  chmod 600 ~/.ssh/test_key
                   ssh-keyscan -p ${{ secrets.SERVER_PORT }} ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
-            - name: Upload binary to server
+            - name: Upload files to server
               run: |
                   chmod +x ${{ env.BINARY_NAME }}
-                  scp -i ~/.ssh/deploy_key \
-                      -P ${{ secrets.SERVER_PORT }} \
+                  # 创建远程工作目录
+                  ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
+                    ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+                    "mkdir -p /tmp/loadtest"
+                  # 上传二进制、SQL 文件、启动脚本、配置模板
+                  scp -i ~/.ssh/test_key -P ${{ secrets.SERVER_PORT }} \
                       ${{ env.BINARY_NAME }} \
-                      ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ env.DEPLOY_PATH }}/${{ env.BINARY_NAME }}.new
+                      tests/load/setup/start-loadtest.sh \
+                      tests/load/setup/stop-loadtest.sh \
+                      tests/load/setup/seed.sql \
+                      tests/load/setup/loadtest-config.json \
+                      docs/sql/init.sql \
+                      ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/loadtest/
+                  # 上传 docker-compose 并修正 init.sql 路径（本地用 ../../docs/sql/init.sql，远程用 ./init.sql）
+                  scp -i ~/.ssh/test_key -P ${{ secrets.SERVER_PORT }} \
+                      tests/load/docker-compose.yml \
+                      ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/loadtest/docker-compose.yml.src
+                  ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
+                    ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+                    "sed 's|../../docs/sql/init.sql|./init.sql|g' /tmp/loadtest/docker-compose.yml.src > /tmp/loadtest/docker-compose.yml && rm /tmp/loadtest/docker-compose.yml.src"
 
-            - name: Swap binary & restart service
+            - name: Start loadtest environment
               run: |
-                  ssh -i ~/.ssh/deploy_key \
-                      -p ${{ secrets.SERVER_PORT }} \
-                      ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-                      set -e
-                      cd ${{ env.DEPLOY_PATH }}
-                      mv ${{ env.BINARY_NAME }}.new ${{ env.BINARY_NAME }}
-                      chmod +x ${{ env.BINARY_NAME }}
-                      sudo systemctl restart memory-seek-server
-                      sleep 3
-                      sudo systemctl is-active --quiet memory-seek-server \
-                          && echo "✅ Deploy success" \
-                          || (echo "❌ Deploy failed"; sudo journalctl -u memory-seek-server -n 30; exit 1)
-                  EOF
-
-            - name: Cleanup SSH key
-              if: always()
-              run: rm -f ~/.ssh/deploy_key
-
-    # ── 第三步：压测 ──────────────────────────────
-    loadtest:
-        name: Load Test
-        runs-on: ubuntu-latest
-        needs: deploy
-        environment: test
-
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+                  ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
+                    ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+                    "cd /tmp/loadtest && bash start-loadtest.sh \
+                    '${{ secrets.LOADTEST_DB_USER }}' \
+                    '${{ secrets.LOADTEST_DB_PASS }}' \
+                    '10000' '20' '100000' \
+                    './memory-seek-server'"
 
             - name: Install k6
               run: |
@@ -108,31 +106,6 @@ jobs:
                   echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
                     | sudo tee /etc/apt/sources.list.d/k6.list
                   sudo apt-get update && sudo apt-get install -y k6
-
-            - name: Setup SSH
-              run: |
-                  mkdir -p ~/.ssh
-                  echo "${{ secrets.LOADTEST_SSH_KEY }}" > ~/.ssh/deploy_key
-                  chmod 600 ~/.ssh/deploy_key
-                  ssh-keyscan -p ${{ secrets.SERVER_PORT }} ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-
-            - name: Seed & Start loadtest server
-              run: |
-                  ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }} \
-                    ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-                    "bash -s" < tests/load/setup/start-loadtest.sh \
-                    "${{ secrets.LOADTEST_DB_USER }}" \
-                    "${{ secrets.LOADTEST_DB_PASS }}" \
-                    "10000" "20" "100000" \
-                    "${{ secrets.LOADTEST_S3_ENDPOINT }}" \
-                    "${{ secrets.LOADTEST_S3_ACCESS_KEY }}" \
-                    "${{ secrets.LOADTEST_S3_SECRET_KEY }}" \
-                    "${{ secrets.LOADTEST_S3_REGION }}" \
-                    "${{ secrets.LOADTEST_S3_BUCKET }}" \
-                    "${{ secrets.LOADTEST_S3_PUBLIC_URL }}" \
-                    "${{ secrets.LOADTEST_TOKEN_KEY }}" \
-                    "${{ secrets.LOADTEST_TOKEN_SALT }}" \
-                    "/opt/memory-seek-server/server"
 
             - name: Run load tests
               working-directory: tests/load
@@ -149,12 +122,12 @@ jobs:
             - name: Teardown loadtest environment
               if: always()
               run: |
-                  ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }} \
+                  ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
                     ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-                    "bash -s" < tests/load/setup/stop-loadtest.sh \
-                    "${{ secrets.LOADTEST_DB_USER }}" \
-                    "${{ secrets.LOADTEST_DB_PASS }}"
+                    "cd /tmp/loadtest && bash stop-loadtest.sh \
+                    '${{ secrets.LOADTEST_DB_USER }}' \
+                    '${{ secrets.LOADTEST_DB_PASS }}'"
 
             - name: Cleanup SSH key
               if: always()
-              run: rm -f ~/.ssh/deploy_key
+              run: rm -f ~/.ssh/test_key
