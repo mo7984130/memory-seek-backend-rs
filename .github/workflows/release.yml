@@ -93,10 +93,10 @@ jobs:
                   ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
                     ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
                     "cd /tmp/loadtest && bash start-loadtest.sh \
-                    '${{ secrets.LOADTEST_DB_USER }}' \
-                    '${{ secrets.LOADTEST_DB_PASS }}' \
-                    '10000' '20' '100000' \
-                    './memory-seek-server'"
+                    --db-user '${{ secrets.LOADTEST_DB_USER }}' \
+                    --db-pass '${{ secrets.LOADTEST_DB_PASS }}' \
+                    --auth-users 10000 --photo-users 20 --photos 100000 \
+                    --server-bin './memory-seek-server'"
 
             - name: Install k6
               run: |
@@ -125,8 +125,8 @@ jobs:
                   ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
                     ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
                     "cd /tmp/loadtest && bash stop-loadtest.sh \
-                    '${{ secrets.LOADTEST_DB_USER }}' \
-                    '${{ secrets.LOADTEST_DB_PASS }}'"
+                    --db-user '${{ secrets.LOADTEST_DB_USER }}' \
+                    --db-pass '${{ secrets.LOADTEST_DB_PASS }}'"
 
             - name: Cleanup SSH key
               if: always()

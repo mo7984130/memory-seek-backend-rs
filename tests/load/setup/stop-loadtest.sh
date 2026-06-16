@@ -3,15 +3,43 @@ set -euo pipefail
 
 # ============================================================
 # 压测环境清理脚本（服务器端执行）
-# 用法: ./stop-loadtest.sh <DB_USER> <DB_PASS>
+#
+# 用法:
+#   ./stop-loadtest.sh --db-user test --db-pass test
+#
+# 必填参数:
+#   --db-user   PostgreSQL 用户名
+#   --db-pass   PostgreSQL 密码
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_DIR="${SCRIPT_DIR}/.."
-DB_USER="$1"
-DB_PASS="$2"
 PID_FILE="/tmp/loadtest-server.pid"
 CONFIG_DST="/tmp/config.loadtest.json"
+
+# 默认值
+DB_USER=""
+DB_PASS=""
+
+# 解析命名参数
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --db-user)  DB_USER="$2";  shift 2 ;;
+        --db-pass)  DB_PASS="$2";  shift 2 ;;
+        *)
+            echo "未知参数: $1"
+            echo "用法: $0 --db-user USER --db-pass PASS"
+            exit 1
+            ;;
+    esac
+done
+
+# 校验必填参数
+if [[ -z "$DB_USER" || -z "$DB_PASS" ]]; then
+    echo "错误: --db-user 和 --db-pass 为必填参数"
+    echo "用法: $0 --db-user USER --db-pass PASS"
+    exit 1
+fi
 
 echo "=== 压测环境清理 ==="
 

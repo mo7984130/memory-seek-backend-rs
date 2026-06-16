@@ -3,18 +3,58 @@ set -euo pipefail
 
 # ============================================================
 # 压测环境完整启动脚本（服务器端执行）
-# 用法: ./start-loadtest.sh <DB_USER> <DB_PASS> <AUTH_USERS> <PHOTO_USERS> <PHOTOS> [SERVER_BIN]
 #
-# 前置条件: docker compose 文件和本脚本在同一目录下
+# 用法:
+#   ./start-loadtest.sh --db-user test --db-pass test \
+#       --auth-users 10000 --photo-users 20 --photos 100000 \
+#       --server-bin ./server
+#
+# 必填参数:
+#   --db-user       PostgreSQL 用户名
+#   --db-pass       PostgreSQL 密码
+#
+# 可选参数:
+#   --auth-users    认证用户数 (默认: 10000)
+#   --photo-users   照片用户数 (默认: 20)
+#   --photos        照片数 (默认: 100000)
+#   --server-bin    服务二进制路径 (默认: ./server)
+#
+# 前置条件: docker compose 文件在 ../ 相对于本脚本
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DB_USER="$1"
-DB_PASS="$2"
-AUTH_USERS="${3:-10000}"
-PHOTO_USERS="${4:-20}"
-PHOTOS="${5:-100000}"
-SERVER_BIN="${6:-./server}"
+
+# 默认值
+DB_USER=""
+DB_PASS=""
+AUTH_USERS=10000
+PHOTO_USERS=20
+PHOTOS=100000
+SERVER_BIN="./server"
+
+# 解析命名参数
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --db-user)      DB_USER="$2";       shift 2 ;;
+        --db-pass)      DB_PASS="$2";       shift 2 ;;
+        --auth-users)   AUTH_USERS="$2";    shift 2 ;;
+        --photo-users)  PHOTO_USERS="$2";   shift 2 ;;
+        --photos)       PHOTOS="$2";        shift 2 ;;
+        --server-bin)   SERVER_BIN="$2";    shift 2 ;;
+        *)
+            echo "未知参数: $1"
+            echo "用法: $0 --db-user USER --db-pass PASS [--auth-users N] [--photo-users N] [--photos N] [--server-bin PATH]"
+            exit 1
+            ;;
+    esac
+done
+
+# 校验必填参数
+if [[ -z "$DB_USER" || -z "$DB_PASS" ]]; then
+    echo "错误: --db-user 和 --db-pass 为必填参数"
+    echo "用法: $0 --db-user USER --db-pass PASS [--auth-users N] [--photo-users N] [--photos N] [--server-bin PATH]"
+    exit 1
+fi
 
 COMPOSE_DIR="${SCRIPT_DIR}/.."
 CONFIG_TEMPLATE="${SCRIPT_DIR}/loadtest-config.json"
@@ -24,6 +64,11 @@ DB_NAME="memory_seek_loadtest"
 PORT=7985
 
 echo "=== 压测环境启动 ==="
+echo "  DB_USER:     ${DB_USER}"
+echo "  AUTH_USERS:  ${AUTH_USERS}"
+echo "  PHOTO_USERS: ${PHOTO_USERS}"
+echo "  PHOTOS:      ${PHOTOS}"
+echo "  SERVER_BIN:  ${SERVER_BIN}"
 
 # 1. 启动基础设施 (PG + Redis + MinIO)
 echo "🐳 启动 docker-compose 基础设施..."
@@ -48,7 +93,7 @@ for svc in postgres redis minio; do
     done
 done
 
-# 3. 创建压测数据库（compose 已创建默认 DB，这里创建压测专用 DB）
+# 3. 创建压测数据库
 echo "📦 创建数据库 ${DB_NAME}..."
 PGPASSWORD="${DB_PASS}" psql -h localhost -p 5433 -U "${DB_USER}" -d postgres \
   -c "DROP DATABASE IF EXISTS ${DB_NAME};" \
@@ -67,7 +112,7 @@ PGPASSWORD="${DB_PASS}" psql -h localhost -p 5433 -U "${DB_USER}" -d "${DB_NAME}
   -v photos="${PHOTOS}" \
   -f "${SCRIPT_DIR}/seed.sql"
 
-# 6. 生成配置文件（只替换 DB 凭据，其他值已在模板中硬编码）
+# 6. 生成配置文件
 echo "⚙️  生成配置..."
 sed -e "s|DB_USER|${DB_USER}|g" \
     -e "s|DB_PASS|${DB_PASS}|g" \

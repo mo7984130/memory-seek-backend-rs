@@ -32,12 +32,14 @@ help: ## 显示帮助信息
 seed: ## SSH 创建数据库 + 建表 + 填充数据
 	@echo "=== Seed: 创建压测数据库 ==="
 	$(SSH_CMD) "bash -s" < $(SETUP_DIR)/start-loadtest.sh \
-		$(DB_USER) $(DB_PASS) $(AUTH_USERS) $(PHOTO_USERS) $(PHOTOS) \
-		$(SERVER_BIN)
+		--db-user $(DB_USER) --db-pass $(DB_PASS) \
+		--auth-users $(AUTH_USERS) --photo-users $(PHOTO_USERS) --photos $(PHOTOS) \
+		--server-bin $(SERVER_BIN)
 
 stop-server: ## SSH 停止临时服务 + 删库 + 清理配置
 	@echo "=== Teardown: 清理压测环境 ==="
-	$(SSH_CMD) "bash -s" < $(SETUP_DIR)/stop-loadtest.sh $(DB_USER) $(DB_PASS)
+	$(SSH_CMD) "bash -s" < $(SETUP_DIR)/stop-loadtest.sh \
+		--db-user $(DB_USER) --db-pass $(DB_PASS)
 
 teardown: stop-server ## 同 stop-server
 
