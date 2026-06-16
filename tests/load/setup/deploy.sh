@@ -5,18 +5,20 @@ set -euo pipefail
 HOST=""
 USER=""
 SERVER_BIN=""
+SSH_KEY=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --host)      HOST="$2"; shift 2 ;;
         --user)      USER="$2"; shift 2 ;;
         --server-bin) SERVER_BIN="$2"; shift 2 ;;
+        --ssh-key)   SSH_KEY="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
 if [[ -z "$HOST" || -z "$USER" ]]; then
-    echo "Usage: $0 --host <IP> --user <USER> [--server-bin <path>]"
+    echo "Usage: $0 --host <IP> --user <USER> [--server-bin <path>] [--ssh-key <path>]"
     exit 1
 fi
 
@@ -28,6 +30,9 @@ LOAD_DIR="$(dirname "$SCRIPT_DIR")"
 # SSH ControlMaster: 只输一次密码，后续复用连接
 SSH_SOCKET="/tmp/loadtest-ssh-%C"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o ControlMaster=auto -o ControlPath=$SSH_SOCKET -o ControlPersist=600"
+if [[ -n "$SSH_KEY" ]]; then
+    SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
+fi
 
 ssh_cmd() { ssh $SSH_OPTS "$REMOTE" "$@"; }
 scp_cmd() { scp $SSH_OPTS "$@"; }

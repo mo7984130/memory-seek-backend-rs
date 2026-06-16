@@ -4,6 +4,7 @@
 REMOTE_HOST ?=
 REMOTE_USER ?=
 SERVER_BIN  ?=
+SSH_KEY     ?=
 
 RESULTS_DIR  := results
 BASELINES    := baselines
@@ -14,10 +15,12 @@ BASE_URL     := http://$(REMOTE_HOST):3000
 # ── 部署 ──────────────────────────────────────────
 deploy:                    ## 部署 infra + server 到远程
 	bash setup/deploy.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) \
-		$(if $(SERVER_BIN),--server-bin $(SERVER_BIN),)
+		$(if $(SERVER_BIN),--server-bin $(SERVER_BIN),) \
+		$(if $(SSH_KEY),--ssh-key $(SSH_KEY),)
 
 teardown:                  ## 清理远程环境（server + infra + 文件）
-	bash setup/teardown.sh --host $(REMOTE_HOST) --user $(REMOTE_USER)
+	bash setup/teardown.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) \
+		$(if $(SSH_KEY),--ssh-key $(SSH_KEY),)
 
 # ── 压测 ──────────────────────────────────────────
 $(RESULTS_DIR):

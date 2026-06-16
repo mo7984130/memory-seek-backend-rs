@@ -69,7 +69,8 @@ jobs:
                   make deploy \
                     REMOTE_HOST=${{ secrets.SERVER_HOST }} \
                     REMOTE_USER=${{ secrets.SERVER_USER }} \
-                    SERVER_BIN=../../${{ env.BINARY_NAME }}
+                    SERVER_BIN=../../${{ env.BINARY_NAME }} \
+                    SSH_KEY=~/.ssh/test_key
 
             - name: Install k6
               run: |
@@ -96,7 +97,8 @@ jobs:
               run: |
                   make teardown \
                     REMOTE_HOST=${{ secrets.SERVER_HOST }} \
-                    REMOTE_USER=${{ secrets.SERVER_USER }}
+                    REMOTE_USER=${{ secrets.SERVER_USER }} \
+                    SSH_KEY=~/.ssh/test_key
 
             - name: Cleanup SSH key
               if: always()
