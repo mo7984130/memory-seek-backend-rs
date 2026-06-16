@@ -20,9 +20,16 @@ fi
 
 REMOTE="${USER}@${HOST}"
 REMOTE_DIR="~/loadtest"
-SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5"
+
+# SSH ControlMaster: 只输一次密码，后续复用连接
+SSH_SOCKET="/tmp/loadtest-ssh-%C"
+SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o ControlMaster=auto -o ControlPath=$SSH_SOCKET -o ControlPersist=600"
 
 ssh_cmd() { ssh $SSH_OPTS "$REMOTE" "$@"; }
+
+# 清理 SSH 连接
+cleanup() { ssh -O stop -o ControlPath="$SSH_SOCKET" "$REMOTE" 2>/dev/null || true; }
+trap cleanup EXIT
 
 echo "=== Tearing down on $REMOTE ==="
 
