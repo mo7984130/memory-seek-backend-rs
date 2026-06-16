@@ -8,7 +8,6 @@ on:
 env:
     CARGO_TERM_COLOR: always
     BINARY_NAME: memory-seek-server
-    DEPLOY_PATH: /opt/memory-seek-server
 
 jobs:
     # ── 第一步：构建 ──────────────────────────────
@@ -64,39 +63,13 @@ jobs:
                   chmod 600 ~/.ssh/test_key
                   ssh-keyscan -p ${{ secrets.SERVER_PORT }} ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
-            - name: Upload files to server
+            - name: Deploy loadtest environment
+              working-directory: tests/load
               run: |
-                  chmod +x ${{ env.BINARY_NAME }}
-                  # 创建远程工作目录
-                  ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
-                    ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-                    "mkdir -p /tmp/loadtest"
-                  # 上传二进制、SQL 文件、启动脚本、配置模板
-                  scp -i ~/.ssh/test_key -P ${{ secrets.SERVER_PORT }} \
-                      ${{ env.BINARY_NAME }} \
-                      tests/load/setup/start-loadtest.sh \
-                      tests/load/setup/stop-loadtest.sh \
-                      tests/load/setup/seed.sql \
-                      tests/load/setup/loadtest-config.json \
-                      docs/sql/init.sql \
-                      ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/loadtest/
-                  # 上传 docker-compose 并修正 init.sql 路径（本地用 ../../docs/sql/init.sql，远程用 ./init.sql）
-                  scp -i ~/.ssh/test_key -P ${{ secrets.SERVER_PORT }} \
-                      tests/load/docker-compose.yml \
-                      ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/loadtest/docker-compose.yml.src
-                  ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
-                    ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-                    "sed 's|../../docs/sql/init.sql|./init.sql|g' /tmp/loadtest/docker-compose.yml.src > /tmp/loadtest/docker-compose.yml && rm /tmp/loadtest/docker-compose.yml.src"
-
-            - name: Start loadtest environment
-              run: |
-                  ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
-                    ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-                    "cd /tmp/loadtest && bash start-loadtest.sh \
-                    --db-user '${{ secrets.LOADTEST_DB_USER }}' \
-                    --db-pass '${{ secrets.LOADTEST_DB_PASS }}' \
-                    --auth-users 10000 --photo-users 20 --photos 100000 \
-                    --server-bin './memory-seek-server'"
+                  make deploy \
+                    REMOTE_HOST=${{ secrets.SERVER_HOST }} \
+                    REMOTE_USER=${{ secrets.SERVER_USER }} \
+                    SERVER_BIN=../../${{ env.BINARY_NAME }}
 
             - name: Install k6
               run: |
@@ -109,24 +82,21 @@ jobs:
 
             - name: Run load tests
               working-directory: tests/load
-              env:
-                  BASE_URL: http://${{ secrets.SERVER_HOST }}:7985
               run: |
-                  k6 run -e BASE_URL=$BASE_URL scripts/auth/auth_service.js
-                  k6 run -e BASE_URL=$BASE_URL scripts/user/user_service.js
-                  k6 run -e BASE_URL=$BASE_URL scripts/photo/photo_service.js
-                  k6 run -e BASE_URL=$BASE_URL scripts/photo/comment_service.js
-                  k6 run -e BASE_URL=$BASE_URL scripts/photo/collection_service.js
-                  k6 run -e BASE_URL=$BASE_URL scripts/photo/collection_photo_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/auth/auth_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/user/user_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/photo/photo_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/photo/comment_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/photo/collection_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/photo/collection_photo_service.js
 
-            - name: Teardown loadtest environment
+            - name: Teardown
               if: always()
+              working-directory: tests/load
               run: |
-                  ssh -i ~/.ssh/test_key -p ${{ secrets.SERVER_PORT }} \
-                    ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-                    "cd /tmp/loadtest && bash stop-loadtest.sh \
-                    --db-user '${{ secrets.LOADTEST_DB_USER }}' \
-                    --db-pass '${{ secrets.LOADTEST_DB_PASS }}'"
+                  make teardown \
+                    REMOTE_HOST=${{ secrets.SERVER_HOST }} \
+                    REMOTE_USER=${{ secrets.SERVER_USER }}
 
             - name: Cleanup SSH key
               if: always()

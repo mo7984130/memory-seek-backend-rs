@@ -1,75 +1,91 @@
 # tests/load/Makefile
-# 隔离式压测自动化入口
+# Load test entry point — CI and local both call these targets
 
-CONFIG_FILE ?= config/remote.json
+REMOTE_HOST ?=
+REMOTE_USER ?=
+SERVER_BIN  ?=
 
-# 从配置文件读取连接信息
-SSH_HOST    ?= $(shell jq -r .ssh.host $(CONFIG_FILE))
-SSH_PORT    ?= $(shell jq -r .ssh.port $(CONFIG_FILE))
-SSH_USER    ?= $(shell jq -r .ssh.user $(CONFIG_FILE))
-DB_USER     ?= $(shell jq -r .db.user $(CONFIG_FILE))
-DB_PASS     ?= $(shell jq -r .db.pass $(CONFIG_FILE))
-SERVER_BIN  ?= $(shell jq -r .server_bin $(CONFIG_FILE))
+RESULTS_DIR  := results
+BASELINES    := baselines
+BASE_URL     := http://$(REMOTE_HOST):3000
 
-# 数据量配置
-AUTH_USERS  ?= 10000
-PHOTO_USERS ?= 20
-PHOTOS      ?= 100000
+.PHONY: deploy teardown auth photo user collection comment p95-report baseline compare clean help
 
-# k6 目标服务器（临时服务端口）
-BASE_URL    ?= http://$(SSH_HOST):7985
+# ── 部署 ──────────────────────────────────────────
+deploy:                    ## 部署 infra + server 到远程
+	bash setup/deploy.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) \
+		$(if $(SERVER_BIN),--server-bin $(SERVER_BIN),)
 
-SSH_CMD = ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
+teardown:                  ## 清理远程环境（server + infra + 文件）
+	bash setup/teardown.sh --host $(REMOTE_HOST) --user $(REMOTE_USER)
 
-# 脚本路径（相对于 tests/load/）
-SETUP_DIR = setup
+# ── 压测 ──────────────────────────────────────────
+$(RESULTS_DIR):
+	mkdir -p $(RESULTS_DIR)
 
-.PHONY: help seed start-server stop-server teardown loadtest loadtest-quick verify
-
-help: ## 显示帮助信息
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
-
-seed: ## SSH 创建数据库 + 建表 + 填充数据
-	@echo "=== Seed: 创建压测数据库 ==="
-	$(SSH_CMD) "bash -s" < $(SETUP_DIR)/start-loadtest.sh \
-		--db-user $(DB_USER) --db-pass $(DB_PASS) \
-		--auth-users $(AUTH_USERS) --photo-users $(PHOTO_USERS) --photos $(PHOTOS) \
-		--server-bin $(SERVER_BIN)
-
-stop-server: ## SSH 停止临时服务 + 删库 + 清理配置
-	@echo "=== Teardown: 清理压测环境 ==="
-	$(SSH_CMD) "bash -s" < $(SETUP_DIR)/stop-loadtest.sh \
-		--db-user $(DB_USER) --db-pass $(DB_PASS)
-
-teardown: stop-server ## 同 stop-server
-
-loadtest: seed ## 完整压测流程 (seed → k6 run all → teardown)
-	@echo "=== Loadtest: 开始全量压测 ==="
-	@trap 'make teardown' EXIT; \
-	k6 run -e BASE_URL=$(BASE_URL) -e AUTH_USERS=$(AUTH_USERS) -e PHOTO_USERS=$(PHOTO_USERS) \
-		scripts/auth/auth_service.js; \
-	k6 run -e BASE_URL=$(BASE_URL) -e AUTH_USERS=$(AUTH_USERS) -e PHOTO_USERS=$(PHOTO_USERS) \
-		scripts/user/user_service.js; \
-	k6 run -e BASE_URL=$(BASE_URL) -e AUTH_USERS=$(AUTH_USERS) -e PHOTO_USERS=$(PHOTO_USERS) \
-		scripts/photo/photo_service.js; \
-	k6 run -e BASE_URL=$(BASE_URL) -e AUTH_USERS=$(AUTH_USERS) -e PHOTO_USERS=$(PHOTO_USERS) \
-		scripts/photo/comment_service.js; \
-	k6 run -e BASE_URL=$(BASE_URL) -e AUTH_USERS=$(AUTH_USERS) -e PHOTO_USERS=$(PHOTO_USERS) \
-		scripts/photo/collection_service.js; \
-	k6 run -e BASE_URL=$(BASE_URL) -e AUTH_USERS=$(AUTH_USERS) -e PHOTO_USERS=$(PHOTO_USERS) \
-		scripts/photo/collection_photo_service.js
-	@echo "=== Loadtest: 全量压测完成 ==="
-
-loadtest-quick: ## 快速压测 (少量数据, 仅 auth 模块)
-	@echo "=== Quick Loadtest ==="
-	@AUTH_USERS=100 PHOTO_USERS=5 PHOTOS=100 make seed
-	@trap 'make teardown' EXIT; \
-	k6 run -e BASE_URL=$(BASE_URL) -e AUTH_USERS=100 -e PHOTO_USERS=5 \
-		--duration 30s --vus 10 \
+auth: $(RESULTS_DIR)       ## 认证模块压测
+	k6 run -e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR/auth_raw.json) \
+		--summary-export=$(RESULTS_DIR/auth_summary.json) \
 		scripts/auth/auth_service.js
-	@echo "=== Quick Loadtest 完成 ==="
 
-verify: ## 验证压测数据量
-	@echo "=== 验证压测数据 ==="
-	$(SSH_CMD) "PGPASSWORD=$(DB_PASS) psql -h localhost -p 5433 -U $(DB_USER) -d memory_seek_loadtest" \
-		< $(SETUP_DIR)/verify.sql
+user: $(RESULTS_DIR)       ## 用户模块压测
+	k6 run -e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR/user_raw.json) \
+		--summary-export=$(RESULTS_DIR/user_summary.json) \
+		scripts/user/user_service.js
+
+photo: $(RESULTS_DIR)      ## 照片模块压测
+	k6 run -e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR/photo_raw.json) \
+		--summary-export=$(RESULTS_DIR/photo_summary.json) \
+		scripts/photo/photo_service.js
+
+collection: $(RESULTS_DIR) ## 收藏夹模块压测
+	k6 run -e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR/collection_raw.json) \
+		--summary-export=$(RESULTS_DIR/collection_summary.json) \
+		scripts/photo/collection_service.js
+
+comment: $(RESULTS_DIR)    ## 评论模块压测
+	k6 run -e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR/comment_raw.json) \
+		--summary-export=$(RESULTS_DIR/comment_summary.json) \
+		scripts/photo/comment_service.js
+
+# ── 报告 ──────────────────────────────────────────
+p95-report:                ## 生成 P95 性能报告
+	@echo "=== P95 Latency ==="
+	@for f in $(RESULTS_DIR)/*_summary.json; do \
+		name=$$(basename $$f _summary.json); \
+		p95=$$(cat $$f | jq -r '.metrics.http_req_duration.values["p(95)"]' 2>/dev/null); \
+		if [ "$$p95" != "null" ] && [ -n "$$p95" ]; then \
+			printf "  %-15s %.2f ms\n" "$$name" "$$p95"; \
+		fi; \
+	done
+
+baseline:                  ## 保存当前结果为基线
+	@mkdir -p $(BASELINES)
+	cp $(RESULTS_DIR)/*_summary.json $(BASELINES)/ 2>/dev/null || echo "No results to save"
+
+compare:                   ## 对比当前结果与基线
+	@echo "=== P95 Comparison ==="
+	@printf "  %-15s %12s %12s %10s\n" "Endpoint" "Baseline" "Current" "Change"
+	@printf "  %-15s %12s %12s %10s\n" "--------" "--------" "-------" "------"
+	@for f in $(BASELINES)/*_summary.json; do \
+		name=$$(basename $$f _summary.json); \
+		base=$$(cat $$f | jq -r '.metrics.http_req_duration.values["p(95)"]' 2>/dev/null); \
+		curr=$$(cat $(RESULTS_DIR)/$${name}_summary.json 2>/dev/null | jq -r '.metrics.http_req_duration.values["p(95)"]' 2>/dev/null); \
+		if [ "$$base" != "null" ] && [ "$$curr" != "null" ] && [ -n "$$base" ] && [ -n "$$curr" ]; then \
+			change=$$(echo "$$curr $$base" | awk '{printf "%.1f%%", ($$1/$$2 - 1) * 100}'); \
+			printf "  %-15s %10s ms %10s ms %10s\n" "$$name" "$$base" "$$curr" "$$change"; \
+		fi; \
+	done
+
+# ── 清理 ──────────────────────────────────────────
+clean:                     ## 清理本地结果文件
+	rm -rf $(RESULTS_DIR)/*.json $(BASELINES)/*.json
+
+help:                      ## 显示帮助
+	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*##"} {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' | sort
