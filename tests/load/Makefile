@@ -1,6 +1,8 @@
 # tests/load/Makefile
 # Load test entry point — CI and local both call these targets
 
+-include .env
+
 REMOTE_HOST ?=
 REMOTE_USER ?=
 SERVER_BIN  ?=
