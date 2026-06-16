@@ -51,6 +51,7 @@ ssh_cmd "mkdir -p $REMOTE_DIR"
 echo "[2/7] Uploading files..."
 scp_cmd "$LOAD_DIR/docker-compose.yml" "$REMOTE:$REMOTE_DIR/"
 scp_cmd "$LOAD_DIR/config/config.json" "$REMOTE:$REMOTE_DIR/config.json"
+scp_cmd "$SCRIPT_DIR/../../docs/sql/init.sql" "$REMOTE:$REMOTE_DIR/"
 scp_cmd "$LOAD_DIR/setup/seed.sql" "$REMOTE:$REMOTE_DIR/"
 scp_cmd "$LOAD_DIR/setup/verify.sql" "$REMOTE:$REMOTE_DIR/"
 if [[ -n "$SERVER_BIN" ]]; then
@@ -63,20 +64,33 @@ ssh_cmd "cd $REMOTE_DIR && docker compose up -d"
 
 # ── Step 4: 等待容器就绪 ─────────────────────────────
 echo "[4/7] Waiting for containers to be healthy..."
-ssh_cmd "cd $REMOTE_DIR && timeout 60 bash -c 'until docker compose ps --format json | jq -e \".Health == \\\"healthy\\\"\" >/dev/null 2>&1; do sleep 2; done'" || {
+ssh_cmd "cd $REMOTE_DIR && timeout 90 bash -c '
+    while true; do
+        healthy=\$(docker inspect --format=\"{{.State.Health.Status}}\" \
+            \$(docker compose ps -q) 2>/dev/null | grep -c \"healthy\" || true)
+        if [ \"\$healthy\" -ge 3 ]; then break; fi
+        sleep 2
+    done
+'" || {
     echo "Warning: containers may not all be healthy, continuing anyway..."
+    ssh_cmd "cd $REMOTE_DIR && docker compose ps"
 }
 
 # ── Step 5: 创建数据库并导入测试数据 ──────────────────
 echo "[5/7] Creating database and seeding data..."
-ssh_cmd "docker exec -i \$(docker compose -f $REMOTE_DIR/docker-compose.yml ps -q postgres) \
+PGCONTAINER=$(ssh_cmd "docker compose -f $REMOTE_DIR/docker-compose.yml ps -q postgres")
+ssh_cmd "docker exec -i $PGCONTAINER \
     psql -U test -d postgres -c \"CREATE DATABASE memory_seek_loadtest;\" 2>/dev/null || true"
-ssh_cmd "docker exec -i \$(docker compose -f $REMOTE_DIR/docker-compose.yml ps -q postgres) \
+echo "  Running init.sql (create tables)..."
+ssh_cmd "docker exec -i $PGCONTAINER \
+    psql -U test -d memory_seek_loadtest" < "$SCRIPT_DIR/../../docs/sql/init.sql"
+echo "  Running seed.sql (insert test data)..."
+ssh_cmd "docker exec -i $PGCONTAINER \
     psql -U test -d memory_seek_loadtest -v auth_users=10000 -v photo_users=20 -v photos=100000" < "$LOAD_DIR/setup/seed.sql"
 
 # 验证数据
-echo "[5/7] Verifying seed data..."
-ssh_cmd "docker exec -i \$(docker compose -f $REMOTE_DIR/docker-compose.yml ps -q postgres) \
+echo "  Verifying seed data..."
+ssh_cmd "docker exec -i $PGCONTAINER \
     psql -U test -d memory_seek_loadtest" < "$LOAD_DIR/setup/verify.sql"
 
 # ── Step 6: 启动服务器 ───────────────────────────────
