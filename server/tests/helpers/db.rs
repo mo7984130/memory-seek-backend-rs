@@ -7,12 +7,14 @@ use super::test_config;
 /// - 创建时可指定需要预先清理的用户名（防上次残留）
 /// - 测试中通过 `track_user()` 追踪新创建的用户 ID
 /// - 测试结束时调用 `cleanup()` 或 Drop 自动清理
+#[allow(dead_code)]
 pub struct CleanupGuard {
     db: DatabaseConnection,
     user_ids: Vec<i64>,
     user_names: Vec<String>,
 }
 
+#[allow(dead_code)]
 impl CleanupGuard {
     /// 创建新的清理守卫（不预先清理）
     pub async fn new() -> Self {

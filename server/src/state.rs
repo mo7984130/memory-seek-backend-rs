@@ -22,8 +22,10 @@ pub struct AppLibs {
 
 // ============ AppState ============
 pub struct AppState {
+    #[allow(dead_code)]
     pub db: DatabaseConnection,
     pub redis: Pool,
+    #[allow(dead_code)]
     pub token_cipher: Arc<TokenCipher>,
 
     #[cfg(feature = "s3")]

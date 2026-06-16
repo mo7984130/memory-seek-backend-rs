@@ -10,6 +10,7 @@ use super::test_config;
 /// 包含真实的 auth_middleware，测试需通过登录获取 token 来访问受保护路由。
 ///
 /// 返回 `Router<()>`（state 已通过 `with_state()` 消费）。
+#[allow(dead_code)]
 pub async fn build_test_router() -> Router {
     // 加载配置并初始化应用
     let cfg = test_config();

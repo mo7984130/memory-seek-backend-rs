@@ -7,6 +7,7 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
+    #[allow(dead_code)]
     pub smtp: SmtpConfig,
     #[cfg(feature = "s3")]
     pub s3: Option<S3Config>,
@@ -32,6 +33,7 @@ pub struct RedisConfig {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct SmtpConfig {
     pub server: String,
     pub port: u16,
