@@ -10,14 +10,6 @@ SSH_USER    ?= $(shell jq -r .ssh.user $(CONFIG_FILE))
 DB_USER     ?= $(shell jq -r .db.user $(CONFIG_FILE))
 DB_PASS     ?= $(shell jq -r .db.pass $(CONFIG_FILE))
 SERVER_BIN  ?= $(shell jq -r .server_bin $(CONFIG_FILE))
-S3_ENDPOINT ?= $(shell jq -r .s3.endpoint $(CONFIG_FILE))
-S3_ACCESS_KEY ?= $(shell jq -r .s3.access_key $(CONFIG_FILE))
-S3_SECRET_KEY ?= $(shell jq -r .s3.secret_key $(CONFIG_FILE))
-S3_REGION   ?= $(shell jq -r .s3.region $(CONFIG_FILE))
-S3_BUCKET   ?= $(shell jq -r .s3.bucket $(CONFIG_FILE))
-S3_PUBLIC_URL ?= $(shell jq -r .s3.public_url $(CONFIG_FILE))
-TOKEN_KEY   ?= $(shell jq -r .token_cipher.key $(CONFIG_FILE))
-TOKEN_SALT  ?= $(shell jq -r .token_cipher.salt $(CONFIG_FILE))
 
 # 数据量配置
 AUTH_USERS  ?= 10000
@@ -41,8 +33,7 @@ seed: ## SSH 创建数据库 + 建表 + 填充数据
 	@echo "=== Seed: 创建压测数据库 ==="
 	$(SSH_CMD) "bash -s" < $(SETUP_DIR)/start-loadtest.sh \
 		$(DB_USER) $(DB_PASS) $(AUTH_USERS) $(PHOTO_USERS) $(PHOTOS) \
-		$(S3_ENDPOINT) $(S3_ACCESS_KEY) $(S3_SECRET_KEY) $(S3_REGION) $(S3_BUCKET) $(S3_PUBLIC_URL) \
-		$(TOKEN_KEY) $(TOKEN_SALT) $(SERVER_BIN)
+		$(SERVER_BIN)
 
 stop-server: ## SSH 停止临时服务 + 删库 + 清理配置
 	@echo "=== Teardown: 清理压测环境 ==="
@@ -78,5 +69,5 @@ loadtest-quick: ## 快速压测 (少量数据, 仅 auth 模块)
 
 verify: ## 验证压测数据量
 	@echo "=== 验证压测数据 ==="
-	$(SSH_CMD) "PGPASSWORD=$(DB_PASS) psql -h localhost -U $(DB_USER) -d memory_seek_loadtest" \
+	$(SSH_CMD) "PGPASSWORD=$(DB_PASS) psql -h localhost -p 5433 -U $(DB_USER) -d memory_seek_loadtest" \
 		< $(SETUP_DIR)/verify.sql
