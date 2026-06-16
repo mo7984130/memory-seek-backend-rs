@@ -43,10 +43,16 @@ cargo test --lib
 ### 负载测试
 
 ```bash
-# 完整负载测试环境
-podman compose -f tests/load/docker-compose.yml --profile load up -d
-k6 run tests/load/scripts/auth.js
-k6 run tests/load/scripts/photo.js
+# 部署到远程服务器（infra + server）
+make -C tests/load deploy REMOTE_HOST=<IP> REMOTE_USER=<USER>
+
+# 跑压测（本地 k6 打远程 API）
+make -C tests/load auth REMOTE_HOST=<IP>
+make -C tests/load photo REMOTE_HOST=<IP>
+make -C tests/load user REMOTE_HOST=<IP>
+
+# 清理远程环境
+make -C tests/load teardown REMOTE_HOST=<IP> REMOTE_USER=<USER>
 ```
 
 ## 代码架构
