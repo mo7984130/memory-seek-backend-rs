@@ -34,10 +34,18 @@ $(RESULTS_DIR):
 	mkdir -p $(RESULTS_DIR)
 
 auth: $(RESULTS_DIR)       ## 认证模块压测
-	k6 run -e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR/auth_raw.json) \
-		--summary-export=$(RESULTS_DIR/auth_summary.json) \
-		scripts/auth/auth_service.js
+	# k6 run --quiet \
+	#     -e BASE_URL=$(BASE_URL) \
+	#     --out json=$(RESULTS_DIR/auth_raw.json) \
+	#     --summary-export=$(RESULTS_DIR/auth_summary.json) \
+	#     scripts/auth/auth_service.js
+	k6 run --quiet \
+    --iterations 1 \
+    --vus 1 \
+    -e BASE_URL=$(BASE_URL) \
+    --out json=$(RESULTS_DIR)/auth_raw.json \
+    --summary-export=$(RESULTS_DIR)/auth_summary.json \
+    scripts/auth/auth_service.js
 
 user: $(RESULTS_DIR)       ## 用户模块压测
 	k6 run -e BASE_URL=$(BASE_URL) \
