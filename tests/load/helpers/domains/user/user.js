@@ -1,9 +1,9 @@
-// tests/load/helpers/user_ops.js
+// tests/load/helpers/domains/user/user.js
 // 用户模块操作函数
 
 import http from "k6/http";
-import { BASE_URL } from "./common.js";
-import { getSessionHeaders, maybeRefreshSession } from "./session.js";
+import { BASE_URL } from "../../common.js";
+import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 
 /**
  * 获取当前用户信息

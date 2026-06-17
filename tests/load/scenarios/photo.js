@@ -13,7 +13,7 @@ import {
     uploadPhoto,
     listPhotos,
     getTimelineStats,
-} from "../helpers/photo_ops.js";
+} from "../helpers/domains/photo/photo.js";
 
 const photoErrorRate = new Rate("photo_errors");
 const photoDuration = new Trend("photo_duration");

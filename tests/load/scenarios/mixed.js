@@ -5,10 +5,11 @@ import { sleep } from "k6";
 import { SharedArray } from "k6/data";
 import { getPhotoUserCredentials, recordResult } from "../helpers/common.js";
 import { initSession, refreshSession, logout } from "../helpers/session.js";
-import { getMe } from "../helpers/user_ops.js";
-import { uploadPhoto, listPhotos, getTimelineStats } from "../helpers/photo_ops.js";
-import { createCollection, listCollections } from "../helpers/collection_ops.js";
-import { createComment, listComments, likeComment } from "../helpers/comment_ops.js";
+import { getMe } from "../helpers/domains/user/user.js";
+import { uploadPhoto, listPhotos, getTimelineStats } from "../helpers/domains/photo/photo.js";
+import { createCollection, listCollections } from "../helpers/domains/photo/collection.js";
+import { createComment, listComments } from "../helpers/domains/photo/comment.js";
+import { likeComment } from "../helpers/domains/photo/comment_like.js";
 
 // 共享图片数据
 const testImage = new SharedArray("test-image", function () {

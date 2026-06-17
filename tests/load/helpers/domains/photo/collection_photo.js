@@ -1,9 +1,9 @@
-// tests/load/helpers/collection_photo_ops.js
-// 收藏夹-照片关联操作函数
+// tests/load/helpers/domains/photo/collection_photo.js
+// 收藏夹-照片关联操作函数（collection_photo_controller）
 
 import http from "k6/http";
-import { BASE_URL } from "./common.js";
-import { getSessionHeaders, maybeRefreshSession } from "./session.js";
+import { BASE_URL } from "../../common.js";
+import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 
 /**
  * 添加照片到收藏夹

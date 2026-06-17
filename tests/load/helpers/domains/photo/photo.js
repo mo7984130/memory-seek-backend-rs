@@ -1,9 +1,9 @@
-// tests/load/helpers/photo_ops.js
-// 照片模块操作函数
+// tests/load/helpers/domains/photo/photo.js
+// 照片模块操作函数（photo_controller + timeline_stat_controller）
 
 import http from "k6/http";
-import { BASE_URL } from "./common.js";
-import { getSessionHeaders, maybeRefreshSession } from "./session.js";
+import { BASE_URL } from "../../common.js";
+import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 
 /**
  * 上传照片

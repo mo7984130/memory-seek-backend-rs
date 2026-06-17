@@ -1,10 +1,9 @@
-// tests/load/helpers/auth_ops.js
+// tests/load/helpers/domains/auth/auth.js
 // 认证模块操作函数（注册、发送验证码等辅助操作）
 // 注意：主要的登录/刷新/登出逻辑在 session.js 中
 
 import http from "k6/http";
-import { BASE_URL } from "./common.js";
-import { getSessionHeaders, maybeRefreshSession } from "./session.js";
+import { BASE_URL } from "../../common.js";
 
 /**
  * 注册新用户

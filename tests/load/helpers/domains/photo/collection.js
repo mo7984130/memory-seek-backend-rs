@@ -1,9 +1,9 @@
-// tests/load/helpers/collection_ops.js
-// 收藏夹模块操作函数
+// tests/load/helpers/domains/photo/collection.js
+// 收藏夹操作函数（collection_controller）
 
 import http from "k6/http";
-import { BASE_URL } from "./common.js";
-import { getSessionHeaders, maybeRefreshSession } from "./session.js";
+import { BASE_URL } from "../../common.js";
+import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 
 /**
  * 创建收藏夹

@@ -5,24 +5,26 @@ import { sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
 import { getPhotoUserCredentials, recordResult } from "../helpers/common.js";
 import { initSession, logout } from "../helpers/session.js";
-import { listPhotos } from "../helpers/photo_ops.js";
+import { listPhotos } from "../helpers/domains/photo/photo.js";
 import {
     createCollection,
     listCollections,
     deleteCollection,
-} from "../helpers/collection_ops.js";
+} from "../helpers/domains/photo/collection.js";
 import {
     addPhotosToCollection,
     listCollectionPhotos,
     removePhotoFromCollection,
-} from "../helpers/collection_photo_ops.js";
+} from "../helpers/domains/photo/collection_photo.js";
 import {
     createComment,
     listComments,
+    deleteComment,
+} from "../helpers/domains/photo/comment.js";
+import {
     likeComment,
     unlikeComment,
-    deleteComment,
-} from "../helpers/comment_ops.js";
+} from "../helpers/domains/photo/comment_like.js";
 
 const socialErrorRate = new Rate("social_errors");
 const socialDuration = new Trend("social_duration");
