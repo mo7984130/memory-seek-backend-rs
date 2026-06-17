@@ -33,10 +33,11 @@ export default function () {
   const { account, password } = getPhotoUserCredentials(__VU);
 
   // 登录获取 token
-  const token = login(account, password);
-  if (!token) return;
+  const loginResult = login(account, password);
+  if (!loginResult) return;
 
-  const headers = authHeaders(token);
+  const { uid, token, refreshToken } = loginResult;
+  const headers = authHeaders(uid, token);
 
   // 1. 创建收藏夹
   const createRes = http.post(`${BASE_URL}/photo/collections/`, JSON.stringify({
