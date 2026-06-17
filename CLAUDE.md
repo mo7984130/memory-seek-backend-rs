@@ -158,6 +158,13 @@ pub struct AppState {
 - Redis: `redis://localhost:6380`
 - MinIO: `http://localhost:9000`
 
+### Dashboard
+
+- `docs/dashboards/system.json` - 系统监控 dashboard（CPU、内存、数据库连接池、Redis 连接池）
+- `docs/dashboards/auth.json` - Auth 模块监控 dashboard（登录、注册、发送验证码、刷新 Token）
+- `docs/dashboards/user.json` - User 模块监控 dashboard
+- `docs/dashboards/photo.json` - Photo 模块监控 dashboard
+
 ### CleanupGuard 使用
 
 ```rust
