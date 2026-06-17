@@ -41,6 +41,8 @@ dotenvy = { workspace = true }
 
 # 性能监控
 metrics = { workspace = true, optional = true }
+sysinfo = "0.31"
+metrics-exporter-prometheus = "0.16"
 
 # S3
 oss = { path = "../libs/oss", optional = true }
