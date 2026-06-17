@@ -2,7 +2,7 @@
 // 会话管理：登录、token 刷新、登出、模块级状态
 
 import http from "k6/http";
-import { BASE_URL, authHeaders } from "./common.js";
+import { BASE_URL, authHeaders, logResult } from "./common.js";
 
 let _session = null; // { uid, token, refreshToken }
 let _opCount = 0; // 操作计数，用于 token 刷新策略
@@ -19,10 +19,12 @@ export function initSession(account, password) {
         JSON.stringify({ account, password }),
         { headers: { "Content-Type": "application/json" } },
     );
-    if (res.status !== 200) {
+    const ok = res.status === 200;
+    if (!ok) {
         console.error(`Login failed for ${account}: ${res.status} ${res.body}`);
-        return null;
     }
+    logResult("login", { success: ok, duration: res.timings.duration });
+    if (!ok) return null;
     _session = {
         uid: res.json("data.id"),
         token: res.json("data.accessToken"),
@@ -70,7 +72,9 @@ export function refreshSession() {
             "x-refresh-token": _session.refreshToken,
         },
     });
-    if (res.status === 200) {
+    const ok = res.status === 200;
+    logResult("refresh_token", { success: ok, duration: res.timings.duration });
+    if (ok) {
         _session.token = res.json("data.accessToken");
         _session.refreshToken = res.json("data.refreshToken");
         _opCount = 0;
@@ -95,8 +99,9 @@ export function maybeRefreshSession() {
  */
 export function logout() {
     if (!_session) return;
-    http.post(`${BASE_URL}/user/logout`, null, {
+    const res = http.post(`${BASE_URL}/user/logout`, null, {
         headers: getSessionHeaders(),
     });
+    logResult("logout", { success: res.status === 200, duration: res.timings.duration });
     _session = null;
 }

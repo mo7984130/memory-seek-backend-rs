@@ -2,7 +2,7 @@
 // 评论点赞操作函数（comment_like_controller）
 
 import http from "k6/http";
-import { BASE_URL } from "../../common.js";
+import { BASE_URL, logResult } from "../../common.js";
 import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 
 /**
@@ -19,10 +19,12 @@ export function likeComment(photoId, commentId) {
         null,
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
     };
+    logResult("like_comment", result);
+    return result;
 }
 
 /**
@@ -39,8 +41,10 @@ export function unlikeComment(photoId, commentId) {
         null,
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
     };
+    logResult("unlike_comment", result);
+    return result;
 }

@@ -7,7 +7,10 @@ import { SharedArray } from "k6/data";
 import {
     getPhotoUserCredentials,
     recordResult,
+    printSummary,
 } from "../helpers/common.js";
+
+export { printSummary as handleSummary };
 import { initSession, logout } from "../helpers/session.js";
 import {
     uploadPhoto,

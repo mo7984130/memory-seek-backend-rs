@@ -3,9 +3,11 @@
 
 import { sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
-import { getTestUserCredentials, recordResult } from "../helpers/common.js";
+import { getTestUserCredentials, recordResult, printSummary } from "../helpers/common.js";
 import { initSession, logout } from "../helpers/session.js";
 import { getMe, changeNickname, changePassword } from "../helpers/domains/user/user.js";
+
+export { printSummary as handleSummary };
 
 const userErrorRate = new Rate("user_errors");
 const userDuration = new Trend("user_duration");

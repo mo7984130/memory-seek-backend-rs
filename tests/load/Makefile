@@ -34,38 +34,33 @@ $(RESULTS_DIR):
 	mkdir -p $(RESULTS_DIR)
 
 auth: $(RESULTS_DIR)       ## 认证模块压测
-	k6 run --quiet \
+	k6 run \
 		-e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR)/auth_raw.json \
-		--summary-export=$(RESULTS_DIR)/auth_summary.json \
+		-e SUMMARY_EXPORT=$(RESULTS_DIR)/auth_summary.json \
 		scenarios/auth.js
 
 user: $(RESULTS_DIR)       ## 用户模块压测
-	k6 run --quiet \
+	k6 run \
 		-e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR)/user_raw.json \
-		--summary-export=$(RESULTS_DIR)/user_summary.json \
+		-e SUMMARY_EXPORT=$(RESULTS_DIR)/user_summary.json \
 		scenarios/user.js
 
 photo: $(RESULTS_DIR)      ## 照片模块压测
-	k6 run --quiet \
+	k6 run \
 		-e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR)/photo_raw.json \
-		--summary-export=$(RESULTS_DIR)/photo_summary.json \
+		-e SUMMARY_EXPORT=$(RESULTS_DIR)/photo_summary.json \
 		scenarios/photo.js
 
 social: $(RESULTS_DIR)     ## 社交模块压测（收藏夹 + 评论）
-	k6 run --quiet \
+	k6 run \
 		-e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR)/social_raw.json \
-		--summary-export=$(RESULTS_DIR)/social_summary.json \
+		-e SUMMARY_EXPORT=$(RESULTS_DIR)/social_summary.json \
 		scenarios/social.js
 
 mixed: $(RESULTS_DIR)      ## 混合场景压测
-	k6 run --quiet \
+	k6 run \
 		-e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR)/mixed_raw.json \
-		--summary-export=$(RESULTS_DIR)/mixed_summary.json \
+		-e SUMMARY_EXPORT=$(RESULTS_DIR)/mixed_summary.json \
 		scenarios/mixed.js
 
 all: auth user photo social mixed  ## 运行全部压测

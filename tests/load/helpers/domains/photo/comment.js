@@ -2,7 +2,7 @@
 // 评论操作函数（comment_controller）
 
 import http from "k6/http";
-import { BASE_URL } from "../../common.js";
+import { BASE_URL, logResult } from "../../common.js";
 import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 
 /**
@@ -19,11 +19,13 @@ export function createComment(photoId, content) {
         JSON.stringify({ content }),
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
         data: res.status === 200 ? res.json("data") : null,
     };
+    logResult("create_comment", result);
+    return result;
 }
 
 /**
@@ -39,11 +41,13 @@ export function listComments(photoId, pageSize = 10) {
         `${BASE_URL}/photo/comment/${photoId}?size=${pageSize}`,
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
         data: res.status === 200 ? res.json("data") : null,
     };
+    logResult("list_comments", result);
+    return result;
 }
 
 /**
@@ -60,8 +64,10 @@ export function deleteComment(photoId, commentId) {
         null,
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
     };
+    logResult("delete_comment", result);
+    return result;
 }

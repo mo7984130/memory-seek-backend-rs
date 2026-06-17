@@ -2,7 +2,7 @@
 // 收藏夹-照片关联操作函数（collection_photo_controller）
 
 import http from "k6/http";
-import { BASE_URL } from "../../common.js";
+import { BASE_URL, logResult } from "../../common.js";
 import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 
 /**
@@ -19,10 +19,12 @@ export function addPhotosToCollection(collectionId, photoIds) {
         JSON.stringify({ photoIds }),
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
     };
+    logResult("add_photos_to_collection", result);
+    return result;
 }
 
 /**
@@ -38,11 +40,13 @@ export function listCollectionPhotos(collectionId, pageSize = 10) {
         `${BASE_URL}/photo/collections/${collectionId}/photos?size=${pageSize}`,
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
         data: res.status === 200 ? res.json("data") : null,
     };
+    logResult("list_collection_photos", result);
+    return result;
 }
 
 /**
@@ -59,8 +63,10 @@ export function removePhotoFromCollection(collectionId, photoId) {
         null,
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
     };
+    logResult("remove_photo_from_collection", result);
+    return result;
 }

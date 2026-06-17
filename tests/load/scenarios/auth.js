@@ -3,8 +3,10 @@
 
 import { sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
-import { getTestUserCredentials } from "../helpers/common.js";
+import { getTestUserCredentials, printSummary } from "../helpers/common.js";
 import { initSession, refreshSession, logout } from "../helpers/session.js";
+
+export { printSummary as handleSummary };
 
 // 自定义指标
 const loginErrorRate = new Rate("login_errors");

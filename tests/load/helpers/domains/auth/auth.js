@@ -3,7 +3,7 @@
 // 注意：主要的登录/刷新/登出逻辑在 session.js 中
 
 import http from "k6/http";
-import { BASE_URL } from "../../common.js";
+import { BASE_URL, logResult } from "../../common.js";
 
 /**
  * 注册新用户
@@ -19,11 +19,13 @@ export function register(username, email, password, verificationCode = "") {
         JSON.stringify({ username, email, password, verificationCode }),
         { headers: { "Content-Type": "application/json" } },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
         data: res.status === 200 ? res.json("data") : null,
     };
+    logResult("register", result);
+    return result;
 }
 
 /**
@@ -37,8 +39,10 @@ export function sendEmailCode(email) {
         JSON.stringify({ email }),
         { headers: { "Content-Type": "application/json" } },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
     };
+    logResult("send_email_code", result);
+    return result;
 }

@@ -2,7 +2,7 @@
 // 照片模块操作函数（photo_controller + timeline_stat_controller）
 
 import http from "k6/http";
-import { BASE_URL } from "../../common.js";
+import { BASE_URL, logResult } from "../../common.js";
 import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 
 /**
@@ -19,11 +19,13 @@ export function uploadPhoto(imageBytes) {
     const res = http.post(`${BASE_URL}/photo/`, formData, {
         headers: { Authorization: headers.Authorization },
     });
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
         data: res.status === 200 ? res.json("data") : null,
     };
+    logResult("upload_photo", result);
+    return result;
 }
 
 /**
@@ -35,11 +37,13 @@ export function listPhotos(pageSize = 20) {
     maybeRefreshSession();
     const headers = getSessionHeaders();
     const res = http.get(`${BASE_URL}/photo/?size=${pageSize}`, { headers });
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
         data: res.status === 200 ? res.json("data") : null,
     };
+    logResult("list_photos", result);
+    return result;
 }
 
 /**
@@ -50,9 +54,11 @@ export function getTimelineStats() {
     maybeRefreshSession();
     const headers = getSessionHeaders();
     const res = http.get(`${BASE_URL}/photo/timeline/stats`, { headers });
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
         data: res.status === 200 ? res.json("data") : null,
     };
+    logResult("timeline_stats", result);
+    return result;
 }

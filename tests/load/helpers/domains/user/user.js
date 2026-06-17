@@ -2,7 +2,7 @@
 // 用户模块操作函数
 
 import http from "k6/http";
-import { BASE_URL } from "../../common.js";
+import { BASE_URL, logResult } from "../../common.js";
 import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 
 /**
@@ -13,11 +13,13 @@ export function getMe() {
     maybeRefreshSession();
     const headers = getSessionHeaders();
     const res = http.get(`${BASE_URL}/user/me`, { headers });
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
         data: res.status === 200 ? res.json("data") : null,
     };
+    logResult("get_me", result);
+    return result;
 }
 
 /**
@@ -33,10 +35,12 @@ export function changeNickname(nickname) {
         JSON.stringify({ newNickname: nickname }),
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
     };
+    logResult("change_nickname", result);
+    return result;
 }
 
 /**
@@ -53,8 +57,10 @@ export function changePassword(oldPassword, newPassword) {
         JSON.stringify({ oldPassword, newPassword }),
         { headers },
     );
-    return {
+    const result = {
         success: res.status === 200,
         duration: res.timings.duration,
     };
+    logResult("change_password", result);
+    return result;
 }

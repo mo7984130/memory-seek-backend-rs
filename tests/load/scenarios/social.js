@@ -3,7 +3,9 @@
 
 import { sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
-import { getPhotoUserCredentials, recordResult } from "../helpers/common.js";
+import { getPhotoUserCredentials, recordResult, printSummary } from "../helpers/common.js";
+
+export { printSummary as handleSummary };
 import { initSession, logout } from "../helpers/session.js";
 import { listPhotos } from "../helpers/domains/photo/photo.js";
 import {
