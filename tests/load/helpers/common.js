@@ -1,7 +1,8 @@
 // tests/load/helpers/common.js
-// k6 公共函数
+// k6 公共工具函数
 
 import http from "k6/http";
+import { Rate, Trend, Counter } from "k6/metrics";
 
 // BASE_URL 必须通过 -e BASE_URL=... 显式传入
 const BASE_URL = __ENV.BASE_URL;
@@ -14,36 +15,6 @@ if (!BASE_URL) {
 // 数据量配置（与 seed.sql 的 psql 变量对齐）
 const AUTH_USERS = parseInt(__ENV.AUTH_USERS || "10000");
 const PHOTO_USERS = parseInt(__ENV.PHOTO_USERS || "20");
-
-/**
- * 用户登录并返回完整信息
- * @param {string} account - 邮箱账号
- * @param {string} password - 密码
- * @returns {{ uid: number, token: string, refreshToken: string }|null}
- */
-export function login(account, password) {
-    const res = http.post(
-        `${BASE_URL}/auth/login`,
-        JSON.stringify({
-            account,
-            password,
-        }),
-        {
-            headers: { "Content-Type": "application/json" },
-        },
-    );
-
-    if (res.status === 200) {
-        return {
-            uid: res.json("data.id"),
-            token: res.json("data.accessToken"),
-            refreshToken: res.json("data.refreshToken"),
-        };
-    }
-
-    console.error(`Login failed for ${account}: ${res.status} ${res.body}`);
-    return null;
-}
 
 /**
  * 生成 auth 测试用户凭据
@@ -73,6 +44,7 @@ export function getPhotoUserCredentials(vuId) {
 
 /**
  * 创建带 Authorization 头的请求头
+ * @param {string} uid - 用户 ID
  * @param {string} token - accessToken
  * @returns {Object} headers
  */
@@ -81,6 +53,22 @@ export function authHeaders(uid, token) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${uid} ${token}`,
     };
+}
+
+// ── 共享指标 ──
+export const opDuration = new Trend("op_duration", true);
+export const opErrors = new Rate("op_errors");
+export const opCount = new Counter("op_count");
+
+/**
+ * 记录操作结果到共享指标
+ * @param {string} label - 操作标签
+ * @param {{ success: boolean, duration: number }} result
+ */
+export function recordResult(label, result) {
+    opDuration.add(result.duration, { operation: label });
+    opErrors.add(!result.success, { operation: label });
+    opCount.add(1, { operation: label });
 }
 
 export { BASE_URL };
