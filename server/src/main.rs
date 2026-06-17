@@ -1,6 +1,7 @@
 use tokio::net::TcpListener;
 
 mod config;
+mod metrics;
 mod middlewares;
 mod setup;
 mod state;
@@ -18,9 +19,17 @@ async fn main() -> anyhow::Result<()> {
     // 初始化应用
     let app_setup = AppSetup::init(&cfg).await?;
 
+    // 初始化 Prometheus metrics exporter
+    #[cfg(feature = "metrics")]
+    {
+        setup::bases::metrics::init()?;
+        metrics::start_collector(app_setup.state.db.clone(), app_setup.state.redis.clone());
+    }
+
     // 合并路由并添加中间件
     let app = app_setup
         .public_router
+        .route("/health", axum::routing::get(|| async { "ok" }))
         .merge(
             app_setup
                 .protected_router
