@@ -5,24 +5,29 @@
 
 REMOTE_HOST ?=
 REMOTE_USER ?=
-SERVER_BIN  ?=
+SERVER_BIN_PATH ?=
 SSH_KEY     ?=
+SERVER_PORT ?= 7985
+REMOTE_DIR  ?= /tmp/memory-seek-server/loadtest
 
 RESULTS_DIR  := results
 BASELINES    := baselines
-BASE_URL     := http://$(REMOTE_HOST):3000
+BASE_URL     := http://$(REMOTE_HOST):$(SERVER_PORT)
 
 .PHONY: deploy teardown auth photo user collection comment p95-report baseline compare clean help
 
 # ── 部署 ──────────────────────────────────────────
 deploy:                    ## 部署 infra + server 到远程
 	bash setup/deploy.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) \
-		$(if $(SERVER_BIN),--server-bin $(SERVER_BIN),) \
-		$(if $(SSH_KEY),--ssh-key $(SSH_KEY),)
+		$(if $(SERVER_BIN_PATH),--server-bin-path $(SERVER_BIN_PATH),) \
+		$(if $(SSH_KEY),--ssh-key $(SSH_KEY),) \
+		--port $(SERVER_PORT) \
+		--remote-dir $(REMOTE_DIR)
 
 teardown:                  ## 清理远程环境（server + infra + 文件）
 	bash setup/teardown.sh --host $(REMOTE_HOST) --user $(REMOTE_USER) \
-		$(if $(SSH_KEY),--ssh-key $(SSH_KEY),)
+		$(if $(SSH_KEY),--ssh-key $(SSH_KEY),) \
+		--remote-dir $(REMOTE_DIR)
 
 # ── 压测 ──────────────────────────────────────────
 $(RESULTS_DIR):

@@ -5,7 +5,7 @@ set -euo pipefail
 HOST=""
 USER=""
 SSH_KEY=""
-REMOTE_DIR="/tmp/memory-seek-server/loadtest"
+REMOTE_DIR="${REMOTE_DIR:-/tmp/memory-seek-server/loadtest}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

@@ -4,26 +4,29 @@ set -euo pipefail
 # ── 参数解析 ──────────────────────────────────────────
 HOST=""
 USER=""
-SERVER_BIN=""
+SERVER_BIN_PATH=""
 SSH_KEY=""
+SERVER_PORT="${SERVER_PORT:-7985}"
+REMOTE_DIR="${REMOTE_DIR:-/tmp/memory-seek-server/loadtest}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --host)      HOST="$2"; shift 2 ;;
         --user)      USER="$2"; shift 2 ;;
-        --server-bin) SERVER_BIN="$2"; shift 2 ;;
+        --server-bin-path) SERVER_BIN_PATH="$2"; shift 2 ;;
         --ssh-key)   SSH_KEY="$2"; shift 2 ;;
+        --port)       SERVER_PORT="$2"; shift 2 ;;
+        --remote-dir) REMOTE_DIR="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
 if [[ -z "$HOST" || -z "$USER" ]]; then
-    echo "Usage: $0 --host <IP> --user <USER> [--server-bin <path>] [--ssh-key <path>]"
+    echo "Usage: $0 --host <IP> --user <USER> [--server-bin-path <path>] [--ssh-key <path>] [--remote-dir <path>]"
     exit 1
 fi
 
 REMOTE="${USER}@${HOST}"
-REMOTE_DIR="~/loadtest"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOAD_DIR="$(dirname "$SCRIPT_DIR")"
 
@@ -43,6 +46,24 @@ trap cleanup EXIT
 
 echo "=== Deploying to $REMOTE ==="
 
+# ── Step 0: 杀掉旧进程 ──────────────────────────────
+echo "[0/7] Killing existing server process (if any)..."
+ssh_cmd "
+    pids=\$(pgrep -f '$REMOTE_DIR/memory-seek-server' | grep -v \$\$ || true)
+    if [ -n \"\$pids\" ]; then
+        echo \"  Found running server (PID: \$pids), killing...\"
+        echo \"\$pids\" | xargs kill -9 2>/dev/null || true
+        # 等待进程真正退出
+        for i in \$(seq 1 10); do
+            if ! echo \"\$pids\" | xargs kill -0 2>/dev/null; then break; fi
+            sleep 0.5
+        done
+    fi
+    # 删除旧二进制文件（避免权限/属性导致 scp 覆盖失败）
+    rm -f '$REMOTE_DIR/memory-seek-server' 2>/dev/null || true
+    true
+"
+
 # ── Step 1: 创建远程目录 ─────────────────────────────
 echo "[1/7] Creating remote directory..."
 ssh_cmd "mkdir -p $REMOTE_DIR"
@@ -54,8 +75,8 @@ scp_cmd "$LOAD_DIR/config/config.json" "$REMOTE:$REMOTE_DIR/config.json"
 scp_cmd "$SCRIPT_DIR/../../../docs/sql/init.sql" "$REMOTE:$REMOTE_DIR/"
 scp_cmd "$LOAD_DIR/setup/seed.sql" "$REMOTE:$REMOTE_DIR/"
 scp_cmd "$LOAD_DIR/setup/verify.sql" "$REMOTE:$REMOTE_DIR/"
-if [[ -n "$SERVER_BIN" ]]; then
-    scp_cmd "$SERVER_BIN" "$REMOTE:$REMOTE_DIR/memory-seek-server"
+if [[ -n "$SERVER_BIN_PATH" ]]; then
+    scp_cmd "$SERVER_BIN_PATH" "$REMOTE:$REMOTE_DIR/memory-seek-server"
 fi
 
 # ── Step 3: 启动基础设施 ─────────────────────────────
@@ -94,12 +115,12 @@ ssh_cmd "docker exec -i $PGCONTAINER \
     psql -U test -d memory_seek_loadtest" < "$LOAD_DIR/setup/verify.sql"
 
 # ── Step 6: 启动服务器 ───────────────────────────────
-if [[ -n "$SERVER_BIN" ]]; then
+if [[ -n "$SERVER_BIN_PATH" ]]; then
     echo "[6/7] Starting server..."
-    ssh_cmd "cd $REMOTE_DIR && chmod +x memory-seek-server && nohup ./memory-seek-server --config config.json > server.log 2>&1 &"
+    ssh $SSH_OPTS -f "$REMOTE" "cd $REMOTE_DIR && chmod +x memory-seek-server && nohup ./memory-seek-server < /dev/null > server.log 2>&1"
 
-    echo "[7/7] Waiting for server to be ready..."
-    ssh_cmd "timeout 30 bash -c 'until curl -sf http://localhost:3000/health >/dev/null 2>&1; do sleep 1; done'" || {
+    echo "[7/7] Waiting for server to be ready (port $SERVER_PORT)..."
+    ssh_cmd "timeout 30 bash -c 'until curl -sf http://localhost:${SERVER_PORT}/health >/dev/null 2>&1; do sleep 1; done'" || {
         echo "Warning: server may not be ready"
     }
 else
@@ -111,6 +132,6 @@ echo "=== Deployment complete ==="
 echo "PostgreSQL: $HOST:5433"
 echo "Redis:      $HOST:6380"
 echo "MinIO:      $HOST:9000"
-if [[ -n "$SERVER_BIN" ]]; then
-    echo "Server:     $HOST:3000"
+if [[ -n "$SERVER_BIN_PATH" ]]; then
+    echo "Server:     $HOST:$SERVER_PORT"
 fi
