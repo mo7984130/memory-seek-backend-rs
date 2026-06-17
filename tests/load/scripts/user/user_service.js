@@ -36,10 +36,11 @@ export default function () {
   const { account, password } = getTestUserCredentials(__VU);
 
   // 登录获取 token
-  const token = login(account, password);
-  if (!token) return;
+  const loginResult = login(account, password);
+  if (!loginResult) return;
 
-  const headers = authHeaders(token);
+  const { uid, token, refreshToken } = loginResult;
+  const headers = authHeaders(uid, token);
 
   // 1. 获取当前用户信息
   const meRes = http.get(`${BASE_URL}/user/me`, { headers });
