@@ -33,10 +33,11 @@ export default function () {
   const { account, password } = getPhotoUserCredentials(__VU);
 
   // 登录获取 token
-  const token = login(account, password);
-  if (!token) return;
+  const loginResult = login(account, password);
+  if (!loginResult) return;
 
-  const headers = authHeaders(token);
+  const { uid, token, refreshToken } = loginResult;
+  const headers = authHeaders(uid, token);
 
   // 先获取照片列表，取一个 photo_id
   const listRes = http.get(`${BASE_URL}/photo/?size=1`, { headers });
