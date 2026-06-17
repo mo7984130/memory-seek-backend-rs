@@ -14,7 +14,7 @@ RESULTS_DIR  := results
 BASELINES    := baselines
 BASE_URL     := http://$(REMOTE_HOST):$(SERVER_PORT)
 
-.PHONY: deploy teardown auth photo user collection comment p95-report baseline compare clean help
+.PHONY: deploy teardown auth user photo social mixed all p95-report baseline compare clean help
 
 # ── 部署 ──────────────────────────────────────────
 deploy:                    ## 部署 infra + server 到远程
@@ -34,42 +34,41 @@ $(RESULTS_DIR):
 	mkdir -p $(RESULTS_DIR)
 
 auth: $(RESULTS_DIR)       ## 认证模块压测
-	# k6 run --quiet \
-	#     -e BASE_URL=$(BASE_URL) \
-	#     --out json=$(RESULTS_DIR/auth_raw.json) \
-	#     --summary-export=$(RESULTS_DIR/auth_summary.json) \
-	#     scripts/auth/auth_service.js
 	k6 run --quiet \
-    --iterations 1 \
-    --vus 1 \
-    -e BASE_URL=$(BASE_URL) \
-    --out json=$(RESULTS_DIR)/auth_raw.json \
-    --summary-export=$(RESULTS_DIR)/auth_summary.json \
-    scripts/auth/auth_service.js
+		-e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR)/auth_raw.json \
+		--summary-export=$(RESULTS_DIR)/auth_summary.json \
+		scenarios/auth.js
 
 user: $(RESULTS_DIR)       ## 用户模块压测
-	k6 run -e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR/user_raw.json) \
-		--summary-export=$(RESULTS_DIR/user_summary.json) \
-		scripts/user/user_service.js
+	k6 run --quiet \
+		-e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR)/user_raw.json \
+		--summary-export=$(RESULTS_DIR)/user_summary.json \
+		scenarios/user.js
 
 photo: $(RESULTS_DIR)      ## 照片模块压测
-	k6 run -e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR/photo_raw.json) \
-		--summary-export=$(RESULTS_DIR/photo_summary.json) \
-		scripts/photo/photo_service.js
+	k6 run --quiet \
+		-e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR)/photo_raw.json \
+		--summary-export=$(RESULTS_DIR)/photo_summary.json \
+		scenarios/photo.js
 
-collection: $(RESULTS_DIR) ## 收藏夹模块压测
-	k6 run -e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR/collection_raw.json) \
-		--summary-export=$(RESULTS_DIR/collection_summary.json) \
-		scripts/photo/collection_service.js
+social: $(RESULTS_DIR)     ## 社交模块压测（收藏夹 + 评论）
+	k6 run --quiet \
+		-e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR)/social_raw.json \
+		--summary-export=$(RESULTS_DIR)/social_summary.json \
+		scenarios/social.js
 
-comment: $(RESULTS_DIR)    ## 评论模块压测
-	k6 run -e BASE_URL=$(BASE_URL) \
-		--out json=$(RESULTS_DIR/comment_raw.json) \
-		--summary-export=$(RESULTS_DIR/comment_summary.json) \
-		scripts/photo/comment_service.js
+mixed: $(RESULTS_DIR)      ## 混合场景压测
+	k6 run --quiet \
+		-e BASE_URL=$(BASE_URL) \
+		--out json=$(RESULTS_DIR)/mixed_raw.json \
+		--summary-export=$(RESULTS_DIR)/mixed_summary.json \
+		scenarios/mixed.js
+
+all: auth user photo social mixed  ## 运行全部压测
 
 # ── 报告 ──────────────────────────────────────────
 p95-report:                ## 生成 P95 性能报告
