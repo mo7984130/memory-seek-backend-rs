@@ -42,10 +42,11 @@ export default function () {
   const { account, password } = getPhotoUserCredentials(__VU);
 
   // 登录获取 token
-  const token = login(account, password);
-  if (!token) return;
+  const loginResult = login(account, password);
+  if (!loginResult) return;
 
-  const headers = authHeaders(token);
+  const { uid, token, refreshToken } = loginResult;
+  const headers = authHeaders(uid, token);
 
   // 1. 上传照片
   const formData = {
@@ -53,7 +54,7 @@ export default function () {
   };
 
   const uploadRes = http.post(`${BASE_URL}/photo/`, formData, {
-    headers: { 'Authorization': `Bearer ${token}` },
+    headers: { 'Authorization': `Bearer ${uid} ${token}` },
   });
 
   check(uploadRes, {
