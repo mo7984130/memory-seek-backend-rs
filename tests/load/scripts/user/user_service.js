@@ -62,7 +62,7 @@ export default function () {
 
   // 2. 修改昵称
   const nicknameRes = http.patch(`${BASE_URL}/user/nickname`, JSON.stringify({
-    nickname: `Updated ${__VU} ${Date.now()}`,
+    newNickname: `Updated ${__VU} ${Date.now()}`,
   }), { headers });
 
   check(nicknameRes, {
