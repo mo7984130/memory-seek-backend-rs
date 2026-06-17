@@ -330,19 +330,27 @@ impl PhotoService {
                 Ok(photos)
             })
         })
+        .timed(metrics_timer_name!("delete_photos", "db_transaction"))
         .await
         .trace_internal_err("db_txn_err", "数据库事务错误")?;
 
         // 删除照片文件
         let file_ids = photos.iter().map(|p| p.file_id.clone()).collect::<Vec<_>>();
-        state.s3_client.delete_batch(file_ids).await?;
+        state
+            .s3_client
+            .delete_batch(file_ids)
+            .timed(metrics_timer_name!("delete_photos", "s3_delete_batch"))
+            .await?;
 
         // 更新照片时间线统计
         TimelineStatMapper::decr_stat_by_created_ats(
             &state.db,
             &photos.iter().map(|p| p.created_at).collect::<Vec<_>>(),
         )
+        .timed(metrics_timer_name!("delete_photos", "timeline_decr_stat"))
         .await?;
+
+        metrics_success!("delete_photos");
 
         Ok(())
     }

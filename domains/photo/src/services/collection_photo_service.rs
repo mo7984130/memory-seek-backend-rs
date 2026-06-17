@@ -15,6 +15,7 @@ use common::{
     Result,
     error::AppError,
     ext::{OkExt, ToErr, log_warn},
+    metrics_group, metrics_success,
     models::CursorPage,
     utils::DbUtils,
 };
@@ -34,6 +35,8 @@ impl CollectionPhotoService {
         cursor: Option<String>,
         size: u64,
     ) -> Result<CursorPage<PhotoResult, String>> {
+        metrics_group!("get_collection_photos");
+
         let decoded_cursor = cursor
             .as_ref()
             .and_then(|s| CollectionPhotoCursor::decode(s));
@@ -63,6 +66,7 @@ impl CollectionPhotoService {
             })
         });
 
+        metrics_success!("get_collection_photos");
         CursorPage {
             records: photo_vos,
             has_more,
@@ -80,7 +84,10 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: Vec<PhotoId>,
     ) -> Result<CollectionPhotoAddBatchResult> {
+        metrics_group!("add_collection_photos");
+
         if photo_ids.is_empty() {
+            metrics_success!("add_collection_photos");
             return Ok(CollectionPhotoAddBatchResult::default());
         }
 
@@ -108,6 +115,7 @@ impl CollectionPhotoService {
         })
         .await?;
 
+        metrics_success!("add_collection_photos");
         Ok(CollectionPhotoAddBatchResult {
             new_photo_count: photo_count,
         })
@@ -122,7 +130,10 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: Vec<PhotoId>,
     ) -> Result<CollectionPhotoRemoveBatchResult> {
+        metrics_group!("remove_collection_photos");
+
         if photo_ids.is_empty() {
+            metrics_success!("remove_collection_photos");
             return Ok(CollectionPhotoRemoveBatchResult::default());
         }
 
@@ -151,6 +162,7 @@ impl CollectionPhotoService {
         })
         .await?;
 
+        metrics_success!("remove_collection_photos");
         CollectionPhotoRemoveBatchResult {
             removed_photo_count: remove_count,
         }

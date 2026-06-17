@@ -12,8 +12,10 @@ use common::{
     Result,
     ext::{ResultErrExt, ResultRExt},
     extractors::{ValidatedJson, ValidatedQuery},
+    metrics_group, metrics_success, metrics_timer_name,
     models::{CursorPage, ImageToken, ImageTokenType},
     traits::controller::ControllerRouter,
+    utils::MetricsTimerExt,
 };
 use common::{ext::OptionExt, r::R};
 use entities::auth::user::UserId;
@@ -93,13 +95,18 @@ impl PhotoController {
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
+        metrics_group!("get_image");
+
         let image_token: ImageToken = state.token_cipher.decrypt(&token).trace_warn_bad_request(
             "invalid_image_token",
             "无效的token",
             "无效的token",
         )?;
 
-        Self::handle_image_download(state, image_token).await
+        let resp = Self::handle_image_download(state, image_token).await?;
+
+        metrics_success!("get_image");
+        Ok(resp)
     }
 
     async fn handle_image_download(
@@ -128,6 +135,7 @@ impl PhotoController {
                 let bytes = state
                     .s3_client
                     .download_with_process(&token.file_id, &process_param)
+                    .timed(metrics_timer_name!("get_image", "s3_download_process"))
                     .await?;
 
                 Ok(Response::builder()
@@ -141,6 +149,7 @@ impl PhotoController {
                 let stream_resp = state
                     .s3_client
                     .get_download_stream_response(&token.file_id)
+                    .timed(metrics_timer_name!("get_image", "s3_download_stream"))
                     .await?;
 
                 let stream = stream_resp

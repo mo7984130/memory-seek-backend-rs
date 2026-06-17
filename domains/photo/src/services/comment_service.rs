@@ -13,6 +13,7 @@ use common::{
     Result,
     error::AppError,
     ext::{ToErr, ToOk, log_warn},
+    metrics_group, metrics_success,
     models::CursorPage,
     utils::DbUtils,
 };
@@ -32,6 +33,8 @@ impl CommentService {
         user_id: UserId,
         content: String,
     ) -> Result<PhotoCommentResult> {
+        metrics_group!("publish_comment");
+
         let comment = DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 // 查询照片是否存在
@@ -52,6 +55,8 @@ impl CommentService {
             })
         })
         .await?;
+
+        metrics_success!("publish_comment");
         PhotoCommentResult::from(comment).to_ok()
     }
 }
@@ -68,6 +73,8 @@ impl CommentService {
         cursor: Option<DateTimeUtc>,
         size: Option<u64>,
     ) -> Result<CursorPage<PhotoCommentResult, DateTimeUtc>> {
+        metrics_group!("get_comment_cursor_page");
+
         // 校验 limit 参数
         let size = size.unwrap_or(32);
         if size > COMMENT_CURSOR_PAGE_MAX_SIZE {
@@ -133,6 +140,7 @@ impl CommentService {
             })
             .collect();
 
+        metrics_success!("get_comment_cursor_page");
         CursorPage {
             records,
             has_more,
@@ -145,6 +153,8 @@ impl CommentService {
 // 删除
 impl CommentService {
     pub async fn delete(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
+        metrics_group!("delete_comment");
+
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 let photo_id = CommentMapper::query_photo_id_by_id(txn, comment_id).await?;
@@ -173,6 +183,7 @@ impl CommentService {
         })
         .await?;
 
+        metrics_success!("delete_comment");
         Ok(())
     }
 }

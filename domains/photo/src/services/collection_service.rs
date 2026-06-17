@@ -6,6 +6,7 @@ use common::Result;
 use common::error::AppError;
 use common::ext::{CacheExtension, OkExt, ToErr, log_warn};
 use common::utils::DbUtils;
+use common::{metrics_group, metrics_success};
 use constants::RedisKeys;
 use entities::auth::user::UserId;
 use entities::photo::collection::{CollectionId, CollectionRecord};
@@ -63,6 +64,8 @@ impl CollectionService {
         state: &PhotoState,
         user_id: UserId,
     ) -> Result<Vec<CollectionResult>> {
+        metrics_group!("get_collection_list");
+
         // 获取用户收藏夹
         let collections = CollectionMapper::query_by_user_id(&state.db, user_id).await?;
 
@@ -70,6 +73,7 @@ impl CollectionService {
         if collections.is_empty() {
             let record = Self::create_favorite_collection(state, user_id).await?;
             let vo = CollectionResult::from(record);
+            metrics_success!("get_collection_list");
             return Ok(vec![vo]);
         }
 
@@ -79,6 +83,7 @@ impl CollectionService {
             .map(|c| CollectionResult::from(c).with_generate_cover_token(&state.token_cipher))
             .collect();
 
+        metrics_success!("get_collection_list");
         Ok(result)
     }
 }
@@ -92,8 +97,12 @@ impl CollectionService {
         description: Option<String>,
         is_favorite: bool,
     ) -> Result<CollectionResult> {
+        metrics_group!("create_collection");
+
         let collection =
             CollectionMapper::insert(&state.db, user_id, name, description, is_favorite).await?;
+
+        metrics_success!("create_collection");
         CollectionResult::from(collection).to_ok()
     }
 
@@ -114,9 +123,12 @@ impl CollectionService {
         name: Option<String>,
         description: Option<String>,
     ) -> Result<()> {
+        metrics_group!("update_collection_info");
+
         // 修改时鉴权
         CollectionMapper::update_info(&state.db, collection_id, user_id, name, description).await?;
 
+        metrics_success!("update_collection_info");
         Ok(())
     }
 }
@@ -128,6 +140,8 @@ impl CollectionService {
         user_id: UserId,
         collection_id: CollectionId,
     ) -> Result<()> {
+        metrics_group!("delete_collection");
+
         // 我喜欢收藏夹不可以删除
         if Self::get_favorite_collection_id(state, user_id).await? == collection_id {
             return log_warn(
@@ -151,6 +165,7 @@ impl CollectionService {
         })
         .await?;
 
+        metrics_success!("delete_collection");
         Ok(())
     }
 }

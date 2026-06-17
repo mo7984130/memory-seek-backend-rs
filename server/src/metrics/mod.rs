@@ -1,14 +1,21 @@
+#[cfg(feature = "metrics")]
 mod database;
+#[cfg(feature = "metrics")]
 mod redis;
+#[cfg(feature = "metrics")]
 mod system;
 
+#[cfg(feature = "metrics")]
 use std::time::Duration;
+#[cfg(feature = "metrics")]
 use sysinfo::System;
+#[cfg(feature = "metrics")]
 use tokio::time::interval;
 
 /// 启动后台指标采集任务
 ///
 /// 每 15 秒采集一次系统指标、数据库连接池指标、Redis 连接池指标
+#[cfg(feature = "metrics")]
 pub fn start_collector(db: sea_orm::DatabaseConnection, redis_pool: deadpool_redis::Pool) {
     tokio::spawn(async move {
         let mut sys = System::new_all();
