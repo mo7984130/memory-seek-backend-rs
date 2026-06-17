@@ -5,23 +5,24 @@ set -euo pipefail
 HOST=""
 USER=""
 SSH_KEY=""
+REMOTE_DIR="/tmp/memory-seek-server/loadtest"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --host) HOST="$2"; shift 2 ;;
-        --user) USER="$2"; shift 2 ;;
-        --ssh-key) SSH_KEY="$2"; shift 2 ;;
+        --host)       HOST="$2"; shift 2 ;;
+        --user)       USER="$2"; shift 2 ;;
+        --ssh-key)    SSH_KEY="$2"; shift 2 ;;
+        --remote-dir) REMOTE_DIR="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
 if [[ -z "$HOST" || -z "$USER" ]]; then
-    echo "Usage: $0 --host <IP> --user <USER> [--ssh-key <path>]"
+    echo "Usage: $0 --host <IP> --user <USER> [--ssh-key <path>] [--remote-dir <path>]"
     exit 1
 fi
 
 REMOTE="${USER}@${HOST}"
-REMOTE_DIR="~/loadtest"
 
 # SSH ControlMaster: 只输一次密码，后续复用连接
 SSH_SOCKET="/tmp/loadtest-ssh-%C"
@@ -40,7 +41,18 @@ echo "=== Tearing down on $REMOTE ==="
 
 # ── Step 1: 杀掉 server 进程 ─────────────────────────
 echo "[1/3] Stopping server..."
-ssh_cmd "pkill -f 'memory-seek-server' 2>/dev/null || true"
+ssh_cmd "
+    pids=\$(pgrep -f '$REMOTE_DIR/memory-seek-server' | grep -v \$\$ || true)
+    if [ -n \"\$pids\" ]; then
+        echo \"  Found running server (PID: \$pids), killing...\"
+        echo \"\$pids\" | xargs kill -9 2>/dev/null || true
+        for i in \$(seq 1 10); do
+            if ! echo \"\$pids\" | xargs kill -0 2>/dev/null; then break; fi
+            sleep 0.5
+        done
+    fi
+    true
+"
 
 # ── Step 2: 停止并删除容器和数据卷 ────────────────────
 echo "[2/3] Stopping containers and removing volumes..."
