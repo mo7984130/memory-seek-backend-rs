@@ -1,5 +1,6 @@
 pub mod database;
 pub mod log;
+pub mod metrics;
 pub mod redis;
 
 use crate::config::AppConfig;
