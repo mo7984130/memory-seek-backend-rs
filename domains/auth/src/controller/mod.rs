@@ -15,10 +15,10 @@ impl ControllerRouter for Controller {
     type State = AuthState;
 
     fn protected_routes() -> Router<Arc<Self::State>> {
-        AuthController::protected_routes()
+        Router::new().nest("/auth", AuthController::protected_routes())
     }
 
     fn public_routes() -> Router<Arc<Self::State>> {
-        AuthController::public_routes()
+        Router::new().nest("/auth", AuthController::public_routes())
     }
 }

@@ -25,7 +25,8 @@ use crate::config::{
 };
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
-static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(num_cpus::get()));
+static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> =
+    LazyLock::new(|| Semaphore::new(num_cpus::get() * 2));
 
 /// 获取用户个人信息
 ///
@@ -351,6 +352,7 @@ pub async fn change_password(
     // 获取信号量许可，限制并发密码验证
     let _permit = PASSWORD_VERIFY_SEM
         .acquire()
+        .timed(metrics_timer_name!("change_password", "acquire_permit"))
         .await
         .map_err(|_| AppError::InternalServerError)?;
 

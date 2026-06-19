@@ -26,6 +26,6 @@ impl MetricsTimer {
 impl Drop for MetricsTimer {
     /// 计时器销毁时将从创建到销毁的耗时记录到 histogram 指标
     fn drop(&mut self) {
-        metrics::histogram!(self.name).record(self.start.elapsed().as_secs_f64());
+        metrics::histogram!(self.name).record(self.start.elapsed().as_secs_f64() * 1000.0);
     }
 }

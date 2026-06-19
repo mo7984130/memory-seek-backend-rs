@@ -14,12 +14,12 @@ use tokio::time::interval;
 
 /// 启动后台指标采集任务
 ///
-/// 每 15 秒采集一次系统指标、数据库连接池指标、Redis 连接池指标
+/// 每 5 秒采集一次系统指标、数据库连接池指标、Redis 连接池指标
 #[cfg(feature = "metrics")]
 pub fn start_collector(db: sea_orm::DatabaseConnection, redis_pool: deadpool_redis::Pool) {
     tokio::spawn(async move {
         let mut sys = System::new_all();
-        let mut tick = interval(Duration::from_secs(15));
+        let mut tick = interval(Duration::from_secs(5));
 
         loop {
             tick.tick().await;

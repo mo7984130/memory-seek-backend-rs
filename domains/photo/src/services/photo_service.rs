@@ -62,7 +62,7 @@ impl PhotoService {
             .map(|p| {
                 PhotoResult::from(p.clone())
                     .with_favorited(favorited_photo_ids.contains(&p.id))
-                    .with_tokens(&state.token_cipher)
+                    .with_tokens(&p.file_id, &state.token_cipher)
             })
             .collect::<Vec<_>>()
             .to_ok()
@@ -259,8 +259,9 @@ impl PhotoService {
 
         metrics_success!("upload_photo");
 
+        let file_id = photo.file_id.clone();
         PhotoResult::from(PhotoRecord::from(photo))
-            .with_tokens(&state.token_cipher)
+            .with_tokens(&file_id, &state.token_cipher)
             .to_ok()
     }
 

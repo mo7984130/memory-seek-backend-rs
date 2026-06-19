@@ -20,6 +20,7 @@ use common::{
 use common::{ext::OptionExt, r::R};
 use entities::auth::user::UserId;
 use futures::StreamExt;
+use tracing::debug;
 
 use crate::{
     models::photo::{DeletePhotoParam, Md5sExistParam, PhotoCursorParam, PhotoResult},
@@ -115,6 +116,7 @@ impl PhotoController {
     ) -> Result<Response<Body>> {
         match token.token_type {
             ImageTokenType::Thumbnail | ImageTokenType::Preview | ImageTokenType::Crop => {
+                debug!("token_type: t,p,c");
                 let process_param: String = match token.token_type {
                     ImageTokenType::Thumbnail => "image/resize,w_300/format,webp".to_string(),
                     ImageTokenType::Preview => "image/resize,w_1920/format,webp".to_string(),
@@ -132,6 +134,7 @@ impl PhotoController {
                     }
                     _ => unreachable!(),
                 };
+                debug!("file_id: {}", &token.file_id);
                 let bytes = state
                     .s3_client
                     .download_with_process(&token.file_id, &process_param)
@@ -146,6 +149,7 @@ impl PhotoController {
                     .unwrap())
             }
             ImageTokenType::Original => {
+                debug!("token_type: o");
                 let stream_resp = state
                     .s3_client
                     .get_download_stream_response(&token.file_id)

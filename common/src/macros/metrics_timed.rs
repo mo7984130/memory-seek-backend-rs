@@ -19,7 +19,7 @@ macro_rules! timed {
             $func,
             ":",
             $name,
-            ":duration"
+            ":duration_quantile"
         ));
         $block
     }};
@@ -31,7 +31,7 @@ macro_rules! timed {
             $func,
             ":",
             $name,
-            ":duration"
+            ":duration_quantile"
         ));
         $entry
     }};

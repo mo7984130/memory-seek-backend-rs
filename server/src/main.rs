@@ -22,7 +22,8 @@ async fn main() -> anyhow::Result<()> {
     // 初始化 Prometheus metrics exporter
     #[cfg(feature = "metrics")]
     {
-        setup::bases::metrics::init()?;
+        let metrics_cfg = cfg.metrics.as_ref().expect("metrics config is required when metrics feature is enabled");
+        setup::bases::metrics::init(&metrics_cfg.host, metrics_cfg.port);
         metrics::start_collector(app_setup.state.db.clone(), app_setup.state.redis.clone());
     }
 
@@ -45,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
         .with_state(app_setup.state);
 
     // 启动服务器
+    tracing::info!("尝试监听{}端口", cfg.server.port);
     let listener = TcpListener::bind(&cfg.server_addr()).await?;
     tracing::info!("Server listening on {}", cfg.server_addr());
 

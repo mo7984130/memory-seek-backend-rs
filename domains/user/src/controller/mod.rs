@@ -15,10 +15,10 @@ impl ControllerRouter for Controller {
     type State = UserState;
 
     fn protected_routes() -> Router<Arc<Self::State>> {
-        UserController::protected_routes()
+        Router::new().nest("/user", UserController::protected_routes())
     }
 
     fn public_routes() -> Router<Arc<Self::State>> {
-        UserController::public_routes()
+        Router::new().nest("/user", UserController::public_routes())
     }
 }

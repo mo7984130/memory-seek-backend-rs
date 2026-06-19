@@ -54,30 +54,30 @@ impl PhotoResult {
         self
     }
 
-    pub fn with_tokens(mut self, token_cipher: &TokenCipher) -> Self {
-        self = self.with_original_token(token_cipher);
-        self = self.with_thumbnail_token(token_cipher);
-        self = self.with_preview_token(token_cipher);
+    pub fn with_tokens(mut self, file_id: &str, token_cipher: &TokenCipher) -> Self {
+        self = self.with_original_token(file_id, token_cipher);
+        self = self.with_thumbnail_token(file_id, token_cipher);
+        self = self.with_preview_token(file_id, token_cipher);
         self
     }
 
-    pub fn with_thumbnail_token(mut self, token_cipher: &TokenCipher) -> Self {
+    pub fn with_thumbnail_token(mut self, file_id: &str, token_cipher: &TokenCipher) -> Self {
         self.thumbnail_token = token_cipher
-            .encrypt(&ImageToken::thumbnail(self.id.to_string()), Some(&self.id))
+            .encrypt(&ImageToken::thumbnail(file_id), Some(&self.id))
             .ok();
         self
     }
 
-    pub fn with_preview_token(mut self, token_cipher: &TokenCipher) -> Self {
+    pub fn with_preview_token(mut self, file_id: &str, token_cipher: &TokenCipher) -> Self {
         self.preview_token = token_cipher
-            .encrypt(&ImageToken::preview(self.id.to_string()), Some(&self.id))
+            .encrypt(&ImageToken::preview(file_id), Some(&self.id))
             .ok();
         self
     }
 
-    pub fn with_original_token(mut self, token_cipher: &TokenCipher) -> Self {
+    pub fn with_original_token(mut self, file_id: &str, token_cipher: &TokenCipher) -> Self {
         self.original_token = token_cipher
-            .encrypt(&ImageToken::original(self.id.to_string()), Some(&self.id))
+            .encrypt(&ImageToken::original(file_id), Some(&self.id))
             .ok();
         self
     }

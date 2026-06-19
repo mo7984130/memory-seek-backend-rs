@@ -12,6 +12,8 @@ pub struct AppConfig {
     #[cfg(feature = "s3")]
     pub s3: Option<S3Config>,
     pub token_cipher: TokenCipherConfig,
+    #[cfg(feature = "metrics")]
+    pub metrics: Option<MetricsConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,6 +60,13 @@ pub struct S3Config {
 pub struct TokenCipherConfig {
     pub key: String,
     pub salt: String,
+}
+
+#[cfg(feature = "metrics")]
+#[derive(Debug, Deserialize)]
+pub struct MetricsConfig {
+    pub host: String,
+    pub port: u16,
 }
 
 impl AppConfig {

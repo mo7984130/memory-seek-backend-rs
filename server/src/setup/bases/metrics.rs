@@ -2,11 +2,10 @@ use metrics_exporter_prometheus::PrometheusBuilder;
 use tracing::info;
 
 /// 初始化 Prometheus metrics exporter
-/// 监听 0.0.0.0:9090，提供 /metrics endpoint
-pub fn init() -> anyhow::Result<()> {
+pub fn init(host: &str, port: u16) {
     PrometheusBuilder::new()
-        .with_http_listener(([0, 0, 0, 0], 9090))
-        .install()?;
-    info!("Prometheus metrics exporter listening on 0.0.0.0:9090");
-    Ok(())
+        .with_http_listener((host.parse::<std::net::IpAddr>().unwrap(), port))
+        .install()
+        .expect("Failed to start Prometheus metrics exporter");
+    info!("Prometheus metrics exporter listening on {}:{}", host, port);
 }

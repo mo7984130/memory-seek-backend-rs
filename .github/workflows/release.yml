@@ -61,15 +61,15 @@ jobs:
                   mkdir -p ~/.ssh
                   echo "${{ secrets.SSH_KEY }}" > ~/.ssh/test_key
                   chmod 600 ~/.ssh/test_key
-                  ssh-keyscan -p ${{ secrets.SERVER_PORT }} ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+                  ssh-keyscan ${{ secrets.REMOTE_HOST }} >> ~/.ssh/known_hosts
 
             - name: Deploy loadtest environment
               working-directory: tests/load
               run: |
                   make deploy \
-                    REMOTE_HOST=${{ secrets.SERVER_HOST }} \
-                    REMOTE_USER=${{ secrets.SERVER_USER }} \
-                    SERVER_BIN=../../${{ env.BINARY_NAME }} \
+                    REMOTE_HOST=${{ secrets.REMOTE_HOST }} \
+                    REMOTE_USER=${{ secrets.REMOTE_USER }} \
+                    SERVER_BIN_PATH=../../${{ env.BINARY_NAME }} \
                     SSH_KEY=~/.ssh/test_key
 
             - name: Install k6
@@ -84,20 +84,20 @@ jobs:
             - name: Run load tests
               working-directory: tests/load
               run: |
-                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/auth/auth_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/user/user_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/photo/photo_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/photo/comment_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/photo/collection_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.SERVER_HOST }}:3000 scripts/photo/collection_photo_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/auth/auth_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/user/user_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/photo/photo_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/photo/comment_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/photo/collection_service.js
+                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/photo/collection_photo_service.js
 
             - name: Teardown
               if: always()
               working-directory: tests/load
               run: |
                   make teardown \
-                    REMOTE_HOST=${{ secrets.SERVER_HOST }} \
-                    REMOTE_USER=${{ secrets.SERVER_USER }} \
+                    REMOTE_HOST=${{ secrets.REMOTE_HOST }} \
+                    REMOTE_USER=${{ secrets.REMOTE_USER }} \
                     SSH_KEY=~/.ssh/test_key
 
             - name: Cleanup SSH key

@@ -94,6 +94,7 @@ pub async fn login(state: &AuthState, req: LoginParam) -> Result<UserDTO, AppErr
     let old_alg = {
         let _permit = PASSWORD_VERIFY_SEM
             .acquire()
+            .timed(metrics_timer_name!("login", "acquire_permit"))
             .await
             .trace_internal_err("semaphore_error", "获取密码验证信号量失败")?;
 

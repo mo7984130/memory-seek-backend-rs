@@ -15,14 +15,14 @@ macro_rules! metrics_group {
                 env!("CARGO_PKG_NAME"),
                 ":",
                 $func,
-                ":duration"
+                ":duration_quantile"
             )),
-            $crate::utils::MetricsConcurrencyGuard::start(concat!(
-                env!("CARGO_PKG_NAME"),
-                ":",
-                $func,
-                ":concurrency"
-            )),
+            // $crate::utils::MetricsConcurrencyGuard::start(concat!(
+            //     env!("CARGO_PKG_NAME"),
+            //     ":",
+            //     $func,
+            //     ":concurrency"
+            // )),
             $crate::metrics::counter!(concat!(env!("CARGO_PKG_NAME"), ":", $func, ":attempts"))
                 .increment(1),
         );
