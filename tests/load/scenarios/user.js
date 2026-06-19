@@ -4,7 +4,13 @@
 import { sleep } from "k6";
 import { getTestUserCredentials, recordResult, printSummary } from "../helpers/common.js";
 import { initSession, logout } from "../helpers/session.js";
-import { getMe, changeNickname, changePassword } from "../helpers/domains/user/user.js";
+import {
+    getMe,
+    changeNickname,
+    changePassword,
+    generateInviterCode,
+    getUserInfoBatch,
+} from "../helpers/domains/user/user.js";
 
 export { printSummary as handleSummary };
 
@@ -50,7 +56,20 @@ export default function () {
 
     sleep(0.5);
 
-    // 4. 修改密码（先改临时密码，再改回原密码，保证后续测试不受影响）
+    // 4. 生成邀请码
+    result = generateInviterCode();
+    recordResult("generate_inviter_code", result);
+
+    sleep(0.5);
+
+    // 5. 批量获取用户信息（使用当前用户 ID 和几个模拟 ID）
+    const userIds = [String(__VU), String(__VU + 1000), String(__VU + 2000)];
+    result = getUserInfoBatch(userIds);
+    recordResult("get_user_info_batch", result);
+
+    sleep(0.5);
+
+    // 6. 修改密码（先改临时密码，再改回原密码，保证后续测试不受影响）
     //    注意：服务端 change_password 会调用 logout 清除 token，每次改完需重新登录
     const tempPassword = "Temp@12345";
     result = changePassword(password, tempPassword);
@@ -73,7 +92,7 @@ export default function () {
 
     sleep(0.5);
 
-    // 5. 登出
+    // 7. 登出
     logout();
 
     sleep(0.5);
