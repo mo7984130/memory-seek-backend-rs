@@ -5,12 +5,12 @@ import { printSummary } from "../helpers/common.js";
 
 export { printSummary as handleSummary };
 
-// 导入各服务的 exec 函数
-import { photoExec } from "./photo/photo.js";
-import { collectionExec } from "./photo/collection.js";
-import { collectionPhotoExec } from "./photo/collection_photo.js";
-import { commentExec } from "./photo/comment.js";
-import { commentLikeExec } from "./photo/comment_like.js";
+// 重新导出 exec 函数（k6 scenarios 要求顶层 export）
+export { photoExec } from "./photo/photo.js";
+export { collectionExec } from "./photo/collection.js";
+export { collectionPhotoExec } from "./photo/collection_photo.js";
+export { commentExec } from "./photo/comment.js";
+export { commentLikeExec } from "./photo/comment_like.js";
 
 export const options = {
     scenarios: {
