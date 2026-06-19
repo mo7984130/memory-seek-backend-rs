@@ -18,9 +18,15 @@ import {
     getTimelineStats,
 } from "../../helpers/domains/photo/photo.js";
 
-// 共享图片数据（所有 VU 共享同一份，节省内存）
+// 共享图片数据（所有 VU 共享同一份，转为 ArrayBuffer 供 http.file 使用）
 const testImage = new SharedArray("test-image", function () {
-    return [open("../../fixtures/test.jpg", "b")];
+    const data = open("../../fixtures/test.jpg", "b");
+    const buf = new ArrayBuffer(data.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i < data.length; i++) {
+        view[i] = data.charCodeAt(i);
+    }
+    return [buf];
 });
 
 // ── 独立运行时的 options ──
