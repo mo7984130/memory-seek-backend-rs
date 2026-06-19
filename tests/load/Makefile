@@ -14,7 +14,7 @@ RESULTS_DIR  := results
 BASELINES    := baselines
 BASE_URL     := http://$(REMOTE_HOST):$(SERVER_PORT)
 
-.PHONY: deploy teardown auth user photo social mixed all p95-report baseline compare clean help
+.PHONY: deploy teardown auth user photo all p95-report baseline compare clean help
 
 # ── 部署 ──────────────────────────────────────────
 deploy:                    ## 部署 infra + server 到远程
@@ -35,35 +35,27 @@ $(RESULTS_DIR):
 
 auth: $(RESULTS_DIR)       ## 认证模块压测
 	k6 run \
+		-q \
 		-e BASE_URL=$(BASE_URL) \
 		-e SUMMARY_EXPORT=$(RESULTS_DIR)/auth_summary.json \
 		scenarios/auth.js
 
 user: $(RESULTS_DIR)       ## 用户模块压测
 	k6 run \
+		-q \
 		-e BASE_URL=$(BASE_URL) \
 		-e SUMMARY_EXPORT=$(RESULTS_DIR)/user_summary.json \
 		scenarios/user.js
 
-photo: $(RESULTS_DIR)      ## 照片模块压测
+photo: $(RESULTS_DIR)      ## 照片模块压测（可选 SERVICE=<name> 指定单个服务）
 	k6 run \
+		-q \
 		-e BASE_URL=$(BASE_URL) \
 		-e SUMMARY_EXPORT=$(RESULTS_DIR)/photo_summary.json \
+		$(if $(SERVICE),--scenario $(SERVICE),) \
 		scenarios/photo.js
 
-social: $(RESULTS_DIR)     ## 社交模块压测（收藏夹 + 评论）
-	k6 run \
-		-e BASE_URL=$(BASE_URL) \
-		-e SUMMARY_EXPORT=$(RESULTS_DIR)/social_summary.json \
-		scenarios/social.js
-
-mixed: $(RESULTS_DIR)      ## 混合场景压测
-	k6 run \
-		-e BASE_URL=$(BASE_URL) \
-		-e SUMMARY_EXPORT=$(RESULTS_DIR)/mixed_summary.json \
-		scenarios/mixed.js
-
-all: auth user photo social mixed  ## 运行全部压测
+all: auth user photo  ## 运行全部压测
 
 # ── 报告 ──────────────────────────────────────────
 p95-report:                ## 生成 P95 性能报告
