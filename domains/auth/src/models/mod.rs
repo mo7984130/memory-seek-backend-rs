@@ -16,3 +16,14 @@ pub struct AccessTokenInfo {
     pub token: String,
     pub expire_at: chrono::DateTime<chrono::Utc>,
 }
+
+/// 登录结果，包含用户信息和令牌
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginResult {
+    pub user: memory_seek_type::user::UserInfo,
+    pub access_token: String,
+    pub access_token_expire_at: chrono::DateTime<chrono::Utc>,
+    pub refresh_token: String,
+    pub refresh_token_expire_at: chrono::DateTime<chrono::Utc>,
+}

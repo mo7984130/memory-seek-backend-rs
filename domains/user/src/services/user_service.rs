@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use constants::{PasswordHasher, RedisKeys};
-use entities::auth::user::UserDTO;
+use memory_seek_type::user::UserInfo;
 use sea_orm::sea_query::Expr;
 use sea_orm::sqlx::types::uuid;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set};
@@ -44,7 +44,7 @@ static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> =
     skip_all,
     fields(user_id = %user_id)
 )]
-pub async fn get_user_info(state: &UserState, user_id: i64) -> Result<user::UserDTO, AppError> {
+pub async fn get_user_info(state: &UserState, user_id: i64) -> Result<UserInfo, AppError> {
     metrics_group!("get_user_info");
 
     // 获取用户
@@ -58,12 +58,12 @@ pub async fn get_user_info(state: &UserState, user_id: i64) -> Result<user::User
     metrics_success!("get_user_info");
     info!(status = "success", user_id = %user_id, "获取用户信息成功");
 
-    Ok(UserDTO::from_user(
-        state
-            .token_cipher
-            .encrypt_avatar_token(user.avatar_file_id.as_deref()),
-        user,
-    ))
+    let user_record = user::UserRecord::from(user);
+    let mut user_info = user::create_user_info(&user_record);
+    user_info.avatar_token = state
+        .token_cipher
+        .encrypt_avatar_token(user_record.avatar_file_id.as_deref());
+    Ok(user_info)
 }
 
 /// 为用户生成唯一邀请码

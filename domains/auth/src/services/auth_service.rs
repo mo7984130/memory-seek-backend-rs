@@ -1,6 +1,6 @@
 use crate::AuthState;
 use crate::config::{ACCESS_TOKEN_EXPIRE_SECONDS, REFRESH_TOKEN_EXPIRE_DAYS};
-use crate::models::{LoginRequest, RegisterRequest, SendEmailCodeRequest, LoginResponse};
+use crate::models::{LoginRequest, LoginResult, LoginResponse, RegisterRequest, SendEmailCodeRequest};
 use chrono::{DateTime, Duration, Utc};
 use common::error::AppError;
 use common::ext::{BoolExt, OptionExt, RedisExt, ResultErrExt, log_err, log_warn};
@@ -10,7 +10,8 @@ use common::{metrics_group, metrics_success, metrics_timer_name, timed};
 use constants::RedisKeys;
 use constants::redis_keys;
 use deadpool_redis::Pool;
-use entities::auth::user::{self, UserDTO};
+use entities::auth::user;
+use memory_seek_type::user::UserInfo;
 use sea_orm::error::DbErr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
@@ -49,7 +50,7 @@ static EMAIL_SEND_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(16)
         account = %req.account
     )
 )]
-pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppError> {
+pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResult, AppError> {
     metrics_group!("login");
 
     // 获取用户Id, 密码, 头像FileId
@@ -203,13 +204,17 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
     metrics_success!("login");
     info!(status="success", user_id = %user.id, username = %updated_user.username, "用户登录成功");
 
-    // 返回UserDTO
-    Ok(UserDTO::from_user(avatar_token, updated_user)
-        .with_access_token(
-            new_access_token,
-            Utc::now() + Duration::seconds(ACCESS_TOKEN_EXPIRE_SECONDS),
-        )
-        .with_refresh_token(new_refresh_token, new_refresh_token_expire))
+    // 返回 LoginResult（包含用户信息和令牌）
+    let user_record = user::UserRecord::from(updated_user);
+    let mut user_info = user::create_user_info(&user_record);
+    user_info.avatar_token = avatar_token;
+    Ok(LoginResult {
+        user: user_info,
+        access_token: new_access_token,
+        access_token_expire_at: Utc::now() + Duration::seconds(ACCESS_TOKEN_EXPIRE_SECONDS),
+        refresh_token: new_refresh_token,
+        refresh_token_expire_at: new_refresh_token_expire,
+    })
 }
 
 /// 用户注册
@@ -238,7 +243,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<UserDTO, AppE
         email_code_prefix = %&req.email_verify_code[..2]
     )
 )]
-pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO, AppError> {
+pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInfo, AppError> {
     metrics_group!("register");
 
     // 校验邮箱验证码
@@ -284,7 +289,8 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserDTO
 
     info!(status = "success", "用户注册成功");
 
-    Ok(UserDTO::from_user(None, user_model))
+    let user_record = user::UserRecord::from(user_model);
+    Ok(user::create_user_info(&user_record))
 }
 
 /// 将 SeaORM 插入用户时的 DbErr 转换为 AppError

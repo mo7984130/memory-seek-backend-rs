@@ -7,7 +7,8 @@ use common::ext::{OptionExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use common::traits::controller::ControllerRouter;
-use entities::auth::user::{UserDTO, UserId};
+use entities::auth::user::UserId;
+use memory_seek_type::user::UserInfo;
 use std::sync::Arc;
 
 use crate::UserState;
@@ -54,7 +55,7 @@ impl UserController {
     async fn get_user_info(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<UserDTO>, AppError> {
+    ) -> Result<R<UserInfo>, AppError> {
         user_service::get_user_info(&state, user_id.0)
             .await
             .to_r_ok()

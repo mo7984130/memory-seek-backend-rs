@@ -12,6 +12,7 @@ controller = ["dep:axum"]
 common = { path = "../../common", features = ["file_validator", "validators"] }
 constants = { path = "../constants" }
 entities = { path = "../../entities" }
+memory-seek-type = { workspace = true }
 oss = { path = "../../libs/oss" }
 serde = { version = "1.0.228", features = ["derive"] }
 validator = { workspace = true }

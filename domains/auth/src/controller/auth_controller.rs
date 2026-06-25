@@ -1,6 +1,5 @@
 use crate::AuthState;
-use crate::models::SendEmailCodeParam;
-use crate::models::{AccessTokenResult, LoginParam, RegisterParam};
+use crate::models::{LoginRequest, LoginResult, LoginResponse, RegisterRequest, SendEmailCodeRequest};
 use crate::services as auth_service;
 use axum::Router;
 use axum::extract::State;
@@ -11,7 +10,7 @@ use common::ext::{OptionExt, ResultErrExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use common::traits::controller::ControllerRouter;
-use entities::auth::user::UserDTO;
+use memory_seek_type::user::UserInfo;
 use std::sync::Arc;
 
 pub struct AuthController;
@@ -47,8 +46,8 @@ impl AuthController {
     /// - `AppError::InternalServerError`: 数据库或 Redis 操作失败
     async fn login(
         State(state): State<Arc<AuthState>>,
-        ValidatedJson(req): ValidatedJson<LoginParam>,
-    ) -> Result<R<UserDTO>, AppError> {
+        ValidatedJson(req): ValidatedJson<LoginRequest>,
+    ) -> Result<R<LoginResult>, AppError> {
         auth_service::login(&state, req).await.to_r_ok()
     }
 
@@ -66,8 +65,8 @@ impl AuthController {
     /// - `AppError::InternalServerError`: 数据库操作失败
     async fn register(
         State(state): State<Arc<AuthState>>,
-        ValidatedJson(payload): ValidatedJson<RegisterParam>,
-    ) -> Result<R<UserDTO>, AppError> {
+        ValidatedJson(payload): ValidatedJson<RegisterRequest>,
+    ) -> Result<R<UserInfo>, AppError> {
         auth_service::register(&state, payload).await.to_r_ok()
     }
 
@@ -84,7 +83,7 @@ impl AuthController {
     /// - `AppError::InternalServerError`: Redis 操作或邮件发送失败
     async fn send_email_code(
         State(state): State<Arc<AuthState>>,
-        ValidatedJson(payload): ValidatedJson<SendEmailCodeParam>,
+        ValidatedJson(payload): ValidatedJson<SendEmailCodeRequest>,
     ) -> Result<R<()>, AppError> {
         auth_service::send_email_code(&state, payload)
             .await
@@ -108,7 +107,7 @@ impl AuthController {
     async fn refresh_access_token(
         State(state): State<Arc<AuthState>>,
         headers: HeaderMap,
-    ) -> Result<R<AccessTokenResult>, AppError> {
+    ) -> Result<R<LoginResponse>, AppError> {
         let user_id = headers
             .get("x-user-id")
             .ok_or_warn(
