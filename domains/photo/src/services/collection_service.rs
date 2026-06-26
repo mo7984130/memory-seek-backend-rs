@@ -6,7 +6,7 @@ use common::Result;
 use common::error::AppError;
 use common::ext::{CacheExtension, OkExt, ToErr, log_warn};
 use common::utils::DbUtils;
-use common::{metrics_group, metrics_success};
+use common::{metrics_group, metrics_success, metrics_timer_name, timed, utils::MetricsTimerExt};
 use constants::RedisKeys;
 use entities::auth::user::UserId;
 use entities::photo::collection::{CollectionId, CollectionRecord};
@@ -67,7 +67,9 @@ impl CollectionService {
         metrics_group!("get_collection_list");
 
         // 获取用户收藏夹
-        let collections = CollectionMapper::query_by_user_id(&state.db, user_id).await?;
+        let collections = CollectionMapper::query_by_user_id(&state.db, user_id)
+            .timed(metrics_timer_name!("get_collection_list", "query_by_user_id"))
+            .await?;
 
         // 如果收藏夹为空, 创建默认的我喜欢收藏夹
         if collections.is_empty() {
@@ -99,8 +101,9 @@ impl CollectionService {
     ) -> Result<CollectionResult> {
         metrics_group!("create_collection");
 
-        let collection =
-            CollectionMapper::insert(&state.db, user_id, name, description, is_favorite).await?;
+        let collection = CollectionMapper::insert(&state.db, user_id, name, description, is_favorite)
+            .timed(metrics_timer_name!("create_collection", "db_insert"))
+            .await?;
 
         metrics_success!("create_collection");
         CollectionResult::from(collection).to_ok()
@@ -126,7 +129,9 @@ impl CollectionService {
         metrics_group!("update_collection_info");
 
         // 修改时鉴权
-        CollectionMapper::update_info(&state.db, collection_id, user_id, name, description).await?;
+        CollectionMapper::update_info(&state.db, collection_id, user_id, name, description)
+            .timed(metrics_timer_name!("update_collection_info", "db_update"))
+            .await?;
 
         metrics_success!("update_collection_info");
         Ok(())
@@ -154,16 +159,19 @@ impl CollectionService {
         }
 
         // 删除收藏夹 和 收藏夹照片
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                // 删除收藏夹里面的照片
-                CollectionPhotoMapper::delete_by_collection_id(txn, collection_id, user_id).await?;
-                // 删除收藏夹本身
-                CollectionMapper::delete_by_id(txn, collection_id, user_id).await?;
-                Ok(())
+        timed!("delete_collection", "db_transaction", {
+            DbUtils::write(&state.db, |txn| {
+                Box::pin(async move {
+                    // 删除收藏夹里面的照片
+                    CollectionPhotoMapper::delete_by_collection_id(txn, collection_id, user_id)
+                        .await?;
+                    // 删除收藏夹本身
+                    CollectionMapper::delete_by_id(txn, collection_id, user_id).await?;
+                    Ok(())
+                })
             })
-        })
-        .await?;
+            .await
+        })?;
 
         metrics_success!("delete_collection");
         Ok(())

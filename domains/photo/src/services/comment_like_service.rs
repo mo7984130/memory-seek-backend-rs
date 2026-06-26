@@ -2,8 +2,8 @@ use common::{
     Result,
     error::AppError,
     ext::{ToErr, log_warn},
-    metrics_group, metrics_success,
-    utils::DbUtils,
+    metrics_group, metrics_success, metrics_timer_name, timed,
+    utils::{DbUtils, MetricsTimerExt},
 };
 use entities::{auth::user::UserId, photo::comment::CommentId};
 
@@ -20,7 +20,10 @@ impl CommentLikeService {
         metrics_group!("like_comment");
 
         // 检查评论是否存在
-        if !CommentMapper::exists(&state.db, comment_id).await? {
+        if !CommentMapper::exists(&state.db, comment_id)
+            .timed(metrics_timer_name!("like_comment", "check_exists"))
+            .await?
+        {
             return log_warn(
                 "comment_not_found",
                 "用户尝试点赞不存在的评论",
@@ -30,26 +33,29 @@ impl CommentLikeService {
             .to_err();
         }
 
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                let inserted = CommentLikeMapper::insert_ignore(txn, user_id, comment_id).await?;
+        timed!("like_comment", "db_transaction", {
+            DbUtils::write(&state.db, |txn| {
+                Box::pin(async move {
+                    let inserted =
+                        CommentLikeMapper::insert_ignore(txn, user_id, comment_id).await?;
 
-                if !inserted {
-                    return log_warn(
-                        "comment_like_already_exist",
-                        "用户尝试点赞一个已经点赞过的评论",
-                        "",
-                        AppError::bad_request("已经点赞过"),
-                    )
-                    .to_err();
-                }
+                    if !inserted {
+                        return log_warn(
+                            "comment_like_already_exist",
+                            "用户尝试点赞一个已经点赞过的评论",
+                            "",
+                            AppError::bad_request("已经点赞过"),
+                        )
+                        .to_err();
+                    }
 
-                // 增加点赞总数
-                CommentMapper::update_like_count_delta(txn, comment_id, 1).await?;
-                Ok(())
+                    // 增加点赞总数
+                    CommentMapper::update_like_count_delta(txn, comment_id, 1).await?;
+                    Ok(())
+                })
             })
-        })
-        .await?;
+            .await
+        })?;
 
         metrics_success!("like_comment");
         Ok(())
@@ -67,26 +73,28 @@ impl CommentLikeService {
     pub async fn unlike(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
         metrics_group!("unlike_comment");
 
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                let deleted = CommentLikeMapper::delete(txn, user_id, comment_id).await?;
+        timed!("unlike_comment", "db_transaction", {
+            DbUtils::write(&state.db, |txn| {
+                Box::pin(async move {
+                    let deleted = CommentLikeMapper::delete(txn, user_id, comment_id).await?;
 
-                if !deleted {
-                    return log_warn(
-                        "comment_like_already_exist",
-                        "用户尝试取消点赞一个未点赞过的评论",
-                        "",
-                        AppError::bad_request("还未点赞"),
-                    )
-                    .to_err();
-                }
+                    if !deleted {
+                        return log_warn(
+                            "comment_like_already_exist",
+                            "用户尝试取消点赞一个未点赞过的评论",
+                            "",
+                            AppError::bad_request("还未点赞"),
+                        )
+                        .to_err();
+                    }
 
-                // 减少点赞总数
-                CommentMapper::update_like_count_delta(txn, comment_id, -1).await?;
-                Ok(())
+                    // 减少点赞总数
+                    CommentMapper::update_like_count_delta(txn, comment_id, -1).await?;
+                    Ok(())
+                })
             })
-        })
-        .await?;
+            .await
+        })?;
 
         metrics_success!("unlike_comment");
         Ok(())

@@ -110,7 +110,9 @@ impl PhotoService {
             ..
         } = CursorPage::from_oversize(photo_ids, size);
 
-        let photo_vos = Self::load_photos_info(state, user_id, &photo_ids).await?;
+        let photo_vos = Self::load_photos_info(state, user_id, &photo_ids)
+            .timed(metrics_timer_name!("get_photo_cursor_page", "load_photos_info"))
+            .await?;
 
         // 获取next_cursor
         let next_cursor = if has_more {
@@ -157,6 +159,30 @@ impl PhotoService {
     ) -> Result<PhotoResult> {
         metrics_group!("upload_photo");
 
+        // 效验文件
+        let metadata = {
+            let file_data_clone = file_data.clone();
+            timed!("upload_photo", "validate_photo", {
+                tokio::task::spawn_blocking(move || {
+                    FileValidator::validate_image(&file_data_clone, &file_name, &content_type)
+                })
+                .await
+                .trace_internal_err(
+                    "spawn_blocking_validate_photo_err",
+                    "tokio spawn_blocking join err",
+                )?
+                .map_err(|e| {
+                    let msg = e.to_string();
+                    log_warn(
+                        "upload_photo:invalid_photo",
+                        "用户上传图片时, 图片校验未通过",
+                        msg.clone(),
+                        AppError::bad_request(msg),
+                    )
+                })?
+            })
+        };
+
         // 计算md5
         let md5_hash = {
             let file_data_clone = file_data.clone();
@@ -184,30 +210,6 @@ impl PhotoService {
             );
             return Err(err);
         }
-
-        // 效验文件
-        let metadata = {
-            let file_data_clone = file_data.clone();
-            timed!("upload_photo", "validate_photo", {
-                tokio::task::spawn_blocking(move || {
-                    FileValidator::validate_image(&file_data_clone, &file_name, &content_type)
-                })
-                .await
-                .trace_internal_err(
-                    "spawn_blocking_validate_photo_err",
-                    "tokio spawn_blocking join err",
-                )?
-                .map_err(|e| {
-                    let msg = e.to_string();
-                    log_warn(
-                        "upload_photo:invalid_photo",
-                        "图片效验不通过",
-                        &msg,
-                        AppError::bad_request("图片效验不通过"),
-                    )
-                })?
-            })
-        };
 
         // 上传文件
         let date_path = chrono::Local::now().format("%Y/%m/%d");

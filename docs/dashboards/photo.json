@@ -566,6 +566,15 @@
           "expr": "rate(photo:get_photo_cursor_page:find_cursor_page_ids:duration_quantile_sum[5m]) / rate(photo:get_photo_cursor_page:find_cursor_page_ids:duration_quantile_count[5m])",
           "legendFormat": "DB查询",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:get_photo_cursor_page:load_photos_info:duration_quantile_sum[5m]) / rate(photo:get_photo_cursor_page:load_photos_info:duration_quantile_count[5m])",
+          "legendFormat": "加载照片信息",
+          "refId": "B"
         }
       ]
     },
@@ -1578,7 +1587,17 @@
       },
       "title": "获取收藏夹列表子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:get_collection_list:query_by_user_id:duration_quantile_sum[5m]) / rate(photo:get_collection_list:query_by_user_id:duration_quantile_count[5m])",
+          "legendFormat": "DB查询",
+          "refId": "A"
+        }
+      ]
     },
     {
       "datasource": {
@@ -1895,7 +1914,17 @@
       },
       "title": "创建收藏夹子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:create_collection:db_insert:duration_quantile_sum[5m]) / rate(photo:create_collection:db_insert:duration_quantile_count[5m])",
+          "legendFormat": "DB插入",
+          "refId": "A"
+        }
+      ]
     },
     {
       "datasource": {
@@ -2212,7 +2241,17 @@
       },
       "title": "修改收藏夹子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:update_collection_info:db_update:duration_quantile_sum[5m]) / rate(photo:update_collection_info:db_update:duration_quantile_count[5m])",
+          "legendFormat": "DB更新",
+          "refId": "A"
+        }
+      ]
     },
     {
       "datasource": {
@@ -2529,7 +2568,17 @@
       },
       "title": "删除收藏夹子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:delete_collection:db_transaction:duration_quantile_sum[5m]) / rate(photo:delete_collection:db_transaction:duration_quantile_count[5m])",
+          "legendFormat": "DB事务",
+          "refId": "A"
+        }
+      ]
     },
     {
       "datasource": {
@@ -2846,7 +2895,26 @@
       },
       "title": "获取收藏夹照片子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:get_collection_photos:query_photo_ids:duration_quantile_sum[5m]) / rate(photo:get_collection_photos:query_photo_ids:duration_quantile_count[5m])",
+          "legendFormat": "DB查询照片ID",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:get_collection_photos:load_photos_info:duration_quantile_sum[5m]) / rate(photo:get_collection_photos:load_photos_info:duration_quantile_count[5m])",
+          "legendFormat": "加载照片信息",
+          "refId": "B"
+        }
+      ]
     },
     {
       "datasource": {
@@ -3163,7 +3231,26 @@
       },
       "title": "添加收藏夹照片子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:add_collection_photos:auth_check:duration_quantile_sum[5m]) / rate(photo:add_collection_photos:auth_check:duration_quantile_count[5m])",
+          "legendFormat": "鉴权检查",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:add_collection_photos:db_transaction:duration_quantile_sum[5m]) / rate(photo:add_collection_photos:db_transaction:duration_quantile_count[5m])",
+          "legendFormat": "DB事务",
+          "refId": "B"
+        }
+      ]
     },
     {
       "datasource": {
@@ -3480,7 +3567,17 @@
       },
       "title": "移除收藏夹照片子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:remove_collection_photos:db_transaction:duration_quantile_sum[5m]) / rate(photo:remove_collection_photos:db_transaction:duration_quantile_count[5m])",
+          "legendFormat": "DB事务",
+          "refId": "A"
+        }
+      ]
     },
     {
       "datasource": {
@@ -3810,7 +3907,17 @@
       },
       "title": "发表评论子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:publish_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:publish_comment:db_transaction:duration_quantile_count[5m])",
+          "legendFormat": "DB事务",
+          "refId": "A"
+        }
+      ]
     },
     {
       "datasource": {
@@ -4127,7 +4234,35 @@
       },
       "title": "获取评论列表子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:get_comment_cursor_page:query_hot_comments:duration_quantile_sum[5m]) / rate(photo:get_comment_cursor_page:query_hot_comments:duration_quantile_count[5m])",
+          "legendFormat": "热门评论查询",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:get_comment_cursor_page:query_by_photo_id:duration_quantile_sum[5m]) / rate(photo:get_comment_cursor_page:query_by_photo_id:duration_quantile_count[5m])",
+          "legendFormat": "评论列表查询",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:get_comment_cursor_page:query_is_like:duration_quantile_sum[5m]) / rate(photo:get_comment_cursor_page:query_is_like:duration_quantile_count[5m])",
+          "legendFormat": "点赞状态查询",
+          "refId": "C"
+        }
+      ]
     },
     {
       "datasource": {
@@ -4444,7 +4579,17 @@
       },
       "title": "删除评论子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:delete_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:delete_comment:db_transaction:duration_quantile_count[5m])",
+          "legendFormat": "DB事务",
+          "refId": "A"
+        }
+      ]
     },
     {
       "datasource": {
@@ -4761,7 +4906,26 @@
       },
       "title": "点赞子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:like_comment:check_exists:duration_quantile_sum[5m]) / rate(photo:like_comment:check_exists:duration_quantile_count[5m])",
+          "legendFormat": "评论存在检查",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:like_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:like_comment:db_transaction:duration_quantile_count[5m])",
+          "legendFormat": "DB事务",
+          "refId": "B"
+        }
+      ]
     },
     {
       "datasource": {
@@ -5078,7 +5242,17 @@
       },
       "title": "取消点赞子步骤耗时",
       "type": "timeseries",
-      "targets": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:unlike_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:unlike_comment:db_transaction:duration_quantile_count[5m])",
+          "legendFormat": "DB事务",
+          "refId": "A"
+        }
+      ]
     },
     {
       "datasource": {
