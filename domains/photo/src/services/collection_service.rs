@@ -68,7 +68,10 @@ impl CollectionService {
 
         // 获取用户收藏夹
         let collections = CollectionMapper::query_by_user_id(&state.db, user_id)
-            .timed(metrics_timer_name!("get_collection_list", "query_by_user_id"))
+            .timed(metrics_timer_name!(
+                "get_collection_list",
+                "query_by_user_id"
+            ))
             .await?;
 
         // 如果收藏夹为空, 创建默认的我喜欢收藏夹
@@ -101,9 +104,10 @@ impl CollectionService {
     ) -> Result<CollectionResult> {
         metrics_group!("create_collection");
 
-        let collection = CollectionMapper::insert(&state.db, user_id, name, description, is_favorite)
-            .timed(metrics_timer_name!("create_collection", "db_insert"))
-            .await?;
+        let collection =
+            CollectionMapper::insert(&state.db, user_id, name, description, is_favorite)
+                .timed(metrics_timer_name!("create_collection", "db_insert"))
+                .await?;
 
         metrics_success!("create_collection");
         CollectionResult::from(collection).to_ok()

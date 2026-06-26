@@ -111,7 +111,10 @@ impl PhotoService {
         } = CursorPage::from_oversize(photo_ids, size);
 
         let photo_vos = Self::load_photos_info(state, user_id, &photo_ids)
-            .timed(metrics_timer_name!("get_photo_cursor_page", "load_photos_info"))
+            .timed(metrics_timer_name!(
+                "get_photo_cursor_page",
+                "load_photos_info"
+            ))
             .await?;
 
         // 获取next_cursor

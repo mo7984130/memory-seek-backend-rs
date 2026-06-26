@@ -1,5 +1,7 @@
 use crate::AuthState;
-use crate::models::{LoginRequest, LoginResult, LoginResponse, RegisterRequest, SendEmailCodeRequest};
+use crate::models::{
+    LoginRequest, LoginResponse, LoginResult, RegisterRequest, SendEmailCodeRequest,
+};
 use crate::services as auth_service;
 use axum::Router;
 use axum::extract::State;

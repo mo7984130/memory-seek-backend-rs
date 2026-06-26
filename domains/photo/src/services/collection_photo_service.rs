@@ -15,8 +15,9 @@ use common::{
     Result,
     error::AppError,
     ext::{OkExt, ToErr, log_warn},
-    metrics_group, metrics_success, metrics_timer_name, timed,
+    metrics_group, metrics_success, metrics_timer_name,
     models::CursorPage,
+    timed,
     utils::{DbUtils, MetricsTimerExt},
 };
 use entities::{
@@ -47,7 +48,10 @@ impl CollectionPhotoService {
             decoded_cursor.as_ref(),
             size + 1,
         )
-        .timed(metrics_timer_name!("get_collection_photos", "query_photo_ids"))
+        .timed(metrics_timer_name!(
+            "get_collection_photos",
+            "query_photo_ids"
+        ))
         .await?;
 
         let CursorPage {
@@ -57,7 +61,10 @@ impl CollectionPhotoService {
         } = CursorPage::from_oversize(photo_ids, size);
 
         let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
-            .timed(metrics_timer_name!("get_collection_photos", "load_photos_info"))
+            .timed(metrics_timer_name!(
+                "get_collection_photos",
+                "load_photos_info"
+            ))
             .await?;
         let next_cursor = photo_vos.last().and_then(|vo| {
             PhotoId::parse_from_str_or_none(&vo.id).map(|id| {

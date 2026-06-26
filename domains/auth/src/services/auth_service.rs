@@ -1,6 +1,8 @@
 use crate::AuthState;
 use crate::config::{ACCESS_TOKEN_EXPIRE_SECONDS, REFRESH_TOKEN_EXPIRE_DAYS};
-use crate::models::{LoginRequest, LoginResult, LoginResponse, RegisterRequest, SendEmailCodeRequest};
+use crate::models::{
+    LoginRequest, LoginResponse, LoginResult, RegisterRequest, SendEmailCodeRequest,
+};
 use chrono::{DateTime, Duration, Utc};
 use common::error::AppError;
 use common::ext::{BoolExt, OptionExt, RedisExt, ResultErrExt, log_err, log_warn};
