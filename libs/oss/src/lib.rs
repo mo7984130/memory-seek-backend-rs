@@ -19,7 +19,7 @@ pub struct S3Client {
     public_url: String,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct S3Config {
     pub endpoint: String,
     pub access_key: String,

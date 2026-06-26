@@ -1,4 +1,5 @@
 use config::{Config, ConfigError, Environment, File};
+
 use serde::Deserialize;
 use tracing::info;
 
@@ -10,7 +11,7 @@ pub struct AppConfig {
     #[allow(dead_code)]
     pub smtp: SmtpConfig,
     #[cfg(feature = "s3")]
-    pub s3: Option<S3Config>,
+    pub s3: Option<oss::S3Config>,
     pub token_cipher: TokenCipherConfig,
     #[cfg(feature = "metrics")]
     pub metrics: Option<MetricsConfig>,
@@ -43,17 +44,6 @@ pub struct SmtpConfig {
     pub password: String,
     pub from_email: String,
     pub from_name: String,
-}
-
-#[cfg(feature = "s3")]
-#[derive(Debug, Deserialize)]
-pub struct S3Config {
-    pub endpoint: String,
-    pub bucket: String,
-    pub access_key: String,
-    pub secret_key: String,
-    pub region: String,
-    pub public_url: String,
 }
 
 #[derive(Debug, Deserialize)]

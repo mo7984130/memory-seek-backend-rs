@@ -15,7 +15,7 @@ impl AppLibsInit {
 
         // 初始化 S3（如果启用）
         #[cfg(feature = "s3")]
-        let s3_client = s3::init(cfg)?;
+        let s3_client = s3::init(cfg);
 
         Ok(AppLibs {
             token_cipher,

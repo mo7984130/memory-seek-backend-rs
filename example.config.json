@@ -29,7 +29,8 @@
         "access_key": "your-access-key",
         "secret_key": "your-secret-key",
         "region": "us-east-1",
-        "public_url": "http://localhost:9000"
+        "public_url": "http://localhost:9000",
+        "force_path_style": true
     },
     "token_cipher": {
         "key": "your-secret-key-at-least-32-chars",
