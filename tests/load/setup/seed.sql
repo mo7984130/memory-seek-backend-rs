@@ -1,7 +1,7 @@
 -- tests/load/setup/seed.sql
 -- 预置压测数据
 -- 前置条件：数据库已通过 docs/sql/init.sql 建表
--- 使用方式: psql -d memory_seek_loadtest -v auth_users=10000 -v photo_users=20 -v photos=100000 -f seed.sql
+-- 使用方式: psql -d memory_seek_loadtest -v auth_users=10000 -v photo_users=200 -v photos=100000 -f seed.sql
 -- 密码: Test123456 (bcrypt hash)
 
 -- auth 压测用户
@@ -9,7 +9,7 @@ INSERT INTO auth_user (username, email, password, nickname, inviter, created_at)
 SELECT
     'loadtest_' || i,
     'loadtest_' || i || '@test.com',
-    '$2b$12$LJ3m4ys3Lk0TSwHjnF4oR.K3VJxqfVYqxSy3TqFG3YfP0z3bGHXBe',
+    '$argon2id$v=19$m=16384,t=2,p=1$zcGSKX21GtoXbkIRxMLPXQ$QyhhvsEdkENJXKJS9LBaphiQX5nHQcc+w/MGdwUwYzQ',
     'LoadTest User ' || i,
     1,
     NOW()
@@ -21,7 +21,7 @@ INSERT INTO auth_user (username, email, password, nickname, inviter, created_at)
 SELECT
     'loadtest_photo_' || i,
     'loadtest_photo_' || i || '@test.com',
-    '$2b$12$LJ3m4ys3Lk0TSwHjnF4oR.K3VJxqfVYqxSy3TqFG3YfP0z3bGHXBe',
+    '$argon2id$v=19$m=16384,t=2,p=1$zcGSKX21GtoXbkIRxMLPXQ$QyhhvsEdkENJXKJS9LBaphiQX5nHQcc+w/MGdwUwYzQ',
     'Photo User ' || i,
     1,
     NOW()

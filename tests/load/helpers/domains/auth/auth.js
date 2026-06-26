@@ -19,10 +19,12 @@ export function register(username, email, password, verificationCode = "") {
         JSON.stringify({ username, email, password, verificationCode }),
         { headers: { "Content-Type": "application/json" } },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
-        data: res.status === 200 ? res.json("data") : null,
+        data: ok ? res.json("data") : null,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("register", result);
     return result;
@@ -39,9 +41,11 @@ export function sendEmailCode(email) {
         JSON.stringify({ email }),
         { headers: { "Content-Type": "application/json" } },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("send_email_code", result);
     return result;

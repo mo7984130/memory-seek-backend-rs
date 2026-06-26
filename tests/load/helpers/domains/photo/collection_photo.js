@@ -19,9 +19,11 @@ export function addPhotosToCollection(collectionId, photoIds) {
         JSON.stringify({ photoIds }),
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("add_photos_to_collection", result);
     return result;
@@ -40,10 +42,12 @@ export function listCollectionPhotos(collectionId, pageSize = 10) {
         `${BASE_URL}/photo/collections/${collectionId}/photos?size=${pageSize}`,
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
-        data: res.status === 200 ? res.json("data") : null,
+        data: ok ? res.json("data.records") : null,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("list_collection_photos", result);
     return result;
@@ -63,9 +67,11 @@ export function removePhotoFromCollection(collectionId, photoId) {
         null,
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("remove_photo_from_collection", result);
     return result;

@@ -10,7 +10,7 @@ import {
 
 export { printSummary as handleSummary };
 
-import { initSession, logout } from "../../helpers/session.js";
+import { initSession } from "../../helpers/session.js";
 import { listPhotos } from "../../helpers/domains/photo/photo.js";
 import { createComment, listComments, deleteComment } from "../../helpers/domains/photo/comment.js";
 import {
@@ -46,7 +46,6 @@ function runCommentLikeFlow() {
     // 获取一张照片 ID
     const photoListResult = listPhotos(1);
     if (!photoListResult.success || !photoListResult.data?.length) {
-        logout();
         return;
     }
     const photoId = photoListResult.data[0].id;
@@ -55,7 +54,7 @@ function runCommentLikeFlow() {
 
     // 创建一条评论（用于点赞）
     const commentResult = createComment(photoId, `Like target VU${__VU} ${Date.now()}`);
-    if (!commentResult.success) { logout(); return; }
+    if (!commentResult.success) return;
     const commentId = commentResult.data.id;
 
     sleep(0.3);
@@ -75,9 +74,6 @@ function runCommentLikeFlow() {
     // 清理：删除评论
     deleteComment(photoId, commentId);
 
-    sleep(0.5);
-
-    logout();
     sleep(0.5);
 }
 

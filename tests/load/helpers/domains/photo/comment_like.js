@@ -19,9 +19,11 @@ export function likeComment(photoId, commentId) {
         null,
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("like_comment", result);
     return result;
@@ -41,9 +43,11 @@ export function unlikeComment(photoId, commentId) {
         null,
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("unlike_comment", result);
     return result;

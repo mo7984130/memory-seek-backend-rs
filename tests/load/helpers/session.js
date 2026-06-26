@@ -2,7 +2,7 @@
 // 会话管理：登录、token 刷新、登出、模块级状态
 
 import http from "k6/http";
-import { BASE_URL, authHeaders, logResult } from "./common.js";
+import { BASE_URL, authHeaders, logResult, recordResult } from "./common.js";
 
 let _session = null; // { uid, token, refreshToken }
 let _opCount = 0; // 操作计数，用于 token 刷新策略
@@ -20,10 +20,13 @@ export function initSession(account, password) {
         { headers: { "Content-Type": "application/json" } },
     );
     const ok = res.status === 200;
-    if (!ok) {
-        console.error(`Login failed for ${account}: ${res.status} ${res.body}`);
-    }
-    logResult("login", { success: ok, duration: res.timings.duration });
+    const result = {
+        success: ok,
+        duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
+    };
+    logResult("login", result);
+    recordResult("login", result);
     if (!ok) return null;
     _session = {
         uid: res.json("data.id"),
@@ -73,14 +76,24 @@ export function refreshSession() {
         },
     });
     const ok = res.status === 200;
-    logResult("refresh_token", { success: ok, duration: res.timings.duration });
+    const result = {
+        success: ok,
+        duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
+    };
+    logResult("refresh_token", result);
+    recordResult("refresh_token", result);
     if (ok) {
-        _session.token = res.json("data.accessToken");
-        _session.refreshToken = res.json("data.refreshToken");
+        const newToken = res.json("data.accessToken");
+        if (!newToken) {
+            console.error(
+                `Token refresh: data.accessToken missing from response`,
+            );
+        }
+        _session.token = newToken || _session.token;
         _opCount = 0;
         return true;
     }
-    console.error(`Token refresh failed: ${res.status} ${res.body}`);
     return false;
 }
 
@@ -102,6 +115,13 @@ export function logout() {
     const res = http.post(`${BASE_URL}/user/logout`, null, {
         headers: getSessionHeaders(),
     });
-    logResult("logout", { success: res.status === 200, duration: res.timings.duration });
+    const ok = res.status === 200;
+    const result = {
+        success: ok,
+        duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
+    };
+    logResult("logout", result);
+    recordResult("logout", result);
     _session = null;
 }

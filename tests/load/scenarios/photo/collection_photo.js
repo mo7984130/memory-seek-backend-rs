@@ -10,7 +10,7 @@ import {
 
 export { printSummary as handleSummary };
 
-import { initSession, logout } from "../../helpers/session.js";
+import { initSession } from "../../helpers/session.js";
 import { listPhotos } from "../../helpers/domains/photo/photo.js";
 import { createCollection, deleteCollection } from "../../helpers/domains/photo/collection.js";
 import {
@@ -47,7 +47,6 @@ function runCollectionPhotoFlow() {
     // 获取一张照片 ID
     const photoListResult = listPhotos(1);
     if (!photoListResult.success || !photoListResult.data?.length) {
-        logout();
         return;
     }
     const photoId = photoListResult.data[0].id;
@@ -56,7 +55,7 @@ function runCollectionPhotoFlow() {
 
     // 创建一个收藏夹（用于关联操作）
     const collResult = createCollection(`CP ${__VU} ${Date.now()}`, "LoadTest");
-    if (!collResult.success) { logout(); return; }
+    if (!collResult.success) return;
     const collectionId = collResult.data.id;
 
     sleep(0.3);
@@ -82,9 +81,6 @@ function runCollectionPhotoFlow() {
     // 清理：删除收藏夹
     deleteCollection(collectionId);
 
-    sleep(0.5);
-
-    logout();
     sleep(0.5);
 }
 

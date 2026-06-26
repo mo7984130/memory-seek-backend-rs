@@ -32,7 +32,7 @@ LOAD_DIR="$(dirname "$SCRIPT_DIR")"
 
 # SSH ControlMaster: 只输一次密码，后续复用连接
 SSH_SOCKET="/tmp/loadtest-ssh-%C"
-SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o ControlMaster=auto -o ControlPath=$SSH_SOCKET -o ControlPersist=600"
+SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=5 -o ControlMaster=auto -o ControlPath=$SSH_SOCKET -o ControlPersist=600 -o ServerAliveInterval=30 -o ServerAliveCountMax=10"
 if [[ -n "$SSH_KEY" ]]; then
     SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
 fi
@@ -49,17 +49,26 @@ echo "=== Deploying to $REMOTE ==="
 # ── Step 0: 杀掉旧进程 ──────────────────────────────
 echo "[0/7] Killing existing server process (if any)..."
 ssh_cmd "
-    pids=\$(pgrep -f '$REMOTE_DIR/memory-seek-server' | grep -v \$\$ || true)
+    target='$REMOTE_DIR/memory-seek-server'
+    pids=''
+    for proc_exe in /proc/[0-9]*/exe; do
+        pid=\${proc_exe#/proc/}
+        pid=\${pid%/exe}
+        exe=\$(readlink \"\$proc_exe\" 2>/dev/null) || continue
+        exe=\${exe% (deleted)}
+        if [ \"\$exe\" = \"\$target\" ]; then
+            pids=\"\$pids \$pid\"
+        fi
+    done
+    pids=\$(echo \$pids | xargs)
     if [ -n \"\$pids\" ]; then
         echo \"  Found running server (PID: \$pids), killing...\"
         echo \"\$pids\" | xargs kill -9 2>/dev/null || true
-        # 等待进程真正退出
         for i in \$(seq 1 10); do
             if ! echo \"\$pids\" | xargs kill -0 2>/dev/null; then break; fi
             sleep 0.5
         done
     fi
-    # 删除旧二进制文件（避免权限/属性导致 scp 覆盖失败）
     rm -f '$REMOTE_DIR/memory-seek-server' 2>/dev/null || true
     true
 "
@@ -85,34 +94,49 @@ ssh_cmd "cd $REMOTE_DIR && docker compose up -d"
 
 # ── Step 4: 等待容器就绪 ─────────────────────────────
 echo "[4/7] Waiting for containers to be healthy..."
-ssh_cmd "cd $REMOTE_DIR && timeout 90 bash -c '
+if ! ssh_cmd "cd $REMOTE_DIR && timeout 90 bash -c '
     while true; do
-        healthy=\$(docker inspect --format=\"{{.State.Health.Status}}\" \
-            \$(docker compose ps -q) 2>/dev/null | grep -c \"healthy\" || true)
-        if [ \"\$healthy\" -ge 3 ]; then break; fi
+        # 分别检查每个容器
+        pg_status=\$(docker inspect --format=\"{{.State.Health.Status}}\" \$(docker compose ps -q postgres) 2>/dev/null || echo \"unknown\")
+        redis_status=\$(docker inspect --format=\"{{.State.Health.Status}}\" \$(docker compose ps -q redis) 2>/dev/null || echo \"unknown\")
+        minio_status=\$(docker inspect --format=\"{{.State.Health.Status}}\" \$(docker compose ps -q minio) 2>/dev/null || echo \"unknown\")
+
+        echo \"Waiting... PG:\$pg_status Redis:\$redis_status MinIO:\$minio_status\"
+
+        if [ \"\$pg_status\" = \"healthy\" ] && [ \"\$redis_status\" = \"healthy\" ] && [ \"\$minio_status\" = \"healthy\" ]; then
+            echo \"All containers healthy\"
+            break
+        fi
+
         sleep 2
     done
-'" || {
-    echo "Warning: containers may not all be healthy, continuing anyway..."
+'"; then
+    echo "ERROR: Containers did not become healthy within timeout"
+    echo "Current container status:"
     ssh_cmd "cd $REMOTE_DIR && docker compose ps"
-}
+    echo "Container logs for postgres:"
+    ssh_cmd "cd $REMOTE_DIR && docker compose logs postgres --tail 50"
+    exit 1
+fi
 
 # ── Step 5: 创建数据库并导入测试数据 ──────────────────
 echo "[5/7] Creating database and seeding data..."
-PGCONTAINER=$(ssh_cmd "docker compose -f $REMOTE_DIR/docker-compose.yml ps -q postgres")
-ssh_cmd "docker exec -i $PGCONTAINER \
+echo "  创建数据库..."
+ssh_cmd "docker compose -f $REMOTE_DIR/docker-compose.yml exec -T postgres \
     psql -U test -d postgres -c \"CREATE DATABASE memory_seek_loadtest;\" 2>/dev/null || true"
-echo "  Running init.sql (create tables)..."
-ssh_cmd "docker exec -i $PGCONTAINER \
-    psql -U test -d memory_seek_loadtest" < "$SCRIPT_DIR/../../../docs/sql/init.sql"
-echo "  Running seed.sql (insert test data)..."
-ssh_cmd "docker exec -i $PGCONTAINER \
-    psql -U test -d memory_seek_loadtest -v auth_users=10000 -v photo_users=20 -v photos=100000" < "$LOAD_DIR/setup/seed.sql"
+
+echo "  运行 init.sql（创建表结构）..."
+cat "$SCRIPT_DIR/../../../docs/sql/init.sql" | ssh_cmd "docker compose -f $REMOTE_DIR/docker-compose.yml exec -T postgres \
+    psql -U test -d memory_seek_loadtest"
+
+echo "  运行 seed.sql（插入测试数据）..."
+cat "$LOAD_DIR/setup/seed.sql" | ssh_cmd "docker compose -f $REMOTE_DIR/docker-compose.yml exec -T postgres \
+    psql -U test -d memory_seek_loadtest -v auth_users=10000 -v photo_users=200 -v photos=100000"
 
 # 验证数据
 echo "  Verifying seed data..."
-ssh_cmd "docker exec -i $PGCONTAINER \
-    psql -U test -d memory_seek_loadtest" < "$LOAD_DIR/setup/verify.sql"
+cat "$LOAD_DIR/setup/verify.sql" | ssh_cmd "docker compose -f $REMOTE_DIR/docker-compose.yml exec -T postgres \
+    psql -U test -d memory_seek_loadtest"
 
 # ── Step 6: 启动服务器 ───────────────────────────────
 if [[ -n "$SERVER_BIN_PATH" ]]; then

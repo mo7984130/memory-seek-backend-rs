@@ -10,7 +10,7 @@ import {
 
 export { printSummary as handleSummary };
 
-import { initSession, logout } from "../../helpers/session.js";
+import { initSession } from "../../helpers/session.js";
 import { listPhotos } from "../../helpers/domains/photo/photo.js";
 import {
     createComment,
@@ -46,7 +46,6 @@ function runCommentFlow() {
     // 获取一张照片 ID
     const photoListResult = listPhotos(1);
     if (!photoListResult.success || !photoListResult.data?.length) {
-        logout();
         return;
     }
     const photoId = photoListResult.data[0].id;
@@ -56,7 +55,7 @@ function runCommentFlow() {
     // 1. 发表评论
     let result = createComment(photoId, `Comment VU${__VU} ${Date.now()}`);
     recordResult("create_comment", result);
-    if (!result.success) { logout(); return; }
+    if (!result.success) return;
     const commentId = result.data.id;
 
     sleep(0.3);
@@ -71,9 +70,6 @@ function runCommentFlow() {
     result = deleteComment(photoId, commentId);
     recordResult("delete_comment", result);
 
-    sleep(0.5);
-
-    logout();
     sleep(0.5);
 }
 

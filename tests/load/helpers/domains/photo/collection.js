@@ -15,14 +15,16 @@ export function createCollection(name, description = "") {
     maybeRefreshSession();
     const headers = getSessionHeaders();
     const res = http.post(
-        `${BASE_URL}/photo/collections/`,
+        `${BASE_URL}/photo/collections`,
         JSON.stringify({ name, description }),
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
-        data: res.status === 200 ? res.json("data") : null,
+        data: ok ? res.json("data") : null,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("create_collection", result);
     return result;
@@ -30,19 +32,20 @@ export function createCollection(name, description = "") {
 
 /**
  * 查询收藏夹列表
- * @param {number} pageSize - 每页数量
  * @returns {{ success: boolean, duration: number, data?: Array }}
  */
-export function listCollections(pageSize = 10) {
+export function listCollections() {
     maybeRefreshSession();
     const headers = getSessionHeaders();
-    const res = http.get(`${BASE_URL}/photo/collections/?size=${pageSize}`, {
+    const res = http.get(`${BASE_URL}/photo/collections`, {
         headers,
     });
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
-        data: res.status === 200 ? res.json("data") : null,
+        data: ok ? res.json("data") : null,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("list_collections", result);
     return result;
@@ -63,9 +66,11 @@ export function updateCollection(collectionId, name, description = "") {
         JSON.stringify({ name, description }),
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("update_collection", result);
     return result;
@@ -84,9 +89,11 @@ export function deleteCollection(collectionId) {
         null,
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("delete_collection", result);
     return result;

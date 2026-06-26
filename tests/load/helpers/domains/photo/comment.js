@@ -19,10 +19,12 @@ export function createComment(photoId, content) {
         JSON.stringify({ content }),
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
-        data: res.status === 200 ? res.json("data") : null,
+        data: ok ? res.json("data") : null,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("create_comment", result);
     return result;
@@ -41,10 +43,12 @@ export function listComments(photoId, pageSize = 10) {
         `${BASE_URL}/photo/comment/${photoId}?size=${pageSize}`,
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
-        data: res.status === 200 ? res.json("data") : null,
+        data: ok ? res.json("data.records") : null,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("list_comments", result);
     return result;
@@ -64,9 +68,11 @@ export function deleteComment(photoId, commentId) {
         null,
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("delete_comment", result);
     return result;

@@ -13,10 +13,12 @@ export function getMe() {
     maybeRefreshSession();
     const headers = getSessionHeaders();
     const res = http.get(`${BASE_URL}/user/me`, { headers });
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
-        data: res.status === 200 ? res.json("data") : null,
+        data: ok ? res.json("data") : null,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("get_me", result);
     return result;
@@ -35,9 +37,11 @@ export function changeNickname(nickname) {
         JSON.stringify({ newNickname: nickname }),
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("change_nickname", result);
     return result;
@@ -57,10 +61,55 @@ export function changePassword(oldPassword, newPassword) {
         JSON.stringify({ oldPassword, newPassword }),
         { headers },
     );
+    const ok = res.status === 200;
     const result = {
-        success: res.status === 200,
+        success: ok,
         duration: res.timings.duration,
+        error: ok ? undefined : { status: res.status, body: res.body },
     };
     logResult("change_password", result);
+    return result;
+}
+
+/**
+ * 生成邀请码
+ * @returns {{ success: boolean, duration: number, data?: Object }}
+ */
+export function generateInviterCode() {
+    maybeRefreshSession();
+    const headers = getSessionHeaders();
+    const res = http.post(`${BASE_URL}/user/inviter-code`, null, { headers });
+    const ok = res.status === 200;
+    const result = {
+        success: ok,
+        duration: res.timings.duration,
+        data: ok ? res.json("data") : null,
+        error: ok ? undefined : { status: res.status, body: res.body },
+    };
+    logResult("generate_inviter_code", result);
+    return result;
+}
+
+/**
+ * 批量获取用户信息
+ * @param {string[]} userIds - 用户 ID 数组
+ * @returns {{ success: boolean, duration: number, data?: Object }}
+ */
+export function getUserInfoBatch(userIds) {
+    maybeRefreshSession();
+    const headers = getSessionHeaders();
+    const res = http.post(
+        `${BASE_URL}/user/batch`,
+        JSON.stringify({ userIds }),
+        { headers },
+    );
+    const ok = res.status === 200;
+    const result = {
+        success: ok,
+        duration: res.timings.duration,
+        data: ok ? res.json("data") : null,
+        error: ok ? undefined : { status: res.status, body: res.body },
+    };
+    logResult("get_user_info_batch", result);
     return result;
 }

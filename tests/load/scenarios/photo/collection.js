@@ -10,7 +10,7 @@ import {
 
 export { printSummary as handleSummary };
 
-import { initSession, logout } from "../../helpers/session.js";
+import { initSession } from "../../helpers/session.js";
 import {
     createCollection,
     listCollections,
@@ -46,13 +46,13 @@ function runCollectionFlow() {
     // 1. 创建收藏夹
     let result = createCollection(`Collection ${__VU} ${Date.now()}`, "LoadTest");
     recordResult("create_collection", result);
-    if (!result.success) { logout(); return; }
+    if (!result.success) return;
     const collectionId = result.data.id;
 
     sleep(0.3);
 
     // 2. 查询收藏夹列表
-    result = listCollections(10);
+    result = listCollections();
     recordResult("list_collections", result);
 
     sleep(0.3);
@@ -67,9 +67,6 @@ function runCollectionFlow() {
     result = deleteCollection(collectionId);
     recordResult("delete_collection", result);
 
-    sleep(0.5);
-
-    logout();
     sleep(0.5);
 }
 

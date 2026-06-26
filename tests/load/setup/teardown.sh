@@ -42,7 +42,18 @@ echo "=== Tearing down on $REMOTE ==="
 # ── Step 1: 杀掉 server 进程 ─────────────────────────
 echo "[1/3] Stopping server..."
 ssh_cmd "
-    pids=\$(pgrep -f '$REMOTE_DIR/memory-seek-server' | grep -v \$\$ || true)
+    target='$REMOTE_DIR/memory-seek-server'
+    pids=''
+    for proc_exe in /proc/[0-9]*/exe; do
+        pid=\${proc_exe#/proc/}
+        pid=\${pid%/exe}
+        exe=\$(readlink \"\$proc_exe\" 2>/dev/null) || continue
+        exe=\${exe% (deleted)}
+        if [ \"\$exe\" = \"\$target\" ]; then
+            pids=\"\$pids \$pid\"
+        fi
+    done
+    pids=\$(echo \$pids | xargs)
     if [ -n \"\$pids\" ]; then
         echo \"  Found running server (PID: \$pids), killing...\"
         echo \"\$pids\" | xargs kill -9 2>/dev/null || true

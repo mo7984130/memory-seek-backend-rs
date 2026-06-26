@@ -2,7 +2,7 @@
 // 照片服务压测场景（photo_service + timeline_stat_service）
 
 import { sleep } from "k6";
-import { SharedArray } from "k6/data";
+import encoding from "k6/encoding";
 import {
     getPhotoUserCredentials,
     recordResult,
@@ -18,16 +18,21 @@ import {
     getTimelineStats,
 } from "../../helpers/domains/photo/photo.js";
 
-// 共享图片数据（所有 VU 共享同一份，转为 ArrayBuffer 供 http.file 使用）
-const testImage = new SharedArray("test-image", function () {
-    const data = open("../../fixtures/test.jpg", "b");
-    const buf = new ArrayBuffer(data.length);
+// 直接嵌入 base64 JPEG，b64decode 返回 ArrayBuffer，绕过 open() 的 string 编码问题
+const testImageB64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCADIAMgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDzGiiivlD7gKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//Z";
+const baseImage = encoding.b64decode(testImageB64);
+
+// 生成唯一图片（在 JPEG 结束标记 FFD9 后追加随机字节，改变 MD5 但不影响解码）
+function getUniqueImage() {
+    const extra = 16;
+    const buf = new ArrayBuffer(baseImage.byteLength + extra);
     const view = new Uint8Array(buf);
-    for (let i = 0; i < data.length; i++) {
-        view[i] = data.charCodeAt(i);
+    view.set(new Uint8Array(baseImage));
+    for (let i = 0; i < extra; i++) {
+        view[baseImage.byteLength + i] = Math.floor(Math.random() * 256);
     }
-    return [buf];
-});
+    return buf;
+}
 
 // ── 独立运行时的 options ──
 
@@ -57,7 +62,7 @@ function runPhotoFlow() {
     sleep(0.3);
 
     // 1. 上传照片
-    let result = uploadPhoto(testImage[0]);
+    let result = uploadPhoto(getUniqueImage());
     recordResult("upload_photo", result);
     if (!result.success) {
         console.error("Upload failed");

@@ -3,6 +3,10 @@
         "host": "0.0.0.0",
         "port": 7985
     },
+    "metrics": {
+        "host": "0.0.0.0",
+        "port": 9091
+    },
     "database": {
         "url": "postgres://test:test@localhost:5433/memory_seek_loadtest",
         "max_connections": 50
@@ -20,12 +24,13 @@
         "from_name": "LoadTest"
     },
     "s3": {
-        "endpoint": "http://localhost:9000",
+        "endpoint": "http://localhost:9002",
         "access_key": "minioadmin",
         "secret_key": "minioadmin",
         "region": "us-east-1",
-        "bucket": "loadtest",
-        "public_url": "http://localhost:9000/loadtest"
+        "bucket": "memory-seek",
+        "public_url": "http://localhost:9002/memory-seek",
+        "force_path_style": true
     },
     "token_cipher": {
         "key": "loadtest-key-0000000000000000000000000000",
