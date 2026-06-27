@@ -6,7 +6,7 @@ use entities::photo::photo_like::*;
 use entities::{auth::user::UserId, photo::photo::PhotoId};
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QuerySelect,
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     entity::prelude::DateTimeUtc,
 };
 
