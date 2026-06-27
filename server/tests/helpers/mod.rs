@@ -1,6 +1,7 @@
 pub mod app;
 pub mod auth;
 pub mod db;
+pub mod photo;
 pub mod photo_like;
 
 use server::config::AppConfig;

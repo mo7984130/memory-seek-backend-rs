@@ -111,6 +111,7 @@ impl CleanupGuard {
 
         // 按依赖顺序删除 photo 关联表
         let tables_with_user_id = [
+            "photo_photo_like",
             "photo_comment_like",
             "photo_comment",
             "photo_collection_photo",
