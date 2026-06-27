@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS photo_photo
     file_id              VARCHAR(255) NULL,
 
     comment_count        BIGINT       NOT NULL DEFAULT 0,
+    like_count           BIGINT       NOT NULL DEFAULT 0,
 
     -- 时间记录
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -67,6 +68,7 @@ CREATE INDEX idx_photo_created_at ON "photo_photo" (created_at DESC);
 -- 哈希索引：用于秒传/去重
 CREATE INDEX idx_photo_md5 ON photo_photo (md5);
 CREATE INDEX idx_photo_user_id ON photo_photo (user_id);
+CREATE INDEX idx_photo_like_count ON photo_photo (like_count DESC);
 COMMENT ON TABLE photo_photo IS '用户相册表';
 COMMENT ON COLUMN photo_photo.id IS '主键ID';
 COMMENT ON COLUMN photo_photo.user_id IS '上传者ID';
@@ -78,6 +80,7 @@ COMMENT ON COLUMN photo_photo.mime_type IS '文件MIME类型';
 COMMENT ON COLUMN photo_photo.md5 IS '文件MD5哈希值';
 COMMENT ON COLUMN photo_photo.file_id IS '原始文件ID';
 COMMENT ON COLUMN photo_photo.comment_count IS '评论总数';
+COMMENT ON COLUMN photo_photo.like_count IS '点赞总数';
 COMMENT ON COLUMN photo_photo.created_at IS '创建时间';
 COMMENT ON COLUMN photo_photo.updated_at IS '更新时间';
 
@@ -199,4 +202,27 @@ COMMENT ON COLUMN photo_comment_like.comment_id IS '评论ID';
 COMMENT ON COLUMN photo_comment_like.user_id IS '点赞用户ID';
 COMMENT ON COLUMN photo_comment_like.created_at IS '点赞时间';
 COMMENT ON COLUMN photo_comment_like.updated_at IS '更新时间';
+
+-- 照片点赞记录表
+CREATE TABLE IF NOT EXISTS photo_photo_like (
+    id BIGSERIAL PRIMARY KEY,
+    photo_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    -- 唯一索引：防止重复点赞
+    CONSTRAINT uk_photo_user_like UNIQUE (photo_id, user_id)
+);
+
+COMMENT ON TABLE photo_photo_like IS '照片点赞记录表';
+COMMENT ON COLUMN photo_photo_like.photo_id IS '照片ID';
+COMMENT ON COLUMN photo_photo_like.user_id IS '点赞用户ID';
+COMMENT ON COLUMN photo_photo_like.created_at IS '点赞时间';
+COMMENT ON COLUMN photo_photo_like.updated_at IS '更新时间';
+
+-- 索引优化
+CREATE INDEX idx_photo_like_photo_id ON photo_photo_like (photo_id);
+CREATE INDEX idx_photo_like_user_id ON photo_photo_like (user_id);
+CREATE INDEX idx_photo_like_user_photo ON photo_photo_like (user_id, photo_id);
 
