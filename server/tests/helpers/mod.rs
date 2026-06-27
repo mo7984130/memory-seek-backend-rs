@@ -1,6 +1,7 @@
 pub mod app;
 pub mod auth;
 pub mod db;
+pub mod photo_like;
 
 use server::config::AppConfig;
 
@@ -12,5 +13,5 @@ pub fn test_config() -> AppConfig {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let config_path = format!("{}/tests/test.config.json", manifest_dir);
     std::env::set_var("MEMORY_SEEK_CONFIG_PATH", &config_path);
-    AppConfig::load().expect("加载测试配置失败")
+    AppConfig::load()
 }
