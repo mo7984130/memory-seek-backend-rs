@@ -57,6 +57,7 @@ pub struct Model {
     pub md5: String,
     pub file_id: String,
     pub comment_count: i64,
+    pub like_count: i64,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }
@@ -74,6 +75,7 @@ pub struct PhotoRecord {
     pub md5: String,
     pub file_id: String,
     pub comment_count: u64,
+    pub like_count: u64,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }
@@ -91,6 +93,7 @@ impl From<Model> for PhotoRecord {
             md5: model.md5,
             file_id: model.file_id,
             comment_count: model.comment_count as u64,
+            like_count: model.like_count as u64,
             created_at: model.created_at,
             updated_at: model.updated_at,
         }
