@@ -79,11 +79,14 @@ impl PhotoLikeMapper {
             .to_ok()
     }
 
-    /// 查询用户点赞的照片ID列表（带分页）
+    /// 查询用户点赞的照片ID列表（带游标分页）
+    ///
+    /// cursor 为 `(created_at, id)` 元组，用于复合游标分页，
+    /// 确保相同时间戳的记录不会被跳过。
     pub async fn query_user_liked_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
-        cursor: Option<DateTimeUtc>,
+        cursor: Option<(DateTimeUtc, i64)>,
         size: u64,
     ) -> Result<Vec<PhotoId>> {
         let mut query = Entity::find()
@@ -93,8 +96,16 @@ impl PhotoLikeMapper {
             .order_by_desc(Column::CreatedAt)
             .order_by_desc(Column::Id);
 
-        if let Some(cursor_time) = cursor {
-            query = query.filter(Column::CreatedAt.lt(cursor_time));
+        if let Some((cursor_time, cursor_id)) = cursor {
+            query = query.filter(
+                sea_orm::Condition::any()
+                    .add(Column::CreatedAt.lt(cursor_time))
+                    .add(
+                        sea_orm::Condition::all()
+                            .add(Column::CreatedAt.eq(cursor_time))
+                            .add(Column::Id.lt(cursor_id)),
+                    ),
+            );
         }
 
         query
@@ -135,7 +146,7 @@ impl PhotoLikeMapper {
             .filter(Column::PhotoId.eq(photo_id.0))
             .exec(db)
             .await
-            .trace_internal_err("db_del_err", "根据照片id删除所有点赞数据库错误")?
+            .trace_internal_err("db_delete_err", "根据照片id删除所有点赞数据库错误")?
             .rows_affected
             .to_ok()
     }
