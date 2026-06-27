@@ -142,7 +142,7 @@ impl PhotoLikeService {
 
 /// 点赞游标，用于复合游标分页
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct PhotoLikeCursor {
+pub(crate) struct PhotoLikeCursor {
     pub created_at: sea_orm::entity::prelude::DateTimeUtc,
     pub id: PhotoId,
 }
