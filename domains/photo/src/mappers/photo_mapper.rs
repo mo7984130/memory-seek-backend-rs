@@ -35,6 +35,25 @@ impl PhotoMapper {
 
         Ok(())
     }
+
+    /// 更新照片点赞数（增量）
+    pub async fn update_like_count_delta(
+        db: &impl ConnectionTrait,
+        photo_id: PhotoId,
+        delta: i64,
+    ) -> Result<()> {
+        Entity::update_many()
+            .col_expr(
+                Column::LikeCount,
+                Expr::col(Column::LikeCount).add(delta),
+            )
+            .filter(Column::Id.eq(photo_id.0))
+            .exec(db)
+            .await
+            .trace_internal_err("db_update_err", "更新照片点赞数错误")?;
+
+        Ok(())
+    }
 }
 
 // 查询
