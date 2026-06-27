@@ -16,10 +16,10 @@ use uuid::Uuid;
 use crate::{
     mappers::{
         collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
-        photo_mapper::PhotoMapper, timeline_stat_mapper::TimelineStatMapper,
+        photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper,
+        timeline_stat_mapper::TimelineStatMapper,
     },
     models::photo::{PhotoCursor, PhotoCursorParam, PhotoResult},
-    services::collection_service::CollectionService,
     state::PhotoState,
 };
 use common::Result;
@@ -38,9 +38,7 @@ impl PhotoService {
         user_id: UserId,
         photo_ids: &[PhotoId],
     ) -> Result<Vec<PhotoResult>> {
-        let favorite_collection_id =
-            CollectionService::get_favorite_collection_id(state, user_id).await?;
-        let (photos_result, favorited_photo_ids_result) = tokio::join!(
+        let (photos_result, liked_photo_ids_result) = tokio::join!(
             state.redis.get_or_load_batch(
                 photo_ids,
                 |id| RedisKeys::photo::photo::photo_info(*id),
@@ -48,20 +46,16 @@ impl PhotoService {
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
                 |photo| photo.id,
             ),
-            CollectionPhotoMapper::exists_in_collection(
-                &state.db,
-                favorite_collection_id,
-                photo_ids
-            )
+            PhotoLikeMapper::query_is_like_by_photo_ids(&state.db, user_id, photo_ids.to_vec())
         );
         let photos = photos_result?;
-        let favorited_photo_ids = favorited_photo_ids_result?;
+        let liked_photo_ids = liked_photo_ids_result?;
         photos
             .into_iter()
             .flatten()
             .map(|p| {
                 PhotoResult::from(p.clone())
-                    .with_favorited(favorited_photo_ids.contains(&p.id))
+                    .with_liked(liked_photo_ids.contains(&p.id))
                     .with_tokens(&p.file_id, &state.token_cipher)
             })
             .collect::<Vec<_>>()
