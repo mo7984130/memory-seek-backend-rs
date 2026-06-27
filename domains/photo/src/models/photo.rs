@@ -23,6 +23,8 @@ pub struct PhotoResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_collected: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_liked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub thumbnail_token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preview_token: Option<String>,
@@ -41,6 +43,7 @@ impl From<PhotoRecord> for PhotoResult {
             created_at: record.created_at,
             is_favorited: None,
             is_collected: None,
+            is_liked: None,
             thumbnail_token: None,
             preview_token: None,
             original_token: None,
@@ -51,6 +54,11 @@ impl From<PhotoRecord> for PhotoResult {
 impl PhotoResult {
     pub fn with_favorited(mut self, is_favorited: bool) -> Self {
         self.is_favorited = Some(is_favorited);
+        self
+    }
+
+    pub fn with_liked(mut self, is_liked: bool) -> Self {
+        self.is_liked = Some(is_liked);
         self
     }
 
