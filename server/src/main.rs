@@ -22,10 +22,7 @@ async fn main() -> anyhow::Result<()> {
     // 初始化 Prometheus metrics exporter
     #[cfg(feature = "metrics")]
     {
-        let metrics_cfg = cfg
-            .metrics
-            .as_ref()
-            .expect("metrics config is required when metrics feature is enabled");
+        let metrics_cfg = cfg.metrics.as_ref().expect("metrics config is required when metrics feature is enabled");
         setup::bases::metrics::init(&metrics_cfg.host, metrics_cfg.port);
         metrics::start_collector(app_setup.state.db.clone(), app_setup.state.redis.clone());
     }
