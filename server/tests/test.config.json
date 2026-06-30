@@ -20,15 +20,24 @@
         "from_name": "Test"
     },
     "s3": {
-        "endpoint": "http://localhost:9000",
-        "bucket": "test",
+        "endpoint": "http://localhost:9002",
+        "bucket": "memory-seek",
         "access_key": "minioadmin",
         "secret_key": "minioadmin",
         "region": "us-east-1",
-        "public_url": "http://localhost:9000/test"
+        "public_url": "http://localhost:9002/memory-seek",
+        "force_path_style": true
     },
     "token_cipher": {
         "key": "test-secret-key-for-testing-only",
         "salt": "test-salt"
+    },
+    "backup": {
+        "enabled": true,
+        "schedule": "0 0 6 * * *",
+        "local_path": "/var/backups/memory-seek",
+        "s3_prefix": "backup/",
+        "retention_days": 3,
+        "tables": null
     }
 }

@@ -35,5 +35,13 @@
     "token_cipher": {
         "key": "loadtest-key-0000000000000000000000000000",
         "salt": "loadtest-salt"
+    },
+    "backup": {
+        "enabled": true,
+        "schedule": "0 0 6 * * *",
+        "local_path": "/var/backups/memory-seek",
+        "s3_prefix": "backup/",
+        "retention_days": 3,
+        "tables": null
     }
 }
