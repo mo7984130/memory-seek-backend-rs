@@ -64,3 +64,5 @@ serde_json = { workspace = true }
 serde = { workspace = true }
 sea-orm = { workspace = true }
 deadpool-redis = { workspace = true }
+backup = { path = "../domains/backup" }
+oss = { path = "../libs/oss" }
