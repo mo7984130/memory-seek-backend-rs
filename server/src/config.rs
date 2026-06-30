@@ -15,6 +15,8 @@ pub struct AppConfig {
     pub token_cipher: TokenCipherConfig,
     #[cfg(feature = "metrics")]
     pub metrics: Option<MetricsConfig>,
+    #[cfg(feature = "backup")]
+    pub backup: Option<backup::BackupConfig>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -14,6 +14,7 @@ user = ["dep:user", "s3"]
 photo = ["dep:photo", "s3"]
 metrics = ["dep:metrics"]
 s3 = ["dep:oss"]
+backup = ["dep:backup"]
 
 [dependencies]
 tokio = { workspace = true }
@@ -30,6 +31,7 @@ tower-http = { version = "0.6", features = ["cors", "trace"] }
 auth = { path = "../domains/auth", features = ["controller"], optional = true }
 user = { path = "../domains/user", features = ["controller"], optional = true }
 photo = { path = "../domains/photo", features = ["controller"], optional = true }
+backup = { path = "../domains/backup", optional = true }
 
 # 基础设施
 common = { path = "../common" }
