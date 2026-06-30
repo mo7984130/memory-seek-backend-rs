@@ -24,6 +24,7 @@ pub struct BackupConfig {
     pub retention_days: u32,
 
     /// 备份的表名列表，None = 备份所有表
+    #[serde(default)]
     pub tables: Option<Vec<String>>,
 }
 
