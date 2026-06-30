@@ -65,8 +65,9 @@ pub struct BackupConfig {
 ```rust
 pub struct BackupState {
     pub db: DatabaseConnection,           // 数据库连接
-    pub s3_client: Arc<oss::S3Client>,    // S3 客户端
+    pub storage: BackupStorage,           // 存储管理器
     pub config: BackupConfig,             // 备份配置
+    pub temp_dir: PathBuf,                // 临时文件目录
     pub last_hashes: RwLock<HashMap<String, String>>,  // 表名 -> 上次哈希值
 }
 ```
@@ -144,6 +145,12 @@ impl BackupStorage {
         csv_path: &Path,
     ) -> Result<()>;
 
+    /// 查找指定表的最新备份日期
+    pub async fn find_latest_backup(
+        &self,
+        table_name: &str,
+    ) -> Result<Option<String>>;
+
     /// 重命名文件（当数据无变化时）
     pub async fn rename(
         &self,
@@ -163,6 +170,16 @@ impl BackupStorage {
 pub struct BackupRunner;
 
 impl BackupRunner {
+    /// 获取需要备份的表名列表
+    /// 如果 config.tables 为 None，则查询数据库获取所有用户表
+    async fn get_tables(state: &BackupState) -> Result<Vec<String>> {
+        if let Some(ref tables) = state.config.tables {
+            return Ok(tables.clone());
+        }
+        // 查询 information_schema.tables 获取所有用户表
+        // ...
+    }
+
     pub async fn execute(state: Arc<BackupState>) -> Result<()> {
         let date = chrono::Local::now().format("%Y-%m-%d").to_string();
         let tables = Self::get_tables(&state).await?;
@@ -177,11 +194,14 @@ impl BackupRunner {
 
             // 3. 判断是否变化
             if Some(&current_hash) == last_hash.as_ref() {
-                // 无变化：重命名昨天的文件
-                let yesterday = (chrono::Local::now() - chrono::Duration::days(1))
-                    .format("%Y-%m-%d").to_string();
-                state.storage.rename(&table_name, &yesterday, &date).await?;
-                tracing::info!("Table {} unchanged, renamed backup", table_name);
+                // 无变化：查找最近的备份文件并重命名
+                // 如果没有找到昨天的文件，则跳过（首次运行场景）
+                if let Some(latest_date) = state.storage.find_latest_backup(&table_name).await? {
+                    state.storage.rename(&table_name, &latest_date, &date).await?;
+                    tracing::info!("Table {} unchanged, renamed backup from {}", table_name, latest_date);
+                } else {
+                    tracing::warn!("Table {} unchanged but no existing backup found", table_name);
+                }
             } else {
                 // 有变化：导出新 CSV
                 let (csv_path, _) = CsvExporter::export(
