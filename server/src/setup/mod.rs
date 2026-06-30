@@ -21,10 +21,42 @@ impl AppSetup {
         // 2. 初始化库
         let libs = libs::AppLibsInit::init(cfg).await?;
 
-        // 3. 构建 AppState
-        let state = Arc::new(AppState::from((bases, libs)));
+        // 3. 初始化备份调度器
+        #[cfg(feature = "backup")]
+        let backup_scheduler = if let Some(ref backup_config) = cfg.backup {
+            if backup_config.enabled {
+                let backup_state = Arc::new(backup::BackupState::new(
+                    bases.db.clone(),
+                    libs.s3_client.clone(),
+                    backup_config.clone(),
+                ));
+                let scheduler = backup::BackupScheduler::new(backup_state)
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                scheduler
+                    .start()
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                Some(Arc::new(scheduler))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
-        // 4. 注册业务模块
+        // 4. 构建 AppState
+        let state = Arc::new(AppState {
+            db: bases.db,
+            redis: bases.redis,
+            token_cipher: libs.token_cipher,
+            #[cfg(feature = "s3")]
+            s3_client: libs.s3_client,
+            #[cfg(feature = "backup")]
+            backup_scheduler,
+        });
+
+        // 5. 注册业务模块
         let (public_router, protected_router) = domains::AppDomains::init(&state, cfg);
 
         Ok(Self {

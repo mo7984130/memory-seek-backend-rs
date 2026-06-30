@@ -6,6 +6,9 @@ use std::sync::Arc;
 #[cfg(feature = "s3")]
 use oss::S3Client;
 
+#[cfg(feature = "backup")]
+use backup::BackupScheduler;
+
 // ============ Bases ============
 pub struct AppBases {
     pub db: DatabaseConnection,
@@ -30,6 +33,9 @@ pub struct AppState {
 
     #[cfg(feature = "s3")]
     pub s3_client: Arc<S3Client>,
+
+    #[cfg(feature = "backup")]
+    pub backup_scheduler: Option<Arc<BackupScheduler>>,
 }
 
 impl From<(AppBases, AppLibs)> for AppState {
@@ -40,6 +46,8 @@ impl From<(AppBases, AppLibs)> for AppState {
             token_cipher: libs.token_cipher,
             #[cfg(feature = "s3")]
             s3_client: libs.s3_client,
+            #[cfg(feature = "backup")]
+            backup_scheduler: None,
         }
     }
 }
