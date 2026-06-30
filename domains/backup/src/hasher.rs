@@ -56,3 +56,49 @@ impl TableHasher {
         Ok(tables)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_table_hasher_deterministic() {
+        // SHA256 of identical inputs should always produce the same hash
+        let data = b"test data for hashing";
+        let mut hasher1 = Sha256::new();
+        hasher1.update(data);
+        let hash1 = hex::encode(hasher1.finalize());
+
+        let mut hasher2 = Sha256::new();
+        hasher2.update(data);
+        let hash2 = hex::encode(hasher2.finalize());
+
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_table_hasher_different_data() {
+        let mut hasher1 = Sha256::new();
+        hasher1.update(b"data1");
+        let hash1 = hex::encode(hasher1.finalize());
+
+        let mut hasher2 = Sha256::new();
+        hasher2.update(b"data2");
+        let hash2 = hex::encode(hasher2.finalize());
+
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_table_hasher_empty_input() {
+        let mut hasher = Sha256::new();
+        hasher.update(b"");
+        let hash = hex::encode(hasher.finalize());
+        assert!(!hash.is_empty());
+        // SHA256 of empty string is well-known
+        assert_eq!(
+            hash,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+}

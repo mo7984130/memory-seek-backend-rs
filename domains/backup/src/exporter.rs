@@ -62,3 +62,46 @@ pub fn compute_hash(data: &[u8]) -> String {
     hasher.update(data);
     hex::encode(hasher.finalize())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_hash_deterministic() {
+        let data = b"test data";
+        let hash1 = compute_hash(data);
+        let hash2 = compute_hash(data);
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_compute_hash_different_data() {
+        let data1 = b"data1";
+        let data2 = b"data2";
+        let hash1 = compute_hash(data1);
+        let hash2 = compute_hash(data2);
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_compute_hash_empty() {
+        let data = b"";
+        let hash = compute_hash(data);
+        assert!(!hash.is_empty());
+        // SHA256 of empty string is a well-known constant
+        assert_eq!(
+            hash,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn test_compute_hash_returns_hex_string() {
+        let hash = compute_hash(b"hello");
+        // SHA256 produces 32 bytes = 64 hex characters
+        assert_eq!(hash.len(), 64);
+        // All characters should be valid hex digits
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+}
