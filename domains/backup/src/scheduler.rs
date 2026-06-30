@@ -1,21 +1,48 @@
-use tracing::info;
+use crate::runner::BackupRunner;
+use crate::state::BackupState;
+use std::sync::Arc;
+use tokio_cron_scheduler::{Job, JobScheduler};
 
-use crate::config::BackupConfig;
-
-/// Scheduler for periodic backup execution
+/// 备份调度器
 pub struct BackupScheduler {
-    config: BackupConfig,
+    scheduler: JobScheduler,
 }
 
 impl BackupScheduler {
-    pub fn new(config: BackupConfig) -> Self {
-        Self { config }
+    /// 创建新的调度器
+    pub async fn new(
+        state: Arc<BackupState>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let scheduler = JobScheduler::new().await?;
+
+        let schedule = state.config.schedule.clone();
+        let state_clone = state.clone();
+
+        let job = Job::new(schedule.as_str(), move |_, _| {
+            let state = state_clone.clone();
+            tokio::spawn(async move {
+                if let Err(e) = BackupRunner::execute(state).await {
+                    tracing::error!("Backup job failed: {}", e);
+                }
+            });
+        })?;
+
+        scheduler.add(job).await?;
+
+        Ok(Self { scheduler })
     }
 
-    pub fn start(&self) {
-        info!(
-            schedule = %self.config.schedule,
-            "Backup scheduler started"
-        );
+    /// 启动调度器
+    pub async fn start(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.scheduler.start().await?;
+        tracing::info!("Backup scheduler started");
+        Ok(())
+    }
+
+    /// 停止调度器
+    pub async fn stop(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.scheduler.shutdown().await?;
+        tracing::info!("Backup scheduler stopped");
+        Ok(())
     }
 }
