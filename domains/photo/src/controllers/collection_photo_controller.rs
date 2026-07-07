@@ -5,7 +5,7 @@ use crate::{
         collection::{
             CollectionPhotoAddBatchParam, CollectionPhotoAddBatchResult,
             CollectionPhotoCursorPageParam, CollectionPhotoRemoveBatchParam,
-            CollectionPhotoRemoveBatchResult,
+            CollectionPhotoRemoveBatchResult, PhotoCollectionResult,
         },
         photo::PhotoResult,
     },
@@ -38,6 +38,10 @@ impl ControllerRouter for CollectionPhotoController {
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
             .route(
+                "/by-photo/{photo_id}",
+                get(Self::get_collections_by_photo),
+            )
+            .route(
                 "/{collection_id}/photos",
                 get(Self::get_cursor_page)
                     .post(Self::add_batch)
@@ -48,6 +52,19 @@ impl ControllerRouter for CollectionPhotoController {
 
     fn public_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
+    }
+}
+
+// 查询照片所属收藏夹
+impl CollectionPhotoController {
+    async fn get_collections_by_photo(
+        State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        Path(photo_id): Path<PhotoId>,
+    ) -> Result<R<Vec<PhotoCollectionResult>>> {
+        CollectionPhotoService::get_collections_by_photo(&state, user_id, photo_id)
+            .await
+            .to_r_ok()
     }
 }
 

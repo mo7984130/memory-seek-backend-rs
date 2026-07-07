@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use common::error::AppError;
-use common::ext::{OkExt, ToErr, log_warn};
+use common::ext::{ToErr, log_warn};
 use common::{Result, ext::ResultErrExt};
 use entities::photo::collection::CollectionId;
 use entities::{auth::user::UserId, photo::collection::*};
@@ -12,25 +12,24 @@ use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityName, EntityTrait, IdenStatic,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
+    PaginatorTrait, QueryFilter, QueryOrder, Statement,
 };
 
 impl CollectionMapper {
-    pub async fn query_favorite_collection_id(
+    pub async fn query_by_ids(
         db: &impl ConnectionTrait,
-        user_id: UserId,
-    ) -> Result<Option<CollectionId>> {
+        ids: &[CollectionId],
+    ) -> Result<Vec<CollectionRecord>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+
         Entity::find()
-            .filter(Column::UserId.eq(user_id.0))
-            .filter(Column::IsFavorite.eq(true))
-            .select_only()
-            .column(Column::Id)
-            .into_tuple::<i64>()
-            .one(db)
+            .filter(Column::Id.is_in(ids.iter().map(|id| id.0)))
+            .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询失败")?
-            .map(CollectionId)
-            .to_ok()
+            .trace_internal_err("db_query_err", "查询收藏夹失败")
+            .map(|models| models.into_iter().map(CollectionRecord::from).collect())
     }
 
     pub async fn query_by_user_id(
@@ -39,7 +38,6 @@ impl CollectionMapper {
     ) -> Result<Vec<CollectionRecord>> {
         Entity::find()
             .filter(Column::UserId.eq(user_id.0))
-            .order_by_asc(Column::IsFavorite)
             .order_by_desc(Column::CreatedAt)
             .all(db)
             .await
@@ -52,7 +50,6 @@ impl CollectionMapper {
         user_id: UserId,
         name: String,
         description: Option<String>,
-        is_favorite: bool,
     ) -> Result<CollectionRecord> {
         let now = Utc::now();
         ActiveModel {
@@ -61,7 +58,6 @@ impl CollectionMapper {
             description: Set(description),
             photo_count: Set(0),
             cover_file_id: Set(None),
-            is_favorite: Set(is_favorite),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -70,6 +66,17 @@ impl CollectionMapper {
         .await
         .trace_internal_err("db_insert_err", "创建收藏夹失败")
         .map(CollectionRecord::from)
+    }
+
+    pub async fn query_by_id(
+        db: &impl ConnectionTrait,
+        collection_id: CollectionId,
+    ) -> Result<Option<CollectionRecord>> {
+        Entity::find_by_id(collection_id.0)
+            .one(db)
+            .await
+            .trace_internal_err("db_query_err", "查询收藏夹失败")
+            .map(|opt| opt.map(CollectionRecord::from))
     }
 
     pub async fn update_photo_count(
@@ -83,6 +90,22 @@ impl CollectionMapper {
             .exec(db)
             .await
             .trace_internal_err("db_update_err", "更新失败")?;
+
+        Ok(())
+    }
+
+    pub async fn update_cover_file_id(
+        db: &impl ConnectionTrait,
+        collection_id: CollectionId,
+        cover_file_id: Option<String>,
+    ) -> Result<()> {
+        Entity::update_many()
+            .col_expr(Column::CoverFileId, Expr::value(cover_file_id))
+            .col_expr(Column::UpdatedAt, Expr::value(chrono::Utc::now()))
+            .filter(Column::Id.eq(collection_id.0))
+            .exec(db)
+            .await
+            .trace_internal_err("db_update_err", "更新封面失败")?;
 
         Ok(())
     }

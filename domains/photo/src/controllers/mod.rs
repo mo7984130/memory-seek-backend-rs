@@ -34,14 +34,17 @@ impl ControllerRouter for Controller {
     /// photo 模块的受保护路由（需要认证的接口）
     fn protected_routes() -> Router<Arc<Self::State>> {
         Router::new()
-            .nest("/photo", PhotoController::protected_routes())
+            .nest(
+                "/photo",
+                PhotoController::protected_routes()
+                    .merge(PhotoLikeController::protected_routes()),
+            )
             .nest(
                 "/photo/collections",
                 CollectionController::protected_routes()
                     .merge(CollectionPhotoController::protected_routes()),
             )
             .nest("/photo/comment", CommentController::protected_routes())
-            .nest("/photo/likes", PhotoLikeController::protected_routes())
             .nest(
                 "/photo/timeline",
                 TimelineStatController::protected_routes(),

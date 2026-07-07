@@ -139,4 +139,36 @@ impl CommentMapper {
 
         Ok(ret.rows_affected == 1)
     }
+
+    pub async fn delete_by_photo_ids(
+        db: &impl ConnectionTrait,
+        photo_ids: &[PhotoId],
+    ) -> Result<Vec<CommentId>> {
+        if photo_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // 先查询要删除的评论 ID
+        let comment_ids: Vec<CommentId> = Entity::find()
+            .select_only()
+            .column(Column::Id)
+            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+            .into_tuple::<i64>()
+            .all(db)
+            .await
+            .trace_internal_err("db_query_err", "查询照片评论失败")?
+            .into_iter()
+            .map(CommentId)
+            .collect();
+
+        if !comment_ids.is_empty() {
+            Entity::delete_many()
+                .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+                .exec(db)
+                .await
+                .trace_internal_err("db_del_err", "批量删除评论失败")?;
+        }
+
+        Ok(comment_ids)
+    }
 }

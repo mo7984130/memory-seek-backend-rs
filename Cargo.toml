@@ -12,7 +12,7 @@ members = [
     "domains/photo",
     "domains/backup",
     "server"
-]
+, "scripts/upload-photo"]
 
 [workspace.dependencies]
 memory-seek-type = { git="https://github.com/mo7984130/memory-seek-type.git" }

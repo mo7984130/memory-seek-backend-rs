@@ -108,4 +108,21 @@ impl CommentLikeMapper {
             .rows_affected
             .to_ok()
     }
+
+    pub async fn delete_by_comment_ids(
+        db: &impl ConnectionTrait,
+        comment_ids: &[CommentId],
+    ) -> Result<u64> {
+        if comment_ids.is_empty() {
+            return Ok(0);
+        }
+
+        Entity::delete_many()
+            .filter(Column::CommentId.is_in(comment_ids.iter().map(|id| id.0)))
+            .exec(db)
+            .await
+            .trace_internal_err("db_del_err", "批量删除评论点赞失败")?
+            .rows_affected
+            .to_ok()
+    }
 }

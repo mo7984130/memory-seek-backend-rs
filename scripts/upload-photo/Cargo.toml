@@ -1,0 +1,12 @@
+[package]
+name = "upload-photo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono.workspace = true
+rexif = "0.7.5"
+s3.workspace = true
+sea-orm.workspace = true
+tokio.workspace = true
+entities = { path = "../../entities" }

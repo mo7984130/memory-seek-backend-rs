@@ -6,6 +6,7 @@ use common::{
     utils::{DbUtils, MetricsTimerExt},
 };
 use entities::{auth::user::UserId, photo::photo::PhotoId};
+use sea_orm::entity::prelude::DateTimeUtc;
 
 use crate::{
     mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper},
@@ -64,36 +65,23 @@ impl PhotoLikeService {
 
 // 查询
 impl PhotoLikeService {
-    /// 批量查询用户对一组照片的点赞状态
-    pub async fn get_like_status(
-        state: &PhotoState,
-        user_id: UserId,
-        photo_ids: Vec<PhotoId>,
-    ) -> Result<std::collections::HashSet<PhotoId>> {
-        metrics_group!("get_photo_like_status");
-
-        let result = PhotoLikeMapper::query_is_like_by_photo_ids(&state.db, user_id, photo_ids)
-            .timed(metrics_timer_name!("get_photo_like_status", "query_likes"))
-            .await?;
-
-        metrics_success!("get_photo_like_status");
-        Ok(result)
-    }
-
     /// 查询用户点赞的照片列表
+    ///
+    /// 返回 `(PhotoId, DateTimeUtc)` 元组，其中 DateTimeUtc 为点赞时间，
+    /// 用于生成正确的分页游标。
     pub async fn get_user_liked_photos(
         state: &PhotoState,
         user_id: UserId,
         cursor: Option<String>,
         size: u64,
-    ) -> Result<Vec<PhotoId>> {
+    ) -> Result<Vec<(PhotoId, DateTimeUtc)>> {
         metrics_group!("get_user_liked_photos");
 
         let decoded_cursor = cursor
             .as_ref()
             .and_then(|s| PhotoLikeCursor::decode(s).ok());
 
-        let photo_ids = PhotoLikeMapper::query_user_liked_photo_ids(
+        let photo_ids_with_like_time = PhotoLikeMapper::query_user_liked_photo_ids(
             &state.db,
             user_id,
             decoded_cursor.map(|c| (c.created_at, c.id.0)),
@@ -103,7 +91,7 @@ impl PhotoLikeService {
         .await?;
 
         metrics_success!("get_user_liked_photos");
-        Ok(photo_ids)
+        Ok(photo_ids_with_like_time)
     }
 }
 

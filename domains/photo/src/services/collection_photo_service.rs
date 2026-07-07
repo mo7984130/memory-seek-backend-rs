@@ -1,10 +1,12 @@
 use crate::{
     mappers::{
         collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
+        photo_mapper::PhotoMapper,
     },
     models::{
         collection::{
             CollectionPhotoAddBatchResult, CollectionPhotoCursor, CollectionPhotoRemoveBatchResult,
+            PhotoCollectionResult,
         },
         photo::PhotoResult,
     },
@@ -29,6 +31,31 @@ pub(crate) struct CollectionPhotoService;
 
 // 查询
 impl CollectionPhotoService {
+    /// 获取包含指定照片的所有收藏夹
+    pub async fn get_collections_by_photo(
+        state: &PhotoState,
+        user_id: UserId,
+        photo_id: PhotoId,
+    ) -> Result<Vec<PhotoCollectionResult>> {
+        metrics_group!("get_collections_by_photo");
+
+        let collection_ids =
+            CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.db, user_id, photo_id)
+                .await?;
+
+        if collection_ids.is_empty() {
+            metrics_success!("get_collections_by_photo");
+            return Ok(vec![]);
+        }
+
+        let collections = CollectionMapper::query_by_ids(&state.db, &collection_ids).await?;
+        let result: Vec<PhotoCollectionResult> =
+            collections.into_iter().map(PhotoCollectionResult::from).collect();
+
+        metrics_success!("get_collections_by_photo");
+        Ok(result)
+    }
+
     pub async fn get_photos(
         state: &PhotoState,
         user_id: UserId,
@@ -126,6 +153,19 @@ impl CollectionPhotoService {
                     CollectionMapper::update_photo_count(txn, collection_id, new_photo_count)
                         .await?;
 
+                    // 将新添加的第一张照片设为封面
+                    if let Some(photo_id) = photo_ids.first() {
+                        let photos = PhotoMapper::query_by_ids(txn, &[*photo_id]).await?;
+                        if let Some(photo) = photos.first() {
+                            CollectionMapper::update_cover_file_id(
+                                txn,
+                                collection_id,
+                                Some(photo.file_id.clone()),
+                            )
+                            .await?;
+                        }
+                    }
+
                     Ok(new_photo_count)
                 })
             })
@@ -158,6 +198,23 @@ impl CollectionPhotoService {
         let remove_count = timed!("remove_collection_photos", "db_transaction", {
             DbUtils::write(&state.db, |txn| {
                 Box::pin(async move {
+                    // 先检查封面是否需要更新
+                    let collection = CollectionMapper::query_by_id(txn, collection_id).await?;
+                    let need_update_cover = if let Some(col) = &collection {
+                        if let Some(cover_file_id) = &col.cover_file_id {
+                            // 检查被删除的照片中是否有封面照片
+                            let deleted_photos =
+                                PhotoMapper::query_by_ids(txn, &photo_ids).await?;
+                            deleted_photos
+                                .iter()
+                                .any(|p| &p.file_id == cover_file_id)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
                     let rows = CollectionPhotoMapper::delete_by_collection_id_and_photo_ids(
                         txn,
                         user_id,
@@ -165,6 +222,42 @@ impl CollectionPhotoService {
                         &photo_ids,
                     )
                     .await?;
+
+                    // 如果封面照片被删除，更新封面
+                    if need_update_cover {
+                        // 获取剩余的第一张照片作为新封面
+                        let remaining_photo_ids = CollectionPhotoMapper::query_photo_id_by_collection_id(
+                            txn,
+                            user_id,
+                            collection_id,
+                            None,
+                            1,
+                        )
+                        .await?;
+
+                        let new_cover_file_id = if let Some(photo_id) = remaining_photo_ids.first()
+                        {
+                            let photos = PhotoMapper::query_by_ids(txn, &[*photo_id]).await?;
+                            photos.first().map(|p| p.file_id.clone())
+                        } else {
+                            None
+                        };
+
+                        CollectionMapper::update_cover_file_id(
+                            txn,
+                            collection_id,
+                            new_cover_file_id,
+                        )
+                        .await?;
+                    }
+
+                    // 更新收藏夹照片数量
+                    let new_photo_count =
+                        CollectionPhotoMapper::count_photo_by_collection_id(txn, collection_id)
+                            .await?;
+                    CollectionMapper::update_photo_count(txn, collection_id, new_photo_count)
+                        .await?;
+
                     Ok(rows)
                 })
             })

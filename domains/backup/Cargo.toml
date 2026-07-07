@@ -22,5 +22,11 @@ tokio-cron-scheduler = { workspace = true }
 # S3
 oss = { path = "../../libs/oss" }
 
+# HTTP / 控制器
+axum = { workspace = true }
+
+# 实体（UserId）
+entities = { path = "../../entities" }
+
 # 错误处理
 common = { path = "../../common" }

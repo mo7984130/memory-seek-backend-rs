@@ -23,26 +23,29 @@ impl AppSetup {
 
         // 3. 初始化备份调度器
         #[cfg(feature = "backup")]
-        let backup_scheduler = if let Some(ref backup_config) = cfg.backup {
-            if backup_config.enabled {
-                let backup_state = Arc::new(backup::BackupState::new(
-                    bases.db.clone(),
-                    libs.s3_client.clone(),
-                    backup_config.clone(),
-                ));
-                let scheduler = backup::BackupScheduler::new(backup_state)
-                    .await
-                    .map_err(|e| anyhow::anyhow!(e))?;
-                scheduler
-                    .start()
-                    .await
-                    .map_err(|e| anyhow::anyhow!(e))?;
-                Some(Arc::new(scheduler))
-            } else {
-                None
+        let (backup_state, backup_scheduler) = {
+            let backup_config = cfg
+                .backup
+                .as_ref()
+                .expect("启用 backup 功能时必须在配置中设置 backup 项");
+
+            if !backup_config.enabled {
+                anyhow::bail!("启用 backup 功能时 backup.enabled 不能为 false");
             }
-        } else {
-            None
+
+            let bs = Arc::new(backup::BackupState::new(
+                bases.db.clone(),
+                libs.s3_client.clone(),
+                backup_config.clone(),
+            ));
+            let scheduler = backup::BackupScheduler::new(bs.clone())
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+            scheduler
+                .start()
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+            (Some(bs), Some(Arc::new(scheduler)))
         };
 
         // 4. 构建 AppState
@@ -54,6 +57,8 @@ impl AppSetup {
             s3_client: libs.s3_client,
             #[cfg(feature = "backup")]
             backup_scheduler,
+            #[cfg(feature = "backup")]
+            backup_state,
         });
 
         // 5. 注册业务模块

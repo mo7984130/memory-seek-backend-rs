@@ -1,0 +1,669 @@
+{
+  "root_group": {
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": [],
+    "checks": []
+  },
+  "options": {
+    "summaryTrendStats": [
+      "avg",
+      "min",
+      "med",
+      "max",
+      "p(90)",
+      "p(95)"
+    ],
+    "summaryTimeUnit": "",
+    "noColor": false
+  },
+  "state": {
+    "isStdOutTTY": true,
+    "isStdErrTTY": true,
+    "testRunDurationMs": 232758.843357
+  },
+  "metrics": {
+    "op_add_photos_to_collection_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "rate": 2.1954053071841413,
+        "count": 511
+      }
+    },
+    "op_list_comments_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 40.295205603478294,
+        "min": 30.188824,
+        "med": 35.7757625,
+        "max": 291.203196,
+        "p(90)": 45.60252110000004,
+        "p(95)": 54.42638704999999
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 111.20503374999997,
+        "avg": 56.52182510493449,
+        "min": 29.464436,
+        "med": 36.853958,
+        "max": 3754.313834,
+        "p(90)": 86.34072000000003
+      }
+    },
+    "op_list_collection_photos_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 39.334366046966686,
+        "min": 31.582112,
+        "med": 35.4772,
+        "max": 280.047295,
+        "p(90)": 44.475515,
+        "p(95)": 54.774499500000005
+      }
+    },
+    "op_list_photos_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(90)": 47.0106015,
+        "p(95)": 52.61801299999997,
+        "avg": 41.81238995881679,
+        "min": 32.304223,
+        "med": 36.8625915,
+        "max": 3634.448301
+      }
+    },
+    "iterations": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 3802,
+        "rate": 16.334502892199815
+      }
+    },
+    "data_received": {
+      "values": {
+        "count": 34878894,
+        "rate": 149849.91975795128
+      },
+      "type": "counter",
+      "contains": "data"
+    },
+    "http_req_tls_handshaking": {
+      "contains": "time",
+      "values": {
+        "avg": 0,
+        "min": 0,
+        "med": 0,
+        "max": 0,
+        "p(90)": 0,
+        "p(95)": 0
+      },
+      "type": "trend"
+    },
+    "op_unlike_comment_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 586,
+        "fails": 0
+      }
+    },
+    "op_delete_comment_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 1150,
+        "rate": 4.940736014210886
+      }
+    },
+    "data_sent": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "rate": 25684.19705897379,
+        "count": 5978224
+      }
+    },
+    "op_upload_photo_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 106.77422289791184,
+        "min": 67.374692,
+        "med": 89.749936,
+        "max": 3704.967089,
+        "p(90)": 131.6073947,
+        "p(95)": 155.39836749999995
+      }
+    },
+    "op_delete_collection_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 693,
+        "fails": 0
+      }
+    },
+    "op_list_collection_photos_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 511,
+        "rate": 2.1954053071841413
+      }
+    },
+    "op_remove_photo_from_collection_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 511,
+        "fails": 0
+      }
+    },
+    "op_create_collection_duration": {
+      "values": {
+        "med": 35.100338,
+        "max": 3633.740655,
+        "p(90)": 41.4108714,
+        "p(95)": 44.795114399999996,
+        "avg": 42.61162762049066,
+        "min": 30.245492
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "op_logout_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "rate": 3.703403864565029,
+        "count": 862
+      }
+    },
+    "http_req_connecting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 0,
+        "med": 0,
+        "max": 22.061568,
+        "p(90)": 0,
+        "p(95)": 0,
+        "avg": 0.003408912197392924
+      }
+    },
+    "op_list_collection_photos_errors": {
+      "contains": "default",
+      "values": {
+        "passes": 511,
+        "fails": 0,
+        "rate": 1
+      },
+      "type": "rate"
+    },
+    "http_req_failed": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "passes": 0,
+        "fails": 21480,
+        "rate": 0
+      },
+      "thresholds": {
+        "rate<0.02": {
+          "ok": true
+        }
+      }
+    },
+    "op_timeline_stats_count": {
+      "values": {
+        "count": 862,
+        "rate": 3.703403864565029
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "op_like_comment_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 586,
+        "fails": 0
+      }
+    },
+    "http_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 36.853958,
+        "max": 3754.313834,
+        "p(90)": 86.34072000000003,
+        "p(95)": 111.20503374999997,
+        "avg": 56.52182510493449,
+        "min": 29.464436
+      },
+      "thresholds": {
+        "p(95)<500": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_blocked": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 0.007768402700186243,
+        "min": 0.000945,
+        "med": 0.003799,
+        "max": 22.106767,
+        "p(90)": 0.005158200000000004,
+        "p(95)": 0.0063531499999999975
+      }
+    },
+    "op_create_comment_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(90)": 46.03269960000006,
+        "p(95)": 55.40137834999998,
+        "avg": 39.90405975391305,
+        "min": 30.068258,
+        "med": 36.1882045,
+        "max": 290.281909
+      }
+    },
+    "op_list_comments_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 1150,
+        "fails": 0
+      }
+    },
+    "op_create_comment_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 1150,
+        "rate": 4.940736014210886
+      }
+    },
+    "http_req_receiving": {
+      "values": {
+        "avg": 0.2324252918528878,
+        "min": 0.007585,
+        "med": 0.0475685,
+        "max": 3509.261375,
+        "p(90)": 0.0785074000000001,
+        "p(95)": 0.1278721
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "op_delete_comment_duration": {
+      "values": {
+        "p(95)": 56.863971799999995,
+        "avg": 47.937575086086945,
+        "min": 30.310503,
+        "med": 36.154678000000004,
+        "max": 3665.587305,
+        "p(90)": 46.13979320000001
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "op_delete_collection_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 693,
+        "rate": 2.9773304850853424
+      }
+    },
+    "iteration_duration": {
+      "contains": "time",
+      "values": {
+        "p(90)": 3137.6312059,
+        "p(95)": 3176.6838847999998,
+        "avg": 2368.497435221995,
+        "min": 1889.045075,
+        "med": 2247.897347,
+        "max": 3684.488584
+      },
+      "type": "trend"
+    },
+    "op_like_comment_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "rate": 2.5176272211544166,
+        "count": 586
+      }
+    },
+    "op_login_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 3802,
+        "fails": 0
+      }
+    },
+    "op_list_comments_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 1150,
+        "rate": 4.940736014210886
+      }
+    },
+    "op_unlike_comment_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 51.797386225256,
+        "min": 31.621037,
+        "med": 36.1318815,
+        "max": 3648.807566,
+        "p(90)": 45.7518905,
+        "p(95)": 54.61625325
+      }
+    },
+    "op_list_photos_errors": {
+      "values": {
+        "rate": 1,
+        "passes": 1724,
+        "fails": 0
+      },
+      "type": "rate",
+      "contains": "default"
+    },
+    "op_delete_comment_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 1150,
+        "fails": 0
+      }
+    },
+    "op_timeline_stats_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 862,
+        "fails": 0
+      }
+    },
+    "http_reqs": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 21480,
+        "rate": 92.2843561610868
+      }
+    },
+    "op_login_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 56.446113,
+        "med": 78.026065,
+        "max": 3754.313834,
+        "p(90)": 137.98511710000002,
+        "p(95)": 168.25336534999994,
+        "avg": 106.12236962546037
+      }
+    },
+    "http_req_sending": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(90)": 0.024621300000000006,
+        "p(95)": 0.027424149999999998,
+        "avg": 0.01818711345437626,
+        "min": 0.002231,
+        "med": 0.018192,
+        "max": 3.510475
+      }
+    },
+    "op_list_collections_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 34.507528,
+        "max": 3633.215681,
+        "p(90)": 40.7018836,
+        "p(95)": 47.2610786,
+        "avg": 42.58347525974029,
+        "min": 29.464436
+      }
+    },
+    "op_like_comment_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 31.905,
+        "med": 36.864512500000004,
+        "max": 3644.997374,
+        "p(90)": 46.537609,
+        "p(95)": 55.66921225,
+        "avg": 52.46190848634807
+      }
+    },
+    "op_logout_errors": {
+      "values": {
+        "passes": 862,
+        "fails": 0,
+        "rate": 1
+      },
+      "type": "rate",
+      "contains": "default"
+    },
+    "op_create_comment_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 1150,
+        "fails": 0
+      }
+    },
+    "op_remove_photo_from_collection_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 45.39029716046963,
+        "min": 31.402825,
+        "med": 35.256655,
+        "max": 3644.873046,
+        "p(90)": 43.287833,
+        "p(95)": 47.873758499999994
+      }
+    },
+    "op_add_photos_to_collection_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 511,
+        "fails": 0
+      }
+    },
+    "op_create_collection_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 693,
+        "rate": 2.9773304850853424
+      }
+    },
+    "op_delete_collection_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 35.581474,
+        "max": 3646.49345,
+        "p(90)": 42.3721002,
+        "p(95)": 51.56263479999999,
+        "avg": 43.53220036219339,
+        "min": 29.887665
+      }
+    },
+    "op_remove_photo_from_collection_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 511,
+        "rate": 2.1954053071841413
+      }
+    },
+    "op_upload_photo_errors": {
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 862,
+        "fails": 0
+      },
+      "type": "rate"
+    },
+    "op_add_photos_to_collection_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 37.224603,
+        "max": 286.646295,
+        "p(90)": 47.819495,
+        "p(95)": 57.5612045,
+        "avg": 40.43729407436403,
+        "min": 32.084699
+      }
+    },
+    "vus_max": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 65,
+        "min": 65,
+        "max": 65
+      }
+    },
+    "op_list_collections_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 693,
+        "rate": 2.9773304850853424
+      }
+    },
+    "op_create_collection_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 693,
+        "fails": 0
+      }
+    },
+    "op_list_collections_errors": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 693,
+        "fails": 0
+      }
+    },
+    "http_req_waiting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 29.412059,
+        "med": 36.751204,
+        "max": 3754.242915,
+        "p(90)": 86.26075940000001,
+        "p(95)": 111.14302495,
+        "avg": 56.271212699627156
+      }
+    },
+    "op_login_count": {
+      "contains": "default",
+      "values": {
+        "rate": 16.334502892199815,
+        "count": 3802
+      },
+      "type": "counter"
+    },
+    "op_timeline_stats_duration": {
+      "values": {
+        "max": 3644.383226,
+        "p(90)": 39.047303,
+        "p(95)": 45.5315957,
+        "avg": 40.23481415429234,
+        "min": 30.02155,
+        "med": 33.899107
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "op_list_photos_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 1724,
+        "rate": 7.406807729130058
+      }
+    },
+    "op_upload_photo_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 862,
+        "rate": 3.703403864565029
+      }
+    },
+    "op_logout_duration": {
+      "values": {
+        "p(95)": 48.3978487,
+        "avg": 38.03028299419954,
+        "min": 31.017977,
+        "med": 35.1648495,
+        "max": 297.005389,
+        "p(90)": 42.526808100000004
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "op_unlike_comment_count": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 586,
+        "rate": 2.5176272211544166
+      }
+    },
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 2,
+        "min": 0,
+        "max": 65
+      }
+    }
+  }
+}

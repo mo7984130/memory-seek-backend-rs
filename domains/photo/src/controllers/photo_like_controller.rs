@@ -24,6 +24,10 @@ use crate::{
 };
 use common::traits::controller::ControllerRouter;
 
+/// 照片ID与点赞时间的映射，用于生成正确的分页游标
+use sea_orm::entity::prelude::DateTimeUtc;
+use std::collections::HashMap;
+
 pub struct PhotoLikeController;
 
 impl ControllerRouter for PhotoLikeController {
@@ -104,8 +108,8 @@ impl PhotoLikeController {
 
         let size = query.size.unwrap_or(20).min(100);
 
-        // 查询用户点赞的照片ID列表
-        let photo_ids = PhotoLikeService::get_user_liked_photos(
+        // 查询用户点赞的照片ID列表和点赞时间
+        let photo_ids_with_like_time = PhotoLikeService::get_user_liked_photos(
             &state,
             user_id,
             query.cursor.clone(),
@@ -113,7 +117,8 @@ impl PhotoLikeController {
         )
         .await?;
 
-        // 构建CursorPage
+        // 构建CursorPage（只提取photo_id用于分页判断）
+        let photo_ids: Vec<PhotoId> = photo_ids_with_like_time.iter().map(|(id, _)| *id).collect();
         let CursorPage {
             records: photo_ids,
             has_more,
@@ -125,14 +130,23 @@ impl PhotoLikeController {
             return Ok(CursorPage::empty()).to_r_ok();
         }
 
+        // 构建 photo_id -> like_created_at 的映射
+        let like_time_map: HashMap<i64, DateTimeUtc> = photo_ids_with_like_time
+            .into_iter()
+            .take(photo_ids.len()) // 只取与 photo_ids 数量匹配的部分
+            .map(|(id, created_at)| (id.0, created_at))
+            .collect();
+
         // 加载照片详细信息
         let photos = PhotoService::load_photos_info(&state, user_id, &photo_ids).await?;
 
-        // 生成next_cursor
+        // 生成next_cursor（使用点赞时间而非照片上传时间）
         let next_cursor = if has_more {
             photos.last().and_then(|p| {
                 let id = PhotoId::from_str(&p.id).ok()?;
-                Some(PhotoLikeCursor { created_at: p.created_at, id }.encode())
+                // 使用点赞时间生成游标，确保分页正确
+                let like_created_at = like_time_map.get(&id.0).copied()?;
+                Some(PhotoLikeCursor { created_at: like_created_at, id }.encode())
             })
         } else {
             None

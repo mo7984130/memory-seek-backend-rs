@@ -7,7 +7,7 @@ use std::sync::Arc;
 use oss::S3Client;
 
 #[cfg(feature = "backup")]
-use backup::BackupScheduler;
+use backup::{BackupScheduler, BackupState};
 
 // ============ Bases ============
 pub struct AppBases {
@@ -36,6 +36,9 @@ pub struct AppState {
 
     #[cfg(feature = "backup")]
     pub backup_scheduler: Option<Arc<BackupScheduler>>,
+
+    #[cfg(feature = "backup")]
+    pub backup_state: Option<Arc<BackupState>>,
 }
 
 impl From<(AppBases, AppLibs)> for AppState {
@@ -48,6 +51,8 @@ impl From<(AppBases, AppLibs)> for AppState {
             s3_client: libs.s3_client,
             #[cfg(feature = "backup")]
             backup_scheduler: None,
+            #[cfg(feature = "backup")]
+            backup_state: None,
         }
     }
 }

@@ -79,19 +79,23 @@ impl PhotoLikeMapper {
             .to_ok()
     }
 
-    /// 查询用户点赞的照片ID列表（带游标分页）
+    /// 查询用户点赞的照片ID和点赞时间列表（带游标分页）
     ///
     /// cursor 为 `(created_at, id)` 元组，用于复合游标分页，
     /// 确保相同时间戳的记录不会被跳过。
+    ///
+    /// 返回 `(PhotoId, DateTimeUtc)` 元组，其中 DateTimeUtc 为点赞时间，
+    /// 用于生成正确的分页游标。
     pub async fn query_user_liked_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
         cursor: Option<(DateTimeUtc, i64)>,
         size: u64,
-    ) -> Result<Vec<PhotoId>> {
+    ) -> Result<Vec<(PhotoId, DateTimeUtc)>> {
         let mut query = Entity::find()
             .select_only()
             .column(Column::PhotoId)
+            .column(Column::CreatedAt)
             .filter(Column::UserId.eq(user_id.0))
             .order_by_desc(Column::CreatedAt)
             .order_by_desc(Column::Id);
@@ -110,13 +114,13 @@ impl PhotoLikeMapper {
 
         query
             .limit(size)
-            .into_tuple::<i64>()
+            .into_tuple::<(i64, DateTimeUtc)>()
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询用户点赞照片列表数据库错误")?
             .into_iter()
-            .map(PhotoId)
-            .collect::<Vec<PhotoId>>()
+            .map(|(photo_id, created_at)| (PhotoId(photo_id), created_at))
+            .collect::<Vec<(PhotoId, DateTimeUtc)>>()
             .to_ok()
     }
 }

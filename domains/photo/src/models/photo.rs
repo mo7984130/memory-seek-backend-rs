@@ -13,13 +13,12 @@ use validator::Validate;
 #[serde(rename_all = "camelCase")]
 pub struct PhotoResult {
     pub id: String,
+    pub user_id: String,
     pub name: String,
     pub width: i32,
     pub height: i32,
     pub size: i64,
     pub created_at: DateTime<Utc>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_favorited: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_collected: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -36,12 +35,12 @@ impl From<PhotoRecord> for PhotoResult {
     fn from(record: PhotoRecord) -> Self {
         Self {
             id: record.id.0.to_string(),
+            user_id: record.user_id.0.to_string(),
             name: record.name,
             width: record.width,
             height: record.height,
             size: record.size,
             created_at: record.created_at,
-            is_favorited: None,
             is_collected: None,
             is_liked: None,
             thumbnail_token: None,
@@ -52,11 +51,6 @@ impl From<PhotoRecord> for PhotoResult {
 }
 
 impl PhotoResult {
-    pub fn with_favorited(mut self, is_favorited: bool) -> Self {
-        self.is_favorited = Some(is_favorited);
-        self
-    }
-
     pub fn with_liked(mut self, is_liked: bool) -> Self {
         self.is_liked = Some(is_liked);
         self
@@ -99,6 +93,7 @@ pub struct PhotoCursorParam {
     pub size: u64,
     pub direction: PageDirection,
     pub default_collection_id: Option<String>,
+    pub anchor_time: Option<DateTimeUtc>,
 }
 
 impl Default for PhotoCursorParam {
@@ -108,6 +103,7 @@ impl Default for PhotoCursorParam {
             size: 128,
             direction: PageDirection::Next,
             default_collection_id: None,
+            anchor_time: None,
         }
     }
 }

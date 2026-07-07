@@ -33,7 +33,6 @@ pub struct Model {
     pub description: Option<String>,
     pub photo_count: i64,
     pub cover_file_id: Option<String>,
-    pub is_favorite: bool,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }
@@ -47,7 +46,6 @@ pub struct CollectionRecord {
     pub description: Option<String>,
     pub photo_count: i64,
     pub cover_file_id: Option<String>,
-    pub is_favorite: bool,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }
@@ -61,7 +59,6 @@ impl From<Model> for CollectionRecord {
             description: model.description,
             photo_count: model.photo_count,
             cover_file_id: model.cover_file_id,
-            is_favorite: model.is_favorite,
             created_at: model.created_at,
             updated_at: model.updated_at,
         }

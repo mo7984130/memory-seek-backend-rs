@@ -39,7 +39,7 @@ impl CollectionController {
         Extension(user_id): Extension<UserId>,
         ValidatedJson(data): ValidatedJson<CollectionCreateParam>,
     ) -> Result<R<CollectionResult>> {
-        CollectionService::create_collection(&state, user_id, data.name, data.description, false)
+        CollectionService::create_collection(&state, user_id, data.name, data.description)
             .await
             .to_r_ok()
     }

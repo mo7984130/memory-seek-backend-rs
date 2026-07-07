@@ -16,6 +16,7 @@ use uuid::Uuid;
 use crate::{
     mappers::{
         collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
+        comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper,
         photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper,
         timeline_stat_mapper::TimelineStatMapper,
     },
@@ -88,6 +89,7 @@ impl PhotoService {
             decoded_cursor,
             size + 1,
             query.direction,
+            query.anchor_time,
         )
         .timed(metrics_timer_name!(
             "get_photo_cursor_page",
@@ -323,6 +325,15 @@ impl PhotoService {
 
                 // 更新收藏夹照片计数
                 CollectionMapper::decr_photo_count_batch(txn, &affected_collections).await?;
+
+                // 删除照片评论点赞
+                let comment_ids = CommentMapper::delete_by_photo_ids(txn, &photo_ids).await?;
+                CommentLikeMapper::delete_by_comment_ids(txn, &comment_ids).await?;
+
+                // 删除照片点赞
+                for photo_id in &photo_ids {
+                    PhotoLikeMapper::delete_all_by_photo_id(txn, *photo_id).await?;
+                }
 
                 // 删除数据库照片
                 PhotoMapper::delete_by_ids(txn, &photo_ids).await?;

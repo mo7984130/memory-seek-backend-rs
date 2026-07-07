@@ -95,6 +95,21 @@ pub async fn create_collection(
     json["data"].clone()
 }
 
+/// Get the list of collections for the current user.
+pub async fn get_collections(app: &axum::Router, user: &auth::TestUser) -> Value {
+    let req = auth::auth_request("GET", "/photo/collections", user, serde_json::json!(null));
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK, "获取相册列表失败");
+
+    let body_bytes = axum::body::to_bytes(res.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let json: Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(json["code"], 200);
+
+    json["data"].clone()
+}
+
 /// Publish a comment on a photo and return the comment result JSON.
 ///
 /// Panics on failure.

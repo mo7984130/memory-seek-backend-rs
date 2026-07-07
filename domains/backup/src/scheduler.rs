@@ -1,11 +1,12 @@
 use crate::runner::BackupRunner;
 use crate::state::BackupState;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 /// 备份调度器
 pub struct BackupScheduler {
-    scheduler: JobScheduler,
+    scheduler: Mutex<JobScheduler>,
 }
 
 impl BackupScheduler {
@@ -29,19 +30,21 @@ impl BackupScheduler {
 
         scheduler.add(job).await?;
 
-        Ok(Self { scheduler })
+        Ok(Self {
+            scheduler: Mutex::new(scheduler),
+        })
     }
 
     /// 启动调度器
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.scheduler.start().await?;
+        self.scheduler.lock().await.start().await?;
         tracing::info!("Backup scheduler started");
         Ok(())
     }
 
     /// 停止调度器
-    pub async fn stop(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.scheduler.shutdown().await?;
+    pub async fn stop(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.scheduler.lock().await.shutdown().await?;
         tracing::info!("Backup scheduler stopped");
         Ok(())
     }

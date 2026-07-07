@@ -5,6 +5,7 @@ pub mod exporter;
 pub mod storage;
 pub mod runner;
 pub mod scheduler;
+pub mod controller;
 
 pub use config::BackupConfig;
 pub use state::BackupState;

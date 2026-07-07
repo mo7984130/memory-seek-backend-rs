@@ -16,5 +16,7 @@ pub fn layer() -> CorsLayer {
             HeaderName::from_static("content-type"),
             HeaderName::from_static("authorization"),
             HeaderName::from_static("x-trace-id"),
+            HeaderName::from_static("x-user-id"),
+            HeaderName::from_static("x-refresh-token"),
         ])
 }
