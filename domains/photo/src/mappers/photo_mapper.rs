@@ -2,11 +2,11 @@ use std::collections::HashSet;
 
 use common::Result;
 use common::ext::{OkExt, ResultErrExt};
+use sea_orm::entity::prelude::DateTimeUtc;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
-use sea_orm::entity::prelude::DateTimeUtc;
 
 use entities::photo::photo::*;
 
@@ -44,10 +44,7 @@ impl PhotoMapper {
         delta: i64,
     ) -> Result<()> {
         Entity::update_many()
-            .col_expr(
-                Column::LikeCount,
-                Expr::col(Column::LikeCount).add(delta),
-            )
+            .col_expr(Column::LikeCount, Expr::col(Column::LikeCount).add(delta))
             .filter(Column::Id.eq(photo_id.0))
             .exec(db)
             .await

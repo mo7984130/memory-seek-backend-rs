@@ -11,7 +11,10 @@ impl TimelineStatService {
         metrics_group!("get_monthly_stats");
 
         let res = TimelineStatMapper::query_monthly_stats(&state.db)
-            .timed(metrics_timer_name!("get_monthly_stats", "query_monthly_stats"))
+            .timed(metrics_timer_name!(
+                "get_monthly_stats",
+                "query_monthly_stats"
+            ))
             .await;
 
         metrics_success!("get_monthly_stats");

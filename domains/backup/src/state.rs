@@ -18,11 +18,7 @@ pub struct BackupState {
 }
 
 impl BackupState {
-    pub fn new(
-        db: DatabaseConnection,
-        s3_client: Arc<S3Client>,
-        config: BackupConfig,
-    ) -> Self {
+    pub fn new(db: DatabaseConnection, s3_client: Arc<S3Client>, config: BackupConfig) -> Self {
         let temp_dir = PathBuf::from(&config.local_path).join(".tmp");
         let storage = BackupStorage::new(
             PathBuf::from(&config.local_path),

@@ -34,7 +34,12 @@ async fn test_delete_photos_success() {
 
     // Verify photoCount = 1 after add
     let collections = get_collections(&app, &user).await;
-    let c = collections.as_array().unwrap().iter().find(|c| c["id"] == collection_id).unwrap();
+    let c = collections
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == collection_id)
+        .unwrap();
     assert_eq!(c["photoCount"], 1);
 
     // Delete the photo
@@ -51,7 +56,12 @@ async fn test_delete_photos_success() {
 
     // Verify photoCount was decremented in the collection
     let collections = get_collections(&app, &user).await;
-    let c = collections.as_array().unwrap().iter().find(|c| c["id"] == collection_id).unwrap();
+    let c = collections
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == collection_id)
+        .unwrap();
     assert_eq!(c["photoCount"], 0);
 
     guard.cleanup().await;

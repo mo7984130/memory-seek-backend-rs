@@ -70,7 +70,7 @@ impl BackupStorage {
 
             if file_name.ends_with(".csv") {
                 let date = file_name.trim_end_matches(".csv").to_string();
-                if latest.as_ref().map_or(true, |l| &date > l) {
+                if latest.as_ref().is_none_or(|l| &date > l) {
                     latest = Some(date);
                 }
             }
@@ -170,8 +170,7 @@ impl BackupStorage {
                             std::fs::remove_file(file_entry.path())?;
 
                             // 删除 S3 文件
-                            let s3_key =
-                                format!("{}{}/{}", self.s3_prefix, table_name, file_name);
+                            let s3_key = format!("{}{}/{}", self.s3_prefix, table_name, file_name);
                             let _ = self.s3_client.delete(&s3_key).await;
 
                             removed_count += 1;

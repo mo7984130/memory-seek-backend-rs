@@ -37,8 +37,7 @@ impl PhotoLikeService {
         timed!("like_photo", "db_transaction", {
             DbUtils::write(&state.db, |txn| {
                 Box::pin(async move {
-                    let inserted =
-                        PhotoLikeMapper::insert_ignore(txn, user_id, photo_id).await?;
+                    let inserted = PhotoLikeMapper::insert_ignore(txn, user_id, photo_id).await?;
 
                     if !inserted {
                         return log_warn(

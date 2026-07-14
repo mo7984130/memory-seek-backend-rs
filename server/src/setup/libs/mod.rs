@@ -20,6 +20,7 @@ impl AppLibsInit {
         let s3_client = s3::init(cfg);
 
         // 初始化人脸模型
+        #[cfg(feature = "face-engine")]
         let face_engine = face_engine::init(cfg);
 
         Ok(AppLibs {

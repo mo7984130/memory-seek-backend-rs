@@ -52,7 +52,12 @@ async fn test_remove_photo_success() {
 
     // Verify photoCount was updated
     let collections = get_collections(&app, &user).await;
-    let updated = collections.as_array().unwrap().iter().find(|c| c["id"] == collection_id).unwrap();
+    let updated = collections
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == collection_id)
+        .unwrap();
     assert_eq!(updated["photoCount"], 0);
 
     guard.cleanup().await;

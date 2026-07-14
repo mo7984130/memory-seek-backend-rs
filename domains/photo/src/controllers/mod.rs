@@ -8,6 +8,7 @@ pub mod collection_controller;
 pub mod collection_photo_controller;
 pub mod comment_controller;
 pub mod comment_like_controller;
+#[cfg(feature = "face")]
 mod face_controller;
 pub mod photo_controller;
 pub mod photo_like_controller;
@@ -16,6 +17,7 @@ pub mod timeline_stat_controller;
 use collection_controller::CollectionController;
 use collection_photo_controller::CollectionPhotoController;
 use comment_controller::CommentController;
+#[cfg(feature = "face")]
 pub use face_controller::FaceController;
 use photo_controller::PhotoController;
 use photo_like_controller::PhotoLikeController;
@@ -35,7 +37,7 @@ impl ControllerRouter for Controller {
 
     /// photo 模块的受保护路由（需要认证的接口）
     fn protected_routes() -> Router<Arc<Self::State>> {
-        Router::new()
+        let router = Router::new()
             .nest(
                 "/photo",
                 PhotoController::protected_routes().merge(PhotoLikeController::protected_routes()),
@@ -49,7 +51,11 @@ impl ControllerRouter for Controller {
             .nest(
                 "/photo/timeline",
                 TimelineStatController::protected_routes(),
-            )
-            .nest("/photo/face", FaceController::protected_routes())
+            );
+
+        #[cfg(feature = "face")]
+        let router = router.nest("/photo/face", FaceController::protected_routes());
+
+        router
     }
 }

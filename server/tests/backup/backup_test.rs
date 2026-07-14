@@ -1,5 +1,5 @@
-use backup::{BackupConfig, BackupState};
 use backup::runner::BackupRunner;
+use backup::{BackupConfig, BackupState};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 use std::sync::Arc;
 
@@ -67,28 +67,19 @@ async fn cleanup_test_user(db: &DatabaseConnection, user_id: i64) {
     let _ = db
         .execute(Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!(
-                "DELETE FROM photo_photo_like WHERE user_id = {}",
-                user_id
-            ),
+            format!("DELETE FROM photo_photo_like WHERE user_id = {}", user_id),
         ))
         .await;
     let _ = db
         .execute(Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!(
-                "DELETE FROM photo_comment_like WHERE user_id = {}",
-                user_id
-            ),
+            format!("DELETE FROM photo_comment_like WHERE user_id = {}", user_id),
         ))
         .await;
     let _ = db
         .execute(Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!(
-                "DELETE FROM photo_comment WHERE user_id = {}",
-                user_id
-            ),
+            format!("DELETE FROM photo_comment WHERE user_id = {}", user_id),
         ))
         .await;
     let _ = db
@@ -104,19 +95,13 @@ async fn cleanup_test_user(db: &DatabaseConnection, user_id: i64) {
     let _ = db
         .execute(Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!(
-                "DELETE FROM photo_collection WHERE user_id = {}",
-                user_id
-            ),
+            format!("DELETE FROM photo_collection WHERE user_id = {}", user_id),
         ))
         .await;
     let _ = db
         .execute(Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,
-            format!(
-                "DELETE FROM photo_photo WHERE user_id = {}",
-                user_id
-            ),
+            format!("DELETE FROM photo_photo WHERE user_id = {}", user_id),
         ))
         .await;
 
@@ -235,10 +220,7 @@ async fn test_backup_config_minimal_json() {
     // 使用 serde(default) 的字段应该有默认值
     assert!(config.enabled); // default_enabled = true
     assert_eq!(config.schedule, "0 0 6 * * *"); // default_schedule
-    assert_eq!(
-        config.local_path,
-        "/var/backups/memory-seek"
-    ); // default_local_path
+    assert_eq!(config.local_path, "/var/backups/memory-seek"); // default_local_path
     assert_eq!(config.s3_prefix, "backup/"); // default_s3_prefix
     assert_eq!(config.retention_days, 3); // default_retention_days
     assert!(config.tables.is_none()); // default = None
@@ -318,7 +300,10 @@ async fn test_csv_export_with_real_db() {
 
     // 验证 CSV 文件存在
     assert!(csv_path.exists(), "CSV 文件应存在");
-    assert!(csv_path.to_string_lossy().ends_with(".csv"), "文件应为 CSV 格式");
+    assert!(
+        csv_path.to_string_lossy().ends_with(".csv"),
+        "文件应为 CSV 格式"
+    );
 
     // 验证哈希
     assert_eq!(hash.len(), 64, "哈希长度应为 64");
@@ -367,19 +352,14 @@ async fn test_full_backup_flow() {
     state.ensure_dirs().expect("创建备份目录失败");
 
     // 执行备份
-    let result = BackupRunner::execute(state)
-        .await
-        .expect("备份执行失败");
+    let result = BackupRunner::execute(state).await.expect("备份执行失败");
 
     // 验证结果：至少导出一个表
     assert!(
         result.exported > 0 || result.skipped > 0 || result.renamed > 0,
         "至少应导出、跳过或重命名一个表"
     );
-    assert_eq!(
-        result.failed, 0,
-        "不应有失败的表（当前测试环境）"
-    );
+    assert_eq!(result.failed, 0, "不应有失败的表（当前测试环境）");
 
     // 清理测试数据和临时目录
     cleanup_test_user(&db, user_id).await;

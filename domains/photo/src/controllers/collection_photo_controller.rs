@@ -37,10 +37,7 @@ impl ControllerRouter for CollectionPhotoController {
 
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
-            .route(
-                "/by-photo/{photo_id}",
-                get(Self::get_collections_by_photo),
-            )
+            .route("/by-photo/{photo_id}", get(Self::get_collections_by_photo))
             .route(
                 "/{collection_id}/photos",
                 get(Self::get_cursor_page)

@@ -48,10 +48,9 @@ impl CollectionService {
     ) -> Result<CollectionResult> {
         metrics_group!("create_collection");
 
-        let collection =
-            CollectionMapper::insert(&state.db, user_id, name, description)
-                .timed(metrics_timer_name!("create_collection", "db_insert"))
-                .await?;
+        let collection = CollectionMapper::insert(&state.db, user_id, name, description)
+            .timed(metrics_timer_name!("create_collection", "db_insert"))
+            .await?;
 
         metrics_success!("create_collection");
         CollectionResult::from(collection).to_ok()

@@ -49,8 +49,10 @@ impl CollectionPhotoService {
         }
 
         let collections = CollectionMapper::query_by_ids(&state.db, &collection_ids).await?;
-        let result: Vec<PhotoCollectionResult> =
-            collections.into_iter().map(PhotoCollectionResult::from).collect();
+        let result: Vec<PhotoCollectionResult> = collections
+            .into_iter()
+            .map(PhotoCollectionResult::from)
+            .collect();
 
         metrics_success!("get_collections_by_photo");
         Ok(result)
@@ -203,11 +205,8 @@ impl CollectionPhotoService {
                     let need_update_cover = if let Some(col) = &collection {
                         if let Some(cover_file_id) = &col.cover_file_id {
                             // 检查被删除的照片中是否有封面照片
-                            let deleted_photos =
-                                PhotoMapper::query_by_ids(txn, &photo_ids).await?;
-                            deleted_photos
-                                .iter()
-                                .any(|p| &p.file_id == cover_file_id)
+                            let deleted_photos = PhotoMapper::query_by_ids(txn, &photo_ids).await?;
+                            deleted_photos.iter().any(|p| &p.file_id == cover_file_id)
                         } else {
                             false
                         }
@@ -226,14 +225,15 @@ impl CollectionPhotoService {
                     // 如果封面照片被删除，更新封面
                     if need_update_cover {
                         // 获取剩余的第一张照片作为新封面
-                        let remaining_photo_ids = CollectionPhotoMapper::query_photo_id_by_collection_id(
-                            txn,
-                            user_id,
-                            collection_id,
-                            None,
-                            1,
-                        )
-                        .await?;
+                        let remaining_photo_ids =
+                            CollectionPhotoMapper::query_photo_id_by_collection_id(
+                                txn,
+                                user_id,
+                                collection_id,
+                                None,
+                                1,
+                            )
+                            .await?;
 
                         let new_cover_file_id = if let Some(photo_id) = remaining_photo_ids.first()
                         {

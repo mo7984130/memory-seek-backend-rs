@@ -35,7 +35,10 @@ impl ControllerRouter for PhotoLikeController {
 
     fn protected_routes() -> Router<Arc<Self::State>> {
         Router::new()
-            .route("/photos/{photo_id}/like", post(Self::like).delete(Self::unlike))
+            .route(
+                "/photos/{photo_id}/like",
+                post(Self::like).delete(Self::unlike),
+            )
             .route("/photos/liked", get(Self::get_user_liked_photos))
     }
 
@@ -60,12 +63,11 @@ impl PhotoLikeController {
     ) -> Result<R<()>> {
         metrics_group!("api_like_photo");
 
-        let photo_id =
-            PhotoId::from_str(&photo_id).trace_warn_bad_request(
-                "invalid_photo_id",
-                "无效的photo_id",
-                "无效的photo_id",
-            )?;
+        let photo_id = PhotoId::from_str(&photo_id).trace_warn_bad_request(
+            "invalid_photo_id",
+            "无效的photo_id",
+            "无效的photo_id",
+        )?;
 
         PhotoLikeService::like(&state, user_id, photo_id).await?;
 
@@ -83,12 +85,11 @@ impl PhotoLikeController {
     ) -> Result<R<()>> {
         metrics_group!("api_unlike_photo");
 
-        let photo_id =
-            PhotoId::from_str(&photo_id).trace_warn_bad_request(
-                "invalid_photo_id",
-                "无效的photo_id",
-                "无效的photo_id",
-            )?;
+        let photo_id = PhotoId::from_str(&photo_id).trace_warn_bad_request(
+            "invalid_photo_id",
+            "无效的photo_id",
+            "无效的photo_id",
+        )?;
 
         PhotoLikeService::unlike(&state, user_id, photo_id).await?;
 
@@ -146,7 +147,13 @@ impl PhotoLikeController {
                 let id = PhotoId::from_str(&p.id).ok()?;
                 // 使用点赞时间生成游标，确保分页正确
                 let like_created_at = like_time_map.get(&id.0).copied()?;
-                Some(PhotoLikeCursor { created_at: like_created_at, id }.encode())
+                Some(
+                    PhotoLikeCursor {
+                        created_at: like_created_at,
+                        id,
+                    }
+                    .encode(),
+                )
             })
         } else {
             None

@@ -15,7 +15,7 @@ photo = ["dep:photo", "s3"]
 metrics = ["dep:metrics"]
 s3 = ["dep:oss"]
 backup = ["dep:backup"]
-face-engine = ["dep:insight-face-rs"]
+face-engine = ["dep:insight-face-rs", "photo?/face", "entities/face-engine"]
 
 [dependencies]
 tokio = { workspace = true }

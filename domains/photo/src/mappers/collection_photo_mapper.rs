@@ -8,8 +8,7 @@ use entities::photo::collection_photo::*;
 use entities::photo::{collection::CollectionId, photo::PhotoId};
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect,
+    ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
 use crate::models::collection::CollectionPhotoCursor;

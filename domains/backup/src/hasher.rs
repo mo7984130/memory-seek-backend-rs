@@ -93,7 +93,9 @@ impl TableHasher {
         for row in &result {
             let cols = row.column_names();
             for col in cols {
-                let value = row.try_get_by::<String, _>(col.as_str()).unwrap_or_default();
+                let value = row
+                    .try_get_by::<String, _>(col.as_str())
+                    .unwrap_or_default();
                 hasher.update(value.as_bytes());
                 hasher.update(b"|"); // 分隔符
             }

@@ -1,12 +1,12 @@
 pub mod config;
-pub mod state;
-pub mod hasher;
+pub mod controller;
 pub mod exporter;
-pub mod storage;
+pub mod hasher;
 pub mod runner;
 pub mod scheduler;
-pub mod controller;
+pub mod state;
+pub mod storage;
 
 pub use config::BackupConfig;
-pub use state::BackupState;
 pub use scheduler::BackupScheduler;
+pub use state::BackupState;

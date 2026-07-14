@@ -22,6 +22,8 @@ impl TimelineStatController {
     }
 
     async fn get_monthly_stats(State(state): State<Arc<PhotoState>>) -> Result<R<Vec<MonthStat>>> {
-        TimelineStatService::get_monthly_stats(&state).await.to_r_ok()
+        TimelineStatService::get_monthly_stats(&state)
+            .await
+            .to_r_ok()
     }
 }
