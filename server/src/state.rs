@@ -2,12 +2,14 @@ use common::utils::TokenCipher;
 use deadpool_redis::Pool;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+#[cfg(feature = "face-engine")]
+use std::sync::Mutex;
 
 #[cfg(feature = "s3")]
 use oss::S3Client;
 
 #[cfg(feature = "backup")]
-use backup::{BackupScheduler, BackupState};
+use backup::BackupScheduler;
 
 // ============ Bases ============
 pub struct AppBases {
@@ -21,6 +23,9 @@ pub struct AppLibs {
 
     #[cfg(feature = "s3")]
     pub s3_client: Arc<S3Client>,
+
+    #[cfg(feature = "face-engine")]
+    pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
 }
 
 // ============ AppState ============
@@ -37,22 +42,6 @@ pub struct AppState {
     #[cfg(feature = "backup")]
     pub backup_scheduler: Option<Arc<BackupScheduler>>,
 
-    #[cfg(feature = "backup")]
-    pub backup_state: Option<Arc<BackupState>>,
-}
-
-impl From<(AppBases, AppLibs)> for AppState {
-    fn from((bases, libs): (AppBases, AppLibs)) -> Self {
-        Self {
-            db: bases.db,
-            redis: bases.redis,
-            token_cipher: libs.token_cipher,
-            #[cfg(feature = "s3")]
-            s3_client: libs.s3_client,
-            #[cfg(feature = "backup")]
-            backup_scheduler: None,
-            #[cfg(feature = "backup")]
-            backup_state: None,
-        }
-    }
+    #[cfg(feature = "face-engine")]
+    pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
 }

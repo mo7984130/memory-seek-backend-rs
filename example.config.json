@@ -42,5 +42,9 @@
         "local_path": "/var/backups/memory-seek",
         "s3_prefix": "backup/",
         "retention_days": 3
+    },
+    "face_engine": {
+        "detect_model_path": "/path/to/model",
+        "recognize_model_path": "/path/to/model"
     }
 }

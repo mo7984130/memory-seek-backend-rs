@@ -17,6 +17,8 @@ pub struct AppConfig {
     pub metrics: Option<MetricsConfig>,
     #[cfg(feature = "backup")]
     pub backup: Option<backup::BackupConfig>,
+    #[cfg(feature = "face-engine")]
+    pub face_engine: FaceEngineConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,6 +61,13 @@ pub struct TokenCipherConfig {
 pub struct MetricsConfig {
     pub host: String,
     pub port: u16,
+}
+
+#[cfg(feature = "face-engine")]
+#[derive(Debug, Deserialize)]
+pub struct FaceEngineConfig {
+    pub detect_model_path: String,
+    pub recognize_model_path: String,
 }
 
 impl AppConfig {

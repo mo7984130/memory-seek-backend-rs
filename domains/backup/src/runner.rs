@@ -106,7 +106,9 @@ impl BackupRunner {
                     return Ok(TableBackupResult::Skipped("already up to date".to_string()));
                 }
             } else {
-                return Ok(TableBackupResult::Skipped("no existing backup found".to_string()));
+                return Ok(TableBackupResult::Skipped(
+                    "no existing backup found".to_string(),
+                ));
             }
         }
 
@@ -117,7 +119,11 @@ impl BackupRunner {
         state.storage.save(table_name, date, &csv_path).await?;
 
         // 6. 更新哈希缓存
-        state.last_hashes.write().await.insert(table_name.to_string(), current_hash);
+        state
+            .last_hashes
+            .write()
+            .await
+            .insert(table_name.to_string(), current_hash);
 
         // 7. 清理临时文件
         let _ = std::fs::remove_file(csv_path);

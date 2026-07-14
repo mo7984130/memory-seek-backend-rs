@@ -1,3 +1,4 @@
+use crate::hasher::TableHasher;
 use csv::Writer;
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use sha2::{Digest, Sha256};
@@ -15,17 +16,32 @@ impl CsvExporter {
         table_name: &str,
         output_dir: &Path,
     ) -> Result<(PathBuf, String), Box<dyn std::error::Error + Send + Sync>> {
-        let sql = format!("SELECT * FROM \"{}\" ORDER BY id", table_name);
+        let columns = TableHasher::get_column_names(db, table_name).await?;
+        if columns.is_empty() {
+            return Err(format!("Table {} does not exist", table_name).into());
+        }
+        let pks = TableHasher::get_primary_key_columns(db, table_name).await?;
+        let select_cols = columns
+            .iter()
+            .map(|c| format!("\"{}\"::text as \"{}\"", c, c))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let order_by = pks
+            .iter()
+            .map(|c| format!("\"{}\"", c))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "SELECT {} FROM \"{}\" ORDER BY {}",
+            select_cols, table_name, order_by
+        );
         let stmt = Statement::from_string(sea_orm::DatabaseBackend::Postgres, sql);
 
         let result = db.query_all(stmt).await?;
 
-        // 获取列名
-        let columns = if let Some(first_row) = result.first() {
-            first_row.column_names()
-        } else {
+        if result.is_empty() {
             return Err(format!("Table {} is empty or does not exist", table_name).into());
-        };
+        }
 
         // 创建 CSV 文件
         let file_path = output_dir.join(format!("{}.csv", table_name));

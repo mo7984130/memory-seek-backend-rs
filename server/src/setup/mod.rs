@@ -23,7 +23,7 @@ impl AppSetup {
 
         // 3. 初始化备份调度器
         #[cfg(feature = "backup")]
-        let (backup_state, backup_scheduler) = {
+        let backup_scheduler = {
             let backup_config = cfg
                 .backup
                 .as_ref()
@@ -41,11 +41,8 @@ impl AppSetup {
             let scheduler = backup::BackupScheduler::new(bs.clone())
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
-            scheduler
-                .start()
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
-            (Some(bs), Some(Arc::new(scheduler)))
+            scheduler.start().await.map_err(|e| anyhow::anyhow!(e))?;
+            Some(Arc::new(scheduler))
         };
 
         // 4. 构建 AppState
@@ -57,8 +54,8 @@ impl AppSetup {
             s3_client: libs.s3_client,
             #[cfg(feature = "backup")]
             backup_scheduler,
-            #[cfg(feature = "backup")]
-            backup_state,
+            #[cfg(feature = "face-engine")]
+            face_engine: libs.face_engine,
         });
 
         // 5. 注册业务模块

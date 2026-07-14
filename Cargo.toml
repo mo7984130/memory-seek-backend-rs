@@ -11,8 +11,8 @@ members = [
     "domains/user",
     "domains/photo",
     "domains/backup",
-    "server"
-, "scripts/upload-photo"]
+    "server",
+]
 
 [workspace.dependencies]
 memory-seek-type = { git="https://github.com/mo7984130/memory-seek-type.git" }
@@ -30,7 +30,7 @@ sea-orm = { version = "1.1.19", features = [
     "runtime-tokio-rustls",
     "macros"
 ] }
-pgvector = { version = "0.4.1" }
+pgvector = { version = "0.4.1", features = ["sqlx", "serde", "postgres"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono"] }
 chrono = { version = "0.4.44", features = ["serde"] }
 thiserror = "2.0.18"
@@ -79,6 +79,9 @@ tokio-test = "0.4"
 wiremock = "0.6"
 
 indexmap = "2.14.0"
+
+insight-face-rs = { version = "1.6.0" , features = ["pgvector"] }
+
 
 # Backup
 csv = "1.3"

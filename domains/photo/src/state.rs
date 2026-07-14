@@ -1,4 +1,6 @@
 use std::sync::Arc;
+#[cfg(feature = "face")]
+use std::sync::Mutex;
 
 use common::utils::TokenCipher;
 use deadpool_redis::Pool;
@@ -10,6 +12,8 @@ pub struct PhotoState {
     pub redis: Pool,
     pub s3_client: Arc<S3Client>,
     pub token_cipher: Arc<TokenCipher>,
+    #[cfg(feature = "face")]
+    pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
 }
 
 impl PhotoState {
@@ -26,12 +30,15 @@ impl PhotoState {
         redis: Pool,
         s3_client: Arc<S3Client>,
         token_cipher: Arc<TokenCipher>,
+        #[cfg(feature = "face")] face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
     ) -> Self {
         Self {
             db,
             redis,
             s3_client,
             token_cipher,
+            #[cfg(feature = "face")]
+            face_engine,
         }
     }
 }

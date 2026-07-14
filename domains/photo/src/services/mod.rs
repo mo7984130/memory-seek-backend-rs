@@ -5,3 +5,6 @@ pub(crate) mod comment_service;
 pub(crate) mod photo_like_service;
 pub(crate) mod photo_service;
 pub(crate) mod timeline_stat_service;
+
+#[cfg(feature = "face")]
+pub(crate) mod face_service;

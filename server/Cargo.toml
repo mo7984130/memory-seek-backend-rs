@@ -15,6 +15,7 @@ photo = ["dep:photo", "s3"]
 metrics = ["dep:metrics"]
 s3 = ["dep:oss"]
 backup = ["dep:backup"]
+face-engine = ["dep:insight-face-rs"]
 
 [dependencies]
 tokio = { workspace = true }
@@ -58,6 +59,7 @@ deadpool-redis = { workspace = true }
 uuid = { workspace = true }
 tracing-appender = "0.2.5"
 metrics-tracing-context = "0.18.1"
+insight-face-rs = { optional = true, workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

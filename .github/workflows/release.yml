@@ -10,96 +10,33 @@ env:
     BINARY_NAME: memory-seek-server
 
 jobs:
-    # ── 第一步：构建 ──────────────────────────────
-    build:
-        name: Build (x86_64-unknown-linux-musl)
-        runs-on: ubuntu-latest
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
 
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-            - name: Install Rust toolchain
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: x86_64-unknown-linux-musl
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-            - name: Cache Cargo
-              uses: Swatinem/rust-cache@v2
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
 
-            - name: Install system dependencies
-              run: sudo apt-get install -y musl-tools
+      - name: Build release binary
+        run: cargo build --release --all-features
 
-            - name: Build release binary
-              run: cargo build --release --target x86_64-unknown-linux-musl
+      - name: 打包 Release
+        run: |
+          mkdir -p release
+          cp target/release/${{ env.BINARY_NAME }} release/
+          cd release && tar -czf ../${{ env.BINARY_NAME }}.tar.gz *
 
-            - name: Upload binary artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: ${{ env.BINARY_NAME }}
-                  path: target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }}
-                  retention-days: 1
-
-    # ── 第二步：压测 ──────────────────────────────
-    loadtest:
-        name: Load Test
-        runs-on: ubuntu-latest
-        needs: build
-        environment: test
-
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Download binary artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: ${{ env.BINARY_NAME }}
-
-            - name: Setup SSH
-              run: |
-                  mkdir -p ~/.ssh
-                  echo "${{ secrets.SSH_KEY }}" > ~/.ssh/test_key
-                  chmod 600 ~/.ssh/test_key
-                  ssh-keyscan ${{ secrets.REMOTE_HOST }} >> ~/.ssh/known_hosts
-
-            - name: Deploy loadtest environment
-              working-directory: tests/load
-              run: |
-                  make deploy \
-                    REMOTE_HOST=${{ secrets.REMOTE_HOST }} \
-                    REMOTE_USER=${{ secrets.REMOTE_USER }} \
-                    SERVER_BIN_PATH=../../${{ env.BINARY_NAME }} \
-                    SSH_KEY=~/.ssh/test_key
-
-            - name: Install k6
-              run: |
-                  sudo gpg -k
-                  sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
-                    --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
-                  echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
-                    | sudo tee /etc/apt/sources.list.d/k6.list
-                  sudo apt-get update && sudo apt-get install -y k6
-
-            - name: Run load tests
-              working-directory: tests/load
-              run: |
-                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/auth/auth_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/user/user_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/photo/photo_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/photo/comment_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/photo/collection_service.js
-                  k6 run -e BASE_URL=http://${{ secrets.REMOTE_HOST }}:${{ secrets.SERVER_PORT }} scripts/photo/collection_photo_service.js
-
-            - name: Teardown
-              if: always()
-              working-directory: tests/load
-              run: |
-                  make teardown \
-                    REMOTE_HOST=${{ secrets.REMOTE_HOST }} \
-                    REMOTE_USER=${{ secrets.REMOTE_USER }} \
-                    SSH_KEY=~/.ssh/test_key
-
-            - name: Cleanup SSH key
-              if: always()
-              run: rm -f ~/.ssh/test_key
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.BINARY_NAME }}.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

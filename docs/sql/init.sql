@@ -224,3 +224,32 @@ CREATE INDEX idx_photo_like_photo_id ON photo_photo_like (photo_id);
 CREATE INDEX idx_photo_like_user_id ON photo_photo_like (user_id);
 CREATE INDEX idx_photo_like_user_photo ON photo_photo_like (user_id, photo_id);
 
+
+CREATE EXTENSION vector;
+CREATE TABLE IF NOT EXISTS photo_face (
+    id BIGSERIAL PRIMARY KEY,
+    photo_id BIGINT NOT NULL,
+    person_id BIGINT NULL,
+
+    bbox JSONB NOT NULL,
+    landmarks JSONB NOT NULL,
+    socre REAL NOT NULL,
+    embedding vector(512) NOT NULL,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_photo_face_photo_id ON photo_face(photo_id);
+CREATE INDEX idx_photo_face_person_id ON photo_face(person_id);
+CREATE TABLE IF NOT EXISTS photo_person (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(32) NULL,
+    name_initials VARCHAR(32) NOT NULL,
+    cover_face_id BIGINT NULL,
+
+    centroid vector(512) NOT NULL,
+    face_count BIGINT NOT NULL DEFAULT 0,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

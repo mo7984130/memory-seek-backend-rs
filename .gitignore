@@ -11,3 +11,7 @@ config.test.json
 .env.test
 memo.md
 **/superpowers
+
+docs
+!docs/sql
+!docs/dashborads
