@@ -32,7 +32,6 @@ async fn test_create_collection_success() {
     assert_eq!(json["code"], 200);
     assert!(json["data"]["id"].as_str().is_some(), "应返回相册 id");
     assert_eq!(json["data"]["name"], "My Album");
-    assert_eq!(json["data"]["isFavorite"], false);
 
     guard.cleanup().await;
 }

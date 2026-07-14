@@ -6,6 +6,12 @@
 config.json
 config.test.json
 !tests/load/config.test.json
+!tests/load/config/config.json
 .env
 .env.test
 memo.md
+**/superpowers
+
+docs
+!docs/sql
+!docs/dashborads

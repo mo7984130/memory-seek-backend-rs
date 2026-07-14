@@ -1,5 +1,7 @@
 pub mod database;
 pub mod log;
+#[cfg(feature = "metrics")]
+pub mod metrics;
 pub mod redis;
 
 use crate::config::AppConfig;

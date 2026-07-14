@@ -14,6 +14,8 @@ user = ["dep:user", "s3"]
 photo = ["dep:photo", "s3"]
 metrics = ["dep:metrics"]
 s3 = ["dep:oss"]
+backup = ["dep:backup"]
+face-engine = ["dep:insight-face-rs", "photo?/face", "entities/face-engine"]
 
 [dependencies]
 tokio = { workspace = true }
@@ -30,6 +32,7 @@ tower-http = { version = "0.6", features = ["cors", "trace"] }
 auth = { path = "../domains/auth", features = ["controller"], optional = true }
 user = { path = "../domains/user", features = ["controller"], optional = true }
 photo = { path = "../domains/photo", features = ["controller"], optional = true }
+backup = { path = "../domains/backup", optional = true }
 
 # 基础设施
 common = { path = "../common" }
@@ -41,6 +44,8 @@ dotenvy = { workspace = true }
 
 # 性能监控
 metrics = { workspace = true, optional = true }
+sysinfo = "0.31"
+metrics-exporter-prometheus = "0.16"
 
 # S3
 oss = { path = "../libs/oss", optional = true }
@@ -50,17 +55,16 @@ sea-orm = { workspace = true }
 redis = { workspace = true }
 deadpool-redis = { workspace = true }
 
-# 加密
-hmac = { workspace = true }
-sha2 = { workspace = true }
-
 # UUID
 uuid = { workspace = true }
 tracing-appender = "0.2.5"
 metrics-tracing-context = "0.18.1"
+insight-face-rs = { optional = true, workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
 serde = { workspace = true }
 sea-orm = { workspace = true }
 deadpool-redis = { workspace = true }
+backup = { path = "../domains/backup" }
+oss = { path = "../libs/oss" }

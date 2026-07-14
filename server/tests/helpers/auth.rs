@@ -6,6 +6,7 @@ use tower::ServiceExt;
 use super::test_config;
 
 /// 测试用户
+#[allow(dead_code)]
 pub struct TestUser {
     pub id: String,
     pub username: String,
@@ -21,6 +22,7 @@ pub struct TestUser {
 /// 1. 在 Redis 中预设邮箱验证码和邀请码
 /// 2. 调用 /register 注册
 /// 3. 调用 /login 登录获取 token
+#[allow(dead_code)]
 pub async fn register_and_login(app: &axum::Router, suffix: &str) -> TestUser {
     let username = format!("testuser_{}", suffix);
     let email = format!("test_{}@example.com", suffix);
@@ -140,6 +142,7 @@ pub fn auth_request(method: &str, uri: &str, user: &TestUser, body: Value) -> Re
 }
 
 /// 从 Redis 中直接设置邮箱验证码
+#[allow(dead_code)]
 async fn setup_email_verify_code(email: &str, code: &str) {
     use deadpool_redis::redis::AsyncCommands;
 

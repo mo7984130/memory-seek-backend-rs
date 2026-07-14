@@ -5,12 +5,12 @@ use common::{Result, ext::ResultErrExt};
 use entities::photo::timeline_stat::*;
 use sea_orm::{
     ActiveValue::Set,
-    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
+    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     entity::prelude::DateTimeUtc,
     sea_query::{Alias, CaseStatement, Expr, Func, OnConflict, SimpleExpr},
 };
 
-use crate::models::timeline_stat::TimeRange;
+use crate::models::timeline_stat::MonthStat;
 
 pub(crate) struct TimelineStatMapper;
 
@@ -87,15 +87,16 @@ impl TimelineStatMapper {
         Ok(())
     }
 
-    pub async fn query_time_range(db: &impl ConnectionTrait) -> Result<TimeRange> {
+    pub async fn query_monthly_stats(db: &impl ConnectionTrait) -> Result<Vec<MonthStat>> {
         let result = Entity::find()
             .select_only()
-            .column_as(Column::CreatedAt.min(), "min_time")
-            .column_as(Column::CreatedAt.max(), "max_time")
-            .into_model::<TimeRange>()
-            .one(db)
+            .column(Column::DateStr)
+            .column(Column::Count)
+            .order_by_asc(Column::DateStr)
+            .into_model::<MonthStat>()
+            .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询时间范围失败")?;
-        Ok(result.unwrap_or_default())
+            .trace_internal_err("db_query_err", "查询月度照片统计失败")?;
+        Ok(result)
     }
 }

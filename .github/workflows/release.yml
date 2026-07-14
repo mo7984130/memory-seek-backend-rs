@@ -1,0 +1,42 @@
+name: Release
+
+on:
+    push:
+        branches: [release]
+    workflow_dispatch:
+
+env:
+    CARGO_TERM_COLOR: always
+    BINARY_NAME: memory-seek-server
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release --all-features
+
+      - name: 打包 Release
+        run: |
+          mkdir -p release
+          cp target/release/${{ env.BINARY_NAME }} release/
+          cd release && tar -czf ../${{ env.BINARY_NAME }}.tar.gz *
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.BINARY_NAME }}.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

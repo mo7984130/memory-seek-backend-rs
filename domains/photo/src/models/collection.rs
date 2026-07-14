@@ -14,7 +14,6 @@ pub struct CollectionResult {
     pub description: Option<String>,
     pub photo_count: i64,
     pub cover_token: Option<String>,
-    pub is_favorite: bool,
     pub created_at: DateTimeUtc,
 }
 
@@ -25,8 +24,7 @@ impl From<CollectionRecord> for CollectionResult {
             name: record.name,
             description: record.description,
             photo_count: record.photo_count,
-            cover_token: None,
-            is_favorite: record.is_favorite,
+            cover_token: record.cover_file_id,
             created_at: record.created_at,
         }
     }
@@ -40,6 +38,23 @@ impl CollectionResult {
                 .ok()
         });
         self
+    }
+}
+
+/// 照片所属收藏夹的简要信息
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PhotoCollectionResult {
+    pub id: String,
+    pub name: String,
+}
+
+impl From<CollectionRecord> for PhotoCollectionResult {
+    fn from(record: CollectionRecord) -> Self {
+        PhotoCollectionResult {
+            id: record.id.0.to_string(),
+            name: record.name,
+        }
     }
 }
 

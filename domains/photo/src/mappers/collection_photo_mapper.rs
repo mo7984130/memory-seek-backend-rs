@@ -203,4 +203,25 @@ impl CollectionPhotoMapper {
 
         Ok(res.rows_affected as u64)
     }
+
+    /// 查询包含指定照片的所有收藏夹 ID
+    pub async fn query_collection_ids_by_photo_id(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        photo_id: PhotoId,
+    ) -> Result<Vec<CollectionId>> {
+        Entity::find()
+            .filter(Column::PhotoId.eq(photo_id.0))
+            .filter(Column::UserId.eq(user_id.0))
+            .select_only()
+            .column(Column::CollectionId)
+            .into_tuple::<i64>()
+            .all(db)
+            .await
+            .trace_internal_err("db_query_err", "查询照片所属收藏夹失败")?
+            .into_iter()
+            .map(CollectionId)
+            .collect::<Vec<_>>()
+            .to_ok()
+    }
 }

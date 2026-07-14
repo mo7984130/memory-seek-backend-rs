@@ -13,8 +13,10 @@ use common::{
     Result,
     error::AppError,
     ext::{ToErr, ToOk, log_warn},
+    metrics_group, metrics_success, metrics_timer_name,
     models::CursorPage,
-    utils::DbUtils,
+    timed,
+    utils::{DbUtils, MetricsTimerExt},
 };
 use entities::{
     auth::user::UserId,
@@ -32,26 +34,32 @@ impl CommentService {
         user_id: UserId,
         content: String,
     ) -> Result<PhotoCommentResult> {
-        let comment = DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                // 查询照片是否存在
-                if !PhotoMapper::exists(txn, photo_id).await? {
-                    return log_warn(
-                        "comment_publish_photo_not_exists",
-                        "用户尝试评论不存在的照片",
-                        "",
-                        AppError::bad_request("无法评论不存在的照片"),
-                    )
-                    .to_err();
-                }
-                // 插入评论
-                let comment = CommentMapper::insert(txn, photo_id, user_id, content).await?;
-                // 更新评论总数
-                PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
-                Ok(comment)
+        metrics_group!("publish_comment");
+
+        let comment = timed!("publish_comment", "db_transaction", {
+            DbUtils::write(&state.db, |txn| {
+                Box::pin(async move {
+                    // 查询照片是否存在
+                    if !PhotoMapper::exists(txn, photo_id).await? {
+                        return log_warn(
+                            "comment_publish_photo_not_exists",
+                            "用户尝试评论不存在的照片",
+                            "",
+                            AppError::bad_request("无法评论不存在的照片"),
+                        )
+                        .to_err();
+                    }
+                    // 插入评论
+                    let comment = CommentMapper::insert(txn, photo_id, user_id, content).await?;
+                    // 更新评论总数
+                    PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
+                    Ok(comment)
+                })
             })
-        })
-        .await?;
+            .await
+        })?;
+
+        metrics_success!("publish_comment");
         PhotoCommentResult::from(comment).to_ok()
     }
 }
@@ -68,6 +76,8 @@ impl CommentService {
         cursor: Option<DateTimeUtc>,
         size: Option<u64>,
     ) -> Result<CursorPage<PhotoCommentResult, DateTimeUtc>> {
+        metrics_group!("get_comment_cursor_page");
+
         // 校验 limit 参数
         let size = size.unwrap_or(32);
         if size > COMMENT_CURSOR_PAGE_MAX_SIZE {
@@ -88,6 +98,10 @@ impl CommentService {
                 HOT_COMMENT_MIN_LIKES,
                 HOT_COMMENT_MAX_COUNT,
             )
+            .timed(metrics_timer_name!(
+                "get_comment_cursor_page",
+                "query_hot_comments"
+            ))
             .await?
         } else {
             vec![]
@@ -101,6 +115,10 @@ impl CommentService {
             cursor,
             size + 1,
         )
+        .timed(metrics_timer_name!(
+            "get_comment_cursor_page",
+            "query_by_photo_id"
+        ))
         .await?;
 
         let CursorPage {
@@ -123,6 +141,10 @@ impl CommentService {
             user_id,
             comments.iter().map(|c| c.id).collect(),
         )
+        .timed(metrics_timer_name!(
+            "get_comment_cursor_page",
+            "query_is_like"
+        ))
         .await?;
 
         let records = comments
@@ -133,6 +155,7 @@ impl CommentService {
             })
             .collect();
 
+        metrics_success!("get_comment_cursor_page");
         CursorPage {
             records,
             has_more,
@@ -145,34 +168,39 @@ impl CommentService {
 // 删除
 impl CommentService {
     pub async fn delete(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                let photo_id = CommentMapper::query_photo_id_by_id(txn, comment_id).await?;
+        metrics_group!("delete_comment");
 
-                // 先删除评论, 在删除评论的同时, 校验权限
-                let deleted = CommentMapper::delete(txn, user_id, comment_id).await?;
-                if !deleted {
-                    return log_warn(
-                        "del_comment_not_deleted",
-                        "用户尝试删除评论, 失败",
-                        "",
-                        AppError::bad_request("删除评论失败"),
-                    )
-                    .to_err();
-                }
+        timed!("delete_comment", "db_transaction", {
+            DbUtils::write(&state.db, |txn| {
+                Box::pin(async move {
+                    let photo_id = CommentMapper::query_photo_id_by_id(txn, comment_id).await?;
 
-                // 更新照片评论数
-                PhotoMapper::update_comment_count_delta(txn, photo_id, -1).await?;
+                    // 先删除评论, 在删除评论的同时, 校验权限
+                    let deleted = CommentMapper::delete(txn, user_id, comment_id).await?;
+                    if !deleted {
+                        return log_warn(
+                            "del_comment_not_deleted",
+                            "用户尝试删除评论, 失败",
+                            "",
+                            AppError::bad_request("删除评论失败"),
+                        )
+                        .to_err();
+                    }
 
-                // 删除评论喜欢
-                // 错误不返回
-                let _ = CommentLikeMapper::delete_all_by_comment_id(txn, comment_id).await;
+                    // 更新照片评论数
+                    PhotoMapper::update_comment_count_delta(txn, photo_id, -1).await?;
 
-                Ok(())
+                    // 删除评论喜欢
+                    // 错误不返回
+                    let _ = CommentLikeMapper::delete_all_by_comment_id(txn, comment_id).await;
+
+                    Ok(())
+                })
             })
-        })
-        .await?;
+            .await
+        })?;
 
+        metrics_success!("delete_comment");
         Ok(())
     }
 }

@@ -1,4 +1,5 @@
 use config::{Config, ConfigError, Environment, File};
+
 use serde::Deserialize;
 use tracing::info;
 
@@ -7,10 +8,17 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
+    #[allow(dead_code)]
     pub smtp: SmtpConfig,
     #[cfg(feature = "s3")]
-    pub s3: Option<S3Config>,
+    pub s3: Option<oss::S3Config>,
     pub token_cipher: TokenCipherConfig,
+    #[cfg(feature = "metrics")]
+    pub metrics: Option<MetricsConfig>,
+    #[cfg(feature = "backup")]
+    pub backup: Option<backup::BackupConfig>,
+    #[cfg(feature = "face-engine")]
+    pub face_engine: FaceEngineConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -32,6 +40,7 @@ pub struct RedisConfig {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct SmtpConfig {
     pub server: String,
     pub port: u16,
@@ -41,21 +50,24 @@ pub struct SmtpConfig {
     pub from_name: String,
 }
 
-#[cfg(feature = "s3")]
-#[derive(Debug, Deserialize)]
-pub struct S3Config {
-    pub endpoint: String,
-    pub bucket: String,
-    pub access_key: String,
-    pub secret_key: String,
-    pub region: String,
-    pub public_url: String,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct TokenCipherConfig {
     pub key: String,
     pub salt: String,
+}
+
+#[cfg(feature = "metrics")]
+#[derive(Debug, Deserialize)]
+pub struct MetricsConfig {
+    pub host: String,
+    pub port: u16,
+}
+
+#[cfg(feature = "face-engine")]
+#[derive(Debug, Deserialize)]
+pub struct FaceEngineConfig {
+    pub detect_model_path: String,
+    pub recognize_model_path: String,
 }
 
 impl AppConfig {

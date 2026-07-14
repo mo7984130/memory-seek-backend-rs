@@ -3,9 +3,15 @@ name = "entities"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+face-engine = ["dep:insight-face-rs", "sea-orm/postgres-vector"]
+
 [dependencies]
 sea-orm = { workspace = true, features = ["sqlx-postgres"] }
 serde = { workspace = true }
-pgvector = { workspace = true }
+pgvector.workspace = true
 sqlx = { workspace = true }
 common = { path = "../common" }
+memory-seek-type = { workspace = true }
+insight-face-rs = { optional = true, workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,50 @@
+{
+    "server": {
+        "host": "0.0.0.0",
+        "port": 3000
+    },
+    "metrics": {
+        "host": "0.0.0.0",
+        "port": 9090
+    },
+    "database": {
+        "url": "postgres://user:password@localhost:5432/memory_seek",
+        "max_connections": 10
+    },
+    "redis": {
+        "url": "redis://localhost:6379",
+        "max_connections": 10
+    },
+    "smtp": {
+        "server": "smtp.example.com",
+        "port": 587,
+        "username": "your-email@example.com",
+        "password": "your-password",
+        "from_email": "noreply@example.com",
+        "from_name": "MemorySeek"
+    },
+    "s3": {
+        "endpoint": "http://localhost:9000",
+        "bucket": "memory-seek",
+        "access_key": "your-access-key",
+        "secret_key": "your-secret-key",
+        "region": "us-east-1",
+        "public_url": "http://localhost:9000",
+        "force_path_style": true
+    },
+    "token_cipher": {
+        "key": "your-secret-key-at-least-32-chars",
+        "salt": "your-salt"
+    },
+    "backup": {
+        "enabled": true,
+        "schedule": "0 0 6 * * *",
+        "local_path": "/var/backups/memory-seek",
+        "s3_prefix": "backup/",
+        "retention_days": 3
+    },
+    "face_engine": {
+        "detect_model_path": "/path/to/model",
+        "recognize_model_path": "/path/to/model"
+    }
+}

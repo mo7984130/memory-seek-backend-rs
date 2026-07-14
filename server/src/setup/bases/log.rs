@@ -1,5 +1,9 @@
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{fmt, prelude::*, EnvFilter, Registry};
+use tracing_subscriber::{
+    fmt::{self},
+    prelude::*,
+    EnvFilter, Registry,
+};
 
 pub fn init() -> WorkerGuard {
     // 日志输出
@@ -13,8 +17,9 @@ pub fn init() -> WorkerGuard {
     // 日志文件layer
     let file_layer = fmt::layer().with_ansi(false).with_writer(non_blocking);
 
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let registry = Registry::default()
-        .with(EnvFilter::new("info,sqlx=warn"))
+        .with(EnvFilter::new(format!("{},sqlx=warn", log_level)))
         .with(stdout_layer)
         .with(file_layer);
 

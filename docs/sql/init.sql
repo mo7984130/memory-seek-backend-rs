@@ -38,9 +38,6 @@ COMMENT ON COLUMN "auth_user".created_at IS '创建时间';
 -- Photo 模块
 -- ============================================
 
--- 开启向量拓展
-CREATE EXTENSION IF NOT EXISTS vector;
-
 -- 照片表
 CREATE TABLE IF NOT EXISTS photo_photo
 (
@@ -58,6 +55,7 @@ CREATE TABLE IF NOT EXISTS photo_photo
     file_id              VARCHAR(255) NULL,
 
     comment_count        BIGINT       NOT NULL DEFAULT 0,
+    like_count           BIGINT       NOT NULL DEFAULT 0,
 
     -- 时间记录
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -69,6 +67,8 @@ CREATE UNIQUE INDEX uk_photo_file_id ON photo_photo (file_id);
 CREATE INDEX idx_photo_created_at ON "photo_photo" (created_at DESC);
 -- 哈希索引：用于秒传/去重
 CREATE INDEX idx_photo_md5 ON photo_photo (md5);
+CREATE INDEX idx_photo_user_id ON photo_photo (user_id);
+CREATE INDEX idx_photo_like_count ON photo_photo (like_count DESC);
 COMMENT ON TABLE photo_photo IS '用户相册表';
 COMMENT ON COLUMN photo_photo.id IS '主键ID';
 COMMENT ON COLUMN photo_photo.user_id IS '上传者ID';
@@ -80,6 +80,7 @@ COMMENT ON COLUMN photo_photo.mime_type IS '文件MIME类型';
 COMMENT ON COLUMN photo_photo.md5 IS '文件MD5哈希值';
 COMMENT ON COLUMN photo_photo.file_id IS '原始文件ID';
 COMMENT ON COLUMN photo_photo.comment_count IS '评论总数';
+COMMENT ON COLUMN photo_photo.like_count IS '点赞总数';
 COMMENT ON COLUMN photo_photo.created_at IS '创建时间';
 COMMENT ON COLUMN photo_photo.updated_at IS '更新时间';
 
@@ -109,9 +110,8 @@ CREATE TABLE IF NOT EXISTS photo_collection (
     description TEXT,
     photo_count BIGINT DEFAULT 0 NOT NULL,
     cover_file_id VARCHAR,
-    is_favorite BOOLEAN NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 表与字段注释
@@ -122,7 +122,6 @@ COMMENT ON COLUMN photo_collection.name IS '收藏夹名称';
 COMMENT ON COLUMN photo_collection.description IS '收藏夹详细描述';
 COMMENT ON COLUMN photo_collection.photo_count IS '逻辑字段：统计该收藏夹下的图片总数';
 COMMENT ON COLUMN photo_collection.cover_file_id IS '收藏夹封面图的文件ID';
-COMMENT ON COLUMN photo_collection.is_favorite IS '是否为我喜欢';
 COMMENT ON COLUMN photo_collection.created_at IS '创建时间';
 COMMENT ON COLUMN photo_collection.updated_at IS '更新时间';
 
@@ -151,6 +150,7 @@ COMMENT ON COLUMN photo_collection_photo.updated_at IS '关系更新时间';
 -- 3. 物理索引 (优化查询)
 CREATE INDEX idx_collection_user_id ON photo_collection(user_id);
 CREATE INDEX idx_fp_collection_id_created_id ON photo_collection_photo(collection_id, created_at DESC, id DESC);
+CREATE INDEX idx_fp_photo_id ON photo_collection_photo (photo_id);
 COMMENT ON INDEX idx_collection_user_id IS '优化：按用户查询收藏夹列表';
 COMMENT ON INDEX idx_fp_collection_id_created_id IS '优化：按收藏时间倒序查询收藏夹内容（复合游标）';
 
@@ -181,6 +181,8 @@ COMMENT ON INDEX idx_comment_photo_time IS '优化：按照片查询评论';
 CREATE INDEX idx_comment_photo_likes ON photo_comment (photo_id, like_count DESC);
 COMMENT ON INDEX idx_comment_photo_likes IS '优化：按照片查询高赞评论';
 
+CREATE INDEX idx_comment_user_id ON photo_comment (user_id);
+
 -- 评论点赞记录表
 CREATE TABLE IF NOT EXISTS photo_comment_like (
     id BIGSERIAL PRIMARY KEY,
@@ -199,59 +201,55 @@ COMMENT ON COLUMN photo_comment_like.user_id IS '点赞用户ID';
 COMMENT ON COLUMN photo_comment_like.created_at IS '点赞时间';
 COMMENT ON COLUMN photo_comment_like.updated_at IS '更新时间';
 
--- 人物信息表
-CREATE TABLE IF NOT EXISTS photo_face_person(
+-- 照片点赞记录表
+CREATE TABLE IF NOT EXISTS photo_photo_like (
     id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    name_initials VARCHAR(50),
-    max_score_feature_id BIGINT NOT NULL,
-    max_score FLOAT4 DEFAULT 0.0 NOT NULL,
-    total_photo_count BIGINT DEFAULT 0 NOT NULL, -- 总图片数
-    centroid_embedding vector(512) default '[0.0]' NOT NULL, -- 中心特征向量
-    total_weight_count FLOAT4 DEFAULT 0.0 NOT NULL, -- 总权重
+    photo_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT uk_person_name UNIQUE (name)
+    -- 唯一索引：防止重复点赞
+    CONSTRAINT uk_photo_user_like UNIQUE (photo_id, user_id)
 );
-COMMENT ON TABLE photo_face_person IS '人物信息表';
-COMMENT ON COLUMN photo_face_person.id IS '人物ID';
-COMMENT ON COLUMN photo_face_person.name IS '人物名称';
-COMMENT ON COLUMN photo_face_person.name_initials IS '名字首字母（拼音）';
-COMMENT ON COLUMN photo_face_person.max_score_feature_id IS '最大置信度特征ID';
-COMMENT ON COLUMN photo_face_person.total_photo_count IS '总图片数';
-COMMENT ON COLUMN photo_face_person.centroid_embedding IS '中心特征向量';
-COMMENT ON COLUMN photo_face_person.total_weight_count IS '总权重';
-COMMENT ON COLUMN photo_face_person.created_at IS '创建时间';
-COMMENT ON COLUMN photo_face_person.updated_at IS '更新时间';
 
-CREATE INDEX IF NOT EXISTS idx_person_name_initials ON photo_face_person (name_initials);
+COMMENT ON TABLE photo_photo_like IS '照片点赞记录表';
+COMMENT ON COLUMN photo_photo_like.photo_id IS '照片ID';
+COMMENT ON COLUMN photo_photo_like.user_id IS '点赞用户ID';
+COMMENT ON COLUMN photo_photo_like.created_at IS '点赞时间';
+COMMENT ON COLUMN photo_photo_like.updated_at IS '更新时间';
 
--- 人脸特征表
-CREATE TABLE IF NOT EXISTS photo_face_feature(
+-- 索引优化
+CREATE INDEX idx_photo_like_photo_id ON photo_photo_like (photo_id);
+CREATE INDEX idx_photo_like_user_id ON photo_photo_like (user_id);
+CREATE INDEX idx_photo_like_user_photo ON photo_photo_like (user_id, photo_id);
+
+
+CREATE EXTENSION vector;
+CREATE TABLE IF NOT EXISTS photo_face (
     id BIGSERIAL PRIMARY KEY,
     photo_id BIGINT NOT NULL,
     person_id BIGINT NULL,
-    embedding vector(512) NOT NULL,
-    bbox JSONB NOT NULL,
-    score FLOAT4 NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-COMMENT ON TABLE photo_face_feature IS '人脸特征表';
-COMMENT ON COLUMN photo_face_feature.id IS '特征ID';
-COMMENT ON COLUMN photo_face_feature.photo_id IS '图片ID';
-COMMENT ON COLUMN photo_face_feature.person_id IS '人物ID';
-COMMENT ON COLUMN photo_face_feature.embedding IS '人脸特征向量';
-COMMENT ON COLUMN photo_face_feature.bbox IS '人脸边界框';
-COMMENT ON COLUMN photo_face_feature.score IS '置信度';
-COMMENT ON COLUMN photo_face_feature.created_at IS '创建时间';
-COMMENT ON COLUMN photo_face_feature.updated_at IS '更新时间';
--- 该索引先按人物分组，再在组内按分数倒序排列
-CREATE INDEX IF NOT EXISTS idx_feature_person_score
-    ON photo_face_feature (person_id, score DESC);
 
--- 创建向量索引
-CREATE INDEX idx_photo_face_feature_embedding ON photo_face_feature USING hnsw (embedding vector_cosine_ops);
--- 创建人物索引
-CREATE INDEX idx_photo_face_feature_person_id ON photo_face_feature USING btree (person_id);
+    bbox JSONB NOT NULL,
+    landmarks JSONB NOT NULL,
+    socre REAL NOT NULL,
+    embedding vector(512) NOT NULL,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_photo_face_photo_id ON photo_face(photo_id);
+CREATE INDEX idx_photo_face_person_id ON photo_face(person_id);
+CREATE TABLE IF NOT EXISTS photo_person (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(32) NULL,
+    name_initials VARCHAR(32) NOT NULL,
+    cover_face_id BIGINT NULL,
+
+    centroid vector(512) NOT NULL,
+    face_count BIGINT NOT NULL DEFAULT 0,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

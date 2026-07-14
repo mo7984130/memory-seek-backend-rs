@@ -2,7 +2,7 @@ use axum::http::StatusCode;
 use serde_json::Value;
 use tower::ServiceExt;
 
-use super::super::common::{create_collection, upload_photo};
+use super::super::common::{create_collection, get_collections, upload_photo};
 use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 
 /// Test removing a single photo from collection
@@ -40,7 +40,7 @@ async fn test_remove_photo_success() {
     // Remove photo from collection
     let remove_uri = format!("/photo/collections/{}/photos/{}", collection_id, photo_id);
     let req = auth::auth_request("DELETE", &remove_uri, &user, serde_json::json!(null));
-    let res = app.oneshot(req).await.unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
 
     assert_eq!(res.status(), StatusCode::OK);
 
@@ -49,6 +49,16 @@ async fn test_remove_photo_success() {
         .unwrap();
     let json: Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(json["code"], 200);
+
+    // Verify photoCount was updated
+    let collections = get_collections(&app, &user).await;
+    let updated = collections
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == collection_id)
+        .unwrap();
+    assert_eq!(updated["photoCount"], 0);
 
     guard.cleanup().await;
 }

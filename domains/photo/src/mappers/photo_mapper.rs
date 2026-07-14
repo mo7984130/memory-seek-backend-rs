@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use common::Result;
 use common::ext::{OkExt, ResultErrExt};
+use sea_orm::entity::prelude::DateTimeUtc;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -32,6 +33,22 @@ impl PhotoMapper {
             .exec(db)
             .await
             .trace_internal_err("db_update_err", "更新照片评论总数数数据库错误")?;
+
+        Ok(())
+    }
+
+    /// 更新照片点赞数（增量）
+    pub async fn update_like_count_delta(
+        db: &impl ConnectionTrait,
+        photo_id: PhotoId,
+        delta: i64,
+    ) -> Result<()> {
+        Entity::update_many()
+            .col_expr(Column::LikeCount, Expr::col(Column::LikeCount).add(delta))
+            .filter(Column::Id.eq(photo_id.0))
+            .exec(db)
+            .await
+            .trace_internal_err("db_update_err", "更新照片点赞数错误")?;
 
         Ok(())
     }
@@ -70,6 +87,7 @@ impl PhotoMapper {
         cursor: Option<&PhotoCursor>,
         size: u64,
         direction: PageDirection,
+        anchor_time: Option<DateTimeUtc>,
     ) -> sea_orm::Select<Entity> {
         let (order_by_desc, filter) = match direction {
             PageDirection::Next => (true, true),   // 倒序，向前翻
@@ -89,6 +107,7 @@ impl PhotoMapper {
         query = query.limit(size);
 
         if let Some(c) = cursor {
+            // 有游标时，按游标分页
             if filter {
                 // Next: 倒序遍历，找比游标小的
                 query = query.filter(
@@ -112,6 +131,15 @@ impl PhotoMapper {
                         ),
                 );
             }
+        } else if let Some(anchor) = anchor_time {
+            // 无游标但有锚点时间时，用锚点时间作为虚拟游标
+            if filter {
+                // Next (倒序): 找 created_at <= anchor 的照片
+                query = query.filter(Column::CreatedAt.lte(anchor));
+            } else {
+                // Prev (正序): 找 created_at >= anchor 的照片
+                query = query.filter(Column::CreatedAt.gte(anchor));
+            }
         }
 
         query
@@ -122,8 +150,9 @@ impl PhotoMapper {
         cursor: Option<PhotoCursor>,
         size: u64,
         direction: PageDirection,
+        anchor_time: Option<DateTimeUtc>,
     ) -> Result<Vec<PhotoId>> {
-        Self::build_cursor_query(cursor.as_ref(), size, direction)
+        Self::build_cursor_query(cursor.as_ref(), size, direction, anchor_time)
             .select_only()
             .column(Column::Id)
             .into_tuple::<i64>()

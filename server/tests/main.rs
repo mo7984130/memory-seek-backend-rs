@@ -8,3 +8,6 @@ mod user;
 
 #[cfg(feature = "photo")]
 mod photo;
+
+#[cfg(feature = "backup")]
+mod backup;

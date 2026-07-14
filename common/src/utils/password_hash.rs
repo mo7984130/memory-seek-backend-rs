@@ -162,6 +162,19 @@ mod tests {
     use super::*;
 
     #[test]
+    // $argon2id$v=19$m=16384,t=2,p=1$zcGSKX21GtoXbkIRxMLPXQ$QyhhvsEdkENJXKJS9LBaphiQX5nHQcc+w/MGdwUwYzQ
+    fn print_test123456_hash() {
+        let alg = HashAlgorithm::Argon2id(Argon2idConfig {
+            m_cost: 16 * 1024,
+            t_cost: 2,
+            p_cost: 1,
+        });
+        let hash = alg.hash("Test123456").unwrap();
+        println!("Test123456 hash: {}", hash.clone());
+        assert!(alg.verify("Test123456", &hash).unwrap(), "验证失败")
+    }
+
+    #[test]
     fn detect_bcrypt_hash() {
         let alg = HashAlgorithm::Bcrypt(BcryptConfig { cost: 12 });
         let hash = alg.hash("test_password").unwrap();

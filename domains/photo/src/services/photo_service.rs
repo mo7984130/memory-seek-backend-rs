@@ -16,10 +16,11 @@ use uuid::Uuid;
 use crate::{
     mappers::{
         collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
-        photo_mapper::PhotoMapper, timeline_stat_mapper::TimelineStatMapper,
+        comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper,
+        photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper,
+        timeline_stat_mapper::TimelineStatMapper,
     },
     models::photo::{PhotoCursor, PhotoCursorParam, PhotoResult},
-    services::collection_service::CollectionService,
     state::PhotoState,
 };
 use common::Result;
@@ -38,9 +39,7 @@ impl PhotoService {
         user_id: UserId,
         photo_ids: &[PhotoId],
     ) -> Result<Vec<PhotoResult>> {
-        let favorite_collection_id =
-            CollectionService::get_favorite_collection_id(state, user_id).await?;
-        let (photos_result, favorited_photo_ids_result) = tokio::join!(
+        let (photos_result, liked_photo_ids_result) = tokio::join!(
             state.redis.get_or_load_batch(
                 photo_ids,
                 |id| RedisKeys::photo::photo::photo_info(*id),
@@ -48,21 +47,17 @@ impl PhotoService {
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
                 |photo| photo.id,
             ),
-            CollectionPhotoMapper::exists_in_collection(
-                &state.db,
-                favorite_collection_id,
-                photo_ids
-            )
+            PhotoLikeMapper::query_is_like_by_photo_ids(&state.db, user_id, photo_ids.to_vec())
         );
         let photos = photos_result?;
-        let favorited_photo_ids = favorited_photo_ids_result?;
+        let liked_photo_ids = liked_photo_ids_result?;
         photos
             .into_iter()
             .flatten()
             .map(|p| {
                 PhotoResult::from(p.clone())
-                    .with_favorited(favorited_photo_ids.contains(&p.id))
-                    .with_tokens(&state.token_cipher)
+                    .with_liked(liked_photo_ids.contains(&p.id))
+                    .with_tokens(&p.file_id, &state.token_cipher)
             })
             .collect::<Vec<_>>()
             .to_ok()
@@ -94,6 +89,7 @@ impl PhotoService {
             decoded_cursor,
             size + 1,
             query.direction,
+            query.anchor_time,
         )
         .timed(metrics_timer_name!(
             "get_photo_cursor_page",
@@ -110,7 +106,12 @@ impl PhotoService {
             ..
         } = CursorPage::from_oversize(photo_ids, size);
 
-        let photo_vos = Self::load_photos_info(state, user_id, &photo_ids).await?;
+        let photo_vos = Self::load_photos_info(state, user_id, &photo_ids)
+            .timed(metrics_timer_name!(
+                "get_photo_cursor_page",
+                "load_photos_info"
+            ))
+            .await?;
 
         // 获取next_cursor
         let next_cursor = if has_more {
@@ -157,6 +158,30 @@ impl PhotoService {
     ) -> Result<PhotoResult> {
         metrics_group!("upload_photo");
 
+        // 效验文件
+        let metadata = {
+            let file_data_clone = file_data.clone();
+            timed!("upload_photo", "validate_photo", {
+                tokio::task::spawn_blocking(move || {
+                    FileValidator::validate_image(&file_data_clone, &file_name, &content_type)
+                })
+                .await
+                .trace_internal_err(
+                    "spawn_blocking_validate_photo_err",
+                    "tokio spawn_blocking join err",
+                )?
+                .map_err(|e| {
+                    let msg = e.to_string();
+                    log_warn(
+                        "upload_photo:invalid_photo",
+                        "用户上传图片时, 图片校验未通过",
+                        msg.clone(),
+                        AppError::bad_request(msg),
+                    )
+                })?
+            })
+        };
+
         // 计算md5
         let md5_hash = {
             let file_data_clone = file_data.clone();
@@ -184,30 +209,6 @@ impl PhotoService {
             );
             return Err(err);
         }
-
-        // 效验文件
-        let metadata = {
-            let file_data_clone = file_data.clone();
-            timed!("upload_photo", "validate_photo", {
-                tokio::task::spawn_blocking(move || {
-                    FileValidator::validate_image(&file_data_clone, &file_name, &content_type)
-                })
-                .await
-                .trace_internal_err(
-                    "spawn_blocking_validate_photo_err",
-                    "tokio spawn_blocking join err",
-                )?
-                .map_err(|e| {
-                    let msg = e.to_string();
-                    log_warn(
-                        "upload_photo:invalid_photo",
-                        "图片效验不通过",
-                        &msg,
-                        AppError::bad_request("图片效验不通过"),
-                    )
-                })?
-            })
-        };
 
         // 上传文件
         let date_path = chrono::Local::now().format("%Y/%m/%d");
@@ -259,8 +260,9 @@ impl PhotoService {
 
         metrics_success!("upload_photo");
 
+        let file_id = photo.file_id.clone();
         PhotoResult::from(PhotoRecord::from(photo))
-            .with_tokens(&state.token_cipher)
+            .with_tokens(&file_id, &state.token_cipher)
             .to_ok()
     }
 
@@ -324,25 +326,42 @@ impl PhotoService {
                 // 更新收藏夹照片计数
                 CollectionMapper::decr_photo_count_batch(txn, &affected_collections).await?;
 
+                // 删除照片评论点赞
+                let comment_ids = CommentMapper::delete_by_photo_ids(txn, &photo_ids).await?;
+                CommentLikeMapper::delete_by_comment_ids(txn, &comment_ids).await?;
+
+                // 删除照片点赞
+                for photo_id in &photo_ids {
+                    PhotoLikeMapper::delete_all_by_photo_id(txn, *photo_id).await?;
+                }
+
                 // 删除数据库照片
                 PhotoMapper::delete_by_ids(txn, &photo_ids).await?;
 
                 Ok(photos)
             })
         })
+        .timed(metrics_timer_name!("delete_photos", "db_transaction"))
         .await
         .trace_internal_err("db_txn_err", "数据库事务错误")?;
 
         // 删除照片文件
         let file_ids = photos.iter().map(|p| p.file_id.clone()).collect::<Vec<_>>();
-        state.s3_client.delete_batch(file_ids).await?;
+        state
+            .s3_client
+            .delete_batch(file_ids)
+            .timed(metrics_timer_name!("delete_photos", "s3_delete_batch"))
+            .await?;
 
         // 更新照片时间线统计
         TimelineStatMapper::decr_stat_by_created_ats(
             &state.db,
             &photos.iter().map(|p| p.created_at).collect::<Vec<_>>(),
         )
+        .timed(metrics_timer_name!("delete_photos", "timeline_decr_stat"))
         .await?;
+
+        metrics_success!("delete_photos");
 
         Ok(())
     }
