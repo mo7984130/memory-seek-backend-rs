@@ -60,7 +60,9 @@ jobs:
                     - "auth"
                     - "auth,user"
                     - "auth,photo"
+                    - "auth,photo,face-engine"
                     - "auth,user,photo"
+                    - "auth,user,photo,face-engine"
         steps:
             - uses: actions/checkout@v4
 
