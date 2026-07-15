@@ -82,7 +82,7 @@ wiremock = "0.6"
 
 indexmap = "2.14.0"
 
-insight-face-rs = { path = "../../rust-libs/insight-face-rs", version = "1.6.1" , features = ["pgvector"] }
+insight-face-rs = { version = "1.6.1" , features = ["pgvector"] }
 
 
 # Backup
