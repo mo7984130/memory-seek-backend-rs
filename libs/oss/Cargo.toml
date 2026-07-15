@@ -6,8 +6,8 @@ edition = "2024"
 [dependencies]
 common = { path = "../../common" }
 serde = { workspace = true }
-bytes = "1.10"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+bytes = { workspace = true }
+reqwest = { workspace = true }
 s3 = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }

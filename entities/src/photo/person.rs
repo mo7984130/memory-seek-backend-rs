@@ -1,10 +1,11 @@
 use common::{error::AppError, ext::ResultErrExt};
 use insight_face_rs::types::FaceEmbedding;
-use pgvector::Vector;
 use sea_orm::entity::prelude::*;
+
 use serde::{Deserialize, Serialize};
 
 use crate::photo::face::FaceId;
+use insight_face_rs::PgVector;
 
 // 记得要同步修改model的table_name
 pub const TABLE_NAME: &'static str = "photo_person";
@@ -17,7 +18,7 @@ pub struct Model {
     pub name: String,
     pub name_initials: Option<String>,
     pub cover_face_id: i64,
-    pub centroid: Vector,
+    pub centroid: PgVector,
     pub face_count: i64,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,

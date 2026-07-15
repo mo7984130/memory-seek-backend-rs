@@ -12,4 +12,4 @@ hex = { workspace = true }
 serde = { workspace = true }
 async-trait = { workspace = true }
 oss = { path = "../oss" }
-thiserror = "2.0"
+thiserror = { workspace = true }

@@ -8,7 +8,7 @@ default = []
 metrics = ["common/metrics"]
 controller = ["dep:axum"]
 file_validator = ["common/file_validator"]
-face = ["dep:insight-face-rs", "dep:backup", "entities/face-engine", "controller"]
+face = ["dep:insight-face-rs", "dep:backup", "entities/face-engine"]
 
 [dependencies]
 common = { path = "../../common", features = ["validators", "file_validator"] }
