@@ -11,7 +11,7 @@ jobs:
         name: 代码格式检查
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
@@ -25,7 +25,7 @@ jobs:
         name: 静态分析
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
@@ -41,7 +41,7 @@ jobs:
         name: 单元测试
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
@@ -67,13 +67,15 @@ jobs:
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
 
+            # 第一步：先提取出没有逗号的 key
             - name: Normalize feature key
               id: cache-key
               run: echo "key=$(echo '${{ matrix.features }}' | tr ',' '-')" >> $GITHUB_OUTPUT
 
             - uses: Swatinem/rust-cache@v2
               with:
-                  key: ${{ matrix.features }}
+                  # ✅ 修改这里：使用上一步生成的 cache-key，而不是 ${{ matrix.features }}
+                  key: ${{ steps.cache-key.outputs.key }}
 
             - name: Build
               run: cargo build --features "${{ matrix.features }}"
