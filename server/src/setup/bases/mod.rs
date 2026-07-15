@@ -10,7 +10,7 @@ use crate::state::AppBases;
 pub struct AppBasesInit;
 
 impl AppBasesInit {
-    pub async fn init(cfg: &AppConfig) -> anyhow::Result<AppBases> {
+    pub async fn init(cfg: &AppConfig) -> Result<AppBases, common::error::AppError> {
         // 初始化数据库
         let db = database::init(cfg).await?;
 

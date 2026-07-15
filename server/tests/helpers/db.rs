@@ -49,10 +49,9 @@ impl CleanupGuard {
                     ),
                 ))
                 .await
+                && let Ok(id) = row.try_get::<i64>("", "id")
             {
-                if let Ok(id) = row.try_get::<i64>("", "id") {
-                    guard.delete_cascade(&[id]).await;
-                }
+                guard.delete_cascade(&[id]).await;
             }
 
             let _ = guard

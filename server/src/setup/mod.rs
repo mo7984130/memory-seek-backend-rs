@@ -2,6 +2,10 @@ pub mod bases;
 pub mod domains;
 pub mod libs;
 
+use common::error::AppError;
+#[cfg(feature = "backup")]
+use common::ext::ResultErrExt;
+
 use crate::config::AppConfig;
 use crate::state::AppState;
 use axum::Router;
@@ -14,7 +18,7 @@ pub struct AppSetup {
 }
 
 impl AppSetup {
-    pub async fn init(cfg: &AppConfig) -> anyhow::Result<Self> {
+    pub async fn init(cfg: &AppConfig) -> Result<Self, AppError> {
         // 1. 初始化基础设施
         let bases = bases::AppBasesInit::init(cfg).await?;
 
@@ -30,7 +34,9 @@ impl AppSetup {
                 .expect("启用 backup 功能时必须在配置中设置 backup 项");
 
             if !backup_config.enabled {
-                anyhow::bail!("启用 backup 功能时 backup.enabled 不能为 false");
+                return Err(AppError::bad_request(
+                    "启用 backup 功能时 backup.enabled 不能为 false",
+                ));
             }
 
             let bs = Arc::new(backup::BackupState::new(
@@ -40,8 +46,11 @@ impl AppSetup {
             ));
             let scheduler = backup::BackupScheduler::new(bs.clone())
                 .await
-                .map_err(|e| anyhow::anyhow!(e))?;
-            scheduler.start().await.map_err(|e| anyhow::anyhow!(e))?;
+                .trace_internal_err("backup_init_err", "备份调度器初始化失败")?;
+            scheduler
+                .start()
+                .await
+                .trace_internal_err("backup_start_err", "备份调度器启动失败")?;
             Some(Arc::new(scheduler))
         };
 

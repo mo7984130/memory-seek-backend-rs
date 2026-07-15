@@ -1,3 +1,4 @@
+use common::ext::ResultErrExt;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
@@ -11,11 +12,11 @@ use config::AppConfig;
 use setup::AppSetup;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<(), common::error::AppError> {
     let _graud = crate::setup::bases::log::init();
 
     // 加载配置
-    let cfg = AppConfig::load()?;
+    let cfg = AppConfig::load().trace_internal_err("config_load_err", "加载配置失败")?;
 
     // 初始化应用
     let app_setup = AppSetup::init(&cfg).await?;
@@ -54,14 +55,17 @@ async fn main() -> anyhow::Result<()> {
 
     // 启动服务器
     tracing::info!("尝试监听{}端口", cfg.server.port);
-    let listener = TcpListener::bind(&cfg.server_addr()).await?;
+    let listener = TcpListener::bind(&cfg.server_addr())
+        .await
+        .trace_internal_err("tcp_bind_err", "端口绑定失败")?;
     tracing::info!("Server listening on {}", cfg.server_addr());
 
     let shutdown_signal = shutdown_signal(graceful_state);
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal)
-        .await?;
+        .await
+        .trace_internal_err("server_err", "服务器运行异常")?;
 
     Ok(())
 }

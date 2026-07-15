@@ -1,8 +1,8 @@
 use crate::photo::{person::PersonId, photo::PhotoId};
 use common::error::AppError;
 use common::ext::ResultErrExt;
+use insight_face_rs::PgVector;
 use insight_face_rs::types::{BoundingBox, Face, FaceEmbedding, FaceLandmarks};
-use pgvector::Vector;
 use sea_orm::{
     ActiveValue::{NotSet, Set},
     entity::prelude::*,
@@ -26,7 +26,7 @@ pub struct Model {
     pub landmarks: Json,
     pub score: f32,
 
-    pub embedding: Vector,
+    pub embedding: PgVector,
 
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
@@ -111,7 +111,7 @@ impl TryFrom<NewFaceRecord> for ActiveModel {
             bbox: Set(bbox),
             landmarks: Set(landmarks),
             score: Set(value.score),
-            embedding: Set(pgvector::Vector::from(value.embedding)),
+            embedding: Set(PgVector::from(value.embedding)),
             created_at: NotSet,
             updated_at: NotSet,
         })

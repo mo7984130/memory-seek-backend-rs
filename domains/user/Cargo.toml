@@ -9,12 +9,12 @@ metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum"]
 
 [dependencies]
-common = { path = "../../common", features = ["file_validator", "validators"] }
+common = { path = "../../common", features = ["file_validator", "validators", "metrics"] }
 constants = { path = "../constants" }
 entities = { path = "../../entities" }
 memory-seek-type = { workspace = true }
 oss = { path = "../../libs/oss" }
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { workspace = true }
 validator = { workspace = true }
 chrono = { workspace = true }
 sea-orm = { workspace = true }

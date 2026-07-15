@@ -1,5 +1,5 @@
 use axum::http::StatusCode;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tower::ServiceExt;
 
 use super::super::common::{create_collection, get_collections, upload_photo};
