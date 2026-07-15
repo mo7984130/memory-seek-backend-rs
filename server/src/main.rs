@@ -55,7 +55,9 @@ async fn main() -> Result<(), common::error::AppError> {
 
     // 启动服务器
     tracing::info!("尝试监听{}端口", cfg.server.port);
-    let listener = TcpListener::bind(&cfg.server_addr()).await.trace_internal_err("tcp_bind_err", "端口绑定失败")?;
+    let listener = TcpListener::bind(&cfg.server_addr())
+        .await
+        .trace_internal_err("tcp_bind_err", "端口绑定失败")?;
     tracing::info!("Server listening on {}", cfg.server_addr());
 
     let shutdown_signal = shutdown_signal(graceful_state);

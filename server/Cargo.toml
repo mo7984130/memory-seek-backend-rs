@@ -66,3 +66,4 @@ sea-orm = { workspace = true }
 deadpool-redis = { workspace = true }
 backup = { path = "../domains/backup" }
 oss = { path = "../libs/oss" }
+tower = { version = "0.5", features = ["util"] }

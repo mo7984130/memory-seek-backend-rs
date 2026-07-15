@@ -1,6 +1,6 @@
 use axum::body::Body;
-use axum::http::{header, Request, StatusCode};
-use serde_json::{json, Value};
+use axum::http::{Request, StatusCode, header};
+use serde_json::{Value, json};
 use tower::ServiceExt;
 
 use crate::helpers::{app::build_test_router, auth::register_and_login, db::CleanupGuard};

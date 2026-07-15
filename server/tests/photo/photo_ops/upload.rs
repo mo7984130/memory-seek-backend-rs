@@ -1,8 +1,8 @@
-use axum::http::{header, Request, StatusCode};
+use axum::http::{Request, StatusCode, header};
 use serde_json::Value;
 use tower::ServiceExt;
 
-use super::super::common::{multipart_upload_request, MINIMAL_JPEG};
+use super::super::common::{MINIMAL_JPEG, multipart_upload_request};
 use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};
 
 /// Test uploading a photo successfully

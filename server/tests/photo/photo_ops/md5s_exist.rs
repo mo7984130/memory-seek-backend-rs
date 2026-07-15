@@ -1,5 +1,5 @@
 use axum::http::StatusCode;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tower::ServiceExt;
 
 use crate::helpers::{app::build_test_router, auth, db::CleanupGuard};

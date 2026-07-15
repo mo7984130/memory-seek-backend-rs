@@ -1,8 +1,8 @@
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
+    EnvFilter, Registry,
     fmt::{self},
     prelude::*,
-    EnvFilter, Registry,
 };
 
 pub fn init() -> WorkerGuard {
