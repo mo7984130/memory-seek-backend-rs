@@ -14,7 +14,9 @@ pub struct Config {
     #[serde(default = "default_force_path_style")]
     pub force_path_style: bool,
 }
-const fn default_force_path_style -> bool { true }
+const fn default_force_path_style() -> bool {
+    true
+}
 
 pub fn init(cfg: &Config) -> Arc<S3Client> {
     info!("初始化 S3 客户端");
