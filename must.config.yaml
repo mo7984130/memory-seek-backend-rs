@@ -1,0 +1,25 @@
+# ── Memory Seek 最小必需配置 ──
+database:
+  url: "postgres://user:password@localhost:5432/memory_seek"
+
+smtp:
+  server: "smtp.example.com"
+  username: "your-email@example.com"
+  password: "your-password"
+  from_email: "noreply@example.com"
+  from_name: "MemorySeek"
+
+s3:
+  endpoint: "http://localhost:9000"
+  bucket: "memory-seek"
+  access_key: "your-access-key"
+  secret_key: "your-secret-key"
+  region: "us-east-1"
+
+token_cipher:
+  key: "your-secret-key"
+  salt: "your-salt"
+
+face_engine:
+  detect_model_path: "/path/to/model"
+  recognize_model_path: "/path/to/model"

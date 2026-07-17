@@ -1,0 +1,40 @@
+server:
+  host: "127.0.0.1"       # port=0 表示随机端口
+  port: 0
+
+database:
+  url: "postgres://test:test@localhost:5433/memory_seek_test"
+  max_connections: 10
+
+redis:
+  url: "redis://localhost:6380"
+  max_connections: 10
+
+smtp:
+  server: "localhost"
+  port: 1025
+  username: ""
+  password: ""
+  from_email: "test@example.com"
+  from_name: "Test"
+
+s3:
+  endpoint: "http://localhost:9002"
+  bucket: "memory-seek"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  region: "us-east-1"
+  public_url: "http://localhost:9002/memory-seek"
+  force_path_style: true
+
+token_cipher:
+  key: "test-secret-key-for-testing-only"
+  salt: "test-salt"
+
+backup:
+  enabled: true
+  schedule: "0 0 6 * * *"
+  local_path: "/var/backups/memory-seek"
+  s3_prefix: "backup/"
+  retention_days: 3
+  tables: null

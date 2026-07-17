@@ -3,8 +3,6 @@ pub mod domains;
 pub mod libs;
 
 use common::error::AppError;
-#[cfg(feature = "backup")]
-use common::ext::ResultErrExt;
 
 use crate::config::AppConfig;
 use crate::state::AppState;
@@ -32,26 +30,7 @@ impl AppSetup {
                 .backup
                 .as_ref()
                 .expect("启用 backup 功能时必须在配置中设置 backup 项");
-
-            if !backup_config.enabled {
-                return Err(AppError::bad_request(
-                    "启用 backup 功能时 backup.enabled 不能为 false",
-                ));
-            }
-
-            let bs = Arc::new(backup::BackupState::new(
-                bases.db.clone(),
-                libs.s3_client.clone(),
-                backup_config.clone(),
-            ));
-            let scheduler = backup::BackupScheduler::new(bs.clone())
-                .await
-                .trace_internal_err("backup_init_err", "备份调度器初始化失败")?;
-            scheduler
-                .start()
-                .await
-                .trace_internal_err("backup_start_err", "备份调度器启动失败")?;
-            Some(Arc::new(scheduler))
+            domains::backup::init(&bases.db, &libs.s3_client, backup_config).await?
         };
 
         // 4. 构建 AppState
@@ -59,6 +38,7 @@ impl AppSetup {
             db: bases.db,
             redis: bases.redis,
             token_cipher: libs.token_cipher,
+            email_client: libs.email_client,
             #[cfg(feature = "s3")]
             s3_client: libs.s3_client,
             #[cfg(feature = "backup")]

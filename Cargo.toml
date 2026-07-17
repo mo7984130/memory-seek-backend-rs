@@ -50,7 +50,7 @@ uuid = { version = "1.21.0", features = ["v4"] }
 futures = "0.3.32"
 const_format = "0.2.35"
 image = "0.25.9"
-config = "0.15.19"
+config = { version = "0.15.19", features = ["yaml"] }
 dotenvy = "0.15.7"
 async-trait = "0.1.89"
 
@@ -88,3 +88,6 @@ insight-face-rs = { version = "1.6.1" , features = ["pgvector"] }
 # Backup
 csv = "1.3"
 tokio-cron-scheduler = "0.13"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }

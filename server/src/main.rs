@@ -1,3 +1,4 @@
+use clap::Parser;
 use common::ext::ResultErrExt;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -11,24 +12,28 @@ mod state;
 use config::AppConfig;
 use setup::AppSetup;
 
+/// Memory Seek 后端服务
+#[derive(Parser)]
+#[command(name = "memory-seek-server")]
+struct Cli {
+    /// 配置文件路径
+    #[arg(short = 'c', long = "config")]
+    config: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), common::error::AppError> {
-    let _graud = crate::setup::bases::log::init();
+    let cli = Cli::parse();
 
     // 加载配置
-    let cfg = AppConfig::load().trace_internal_err("config_load_err", "加载配置失败")?;
+    let cfg = AppConfig::load(cli.config).trace_internal_err("config_load_err", "加载配置失败")?;
 
-    // 初始化应用
+    // 初始化应用（内部会初始化日志、数据库、Redis、metrics 等）
     let app_setup = AppSetup::init(&cfg).await?;
 
-    // 初始化 Prometheus metrics exporter
+    // 启动后台指标采集
     #[cfg(feature = "metrics")]
     {
-        let metrics_cfg = cfg
-            .metrics
-            .as_ref()
-            .expect("metrics config is required when metrics feature is enabled");
-        setup::bases::metrics::init(&metrics_cfg.host, metrics_cfg.port);
         metrics::start_collector(app_setup.state.db.clone(), app_setup.state.redis.clone());
     }
 
