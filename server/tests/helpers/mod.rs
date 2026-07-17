@@ -10,10 +10,9 @@ use server::config::AppConfig;
 
 /// 加载测试配置
 ///
-/// 从 tests/test.config.json 读取，确保所有测试使用同一份配置。
+/// 从 tests/test.config.yaml 读取，确保所有测试使用同一份配置。
 pub fn test_config() -> AppConfig {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let config_path = format!("{}/tests/test.config.json", manifest_dir);
-    unsafe { std::env::set_var("MEMORY_SEEK_CONFIG_PATH", &config_path) };
-    AppConfig::load().expect("加载测试配置失败")
+    let config_path = format!("{}/tests/test.config.yaml", manifest_dir);
+    AppConfig::load(Some(config_path)).expect("加载测试配置失败")
 }

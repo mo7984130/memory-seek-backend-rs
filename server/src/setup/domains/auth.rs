@@ -1,4 +1,3 @@
-use crate::config::AppConfig;
 use crate::state::AppState;
 use auth::AuthState;
 use axum::Router;
@@ -9,25 +8,15 @@ use tracing::info;
 /// 注册 Auth 模块路由
 pub fn register(
     state: &Arc<AppState>,
-    cfg: &AppConfig,
+    _cfg: &crate::config::AppConfig,
 ) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
     info!("注册 Auth 模块路由");
-
-    // 创建 EmailClient
-    let email_client = email::EmailClient::new(
-        &cfg.smtp.server,
-        cfg.smtp.port,
-        &cfg.smtp.username,
-        &cfg.smtp.password,
-        &cfg.smtp.from_email,
-        &cfg.smtp.from_name,
-    );
 
     // 构建 AuthState
     let auth_state = Arc::new(AuthState::new(
         state.db.clone(),
         state.redis.clone(),
-        email_client,
+        state.email_client.clone(),
         state.token_cipher.clone(),
     ));
 

@@ -26,7 +26,7 @@ pub struct S3Config {
     pub secret_key: String,
     pub region: String,
     pub bucket: String,
-    pub public_url: String,
+    pub public_url: Option<String>,
     pub force_path_style: bool,
 }
 
@@ -67,7 +67,12 @@ impl S3Client {
 
         Self {
             bucket: Arc::from(bucket),
-            public_url: s3_config.public_url.trim_end_matches('/').to_string(),
+            public_url: s3_config
+                .public_url
+                .clone()
+                .unwrap_or_else(|| s3_config.endpoint.clone())
+                .trim_end_matches('/')
+                .to_string(),
         }
     }
 

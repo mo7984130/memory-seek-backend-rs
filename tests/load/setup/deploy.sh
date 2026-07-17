@@ -80,7 +80,7 @@ ssh_cmd "mkdir -p $REMOTE_DIR"
 # ── Step 2: 上传文件 ─────────────────────────────────
 echo "[2/7] Uploading files..."
 scp_cmd "$LOAD_DIR/docker-compose.yml" "$REMOTE:$REMOTE_DIR/"
-scp_cmd "$LOAD_DIR/config/config.json" "$REMOTE:$REMOTE_DIR/config.json"
+scp_cmd "$LOAD_DIR/config/config.yaml" "$REMOTE:$REMOTE_DIR/config.yaml"
 scp_cmd "$SCRIPT_DIR/../../../docs/sql/init.sql" "$REMOTE:$REMOTE_DIR/"
 scp_cmd "$LOAD_DIR/setup/seed.sql" "$REMOTE:$REMOTE_DIR/"
 scp_cmd "$LOAD_DIR/setup/verify.sql" "$REMOTE:$REMOTE_DIR/"

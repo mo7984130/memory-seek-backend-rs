@@ -6,7 +6,7 @@ use super::test_config;
 
 /// 构建测试用 Router
 ///
-/// 使用 tests/test.config.json 配置，初始化完整的应用路由。
+/// 使用 tests/test.config.yaml 配置，初始化完整的应用路由。
 /// 包含真实的 auth_middleware，测试需通过登录获取 token 来访问受保护路由。
 ///
 /// 返回 `Router<()>`（state 已通过 `with_state()` 消费）。

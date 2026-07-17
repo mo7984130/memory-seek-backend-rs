@@ -330,7 +330,7 @@ async fn test_full_backup_flow() {
 
     // 获取 S3 客户端
     let s3_config = cfg.s3.expect("测试配置应包含 S3 配置");
-    let s3_client = Arc::new(oss::S3Client::new(&s3_config));
+    let s3_client = Arc::new(oss::S3Client::new(&s3_config.to_oss_config()));
 
     // 创建备份配置（只备份 auth_user 表）
     let backup_config = BackupConfig {
@@ -373,7 +373,7 @@ async fn test_backup_state_creation() {
     let db = get_test_db().await;
 
     let s3_config = cfg.s3.expect("测试配置应包含 S3 配置");
-    let s3_client = Arc::new(oss::S3Client::new(&s3_config));
+    let s3_client = Arc::new(oss::S3Client::new(&s3_config.to_oss_config()));
 
     let backup_config = BackupConfig {
         enabled: true,

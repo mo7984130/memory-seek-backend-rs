@@ -39,6 +39,7 @@ entities = { path = "../entities" }
 email = { path = "../libs/email" }
 config = { workspace = true }
 dotenvy = { workspace = true }
+clap = { workspace = true }
 
 # 性能监控
 metrics = { workspace = true, optional = true }

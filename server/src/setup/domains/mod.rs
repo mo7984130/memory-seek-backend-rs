@@ -1,6 +1,9 @@
 #[cfg(feature = "auth")]
 pub mod auth;
 
+#[cfg(feature = "backup")]
+pub mod backup;
+
 #[cfg(feature = "user")]
 pub mod user;
 
