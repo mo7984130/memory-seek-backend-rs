@@ -17,7 +17,7 @@ pub struct AppBases {
     pub db: DatabaseConnection,
     pub redis: Pool,
     #[allow(dead_code)]
-    pub _log_guard: tracing_appender::non_blocking::WorkerGuard,
+    pub _log_guard: Option<tracing_appender::non_blocking::WorkerGuard>,
 }
 
 // ============ Libs ============

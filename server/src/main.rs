@@ -23,6 +23,17 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<(), common::error::AppError> {
+    // 尽早初始化基础日志（仅 stderr），确保启动阶段错误可见
+    // 后续 AppSetup::init 会用完整配置（含文件输出）替换
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .try_init()
+        .ok();
+
     let cli = Cli::parse();
 
     // 加载配置

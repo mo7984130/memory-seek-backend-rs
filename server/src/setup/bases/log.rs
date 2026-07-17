@@ -23,7 +23,11 @@ fn default_log_file_name() -> String {
     "app.log".to_string()
 }
 
-pub fn init(cfg: &Config) -> WorkerGuard {
+/// 初始化完整日志系统（stdout + 文件）
+///
+/// 如果全局 subscriber 已被 main 中的 bootstrap subscriber 占用，
+/// 则跳过文件日志初始化，返回 None。此时 bootstrap subscriber 继续工作。
+pub fn init(cfg: &Config) -> Option<WorkerGuard> {
     // 日志输出
     // 每天创建一个新文件
     let file_appender = tracing_appender::rolling::daily(&cfg.log_dir, &cfg.log_file_name);
@@ -47,7 +51,16 @@ pub fn init(cfg: &Config) -> WorkerGuard {
         registry.with(MetricsLayer::new())
     };
 
-    registry.init();
-
-    guard
+    match registry.try_init() {
+        Ok(()) => {
+            tracing::info!("日志系统初始化完成");
+            Some(guard)
+        }
+        Err(_) => {
+            // bootstrap subscriber 已存在，丢弃文件写入器避免无用线程
+            drop(guard);
+            tracing::warn!("日志系统已在启动阶段初始化，跳过文件日志配置");
+            None
+        }
+    }
 }
