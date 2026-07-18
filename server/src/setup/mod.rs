@@ -25,13 +25,8 @@ impl AppSetup {
 
         // 3. 初始化备份调度器
         #[cfg(feature = "backup")]
-        let backup_scheduler = {
-            let backup_config = cfg
-                .backup
-                .as_ref()
-                .expect("启用 backup 功能时必须在配置中设置 backup 项");
-            domains::backup::init(&bases.db, &libs.s3_client, backup_config).await?
-        };
+        let backup_scheduler =
+            domains::backup::init(&bases.db, &libs.s3_client, &cfg.backup).await?;
 
         // 4. 构建 AppState
         let state = Arc::new(AppState {

@@ -2,13 +2,13 @@
 # 复制此文件为 config.yaml 并修改实际值
 # 所有字段均可通过环境变量覆盖: MEMORY_SEEK_<SECTION>__<KEY>
 #   例: MEMORY_SEEK_SERVER__PORT=8080
+#
+# 日志级别通过环境变量 RUST_LOG 控制（默认 info）
+# 日志目录/文件名通过 --log-dir/--log-file 或环境变量 MEMORY_SEEK_LOG_DIR/MEMORY_SEEK_LOG_FILE 控制
+# 默认: /var/log/memory-seek-server/app.log
 server:
   host: "0.0.0.0"
   port: 3000
-
-log:
-  log_dir: "./logs"
-  log_file_name: "app.log"
 
 metrics:
   host: "0.0.0.0"

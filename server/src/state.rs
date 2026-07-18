@@ -16,8 +16,6 @@ use backup::BackupScheduler;
 pub struct AppBases {
     pub db: DatabaseConnection,
     pub redis: Pool,
-    #[allow(dead_code)]
-    pub _log_guard: tracing_appender::non_blocking::WorkerGuard,
 }
 
 // ============ Libs ============

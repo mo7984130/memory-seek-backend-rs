@@ -5,20 +5,30 @@ use tracing::info;
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
+    #[serde(default)]
     pub server: ServerConfig,
+
     pub database: crate::setup::bases::database::Config,
+
+    #[serde(default)]
     pub redis: crate::setup::bases::redis::Config,
+
     #[allow(dead_code)]
     pub smtp: crate::setup::libs::email::Config,
+
     #[cfg(feature = "s3")]
-    pub s3: Option<crate::setup::libs::s3::Config>,
+    pub s3: crate::setup::libs::s3::Config,
+
     pub token_cipher: crate::setup::libs::token_cipher::Config,
-    #[serde(default)]
-    pub log: crate::setup::bases::log::Config,
+
     #[cfg(feature = "metrics")]
-    pub metrics: Option<crate::setup::bases::metrics::Config>,
+    #[serde(default)]
+    pub metrics: crate::setup::bases::metrics::Config,
+
     #[cfg(feature = "backup")]
-    pub backup: Option<crate::setup::domains::backup::Config>,
+    #[serde(default)]
+    pub backup: crate::setup::domains::backup::Config,
+
     #[cfg(feature = "face-engine")]
     pub face_engine: crate::setup::libs::face_engine::Config,
 }
@@ -29,6 +39,15 @@ pub struct ServerConfig {
     pub host: String,
     #[serde(default = "default_port")]
     pub port: u16,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            host: default_host(),
+            port: default_port(),
+        }
+    }
 }
 fn default_host() -> String {
     "127.0.0.1".to_string()

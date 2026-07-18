@@ -20,7 +20,7 @@ impl AppLibsInit {
 
         // 初始化 S3（如果启用）
         #[cfg(feature = "s3")]
-        let s3_client = s3::init(cfg.s3.as_ref().expect("未配置s3"));
+        let s3_client = s3::init(&cfg.s3);
 
         // 初始化人脸模型
         #[cfg(feature = "face-engine")]

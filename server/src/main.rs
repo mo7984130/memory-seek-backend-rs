@@ -19,11 +19,23 @@ struct Cli {
     /// 配置文件路径
     #[arg(short = 'c', long = "config")]
     config: Option<String>,
+
+    /// 日志目录
+    #[arg(long = "log-dir")]
+    log_dir: Option<String>,
+
+    /// 日志文件名
+    #[arg(long = "log-file")]
+    log_file: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), common::error::AppError> {
     let cli = Cli::parse();
+
+    // 提前初始化日志系统，确保配置加载等早期阶段也能记录错误详情
+    // 文件写入器生命周期由 _log_guard 持有，进程运行期间持续生效
+    let _log_guard = setup::bases::log::init(cli.log_dir, cli.log_file);
 
     // 加载配置
     let cfg = AppConfig::load(cli.config).trace_internal_err("config_load_err", "加载配置失败")?;
