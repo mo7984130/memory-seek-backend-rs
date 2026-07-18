@@ -12,8 +12,17 @@ pub struct Config {
     pub max_connections: u32,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            url: default_url(),
+            max_connections: default_max_connections(),
+        }
+    }
+}
+
 fn default_url() -> String {
-    "redis://localhost:6379".to_string()
+    "redis://127.0.0.1:6379".to_string()
 }
 const fn default_max_connections() -> u32 {
     16

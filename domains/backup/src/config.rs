@@ -28,6 +28,19 @@ pub struct BackupConfig {
     pub tables: Option<Vec<String>>,
 }
 
+impl Default for BackupConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_enabled(),
+            schedule: default_schedule(),
+            local_path: default_local_path(),
+            s3_prefix: default_s3_prefix(),
+            retention_days: default_retention_days(),
+            tables: None,
+        }
+    }
+}
+
 fn default_enabled() -> bool {
     true
 }

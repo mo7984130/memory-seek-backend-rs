@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use serde::Deserialize;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
     EnvFilter, Registry,
@@ -8,35 +7,28 @@ use tracing_subscriber::{
     prelude::*,
 };
 
-#[derive(Debug, Deserialize, Default)]
-pub struct Config {
-    #[serde(default = "default_log_dir")]
-    log_dir: PathBuf,
-    #[serde(default = "default_log_file_name")]
-    log_file_name: String,
-}
-
-fn default_log_dir() -> PathBuf {
-    PathBuf::from("./logs")
-}
-fn default_log_file_name() -> String {
-    "app.log".to_string()
-}
-
-/// 初始化完整日志系统（stdout + 文件）
+/// 初始化日志系统（stdout + 文件滚动写入），在 main 入口处尽早调用。
 ///
-/// 如果全局 subscriber 已被 main 中的 bootstrap subscriber 占用，
-/// 则跳过文件日志初始化，返回 None。此时 bootstrap subscriber 继续工作。
-pub fn init(cfg: &Config) -> Option<WorkerGuard> {
-    // 日志输出
+/// 参数 `cli_log_dir` 和 `cli_log_file` 为 CLI 传入值（优先级最高），
+/// 未提供时回退到环境变量 `MEMORY_SEEK_LOG_DIR` / `MEMORY_SEEK_LOG_FILE`，
+/// 最终默认 `/var/log/memory-seek-server` / `app.log`。
+pub fn init(cli_log_dir: Option<String>, cli_log_file: Option<String>) -> Option<WorkerGuard> {
+    let log_dir = cli_log_dir
+        .map(PathBuf::from)
+        .or_else(|| std::env::var("MEMORY_SEEK_LOG_DIR").ok().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("/var/log/memory-seek-server"));
+    let log_file_name = cli_log_file
+        .or_else(|| std::env::var("MEMORY_SEEK_LOG_FILE").ok())
+        .unwrap_or_else(|| "app.log".to_string());
+
     // 每天创建一个新文件
-    let file_appender = tracing_appender::rolling::daily(&cfg.log_dir, &cfg.log_file_name);
+    let file_appender = tracing_appender::rolling::daily(&log_dir, &log_file_name);
     // 异步写入器
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-    // 控制台layer
+    // 控制台 layer
     let stdout_layer = fmt::layer().with_ansi(true).with_writer(std::io::stdout);
-    // 日志文件layer
+    // 日志文件 layer
     let file_layer = fmt::layer().with_ansi(false).with_writer(non_blocking);
 
     let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
@@ -57,7 +49,7 @@ pub fn init(cfg: &Config) -> Option<WorkerGuard> {
             Some(guard)
         }
         Err(_) => {
-            // bootstrap subscriber 已存在，丢弃文件写入器避免无用线程
+            // 全局 subscriber 已存在，丢弃文件写入器避免无用线程
             drop(guard);
             tracing::warn!("日志系统已在启动阶段初始化，跳过文件日志配置");
             None
