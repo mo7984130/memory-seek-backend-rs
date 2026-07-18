@@ -15,7 +15,7 @@ pub async fn init(
     s3_client: &Arc<oss::S3Client>,
     cfg: &Config,
 ) -> Result<Option<Arc<backup::BackupScheduler>>, AppError> {
-    if !cfg.enabled {
+    if !cfg.scheduled.enabled {
         return Ok(None);
     }
 

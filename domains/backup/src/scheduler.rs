@@ -16,14 +16,14 @@ impl BackupScheduler {
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let scheduler = JobScheduler::new().await?;
 
-        let schedule = state.config.schedule.clone();
+        let schedule = state.config.scheduled.schedule.clone();
         let state_clone = state.clone();
 
         let job = Job::new(schedule.as_str(), move |_, _| {
             let state = state_clone.clone();
             tokio::spawn(async move {
-                if let Err(e) = BackupRunner::execute(state).await {
-                    tracing::error!("Backup job failed: {}", e);
+                if let Err(e) = BackupRunner::execute_scheduled(state).await {
+                    tracing::error!("Scheduled backup job failed: {}", e);
                 }
             });
         })?;

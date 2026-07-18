@@ -1,4 +1,5 @@
 use backup::runner::BackupRunner;
+use backup::config::BackupScheduleConfig;
 use backup::{BackupConfig, BackupState};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 use std::sync::Arc;
@@ -120,12 +121,10 @@ async fn cleanup_test_user(db: &DatabaseConnection, user_id: i64) {
 #[tokio::test]
 async fn test_backup_config_validate_success() {
     let config = BackupConfig {
-        enabled: true,
-        schedule: "0 0 6 * * *".to_string(),
         local_path: "/tmp/test-backup".to_string(),
         s3_prefix: "test-backup/".to_string(),
-        retention_days: 3,
         tables: Some(vec!["auth_user".to_string()]),
+        scheduled: BackupScheduleConfig::default(),
     };
 
     assert!(config.validate().is_ok(), "有效配置应该通过验证");
@@ -135,12 +134,10 @@ async fn test_backup_config_validate_success() {
 #[tokio::test]
 async fn test_backup_config_validate_empty_local_path() {
     let config = BackupConfig {
-        enabled: true,
-        schedule: "0 0 6 * * *".to_string(),
         local_path: "".to_string(),
         s3_prefix: "backup/".to_string(),
-        retention_days: 3,
         tables: None,
+        scheduled: BackupScheduleConfig::default(),
     };
 
     let result = config.validate();
@@ -148,66 +145,72 @@ async fn test_backup_config_validate_empty_local_path() {
     assert!(result.unwrap_err().contains("local_path"));
 }
 
-/// 测试 retention_days 为 0 验证失败
+/// 测试 daily_retention 为 0 验证失败
 #[tokio::test]
-async fn test_backup_config_validate_zero_retention_days() {
+async fn test_backup_config_validate_zero_retention() {
     let config = BackupConfig {
-        enabled: true,
-        schedule: "0 0 6 * * *".to_string(),
         local_path: "/tmp/test-backup".to_string(),
         s3_prefix: "backup/".to_string(),
-        retention_days: 0,
         tables: None,
+        scheduled: BackupScheduleConfig {
+            daily_retention: 0,
+            ..Default::default()
+        },
     };
 
     let result = config.validate();
-    assert!(result.is_err(), "retention_days=0 应该验证失败");
-    assert!(result.unwrap_err().contains("retention_days"));
+    assert!(result.is_err(), "daily_retention=0 应该验证失败");
+    assert!(result.unwrap_err().contains("retention"));
 }
 
-/// 测试配置默认值（通过 serde 反序列化）
+/// 测试配置默认值
 #[tokio::test]
 async fn test_backup_config_defaults() {
     let config = BackupConfig {
-        enabled: true,
-        schedule: "0 0 6 * * *".to_string(),
         local_path: "/tmp/test".to_string(),
         s3_prefix: "backup/".to_string(),
-        retention_days: 3,
         tables: None,
+        scheduled: BackupScheduleConfig::default(),
     };
 
-    assert!(config.enabled);
-    assert_eq!(config.schedule, "0 0 6 * * *");
     assert_eq!(config.local_path, "/tmp/test");
     assert_eq!(config.s3_prefix, "backup/");
-    assert_eq!(config.retention_days, 3);
     assert!(config.tables.is_none());
+    assert!(config.scheduled.enabled);
+    assert_eq!(config.scheduled.schedule, "0 0 6 * * *");
+    assert_eq!(config.scheduled.daily_retention, 7);
+    assert_eq!(config.scheduled.weekly_retention, 4);
+    assert_eq!(config.scheduled.monthly_retention, 6);
 }
 
-/// 测试从 JSON 反序列化配置
+/// 测试从 JSON 反序列化配置（新格式）
 #[tokio::test]
 async fn test_backup_config_from_json() {
     let json = r#"{
-        "enabled": true,
-        "schedule": "0 30 8 * * *",
         "local_path": "/var/backups/test",
         "s3_prefix": "daily-backup/",
-        "retention_days": 7,
-        "tables": ["auth_user", "photo_photo"]
+        "tables": ["auth_user", "photo_photo"],
+        "scheduled": {
+            "schedule": "0 30 8 * * *",
+            "daily_retention": 14,
+            "weekly_retention": 6,
+            "monthly_retention": 12
+        }
     }"#;
 
     let config: BackupConfig = serde_json::from_str(json).expect("反序列化失败");
 
-    assert!(config.enabled);
-    assert_eq!(config.schedule, "0 30 8 * * *");
     assert_eq!(config.local_path, "/var/backups/test");
     assert_eq!(config.s3_prefix, "daily-backup/");
-    assert_eq!(config.retention_days, 7);
     assert_eq!(
         config.tables,
         Some(vec!["auth_user".to_string(), "photo_photo".to_string()])
     );
+    assert!(config.scheduled.enabled);
+    assert_eq!(config.scheduled.schedule, "0 30 8 * * *");
+    assert_eq!(config.scheduled.daily_retention, 14);
+    assert_eq!(config.scheduled.weekly_retention, 6);
+    assert_eq!(config.scheduled.monthly_retention, 12);
 }
 
 /// 测试最小 JSON（只提供必填字段，其余用默认值）
@@ -217,13 +220,14 @@ async fn test_backup_config_minimal_json() {
 
     let config: BackupConfig = serde_json::from_str(json).expect("反序列化失败");
 
-    // 使用 serde(default) 的字段应该有默认值
-    assert!(config.enabled); // default_enabled = true
-    assert_eq!(config.schedule, "0 0 6 * * *"); // default_schedule
-    assert_eq!(config.local_path, "/var/backups/memory-seek"); // default_local_path
-    assert_eq!(config.s3_prefix, "backup/"); // default_s3_prefix
-    assert_eq!(config.retention_days, 3); // default_retention_days
-    assert!(config.tables.is_none()); // default = None
+    assert_eq!(config.local_path, "/var/backups/memory-seek");
+    assert_eq!(config.s3_prefix, "backup/");
+    assert!(config.tables.is_none());
+    assert!(config.scheduled.enabled);
+    assert_eq!(config.scheduled.schedule, "0 0 6 * * *");
+    assert_eq!(config.scheduled.daily_retention, 7);
+    assert_eq!(config.scheduled.weekly_retention, 4);
+    assert_eq!(config.scheduled.monthly_retention, 6);
 }
 
 // ==================== 集成测试（需要数据库） ====================
@@ -233,16 +237,13 @@ async fn test_backup_config_minimal_json() {
 async fn test_backup_config_from_test_config() {
     let cfg = test_config();
 
-    // 检查配置中是否有 backup 字段
-    // 注意：AppConfig 中 backup 是 Option<BackupConfig>
-    // 当前测试配置文件中包含 backup 配置
     let backup_cfg = cfg.backup;
     assert!(backup_cfg.is_some(), "测试配置应包含 backup 配置");
 
     let config = backup_cfg.unwrap();
-    assert!(config.enabled);
-    assert_eq!(config.schedule, "0 0 6 * * *");
-    assert_eq!(config.retention_days, 3);
+    assert!(config.scheduled.enabled);
+    assert_eq!(config.scheduled.schedule, "0 0 6 * * *");
+    assert_eq!(config.scheduled.daily_retention, 7);
     assert!(config.tables.is_none());
 }
 
@@ -318,7 +319,7 @@ async fn test_csv_export_with_real_db() {
 ///
 /// 此测试执行完整的备份流程：
 /// 1. 创建 BackupState
-/// 2. 执行 BackupRunner::execute()
+/// 2. 执行 BackupRunner::execute_scheduled()
 /// 3. 验证备份结果
 #[tokio::test]
 async fn test_full_backup_flow() {
@@ -334,12 +335,10 @@ async fn test_full_backup_flow() {
 
     // 创建备份配置（只备份 auth_user 表）
     let backup_config = BackupConfig {
-        enabled: true,
-        schedule: "0 0 6 * * *".to_string(),
         local_path: "/tmp/test-backup-flow".to_string(),
         s3_prefix: "test-backup/".to_string(),
-        retention_days: 1,
         tables: Some(vec!["auth_user".to_string()]),
+        scheduled: BackupScheduleConfig::default(),
     };
 
     // 验证配置
@@ -352,13 +351,12 @@ async fn test_full_backup_flow() {
     state.ensure_dirs().expect("创建备份目录失败");
 
     // 执行备份
-    let result = BackupRunner::execute(state).await.expect("备份执行失败");
+    let result = BackupRunner::execute_scheduled(state)
+        .await
+        .expect("备份执行失败");
 
     // 验证结果：至少导出一个表
-    assert!(
-        result.exported > 0 || result.skipped > 0 || result.renamed > 0,
-        "至少应导出、跳过或重命名一个表"
-    );
+    assert!(result.exported > 0, "至少应导出一个表");
     assert_eq!(result.failed, 0, "不应有失败的表（当前测试环境）");
 
     // 清理测试数据和临时目录
@@ -376,12 +374,10 @@ async fn test_backup_state_creation() {
     let s3_client = Arc::new(oss::S3Client::new(&s3_config.to_oss_config()));
 
     let backup_config = BackupConfig {
-        enabled: true,
-        schedule: "0 0 6 * * *".to_string(),
         local_path: "/tmp/test-state-creation".to_string(),
         s3_prefix: "test-backup/".to_string(),
-        retention_days: 3,
         tables: None,
+        scheduled: BackupScheduleConfig::default(),
     };
 
     let state = BackupState::new(db, s3_client, backup_config);

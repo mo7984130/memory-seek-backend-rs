@@ -17,7 +17,9 @@ impl ControllerRouter for BackupController {
     }
 
     fn protected_routes() -> Router<Arc<Self::State>> {
-        Router::new().route("/admin/backup/trigger", post(Self::trigger))
+        Router::new()
+            .route("/admin/backup/trigger", post(Self::trigger))
+            .route("/admin/backup/manual", post(Self::manual))
     }
 }
 
@@ -27,20 +29,36 @@ impl BackupController {
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<serde_json::Value>> {
         if user_id.0 != 1 {
-            return Err(AppError::forbidden("仅管理员可执行备份"));
+            return Err(AppError::forbidden("仅管理员可执行定时备份"));
         }
 
-        let result = BackupRunner::execute(state)
+        let result = BackupRunner::execute_scheduled(state)
             .await
-            .trace_internal_err("backup_exec_err", "备份执行失败")?;
+            .trace_internal_err("backup_exec_err", "定时备份执行失败")?;
 
         Ok(R::ok(serde_json::json!({
-            "success": result.success,
-            "failed": result.failed,
             "exported": result.exported,
-            "renamed": result.renamed,
-            "skipped": result.skipped,
+            "failed": result.failed,
             "cleaned": result.cleaned,
+            "durationSecs": result.duration.as_secs_f64(),
+        })))
+    }
+
+    async fn manual(
+        State(state): State<Arc<BackupState>>,
+        Extension(user_id): Extension<UserId>,
+    ) -> Result<R<serde_json::Value>> {
+        if user_id.0 != 1 {
+            return Err(AppError::forbidden("仅管理员可执行手动备份"));
+        }
+
+        let result = BackupRunner::execute_manual(state)
+            .await
+            .trace_internal_err("backup_manual_err", "手动备份执行失败")?;
+
+        Ok(R::ok(serde_json::json!({
+            "exported": result.exported,
+            "failed": result.failed,
             "durationSecs": result.duration.as_secs_f64(),
         })))
     }
