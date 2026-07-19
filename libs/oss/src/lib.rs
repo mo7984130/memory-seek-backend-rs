@@ -290,7 +290,9 @@ impl S3Client {
 
         let response = reqwest::get(&url)
             .await
-            .trace_internal_err("oss_download_err", "OSS下载失败")?;
+            .trace_internal_err("oss_download_err", "OSS下载失败")?
+            .error_for_status()
+            .trace_internal_err("oss_bad_status_err", "OSS返回了错误状态码")?;
 
         let bytes = response
             .bytes()
@@ -316,7 +318,9 @@ impl S3Client {
 
         let response = reqwest::get(&url)
             .await
-            .trace_internal_err("oss_download_err", "OSS下载失败")?;
+            .trace_internal_err("oss_download_err", "OSS下载失败")?
+            .error_for_status()
+            .trace_internal_err("oss_bad_status_err", "OSS返回了错误状态码")?;
 
         let bytes = response
             .bytes_stream()
