@@ -42,11 +42,10 @@ impl BackupStorage {
     pub async fn save(
         &self,
         table_name: &str,
-        key: &str,
         csv_path: &std::path::Path,
         backup_type: BackupType,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let file_name = format!("{}.csv", key);
+        let file_name = format!("{}.csv", table_name);
 
         // 1. 保存到本地
         let local_dir = self.local_path.join(backup_type.rel_dir()).join(table_name);
@@ -69,7 +68,6 @@ impl BackupStorage {
 
         tracing::info!(
             table = %table_name,
-            key = %key,
             backup_type = %backup_type.rel_dir(),
             local = %local_file.display(),
             s3 = %s3_key,
@@ -84,15 +82,12 @@ impl BackupStorage {
         &self,
         table_name: &str,
         csv_path: &std::path::Path,
-        daily_key: &str,
-        weekly_key: &str,
-        monthly_key: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.save(table_name, daily_key, csv_path, BackupType::ScheduledDaily)
+        self.save(table_name, csv_path, BackupType::ScheduledDaily)
             .await?;
-        self.save(table_name, weekly_key, csv_path, BackupType::ScheduledWeekly)
+        self.save(table_name, csv_path, BackupType::ScheduledWeekly)
             .await?;
-        self.save(table_name, monthly_key, csv_path, BackupType::ScheduledMonthly)
+        self.save(table_name, csv_path, BackupType::ScheduledMonthly)
             .await?;
         Ok(())
     }

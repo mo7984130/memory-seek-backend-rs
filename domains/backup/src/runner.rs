@@ -2,7 +2,6 @@ use crate::exporter::CsvExporter;
 use crate::hasher::TableHasher;
 use crate::state::BackupState;
 use crate::storage::BackupType;
-use chrono::Datelike;
 use std::sync::Arc;
 
 /// 备份执行器
@@ -24,21 +23,8 @@ impl BackupRunner {
         state: Arc<BackupState>,
     ) -> Result<BackupResult, Box<dyn std::error::Error + Send + Sync>> {
         let start = std::time::Instant::now();
-        let now = chrono::Local::now();
-        let daily_key = now.format("%Y-%m-%d").to_string();
-        let weekly_key = format!(
-            "{}-W{:02}",
-            now.iso_week().year(),
-            now.iso_week().week()
-        );
-        let monthly_key = now.format("%Y-%m").to_string();
 
-        tracing::info!(
-            "Starting scheduled backup: daily={}, weekly={}, monthly={}",
-            daily_key,
-            weekly_key,
-            monthly_key
-        );
+        tracing::info!("Starting scheduled backup");
 
         state.ensure_dirs()?;
 
@@ -50,13 +36,7 @@ impl BackupRunner {
                 Ok(csv_path) => {
                     match state
                         .storage
-                        .save_scheduled_all(
-                            &table_name,
-                            &csv_path,
-                            &daily_key,
-                            &weekly_key,
-                            &monthly_key,
-                        )
+                        .save_scheduled_all(&table_name, &csv_path)
                         .await
                     {
                         Ok(_) => {
@@ -105,9 +85,8 @@ impl BackupRunner {
         state: Arc<BackupState>,
     ) -> Result<BackupResult, Box<dyn std::error::Error + Send + Sync>> {
         let start = std::time::Instant::now();
-        let timestamp = chrono::Local::now().format("%Y-%m-%d_%H%M%S").to_string();
 
-        tracing::info!("Starting manual backup at {}", timestamp);
+        tracing::info!("Starting manual backup");
 
         state.ensure_dirs()?;
 
@@ -119,7 +98,7 @@ impl BackupRunner {
                 Ok(csv_path) => {
                     match state
                         .storage
-                        .save(&table_name, &timestamp, &csv_path, BackupType::Manual)
+                        .save(&table_name, &csv_path, BackupType::Manual)
                         .await
                     {
                         Ok(_) => {
