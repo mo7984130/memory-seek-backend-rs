@@ -10,8 +10,8 @@ use entities::{
     },
 };
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Statement,
+    ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    sea_query::{Expr, Query},
 };
 use tokio::sync::mpsc;
 use tracing::{info, warn};
@@ -288,41 +288,35 @@ impl FaceService {
         loop {
             let batch_start = std::time::Instant::now();
 
-            let sql = format!(
-                "SELECT id, file_id FROM photo_photo \
-                 WHERE id > {} AND id NOT IN (SELECT photo_id FROM photo_face) \
-                 ORDER BY id LIMIT {}",
-                previous_id, batch_size
-            );
-            let stmt = Statement::from_string(DatabaseBackend::Postgres, sql);
-            let rows = state
-                .db
-                .query_all(stmt)
+            let tq = std::time::Instant::now();
+            let subquery = Query::select()
+                .expr(Expr::col(face::Column::PhotoId))
+                .from(face::Entity)
+                .to_owned();
+            let photos: Vec<(i64, String)> = photo::Entity::find()
+                .select_only()
+                .column(photo::Column::Id)
+                .column(photo::Column::FileId)
+                .filter(photo::Column::Id.gt(previous_id))
+                .filter(Expr::col(photo::Column::Id).not_in_subquery(subquery))
+                .order_by(photo::Column::Id, sea_orm::Order::Asc)
+                .limit(batch_size)
+                .into_tuple()
+                .all(&state.db)
                 .await
                 .trace_internal_err(
                     "photo:face:incremental:query:err",
                     "增量计算时查询待处理照片失败",
                 )?;
+            let query_time = tq.elapsed();
 
-            if rows.is_empty() {
+            if photos.is_empty() {
                 break;
             }
 
-            let mut photos = Vec::with_capacity(rows.len());
-            for row in &rows {
-                let id: i64 = row
-                    .try_get_by("id")
-                    .trace_internal_err("photo:face:incremental:parse:id", "解析照片ID失败")?;
-                let file_id: String = row
-                    .try_get_by("file_id")
-                    .trace_internal_err(
-                        "photo:face:incremental:parse:file_id",
-                        "解析照片file_id失败",
-                    )?;
-                photos.push((id, file_id));
+            if let Some(last) = photos.last() {
+                previous_id = last.0;
             }
-
-            previous_id = photos.last().unwrap().0;
             let photo_count = photos.len();
 
             let (dltx, mut dlrx) =
@@ -410,8 +404,9 @@ impl FaceService {
             total_faces += batch_faces;
 
             info!(
-                "增量批次完成 ({:?}), 照片数={}, 含人脸照片={}, 人脸数={}, 累计处理={}, 累计人脸={}",
+                "增量批次完成 ({:?}), query={:?}, 照片数={}, 含人脸照片={}, 人脸数={}, 累计处理={}, 累计人脸={}",
                 batch_start.elapsed(),
+                query_time,
                 photo_count,
                 batch_with_faces,
                 batch_faces,
