@@ -23,6 +23,7 @@ impl BackupType {
 }
 
 /// 备份存储管理器
+#[derive(Clone)]
 pub struct BackupStorage {
     local_path: PathBuf,
     s3_client: Arc<S3Client>,

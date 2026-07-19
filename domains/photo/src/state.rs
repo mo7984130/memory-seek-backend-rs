@@ -7,6 +7,9 @@ use deadpool_redis::Pool;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
 
+#[cfg(feature = "face")]
+use backup::storage::BackupStorage;
+
 pub struct PhotoState {
     pub db: DatabaseConnection,
     pub redis: Pool,
@@ -14,23 +17,18 @@ pub struct PhotoState {
     pub token_cipher: Arc<TokenCipher>,
     #[cfg(feature = "face")]
     pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
+    #[cfg(feature = "face")]
+    pub backup_storage: Option<BackupStorage>,
 }
 
 impl PhotoState {
-    /// 创建照片模块状态实例
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis 连接池
-    /// - `s3_client`: OSS 存储客户端
-    /// - `face_tx`: 人脸识别任务发送通道（仅 `face_recognition` feature 启用时）
-    /// - `token_cipher`: 图片访问令牌加密器
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,
         s3_client: Arc<S3Client>,
         token_cipher: Arc<TokenCipher>,
         #[cfg(feature = "face")] face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
+        #[cfg(feature = "face")] backup_storage: Option<BackupStorage>,
     ) -> Self {
         Self {
             db,
@@ -39,6 +37,8 @@ impl PhotoState {
             token_cipher,
             #[cfg(feature = "face")]
             face_engine,
+            #[cfg(feature = "face")]
+            backup_storage,
         }
     }
 }

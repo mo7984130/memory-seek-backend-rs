@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::config::AppConfig;
 use crate::state::AppState;
 use axum::Router;
@@ -9,11 +11,26 @@ use tracing::info;
 /// 注册 Photo 模块路由
 pub fn register(
     state: &Arc<AppState>,
-    _cfg: &AppConfig,
+    cfg: &AppConfig,
 ) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
     info!("注册 Photo 模块路由");
 
-    // 构建 PhotoState
+    #[cfg(feature = "face-engine")]
+    let backup_storage = {
+        #[cfg(feature = "backup")]
+        {
+            Some(backup::storage::BackupStorage::new(
+                PathBuf::from(&cfg.backup.local_path),
+                state.s3_client.clone(),
+                cfg.backup.s3_prefix.clone(),
+            ))
+        }
+        #[cfg(not(feature = "backup"))]
+        {
+            None
+        }
+    };
+
     let photo_state = Arc::new(PhotoState::new(
         state.db.clone(),
         state.redis.clone(),
@@ -21,6 +38,8 @@ pub fn register(
         state.token_cipher.clone(),
         #[cfg(feature = "face-engine")]
         state.face_engine.clone(),
+        #[cfg(feature = "face-engine")]
+        backup_storage,
     ));
 
     // 获取路由
