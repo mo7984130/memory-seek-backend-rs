@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 pub struct CsvExporter;
 
 impl CsvExporter {
-    /// 导出指定表为 CSV
+    /// 导出指定表到指定路径的 CSV 文件
     ///
     /// 返回 (文件路径, 数据哈希)
-    pub async fn export(
+    pub async fn export_to_path(
         db: &DatabaseConnection,
         table_name: &str,
-        output_dir: &Path,
+        output_path: &Path,
     ) -> Result<(PathBuf, String), Box<dyn std::error::Error + Send + Sync>> {
         let columns = TableHasher::get_column_names(db, table_name).await?;
         if columns.is_empty() {
@@ -39,18 +39,14 @@ impl CsvExporter {
 
         let result = db.query_all(stmt).await?;
 
-        if result.is_empty() {
-            return Err(format!("Table {} is empty or does not exist", table_name).into());
+        if let Some(parent) = output_path.parent() {
+            std::fs::create_dir_all(parent)?;
         }
 
-        // 创建 CSV 文件
-        let file_path = output_dir.join(format!("{}.csv", table_name));
-        let mut wtr = Writer::from_path(&file_path)?;
+        let mut wtr = Writer::from_path(output_path)?;
 
-        // 写入表头
         wtr.write_record(&columns)?;
 
-        // 写入数据行
         for row in &result {
             let mut record = Vec::new();
             for col in &columns {
@@ -64,11 +60,22 @@ impl CsvExporter {
 
         wtr.flush()?;
 
-        // 计算文件哈希
-        let file_content = std::fs::read(&file_path)?;
+        let file_content = std::fs::read(output_path)?;
         let hash = compute_hash(&file_content);
 
-        Ok((file_path, hash))
+        Ok((output_path.to_path_buf(), hash))
+    }
+
+    /// 导出指定表为 CSV，存到 output_dir/{table_name}.csv
+    ///
+    /// 返回 (文件路径, 数据哈希)
+    pub async fn export(
+        db: &DatabaseConnection,
+        table_name: &str,
+        output_dir: &Path,
+    ) -> Result<(PathBuf, String), Box<dyn std::error::Error + Send + Sync>> {
+        let output_path = output_dir.join(format!("{}.csv", table_name));
+        Self::export_to_path(db, table_name, &output_path).await
     }
 }
 

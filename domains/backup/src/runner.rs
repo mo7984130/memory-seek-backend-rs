@@ -23,8 +23,9 @@ impl BackupRunner {
         state: Arc<BackupState>,
     ) -> Result<BackupResult, Box<dyn std::error::Error + Send + Sync>> {
         let start = std::time::Instant::now();
+        let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
-        tracing::info!("Starting scheduled backup");
+        tracing::info!(run_id = %run_id, "Starting scheduled backup");
 
         state.ensure_dirs()?;
 
@@ -36,23 +37,23 @@ impl BackupRunner {
                 Ok(csv_path) => {
                     match state
                         .storage
-                        .save_scheduled_all(&table_name, &csv_path)
+                        .save_scheduled_all(&table_name, &csv_path, &run_id)
                         .await
                     {
                         Ok(_) => {
                             result.exported += 1;
-                            tracing::info!("Table {} backed up (scheduled)", table_name);
+                            tracing::info!(run_id = %run_id, table = %table_name, "Table backed up (scheduled)");
                         }
                         Err(e) => {
                             result.failed += 1;
-                            tracing::error!("Table {} save failed: {}", table_name, e);
+                            tracing::error!(run_id = %run_id, table = %table_name, "Save failed: {}", e);
                         }
                     }
                     let _ = std::fs::remove_file(&csv_path);
                 }
                 Err(e) => {
                     result.failed += 1;
-                    tracing::error!("Table {} export failed: {}", table_name, e);
+                    tracing::error!(run_id = %run_id, table = %table_name, "Export failed: {}", e);
                 }
             }
         }
@@ -85,8 +86,9 @@ impl BackupRunner {
         state: Arc<BackupState>,
     ) -> Result<BackupResult, Box<dyn std::error::Error + Send + Sync>> {
         let start = std::time::Instant::now();
+        let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
-        tracing::info!("Starting manual backup");
+        tracing::info!(run_id = %run_id, "Starting manual backup");
 
         state.ensure_dirs()?;
 
@@ -98,23 +100,23 @@ impl BackupRunner {
                 Ok(csv_path) => {
                     match state
                         .storage
-                        .save(&table_name, &csv_path, BackupType::Manual)
+                        .save(&table_name, &csv_path, BackupType::Manual, &run_id)
                         .await
                     {
                         Ok(_) => {
                             result.exported += 1;
-                            tracing::info!("Table {} backed up (manual)", table_name);
+                            tracing::info!(run_id = %run_id, table = %table_name, "Table backed up (manual)");
                         }
                         Err(e) => {
                             result.failed += 1;
-                            tracing::error!("Table {} manual save failed: {}", table_name, e);
+                            tracing::error!(run_id = %run_id, table = %table_name, "Manual save failed: {}", e);
                         }
                     }
                     let _ = std::fs::remove_file(&csv_path);
                 }
                 Err(e) => {
                     result.failed += 1;
-                    tracing::error!("Table {} export failed: {}", table_name, e);
+                    tracing::error!(run_id = %run_id, table = %table_name, "Export failed: {}", e);
                 }
             }
         }

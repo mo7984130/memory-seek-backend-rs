@@ -26,15 +26,19 @@ impl FaceService {
         }
 
         info!("开始人脸全量计算, 计算前会清除face和person表, 谨慎运行");
-        // 保存现在的face和person内容
         info!("开始保存face和person表");
-        CsvExporter::export(&state.db, face::TABLE_NAME, Path::new("./face_backup.csv"))
-            .await
-            .trace_internal_err(
-                "photo:face:full_compute:save_face:err",
-                "人脸全量计算时, 保存face表错误",
-            )?;
-        CsvExporter::export(
+        let (face_path, face_hash) = CsvExporter::export_to_path(
+            &state.db,
+            face::TABLE_NAME,
+            Path::new("./face_backup.csv"),
+        )
+        .await
+        .trace_internal_err(
+            "photo:face:full_compute:save_face:err",
+            "人脸全量计算时, 保存face表错误",
+        )?;
+        info!("face表已备份, path={}, hash={}", face_path.display(), face_hash);
+        let (person_path, person_hash) = CsvExporter::export_to_path(
             &state.db,
             person::TABLE_NAME,
             Path::new("./person_backup.csv"),
@@ -44,6 +48,7 @@ impl FaceService {
             "photo:face:full_compute:save_person:err",
             "人脸全量计算时, 保存person表错误",
         )?;
+        info!("person表已备份, path={}, hash={}", person_path.display(), person_hash);
 
         // 清除face和person库
         info!("开始清除face和person表");
