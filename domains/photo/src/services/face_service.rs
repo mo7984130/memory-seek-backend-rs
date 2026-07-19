@@ -9,7 +9,10 @@ use entities::{
         photo::{self, PhotoId},
     },
 };
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Statement,
+};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
@@ -259,6 +262,169 @@ impl FaceService {
             pipeline_start.elapsed(),
             total_faces,
             no_face_count,
+        );
+
+        Ok(())
+    }
+
+    pub async fn incremental_compute(state: &PhotoState, user_id: UserId) -> Result<()> {
+        if user_id.0 != 1 {
+            warn!("非管理员用户尝试增量计算人脸, id = {}", user_id);
+            return Err(AppError::Forbidden("非管理员无法访问".into()));
+        }
+
+        let overall_start = std::time::Instant::now();
+        info!("开始人脸增量计算");
+
+        let concurrency = std::thread::available_parallelism()
+            .map(|n| (n.get() / 2).max(1))
+            .unwrap_or(4);
+        let batch_size = 128;
+
+        let mut previous_id = -1i64;
+        let mut total_photos = 0usize;
+        let mut total_faces = 0usize;
+
+        loop {
+            let batch_start = std::time::Instant::now();
+
+            let sql = format!(
+                "SELECT id, file_id FROM photo_photo \
+                 WHERE id > {} AND id NOT IN (SELECT photo_id FROM photo_face) \
+                 ORDER BY id LIMIT {}",
+                previous_id, batch_size
+            );
+            let stmt = Statement::from_string(DatabaseBackend::Postgres, sql);
+            let rows = state
+                .db
+                .query_all(stmt)
+                .await
+                .trace_internal_err(
+                    "photo:face:incremental:query:err",
+                    "增量计算时查询待处理照片失败",
+                )?;
+
+            if rows.is_empty() {
+                break;
+            }
+
+            let mut photos = Vec::with_capacity(rows.len());
+            for row in &rows {
+                let id: i64 = row
+                    .try_get_by("id")
+                    .trace_internal_err("photo:face:incremental:parse:id", "解析照片ID失败")?;
+                let file_id: String = row
+                    .try_get_by("file_id")
+                    .trace_internal_err(
+                        "photo:face:incremental:parse:file_id",
+                        "解析照片file_id失败",
+                    )?;
+                photos.push((id, file_id));
+            }
+
+            previous_id = photos.last().unwrap().0;
+            let photo_count = photos.len();
+
+            let (dltx, mut dlrx) =
+                mpsc::channel::<(PhotoId, image::RgbImage)>(concurrency * 2);
+            let (dettx, mut detrx) =
+                mpsc::channel::<Vec<face::ActiveModel>>(concurrency * 2);
+
+            let s3 = state.s3_client.clone();
+            let mut dl_handles = Vec::with_capacity(photo_count);
+            for (photo_id, file_id) in &photos {
+                let tx = dltx.clone();
+                let s3 = s3.clone();
+                let pid = PhotoId(*photo_id);
+                let fid = file_id.clone();
+                dl_handles.push(tokio::spawn(async move {
+                    let img_bytes = s3.download(&fid).await?;
+                    let img = image::load_from_memory(&img_bytes)
+                        .trace_internal_err(
+                            "photo:face:incremental:load_from_memory:err",
+                            "从Bytes转换为image错误",
+                        )?
+                        .to_rgb8();
+                    let _ = tx.send((pid, img)).await;
+                    Ok::<_, AppError>(())
+                }));
+            }
+            drop(dltx);
+
+            let engine = state.face_engine.clone();
+            let dettx_clone = dettx.clone();
+            let detect_handle = tokio::spawn(async move {
+                while let Some((photo_id, img)) = dlrx.recv().await {
+                    let faces = {
+                        let mut engine = engine.lock().trace_internal_err(
+                            "photo:face:incremental:face_engine_lock:err",
+                            "获取人脸引擎锁失败",
+                        )?;
+                        engine.run(&img).trace_internal_err(
+                            "photo:face:incremental:face_engine_run:err",
+                            "人脸模型运行错误",
+                        )?
+                    };
+                    let models = if faces.is_empty() {
+                        Vec::new()
+                    } else {
+                        faces
+                            .into_iter()
+                            .map(|f| NewFaceRecord::from_detected(photo_id, f))
+                            .map(|f| face::ActiveModel::try_from(f))
+                            .collect::<Result<Vec<face::ActiveModel>>>()
+                            .trace_internal_err(
+                                "photo:face:incremental:convert_err",
+                                "转换人脸记录失败",
+                            )?
+                    };
+                    let _ = dettx_clone.send(models).await;
+                }
+                Ok::<_, AppError>(())
+            });
+            drop(dettx);
+
+            let mut batch_faces = 0usize;
+            let mut batch_with_faces = 0usize;
+            while let Some(models) = detrx.recv().await {
+                if models.is_empty() {
+                    continue;
+                }
+                batch_with_faces += 1;
+                batch_faces += models.len();
+                face::Entity::insert_many(models)
+                    .exec(&state.db)
+                    .await
+                    .trace_internal_err(
+                        "photo:face:incremental:insert_many:err",
+                        "批量插入人脸记录失败",
+                    )?;
+            }
+
+            for h in dl_handles {
+                h.await.expect("download task panicked")?;
+            }
+            detect_handle.await.expect("detect task panicked")?;
+
+            total_photos += photo_count;
+            total_faces += batch_faces;
+
+            info!(
+                "增量批次完成 ({:?}), 照片数={}, 含人脸照片={}, 人脸数={}, 累计处理={}, 累计人脸={}",
+                batch_start.elapsed(),
+                photo_count,
+                batch_with_faces,
+                batch_faces,
+                total_photos,
+                total_faces,
+            );
+        }
+
+        info!(
+            "增量计算完成: 总耗时={:?}, 处理照片数={}, 总人脸数={}",
+            overall_start.elapsed(),
+            total_photos,
+            total_faces,
         );
 
         Ok(())
