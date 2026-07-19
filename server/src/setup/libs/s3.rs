@@ -11,11 +11,8 @@ pub struct Config {
     pub region: String,
     pub bucket: String,
     pub public_url: Option<String>,
-    #[serde(default = "default_force_path_style")]
+    #[serde(default)]
     pub force_path_style: bool,
-}
-const fn default_force_path_style() -> bool {
-    true
 }
 
 pub fn init(cfg: &Config) -> Arc<S3Client> {
