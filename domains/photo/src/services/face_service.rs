@@ -10,6 +10,7 @@ use entities::{
     },
 };
 use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 use crate::PhotoState;
@@ -114,11 +115,13 @@ impl FaceService {
         );
 
         let mut previous_id = -1;
-        let mut total_download = std::time::Duration::ZERO;
-        let mut total_detect = std::time::Duration::ZERO;
-        let mut total_insert = std::time::Duration::ZERO;
         let mut total_faces = 0usize;
         let mut no_face_count = 0usize;
+        let pipeline_start = std::time::Instant::now();
+
+        let concurrency = std::thread::available_parallelism()
+            .map(|n| (n.get() / 2).max(1))
+            .unwrap_or(4);
 
         for i in 0..batch_num {
             let batch_start = std::time::Instant::now();
@@ -148,75 +151,112 @@ impl FaceService {
                 previous_id = last.0;
             }
 
-            for (photo_id, file_id) in photos {
-                let t_dl = std::time::Instant::now();
-                let photo_id = PhotoId(photo_id);
-                let img = state.s3_client.download(&file_id).await?;
-                let img = image::load_from_memory(img.iter().as_slice())
-                    .trace_internal_err(
-                        "photo:face:full_compute:load_from_memory:err",
-                        "从Bytes转换为image错误",
-                    )?
-                    .to_rgb8();
-                let download_time = t_dl.elapsed();
-                total_download += download_time;
+            let photo_count = photos.len();
+            let (dltx, mut dlrx) =
+                mpsc::channel::<(PhotoId, image::RgbImage)>(concurrency * 2);
+            let (dettx, mut detrx) =
+                mpsc::channel::<Vec<face::ActiveModel>>(concurrency * 2);
 
-                let t_de = std::time::Instant::now();
-                let faces = {
-                    let mut engine = state.face_engine.lock().trace_internal_err(
-                        "photo:face:full_compute:face_engine_lock:err",
-                        "获取人脸引擎锁失败",
-                    )?;
-                    engine.run(&img).trace_internal_err(
-                        "photo:face:full_compute:face_engine_run:err",
-                        "人脸模型运行错误",
-                    )?
-                };
-                let detect_time = t_de.elapsed();
-                total_detect += detect_time;
+            // Stage 1: Download + decode (N concurrent)
+            let s3 = state.s3_client.clone();
+            let mut dl_handles = Vec::with_capacity(photo_count);
+            for (photo_id, file_id) in &photos {
+                let tx = dltx.clone();
+                let s3 = s3.clone();
+                let pid = PhotoId(*photo_id);
+                let fid = file_id.clone();
+                dl_handles.push(tokio::spawn(async move {
+                    let img_bytes = s3.download(&fid).await?;
+                    let img = image::load_from_memory(&img_bytes)
+                        .trace_internal_err(
+                            "photo:face:full_compute:load_from_memory:err",
+                            "从Bytes转换为image错误",
+                        )?
+                        .to_rgb8();
+                    let _ = tx.send((pid, img)).await;
+                    Ok::<_, AppError>(())
+                }));
+            }
+            drop(dltx);
 
-                if faces.is_empty() {
-                    no_face_count += 1;
+            // Stage 2: Face detection (single-threaded, holds engine lock)
+            let engine = state.face_engine.clone();
+            let dettx_clone = dettx.clone();
+            let detect_handle = tokio::spawn(async move {
+                while let Some((photo_id, img)) = dlrx.recv().await {
+                    let faces = {
+                        let mut engine = engine.lock().trace_internal_err(
+                            "photo:face:full_compute:face_engine_lock:err",
+                            "获取人脸引擎锁失败",
+                        )?;
+                        engine.run(&img).trace_internal_err(
+                            "photo:face:full_compute:face_engine_run:err",
+                            "人脸模型运行错误",
+                        )?
+                    };
+                    let models = if faces.is_empty() {
+                        Vec::new()
+                    } else {
+                        faces
+                            .into_iter()
+                            .map(|f| NewFaceRecord::from_detected(photo_id, f))
+                            .map(|f| face::ActiveModel::try_from(f))
+                            .collect::<Result<Vec<face::ActiveModel>>>()
+                            .trace_internal_err(
+                                "db:photo:face:convert_err",
+                                "转换人脸记录失败",
+                            )?
+                    };
+                    let _ = dettx_clone.send(models).await;
+                }
+                Ok::<_, AppError>(())
+            });
+            drop(dettx);
+
+            // Stage 3: Batch insert (main task)
+            let mut batch_faces = 0usize;
+            let mut batch_with_faces = 0usize;
+            while let Some(models) = detrx.recv().await {
+                if models.is_empty() {
                     continue;
                 }
-
-                total_faces += faces.len();
-
-                let t_in = std::time::Instant::now();
-                let models: Vec<face::ActiveModel> = faces
-                    .into_iter()
-                    .map(|f| NewFaceRecord::from_detected(photo_id, f))
-                    .map(|face| face::ActiveModel::try_from(face))
-                    .collect::<Result<Vec<face::ActiveModel>>>()
-                    .trace_internal_err("db:photo:face:convert_err", "转换人脸记录失败")?;
-
+                batch_with_faces += 1;
+                batch_faces += models.len();
                 face::Entity::insert_many(models)
                     .exec(&state.db)
                     .await
-                    .trace_internal_err("db:photo:face:insert_many:err", "批量插入人脸记录失败")?;
-                total_insert += t_in.elapsed();
+                    .trace_internal_err(
+                        "db:photo:face:insert_many:err",
+                        "批量插入人脸记录失败",
+                    )?;
             }
 
+            for h in dl_handles {
+                h.await.expect("download task panicked")?;
+            }
+            detect_handle.await.expect("detect task panicked")?;
+
+            total_faces += batch_faces;
+            no_face_count += photo_count - batch_with_faces;
+
             info!(
-                "第{}/{}批完成 ({:?}), query={:?}, batch内累计 download={:?} detect={:?} insert={:?}",
+                "第{}/{}批完成 ({:?}), query={:?}, 照片数={}, 含人脸照片={}, 总人脸数={}",
                 i + 1,
                 batch_num,
                 batch_start.elapsed(),
                 query_time,
-                total_download,
-                total_detect,
-                total_insert,
+                photo_count,
+                batch_with_faces,
+                batch_faces,
             );
         }
 
         info!(
-            "全量计算完成: 总耗时={:?}, backup={:?}, 清除={:?}, 检测阶段累计 download={:?} detect={:?} insert={:?}, 总人脸数={}, 无人脸照片数={}",
+            "全量计算完成: 总耗时={:?}, backup={:?}, 清除={:?}, pipeline={:?}, 总人脸数={}, 无人脸照片数={}",
             overall_start.elapsed(),
             backup_time,
             cleanup_time,
-            total_download,
-            total_detect,
-            total_insert,
+            pipeline_start.elapsed(),
             total_faces,
             no_face_count,
         );
