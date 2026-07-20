@@ -1,9 +1,12 @@
 use crate::config::BackupScheduleConfig;
+use crate::exporter::CsvExporter;
 use oss::S3Client;
+use sea_orm::DatabaseConnection;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 /// 备份类型
+#[derive(Clone)]
 pub enum BackupType {
     ScheduledDaily,
     ScheduledWeekly,
@@ -98,6 +101,29 @@ impl BackupStorage {
             .await?;
         self.save(table_name, csv_path, BackupType::ScheduledMonthly, run_id)
             .await?;
+        Ok(())
+    }
+
+    /// 导出并备份指定表到 managed 存储（本地 + S3）
+    ///
+    /// 统一入口：内部处理临时目录创建、CSV 导出、保存到目标路径、清理。
+    pub async fn backup_tables(
+        &self,
+        db: &DatabaseConnection,
+        tables: &[&str],
+        backup_type: BackupType,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let temp_dir = std::env::temp_dir().join("memory-seek-table-backup");
+        std::fs::create_dir_all(&temp_dir)?;
+        let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+
+        for table_name in tables {
+            let (path, hash) = CsvExporter::export(db, table_name, &temp_dir).await?;
+            tracing::info!(table = %table_name, hash = %hash, "表已导出");
+            self.save(table_name, &path, backup_type.clone(), &run_id).await?;
+            let _ = std::fs::remove_file(&path);
+        }
+
         Ok(())
     }
 

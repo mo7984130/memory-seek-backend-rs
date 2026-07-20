@@ -1,4 +1,3 @@
-use backup::exporter::CsvExporter;
 use backup::storage::BackupType;
 use common::{Result, error::AppError, ext::ResultErrExt};
 use entities::{
@@ -34,35 +33,13 @@ impl FaceService {
             info!("开始人脸全量计算, 计算前会清除face和person表, 谨慎运行");
 
             let backup_start = std::time::Instant::now();
-            info!("开始保存face和person表");
-            let backup_dir = std::env::temp_dir().join("memory-seek-full-compute");
-            std::fs::create_dir_all(&backup_dir)
-                .trace_internal_err("photo:face:full_compute:create_backup_dir:err", "创建备份临时目录失败")?;
-            let (face_path, face_hash) = CsvExporter::export(&state.db, face::TABLE_NAME, &backup_dir)
-                .await
-                .trace_internal_err("photo:face:full_compute:save_face:err", "人脸全量计算时, 保存face表错误")?;
-            info!("face表已导出, hash={}", face_hash);
-            let (person_path, person_hash) =
-                CsvExporter::export(&state.db, person::TABLE_NAME, &backup_dir)
-                    .await
-                    .trace_internal_err("photo:face:full_compute:save_person:err", "人脸全量计算时, 保存person表错误")?;
-            info!("person表已导出, hash={}", person_hash);
-
+            info!("开始备份face和person表");
             if let Some(storage) = &state.backup_storage {
-                let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
                 storage
-                    .save(face::TABLE_NAME, &face_path, BackupType::Manual, &run_id)
+                    .backup_tables(&state.db, &[face::TABLE_NAME, person::TABLE_NAME], BackupType::Manual)
                     .await
-                    .trace_internal_err("photo:face:full_compute:save_face_storage:err", "保存face表到备份存储失败")?;
-                storage
-                    .save(person::TABLE_NAME, &person_path, BackupType::Manual, &run_id)
-                    .await
-                    .trace_internal_err("photo:face:full_compute:save_person_storage:err", "保存person表到备份存储失败")?;
-                info!(run_id = %run_id, "face和person表已保存到备份存储");
+                    .trace_internal_err("photo:face:full_compute:backup_tables:err", "备份face和person表失败")?;
             }
-
-            let _ = std::fs::remove_file(&face_path);
-            let _ = std::fs::remove_file(&person_path);
             let backup_time = backup_start.elapsed();
             info!("备份阶段耗时: {:?}", backup_time);
 
