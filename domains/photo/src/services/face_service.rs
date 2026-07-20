@@ -122,10 +122,6 @@ impl FaceService {
         let mut no_face_count = 0usize;
         let pipeline_start = std::time::Instant::now();
 
-        let concurrency = std::thread::available_parallelism()
-            .map(|n| (n.get() / 2).max(1))
-            .unwrap_or(4);
-
         for i in 0..batch_num {
             let batch_start = std::time::Instant::now();
 
@@ -155,12 +151,10 @@ impl FaceService {
             }
 
             let photo_count = photos.len();
-            let (dltx, mut dlrx) =
-                mpsc::channel::<(PhotoId, image::RgbImage)>(concurrency * 2);
-            let (dettx, mut detrx) =
-                mpsc::channel::<Vec<face::ActiveModel>>(concurrency * 2);
+            let (dltx, mut dlrx) = mpsc::channel::<(PhotoId, image::RgbImage)>(2);
+            let (dettx, mut detrx) = mpsc::channel::<Vec<face::ActiveModel>>(2);
 
-            // Stage 1: Download + decode (N concurrent)
+            // Stage 1: Download + decode (single-threaded)
             let s3 = state.s3_client.clone();
             let mut dl_handles = Vec::with_capacity(photo_count);
             for (photo_id, file_id) in &photos {
@@ -276,9 +270,6 @@ impl FaceService {
         let overall_start = std::time::Instant::now();
         info!("开始人脸增量计算");
 
-        let concurrency = std::thread::available_parallelism()
-            .map(|n| (n.get() / 2).max(1))
-            .unwrap_or(4);
         let batch_size = 128;
 
         let mut previous_id = -1i64;
@@ -319,10 +310,8 @@ impl FaceService {
             }
             let photo_count = photos.len();
 
-            let (dltx, mut dlrx) =
-                mpsc::channel::<(PhotoId, image::RgbImage)>(concurrency * 2);
-            let (dettx, mut detrx) =
-                mpsc::channel::<Vec<face::ActiveModel>>(concurrency * 2);
+            let (dltx, mut dlrx) = mpsc::channel::<(PhotoId, image::RgbImage)>(2);
+            let (dettx, mut detrx) = mpsc::channel::<Vec<face::ActiveModel>>(2);
 
             let s3 = state.s3_client.clone();
             let mut dl_handles = Vec::with_capacity(photo_count);
