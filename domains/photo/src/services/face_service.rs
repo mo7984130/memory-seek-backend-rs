@@ -154,29 +154,27 @@ impl FaceService {
             let (dltx, mut dlrx) = mpsc::channel::<(PhotoId, image::RgbImage)>(2);
             let (dettx, mut detrx) = mpsc::channel::<Vec<face::ActiveModel>>(2);
 
-            // Stage 1: Download + decode (single-threaded)
+            // Stage 1: Download + decode (逐张串行，避免堆积内存)
             let s3 = state.s3_client.clone();
-            let mut dl_handles = Vec::with_capacity(photo_count);
-            for (photo_id, file_id) in &photos {
-                let tx = dltx.clone();
-                let s3 = s3.clone();
-                let pid = PhotoId(*photo_id);
-                let fid = file_id.clone();
-                dl_handles.push(tokio::spawn(async move {
-                    let img_bytes = s3.download(&fid).await?;
+            let dltx_clone = dltx.clone();
+            let download_handle = tokio::spawn(async move {
+                for (photo_id, file_id) in photos {
+                    let img_bytes = s3.download(&file_id).await?;
                     let img = image::load_from_memory(&img_bytes)
                         .trace_internal_err(
                             "photo:face:full_compute:load_from_memory:err",
                             "从Bytes转换为image错误",
                         )?
                         .to_rgb8();
-                    let _ = tx.send((pid, img)).await;
-                    Ok::<_, AppError>(())
-                }));
-            }
+                    if dltx_clone.send((PhotoId(photo_id), img)).await.is_err() {
+                        break;
+                    }
+                }
+                Ok::<_, AppError>(())
+            });
             drop(dltx);
 
-            // Stage 2: Face detection (single-threaded, holds engine lock)
+            // Stage 2: Face detection (单线程，持 engine 锁)
             let engine = state.face_engine.clone();
             let dettx_clone = dettx.clone();
             let detect_handle = tokio::spawn(async move {
@@ -228,9 +226,7 @@ impl FaceService {
                     )?;
             }
 
-            for h in dl_handles {
-                h.await.expect("download task panicked")?;
-            }
+            download_handle.await.expect("download task panicked")?;
             detect_handle.await.expect("detect task panicked")?;
 
             total_faces += batch_faces;
@@ -314,24 +310,22 @@ impl FaceService {
             let (dettx, mut detrx) = mpsc::channel::<Vec<face::ActiveModel>>(2);
 
             let s3 = state.s3_client.clone();
-            let mut dl_handles = Vec::with_capacity(photo_count);
-            for (photo_id, file_id) in &photos {
-                let tx = dltx.clone();
-                let s3 = s3.clone();
-                let pid = PhotoId(*photo_id);
-                let fid = file_id.clone();
-                dl_handles.push(tokio::spawn(async move {
-                    let img_bytes = s3.download(&fid).await?;
+            let dltx_clone = dltx.clone();
+            let download_handle = tokio::spawn(async move {
+                for (photo_id, file_id) in photos {
+                    let img_bytes = s3.download(&file_id).await?;
                     let img = image::load_from_memory(&img_bytes)
                         .trace_internal_err(
                             "photo:face:incremental:load_from_memory:err",
                             "从Bytes转换为image错误",
                         )?
                         .to_rgb8();
-                    let _ = tx.send((pid, img)).await;
-                    Ok::<_, AppError>(())
-                }));
-            }
+                    if dltx_clone.send((PhotoId(photo_id), img)).await.is_err() {
+                        break;
+                    }
+                }
+                Ok::<_, AppError>(())
+            });
             drop(dltx);
 
             let engine = state.face_engine.clone();
@@ -384,9 +378,7 @@ impl FaceService {
                     )?;
             }
 
-            for h in dl_handles {
-                h.await.expect("download task panicked")?;
-            }
+            download_handle.await.expect("download task panicked")?;
             detect_handle.await.expect("detect task panicked")?;
 
             total_photos += photo_count;
