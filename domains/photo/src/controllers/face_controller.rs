@@ -28,17 +28,14 @@ impl FaceController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>> {
-        FaceService::full_compute(&state, user_id).await.to_r_ok()
+        FaceService::compute(&state, user_id, true).await.to_r_ok()
     }
-}
 
-// 修改
-impl FaceController {
     async fn incremental_compute(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>> {
-        FaceService::incremental_compute(&state, user_id).await.to_r_ok()
+        FaceService::compute(&state, user_id, false).await.to_r_ok()
     }
 }
 
