@@ -116,6 +116,7 @@ impl FaceService {
             let s3 = state.s3_client.clone();
             let dltx_clone = dltx.clone();
             let download_handle = tokio::spawn(async move {
+                let t = std::time::Instant::now();
                 for (photo_id, file_id) in photos {
                     let img_bytes = s3.download(&file_id).await?;
                     let img = image::load_from_memory(&img_bytes)
@@ -125,13 +126,14 @@ impl FaceService {
                         break;
                     }
                 }
-                Ok::<_, AppError>(())
+                Ok::<std::time::Duration, AppError>(t.elapsed())
             });
             drop(dltx);
 
             let engine = state.face_engine.clone();
             let dettx_clone = dettx.clone();
             let detect_handle = tokio::spawn(async move {
+                let t = std::time::Instant::now();
                 while let Some((photo_id, img)) = dlrx.recv().await {
                     let faces = {
                         let mut engine = engine.lock()
@@ -150,33 +152,37 @@ impl FaceService {
                     };
                     let _ = dettx_clone.send(models).await;
                 }
-                Ok::<_, AppError>(())
+                Ok::<std::time::Duration, AppError>(t.elapsed())
             });
             drop(dettx);
 
             let mut batch_faces = 0usize;
             let mut batch_with_faces = 0usize;
+            let mut batch_insert = std::time::Duration::ZERO;
             while let Some(models) = detrx.recv().await {
                 if models.is_empty() {
                     continue;
                 }
                 batch_with_faces += 1;
                 batch_faces += models.len();
+                let t = std::time::Instant::now();
                 face::Entity::insert_many(models)
                     .exec(&state.db)
                     .await
                     .trace_internal_err("db:photo:face:insert_many:err", "批量插入人脸记录失败")?;
+                batch_insert += t.elapsed();
             }
 
-            download_handle.await.expect("download task panicked")?;
-            detect_handle.await.expect("detect task panicked")?;
+            let download_wall = download_handle.await.expect("download task panicked")?;
+            let detect_wall = detect_handle.await.expect("detect task panicked")?;
 
             total_faces += batch_faces;
             no_face_count += photo_count - batch_with_faces;
 
             info!(
-                "第{}批完成 ({:?}), query={:?}, 照片数={}, 含人脸照片={}, 人脸数={}, 累计人脸={}, 无人脸={}",
+                "第{}批完成 ({:?}), query={:?}, download={:?}, detect={:?}, insert={:?}, 照片数={}, 含人脸照片={}, 人脸数={}, 累计人脸={}, 无人脸={}",
                 batch_idx, batch_start.elapsed(), query_time,
+                download_wall, detect_wall, batch_insert,
                 photo_count, batch_with_faces, batch_faces,
                 total_faces, no_face_count,
             );
