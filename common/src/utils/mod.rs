@@ -10,7 +10,7 @@ mod password_hash;
 /// - `file_validator`: 文件验证（`FileValidator`）
 /// - `password`: 密码哈希工具（Argon2id、Bcrypt）
 /// - `token_cipher`: 通用 token 加解密
-/// - `metrics_ext`: 性能监控工具（仅 `metrics` feature）
+/// - `metrics_ext`: 性能监控工具（`metrics` feature 未启用时变 no-op）
 pub mod rand_utils;
 mod token_cipher;
 #[cfg(feature = "validators")]
@@ -27,6 +27,6 @@ pub use password_hash::{Argon2idConfig, BcryptConfig, HashAlgorithm};
 pub use token_cipher::{TokenCipher, TokenCipherConfig};
 
 #[cfg(feature = "metrics")]
-mod metrics_ext;
+pub mod metrics;
 #[cfg(feature = "metrics")]
-pub use metrics_ext::*;
+pub use metrics::{GaugeGuard, MetricsTimer, MetricsTimerExt};
