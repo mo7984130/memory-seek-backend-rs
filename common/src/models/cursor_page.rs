@@ -33,6 +33,18 @@ impl<T> CursorPage<T, ()> {
     }
 }
 
+#[macro_export]
+macro_rules! current_fn_name {
+    () => {{
+        const fn f() {}
+        fn type_name_of_val<T>(_: T) -> &'static str {
+            std::any::type_name::<T>()
+        }
+        let name = type_name_of_val(f);
+        name
+    }};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -43,6 +55,7 @@ mod tests {
         assert!(page.records.is_empty());
         assert!(page.next_cursor.is_none());
         assert!(!page.has_more);
+        print!("\n curent_fn_name: \n {} \n", current_fn_name!())
     }
 
     #[test]
