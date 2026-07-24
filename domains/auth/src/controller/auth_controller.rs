@@ -1,7 +1,4 @@
 use crate::AuthState;
-use crate::models::{
-    LoginRequest, LoginResponse, LoginResult, RegisterRequest, SendEmailCodeRequest,
-};
 use crate::services as auth_service;
 use axum::Router;
 use axum::extract::State;
@@ -12,6 +9,9 @@ use common::ext::{OptionExt, ResultErrExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use common::traits::controller::ControllerRouter;
+use memory_seek_type::auth::{
+    LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
+};
 use memory_seek_type::user::UserInfo;
 use std::sync::Arc;
 
@@ -49,7 +49,7 @@ impl AuthController {
     async fn login(
         State(state): State<Arc<AuthState>>,
         ValidatedJson(req): ValidatedJson<LoginRequest>,
-    ) -> Result<R<LoginResult>, AppError> {
+    ) -> Result<R<LoginResponse>, AppError> {
         auth_service::login(&state, req).await.to_r_ok()
     }
 
@@ -109,7 +109,7 @@ impl AuthController {
     async fn refresh_access_token(
         State(state): State<Arc<AuthState>>,
         headers: HeaderMap,
-    ) -> Result<R<LoginResponse>, AppError> {
+    ) -> Result<R<RefreshAccessTokenResponse>, AppError> {
         let user_id = headers
             .get("x-user-id")
             .ok_or_warn(
@@ -129,8 +129,6 @@ impl AuthController {
                 "鉴权时, x-user-id 必须是数字",
                 AppError::bad_request("x-user-id 必须是数字"),
             )?;
-
-        tracing::Span::current().record("user_id", user_id);
 
         let refresh_token = headers
             .get("x-refresh-token")
