@@ -104,7 +104,6 @@ impl TokenCipher {
             return Err(log_err(
                 "token_too_short",
                 "Token 长度不合法",
-                "",
                 AppError::InternalServerError,
             ));
         }

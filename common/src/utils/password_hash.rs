@@ -132,7 +132,6 @@ impl HashAlgorithm {
             None => Err(log_err(
                 "password_not_detect",
                 "密码算法检测失败",
-                "",
                 AppError::InternalServerError,
             )),
         }

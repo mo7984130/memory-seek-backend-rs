@@ -1,8 +1,8 @@
 use crate::{
     error::AppError,
-    ext::{log_err, log_warn},
+    ext::{log_err_with_err, log_warn_with_err},
 };
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 // ============================================================
 // ResultErrExt
@@ -34,16 +34,18 @@ pub trait ResultErrExt<T, E>: Sized {
     ) -> Result<T, AppError>;
 }
 
-impl<T, E: Debug + Display> ResultErrExt<T, E> for Result<T, E> {
+impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
+    #[track_caller]
     fn trace_err(
         self,
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError> {
-        self.map_err(|e| log_err(reason, context, e, app_err))
+        self.map_err(|e| log_err_with_err(reason, context, e, app_err))
     }
 
+    #[track_caller]
     fn trace_internal_err(
         self,
         reason: &'static str,
@@ -52,15 +54,17 @@ impl<T, E: Debug + Display> ResultErrExt<T, E> for Result<T, E> {
         self.trace_err(reason, context, AppError::InternalServerError)
     }
 
+    #[track_caller]
     fn trace_warn(
         self,
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError> {
-        self.map_err(|e| log_warn(reason, context, e, app_err))
+        self.map_err(|e| log_warn_with_err(reason, context, e, app_err))
     }
 
+    #[track_caller]
     fn trace_warn_bad_request(
         self,
         reason: &'static str,
@@ -126,5 +130,33 @@ mod tests {
             AppError::BadRequest("custom".into()),
         );
         assert!(matches!(result.unwrap_err(), AppError::BadRequest(_)));
+    }
+}
+
+pub trait ResultInspectErrAsync<T, E> {
+    fn inspect_err_async<F, Fut>(
+        self,
+        f: F,
+    ) -> impl std::future::Future<Output = Result<T, E>> + Send
+    where
+        F: FnOnce(&E) -> Fut + Send,
+        Fut: std::future::Future<Output = ()> + Send;
+}
+
+impl<T: Send, E: Send> ResultInspectErrAsync<T, E> for Result<T, E> {
+    fn inspect_err_async<F, Fut>(
+        self,
+        f: F,
+    ) -> impl std::future::Future<Output = Result<T, E>> + Send
+    where
+        F: FnOnce(&E) -> Fut + Send,
+        Fut: std::future::Future<Output = ()> + Send,
+    {
+        async move {
+            if let Err(e) = &self {
+                f(e).await;
+            }
+            self
+        }
     }
 }

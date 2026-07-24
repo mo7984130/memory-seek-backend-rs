@@ -33,6 +33,7 @@ impl BoolExt for bool {
     ///
     /// # 错误
     /// - `AppError::BadRequest`: 值为 `false` 时
+    #[track_caller]
     fn ok_or_warn(
         self,
         reason: &'static str,
@@ -42,7 +43,7 @@ impl BoolExt for bool {
         if self {
             Ok(())
         } else {
-            Err(log_warn(reason, context, "", app_err))
+            Err(log_warn(reason, context, app_err))
         }
     }
 }

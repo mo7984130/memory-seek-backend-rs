@@ -54,32 +54,35 @@ impl<T> OptionExt<T> for Option<T> {
     /// # 返回
     /// `Some` 时返回内部值，`None` 时返回 `AppError::BadRequest(msg)`
     #[inline]
+    #[track_caller]
     fn ok_or_warn(
         self,
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError> {
-        self.ok_or_else(|| log_warn(reason, context, "", app_err))
+        self.ok_or_else(|| log_warn(reason, context, app_err))
     }
 
+    #[track_caller]
     fn ok_or_warn_bad_request(
         self,
         reason: &'static str,
         context: &'static str,
         msg: &'static str,
     ) -> Result<T, AppError> {
-        self.ok_or_else(|| log_warn(reason, context, "", AppError::bad_request(msg)))
+        self.ok_or_else(|| log_warn(reason, context, AppError::bad_request(msg)))
     }
 
     #[inline]
+    #[track_caller]
     fn ok_or_error(
         self,
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError> {
-        self.ok_or_else(|| log_err(reason, context, "", app_err))
+        self.ok_or_else(|| log_err(reason, context, app_err))
     }
 }
 

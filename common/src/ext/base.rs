@@ -1,38 +1,72 @@
 use crate::error::AppError;
-use std::fmt::{Debug, Display};
-use tracing::{debug, error, info, trace, warn};
+use std::fmt::Debug;
+use std::panic::Location;
+use tracing::Level;
 
-fn log_and_map(
-    level: tracing::Level,
+#[track_caller]
+pub fn log_and_map(
+    level: Level,
     reason: &'static str,
     context: &'static str,
-    e: impl Debug + Display,
+    err: Option<&dyn Debug>,
     app_err: AppError,
 ) -> AppError {
-    match level {
-        tracing::Level::ERROR => error!(%reason, status = "failed", error = %e, "{context}"),
-        tracing::Level::WARN => warn!(%reason, status = "failed", error = %e, "{context}"),
-        tracing::Level::INFO => info!(%reason, status = "failed", error = %e, "{context}"),
-        tracing::Level::TRACE => trace!(%reason, status = "failed", error = %e, "{context}"),
-        tracing::Level::DEBUG => debug!(%reason, status = "failed", error = %e, "{context}"),
+    let loc = Location::caller();
+
+    macro_rules! emit {
+        ($lvl:ident) => {
+            match err {
+                Some(e) => tracing::$lvl!(
+                    reason,
+                    status = "failed",
+                    error = ?e,
+                    caller.file = loc.file(),
+                    caller.line = loc.line(),
+                    "{context}"
+                ),
+                None => tracing::$lvl!(
+                    reason,
+                    status = "failed",
+                    caller.file = loc.file(),
+                    caller.line = loc.line(),
+                    "{context}"
+                ),
+            }
+        };
     }
+
+    match level {
+        Level::ERROR => emit!(error),
+        Level::WARN => emit!(warn),
+        Level::INFO => emit!(info),
+        Level::DEBUG => emit!(debug),
+        Level::TRACE => emit!(trace),
+    }
+
     app_err
 }
 
-pub fn log_err(
-    reason: &'static str,
-    context: &'static str,
-    e: impl Debug + Display,
-    app_err: AppError,
-) -> AppError {
-    log_and_map(tracing::Level::ERROR, reason, context, e, app_err)
+macro_rules! define_log_fns {
+    ($name:ident, $name_with_err:ident, $level:expr) => {
+        #[track_caller]
+        pub fn $name(reason: &'static str, context: &'static str, app_err: AppError) -> AppError {
+            log_and_map($level, reason, context, None, app_err)
+        }
+
+        #[track_caller]
+        pub fn $name_with_err(
+            reason: &'static str,
+            context: &'static str,
+            err: impl Debug,
+            app_err: AppError,
+        ) -> AppError {
+            log_and_map($level, reason, context, Some(&err as &dyn Debug), app_err)
+        }
+    };
 }
 
-pub fn log_warn(
-    reason: &'static str,
-    context: &'static str,
-    e: impl Debug + Display,
-    app_err: AppError,
-) -> AppError {
-    log_and_map(tracing::Level::WARN, reason, context, e, app_err)
-}
+define_log_fns!(log_err, log_err_with_err, Level::ERROR);
+define_log_fns!(log_warn, log_warn_with_err, Level::WARN);
+define_log_fns!(log_info, log_info_with_err, Level::INFO);
+define_log_fns!(log_debug, log_debug_with_err, Level::DEBUG);
+define_log_fns!(log_trace, log_trace_with_err, Level::TRACE);
