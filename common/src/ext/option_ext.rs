@@ -64,6 +64,7 @@ impl<T> OptionExt<T> for Option<T> {
         self.ok_or_else(|| log_warn(reason, context, app_err))
     }
 
+    #[inline]
     #[track_caller]
     fn ok_or_warn_bad_request(
         self,

@@ -4,6 +4,11 @@ use crate::{
 };
 use std::fmt::Debug;
 
+pub trait TraceExt<T> {
+    #[track_caller]
+    fn trace(self) -> Result<T, AppError>;
+}
+
 // ============================================================
 // ResultErrExt
 // ============================================================

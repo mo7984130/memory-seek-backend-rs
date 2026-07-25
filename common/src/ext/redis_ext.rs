@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::ext::ResultErrExt;
+use crate::ext::TraceExt;
 use deadpool_redis::{Connection, Pool, PoolError};
 use indexmap::IndexMap;
 use redis::{AsyncCommands, FromRedisValue, ToSingleRedisArg};
@@ -283,10 +283,7 @@ impl CacheExtension for Pool {
 
         // MGET 批量获取
         let cached_jsons: Vec<Option<String>> = {
-            let mut conn = self
-                .get()
-                .await
-                .trace_internal_err("get_redis_conn_err", "Redis连接获取失败")?;
+            let mut conn = self.get().await?;
             conn.mget(&unique_keys).await.unwrap_or_else(|e| {
                 warn!("get_or_load_batch MGET 失败，降级为全量加载: {:?}", e);
                 vec![None; unique_keys.len()]
@@ -325,10 +322,7 @@ impl CacheExtension for Pool {
 
             let fresh_data = loader(miss_params).await?;
 
-            let mut conn = self
-                .get()
-                .await
-                .trace_internal_err("get_redis_conn_err", "Redis连接获取失败(回写)")?;
+            let mut conn = self.get().await?;
             let mut pipe = redis::pipe();
             let mut has_update = false;
 
@@ -338,15 +332,10 @@ impl CacheExtension for Pool {
 
                 match key_to_info.get(&key) {
                     Some((_, orig_indices)) => {
-                        match serde_json::to_string(&item) {
-                            Ok(json) => {
-                                pipe.set_ex(&key, json, ttl).ignore();
-                                has_update = true;
-                            }
-                            Err(e) => {
-                                warn!("get_or_load_batch 序列化失败 key={}: {:?}", key, e);
-                            }
-                        }
+                        let json = serde_json::to_string(&item)?;
+                        pipe.set_ex(&key, json, ttl).ignore();
+                        has_update = true;
+
                         for &i in orig_indices {
                             final_results[i] = Some(item.clone());
                         }
@@ -358,9 +347,7 @@ impl CacheExtension for Pool {
             }
 
             if has_update {
-                let _: () = pipe.query_async(&mut conn).await.unwrap_or_else(|e| {
-                    warn!("get_or_load_batch Pipeline 回写失败: {:?}", e);
-                });
+                let _: Result<(), AppError> = pipe.query_async(&mut conn).await.trace();
             }
         }
 

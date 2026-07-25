@@ -19,6 +19,13 @@ pub trait BoolExt {
         context: &'static str,
         app_err: AppError,
     ) -> Result<(), AppError>;
+
+    fn false_or_warn(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        app_err: AppError,
+    ) -> Result<(), AppError>;
 }
 
 impl BoolExt for bool {
@@ -44,6 +51,19 @@ impl BoolExt for bool {
             Ok(())
         } else {
             Err(log_warn(reason, context, app_err))
+        }
+    }
+
+    fn false_or_warn(
+        self,
+        reason: &'static str,
+        context: &'static str,
+        app_err: AppError,
+    ) -> Result<(), AppError> {
+        if self {
+            Err(log_warn(reason, context, app_err))
+        } else {
+            Ok(())
         }
     }
 }
