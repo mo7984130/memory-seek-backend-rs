@@ -16,20 +16,11 @@ pub fn register(
     info!("注册 Photo 模块路由");
 
     #[cfg(feature = "face-engine")]
-    let backup_storage = {
-        #[cfg(feature = "backup")]
-        {
-            Some(backup::storage::BackupStorage::new(
-                PathBuf::from(&cfg.backup.local_path),
-                state.s3_client.clone(),
-                cfg.backup.s3_prefix.clone(),
-            ))
-        }
-        #[cfg(not(feature = "backup"))]
-        {
-            None
-        }
-    };
+    let backup_storage = backup::storage::BackupStorage::new(
+        PathBuf::from(&cfg.backup.local_path),
+        state.s3_client.clone(),
+        cfg.backup.s3_prefix.clone(),
+    );
 
     let photo_state = Arc::new(PhotoState::new(
         state.db.clone(),

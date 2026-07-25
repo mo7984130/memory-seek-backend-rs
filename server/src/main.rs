@@ -12,6 +12,9 @@ mod state;
 use config::AppConfig;
 use setup::AppSetup;
 
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 /// Memory Seek 后端服务
 #[derive(Parser)]
 #[command(name = "memory-seek-server")]
@@ -68,6 +71,12 @@ async fn main() -> Result<(), common::error::AppError> {
         .layer(axum::middleware::from_fn(
             middlewares::trace_id::trace_id_middleware,
         ))
+        .layer(axum::middleware::from_fn(
+            middlewares::client_ip::client_ip_middleware,
+        ))
+        .layer(axum::middleware::from_fn(
+            middlewares::tracing_span::tracing_span,
+        ))
         .with_state(app_setup.state);
 
     // 启动服务器
@@ -115,9 +124,9 @@ async fn shutdown_signal(_state: Arc<crate::state::AppState>) {
     tracing::info!("收到关闭信号，开始优雅关闭");
 
     #[cfg(feature = "backup")]
-    if let Some(scheduler) = &_state.backup_scheduler {
+    {
         tracing::info!("正在停止备份调度器...");
-        if let Err(e) = scheduler.stop().await {
+        if let Err(e) = _state.backup_scheduler.stop().await {
             tracing::error!("停止备份调度器失败: {}", e);
         }
     }

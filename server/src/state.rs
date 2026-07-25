@@ -44,7 +44,7 @@ pub struct AppState {
     pub s3_client: Arc<S3Client>,
 
     #[cfg(feature = "backup")]
-    pub backup_scheduler: Option<Arc<BackupScheduler>>,
+    pub backup_scheduler: Arc<BackupScheduler>,
 
     #[cfg(feature = "face-engine")]
     pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,

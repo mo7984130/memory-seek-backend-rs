@@ -12,10 +12,10 @@ default = []
 auth = ["dep:auth"]
 user = ["dep:user", "s3"]
 photo = ["dep:photo", "s3"]
-metrics = ["dep:metrics"]
+metrics = ["dep:metrics", "photo?/metrics"]
 s3 = ["dep:oss"]
 backup = ["dep:backup"]
-face-engine = ["dep:insight-face-rs", "photo/face"]
+face-engine = ["dep:insight-face-rs", "photo/face", "backup"]
 
 [dependencies]
 tokio = { workspace = true }
@@ -59,6 +59,7 @@ uuid = { workspace = true }
 tracing-appender = "0.2.5"
 metrics-tracing-context = "0.18.1"
 insight-face-rs = { optional = true, workspace = true }
+tikv-jemallocator = "0.7.0"
 
 [dev-dependencies]
 serde_json = { workspace = true }

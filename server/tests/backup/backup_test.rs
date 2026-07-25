@@ -1,5 +1,5 @@
-use backup::runner::BackupRunner;
 use backup::config::BackupScheduleConfig;
+use backup::runner::BackupRunner;
 use backup::{BackupConfig, BackupState};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 use std::sync::Arc;
@@ -176,7 +176,6 @@ async fn test_backup_config_defaults() {
     assert_eq!(config.local_path, "/tmp/test");
     assert_eq!(config.s3_prefix, "backup/");
     assert!(config.tables.is_none());
-    assert!(config.scheduled.enabled);
     assert_eq!(config.scheduled.schedule, "0 0 6 * * *");
     assert_eq!(config.scheduled.daily_retention, 7);
     assert_eq!(config.scheduled.weekly_retention, 4);
@@ -206,7 +205,6 @@ async fn test_backup_config_from_json() {
         config.tables,
         Some(vec!["auth_user".to_string(), "photo_photo".to_string()])
     );
-    assert!(config.scheduled.enabled);
     assert_eq!(config.scheduled.schedule, "0 30 8 * * *");
     assert_eq!(config.scheduled.daily_retention, 14);
     assert_eq!(config.scheduled.weekly_retention, 6);
@@ -223,14 +221,11 @@ async fn test_backup_config_minimal_json() {
     assert_eq!(config.local_path, "/var/backups/memory-seek");
     assert_eq!(config.s3_prefix, "backup/");
     assert!(config.tables.is_none());
-    assert!(config.scheduled.enabled);
     assert_eq!(config.scheduled.schedule, "0 0 6 * * *");
     assert_eq!(config.scheduled.daily_retention, 7);
     assert_eq!(config.scheduled.weekly_retention, 4);
     assert_eq!(config.scheduled.monthly_retention, 6);
 }
-
-// ==================== 集成测试（需要数据库） ====================
 
 /// 测试从测试配置加载备份配置
 #[tokio::test]
@@ -241,7 +236,6 @@ async fn test_backup_config_from_test_config() {
     assert!(backup_cfg.is_some(), "测试配置应包含 backup 配置");
 
     let config = backup_cfg.unwrap();
-    assert!(config.scheduled.enabled);
     assert_eq!(config.scheduled.schedule, "0 0 6 * * *");
     assert_eq!(config.scheduled.daily_retention, 7);
     assert!(config.tables.is_none());
