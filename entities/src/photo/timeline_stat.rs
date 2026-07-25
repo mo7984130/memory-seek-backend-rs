@@ -3,6 +3,12 @@ use serde::{Deserialize, Serialize};
 
 pub struct TimelineStatId(pub String);
 
+impl Into<sea_orm::Value> for TimelineStatId {
+    fn into(self) -> sea_orm::Value {
+        sea_orm::Value::String(Some(Box::new(self.0)))
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "photo_timeline_stat")]
 pub struct Model {

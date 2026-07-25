@@ -8,6 +8,7 @@ use sea_orm::{
     entity::prelude::*,
 };
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 // 记得要同步修改model的table_name
 pub const TABLE_NAME: &'static str = "photo_face";
@@ -36,7 +37,32 @@ pub struct Model {
 pub enum Relation {}
 impl ActiveModelBehavior for ActiveModel {}
 
+#[derive(Copy, Clone, Debug)]
 pub struct FaceId(pub i64);
+
+impl From<i64> for FaceId {
+    fn from(id: i64) -> Self {
+        Self(id)
+    }
+}
+
+impl From<FaceId> for i64 {
+    fn from(id: FaceId) -> Self {
+        id.0
+    }
+}
+
+impl fmt::Display for FaceId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Into<sea_orm::Value> for FaceId {
+    fn into(self) -> sea_orm::Value {
+        sea_orm::Value::BigInt(Some(self.0))
+    }
+}
 
 pub struct FaceRecord {
     pub id: FaceId,
@@ -107,7 +133,7 @@ impl TryFrom<NewFaceRecord> for ActiveModel {
         Ok(ActiveModel {
             id: NotSet,
             photo_id: Set(value.photo_id.0),
-            person_id: Set(value.person_id.map(|p| p.0)),
+            person_id: Set(value.person_id.map(i64::from)),
             bbox: Set(bbox),
             landmarks: Set(landmarks),
             score: Set(value.score),

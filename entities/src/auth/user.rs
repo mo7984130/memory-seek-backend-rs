@@ -12,9 +12,21 @@ impl From<i64> for UserId {
     }
 }
 
+impl From<UserId> for i64 {
+    fn from(id: UserId) -> Self {
+        id.0
+    }
+}
+
 impl fmt::Display for UserId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl Into<sea_orm::Value> for UserId {
+    fn into(self) -> sea_orm::Value {
+        sea_orm::Value::BigInt(Some(self.0))
     }
 }
 

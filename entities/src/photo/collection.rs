@@ -1,3 +1,4 @@
+use std::fmt;
 use std::str::FromStr;
 
 use common::error::AppError;
@@ -8,11 +9,31 @@ use crate::auth::user::UserId;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct CollectionId(pub i64);
+
 impl From<i64> for CollectionId {
     fn from(id: i64) -> Self {
         Self(id)
     }
 }
+
+impl From<CollectionId> for i64 {
+    fn from(id: CollectionId) -> Self {
+        id.0
+    }
+}
+
+impl fmt::Display for CollectionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Into<sea_orm::Value> for CollectionId {
+    fn into(self) -> sea_orm::Value {
+        sea_orm::Value::BigInt(Some(self.0))
+    }
+}
+
 impl FromStr for CollectionId {
     type Err = AppError;
 

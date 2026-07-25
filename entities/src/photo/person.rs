@@ -3,6 +3,7 @@ use insight_face_rs::types::FaceEmbedding;
 use sea_orm::entity::prelude::*;
 
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use crate::photo::face::FaceId;
 use insight_face_rs::PgVector;
@@ -27,7 +28,32 @@ pub struct Model {
 pub enum Relation {}
 impl ActiveModelBehavior for ActiveModel {}
 
+#[derive(Copy, Clone, Debug)]
 pub struct PersonId(pub i64);
+
+impl From<i64> for PersonId {
+    fn from(id: i64) -> Self {
+        Self(id)
+    }
+}
+
+impl From<PersonId> for i64 {
+    fn from(id: PersonId) -> Self {
+        id.0
+    }
+}
+
+impl fmt::Display for PersonId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Into<sea_orm::Value> for PersonId {
+    fn into(self) -> sea_orm::Value {
+        sea_orm::Value::BigInt(Some(self.0))
+    }
+}
 
 pub struct PersonRecord {
     pub id: PersonId,

@@ -1,3 +1,5 @@
+use std::fmt;
+
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +12,24 @@ pub struct CommentLikeId(pub i64);
 impl From<i64> for CommentLikeId {
     fn from(id: i64) -> Self {
         Self(id)
+    }
+}
+
+impl From<CommentLikeId> for i64 {
+    fn from(id: CommentLikeId) -> Self {
+        id.0
+    }
+}
+
+impl fmt::Display for CommentLikeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Into<sea_orm::Value> for CommentLikeId {
+    fn into(self) -> sea_orm::Value {
+        sea_orm::Value::BigInt(Some(self.0))
     }
 }
 

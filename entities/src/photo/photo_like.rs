@@ -1,3 +1,5 @@
+use std::fmt;
+
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +12,24 @@ pub struct PhotoLikeId(pub i64);
 impl From<i64> for PhotoLikeId {
     fn from(id: i64) -> Self {
         Self(id)
+    }
+}
+
+impl From<PhotoLikeId> for i64 {
+    fn from(id: PhotoLikeId) -> Self {
+        id.0
+    }
+}
+
+impl fmt::Display for PhotoLikeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Into<sea_orm::Value> for PhotoLikeId {
+    fn into(self) -> sea_orm::Value {
+        sea_orm::Value::BigInt(Some(self.0))
     }
 }
 

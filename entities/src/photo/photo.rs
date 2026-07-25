@@ -1,3 +1,4 @@
+use std::fmt;
 use std::str::FromStr;
 
 use common::error::AppError;
@@ -19,6 +20,25 @@ impl From<i64> for PhotoId {
         Self(id)
     }
 }
+
+impl From<PhotoId> for i64 {
+    fn from(id: PhotoId) -> Self {
+        id.0
+    }
+}
+
+impl fmt::Display for PhotoId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Into<sea_orm::Value> for PhotoId {
+    fn into(self) -> sea_orm::Value {
+        sea_orm::Value::BigInt(Some(self.0))
+    }
+}
+
 impl PhotoId {
     pub fn parse_from_str_or_none(s: &str) -> Option<Self> {
         let id = s.parse::<i64>().ok()?;
