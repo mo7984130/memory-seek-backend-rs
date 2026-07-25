@@ -25,7 +25,7 @@ impl CollectionMapper {
         }
 
         Entity::find()
-            .filter(Column::Id.is_in(ids.iter().map(|id| id.0)))
+            .filter(Column::Id.is_in(ids.iter().copied()))
             .all(db)
             .await
             .trace_internal_err("db_query_err", "查询收藏夹失败")
@@ -37,7 +37,7 @@ impl CollectionMapper {
         user_id: UserId,
     ) -> Result<Vec<CollectionRecord>> {
         Entity::find()
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::UserId.eq(user_id))
             .order_by_desc(Column::CreatedAt)
             .all(db)
             .await
@@ -72,7 +72,7 @@ impl CollectionMapper {
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
     ) -> Result<Option<CollectionRecord>> {
-        Entity::find_by_id(collection_id.0)
+        Entity::find_by_id(collection_id)
             .one(db)
             .await
             .trace_internal_err("db_query_err", "查询收藏夹失败")
@@ -86,7 +86,7 @@ impl CollectionMapper {
     ) -> Result<()> {
         Entity::update_many()
             .col_expr(Column::PhotoCount, Expr::value(count))
-            .filter(Column::Id.eq(collection_id.0))
+            .filter(Column::Id.eq(collection_id))
             .exec(db)
             .await
             .trace_internal_err("db_update_err", "更新失败")?;
@@ -102,7 +102,7 @@ impl CollectionMapper {
         Entity::update_many()
             .col_expr(Column::CoverFileId, Expr::value(cover_file_id))
             .col_expr(Column::UpdatedAt, Expr::value(chrono::Utc::now()))
-            .filter(Column::Id.eq(collection_id.0))
+            .filter(Column::Id.eq(collection_id))
             .exec(db)
             .await
             .trace_internal_err("db_update_err", "更新封面失败")?;
@@ -120,7 +120,7 @@ impl CollectionMapper {
 
         let (ids, counts): (Vec<i64>, Vec<i64>) = decrements
             .iter()
-            .map(|(id, count)| (id.0, *count as i64))
+            .map(|(id, count)| (i64::from(*id), *count as i64))
             .unzip();
 
         let table = Entity.table_name();
@@ -171,8 +171,8 @@ impl CollectionMapper {
 
         let result = update
             .col_expr(Column::UpdatedAt, Expr::value(chrono::Utc::now()))
-            .filter(Column::Id.eq(collection_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::Id.eq(collection_id))
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
             .await
             .trace_internal_err("db_update_err", "修改收藏夹信息失败")?;
@@ -181,7 +181,6 @@ impl CollectionMapper {
             return log_warn(
                 "update_rows_affected",
                 "修改的影响行为零",
-                "",
                 AppError::bad_request("修改收藏夹信息失败"),
             )
             .to_err();
@@ -196,8 +195,8 @@ impl CollectionMapper {
         user_id: UserId,
     ) -> Result<()> {
         let result = Entity::delete_many()
-            .filter(Column::Id.eq(collection_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::Id.eq(collection_id))
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
             .await
             .trace_internal_err("db_delete_err", "删除收藏夹失败")?;
@@ -206,7 +205,6 @@ impl CollectionMapper {
             return log_warn(
                 "delete_rows_affected",
                 "删除的影响行为零",
-                "",
                 AppError::not_found("收藏夹不存在"),
             )
             .to_err();
@@ -221,8 +219,8 @@ impl CollectionMapper {
         collection_id: CollectionId,
     ) -> Result<bool> {
         let count = Entity::find()
-            .filter(Column::Id.eq(collection_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::Id.eq(collection_id))
+            .filter(Column::UserId.eq(user_id))
             .count(db)
             .await
             .trace_internal_err("db_query_err", "查询失败")?;

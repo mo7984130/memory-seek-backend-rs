@@ -18,7 +18,7 @@ pub struct PhotoState {
     #[cfg(feature = "face")]
     pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
     #[cfg(feature = "face")]
-    pub backup_storage: Option<BackupStorage>,
+    pub backup_storage: BackupStorage,
 }
 
 impl PhotoState {
@@ -28,7 +28,7 @@ impl PhotoState {
         s3_client: Arc<S3Client>,
         token_cipher: Arc<TokenCipher>,
         #[cfg(feature = "face")] face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
-        #[cfg(feature = "face")] backup_storage: Option<BackupStorage>,
+        #[cfg(feature = "face")] backup_storage: BackupStorage,
     ) -> Self {
         Self {
             db,

@@ -5,19 +5,20 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics"]
+metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum"]
 file_validator = ["common/file_validator"]
 face = ["dep:insight-face-rs", "dep:backup", "entities/face-engine"]
 
 [dependencies]
-common = { path = "../../common", features = ["validators", "file_validator"] }
+common = { path = "../../common", features = ["validators", "file_validator", "metrics"] }
 constants = { path = "../constants" }
 entities = { path = "../../entities" }
 oss = { path = "../../libs/oss" }
 img_url_generator = { path = "../../libs/img_url_generator" }
 
 axum = { workspace = true, optional = true }
+metrics = { workspace = true, optional = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -36,3 +37,4 @@ validator = { workspace = true }
 insight-face-rs = { workspace = true, optional = true }
 backup = { path = "../backup", optional = true }
 image.workspace = true
+memory-seek-type.workspace = true

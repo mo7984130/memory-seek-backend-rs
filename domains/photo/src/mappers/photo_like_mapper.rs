@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use common::Result;
-use common::ext::{ResultErrExt, ToErr, ToOk, log_err};
+use common::ext::{ResultErrExt, ToErr, ToOk, log_err_with_err};
 use entities::photo::photo_like::*;
 use entities::{auth::user::UserId, photo::photo::PhotoId};
 use sea_orm::ActiveValue::Set;
@@ -41,7 +41,7 @@ impl PhotoLikeMapper {
         match result {
             Ok(_) => Ok(true),
             Err(DbErr::RecordNotInserted) => Ok(false),
-            Err(e) => log_err(
+            Err(e) => log_err_with_err(
                 "db_insert_err",
                 "插入照片点赞时错误",
                 e,
@@ -58,7 +58,7 @@ impl PhotoLikeMapper {
     pub async fn query_is_like_by_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
-        photo_ids: Vec<PhotoId>,
+        photo_ids: &[PhotoId],
     ) -> Result<HashSet<PhotoId>> {
         if photo_ids.is_empty() {
             return HashSet::new().to_ok();
@@ -67,12 +67,11 @@ impl PhotoLikeMapper {
         Entity::find()
             .select_only()
             .column(Column::PhotoId)
-            .filter(Column::UserId.eq(user_id.0))
-            .filter(Column::PhotoId.is_in(photo_ids.into_iter().map(|id| id.0)))
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .into_tuple::<i64>()
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询照片是否点赞数据库错误")?
+            .await?
             .into_iter()
             .map(PhotoId)
             .collect::<HashSet<PhotoId>>()
@@ -96,7 +95,7 @@ impl PhotoLikeMapper {
             .select_only()
             .column(Column::PhotoId)
             .column(Column::CreatedAt)
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::UserId.eq(user_id))
             .order_by_desc(Column::CreatedAt)
             .order_by_desc(Column::Id);
 
@@ -133,8 +132,8 @@ impl PhotoLikeMapper {
         photo_id: PhotoId,
     ) -> Result<bool> {
         let res = Entity::delete_many()
-            .filter(Column::PhotoId.eq(photo_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::PhotoId.eq(photo_id))
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
             .await
             .trace_internal_err("db_delete_err", "尝试删除照片点赞错误")?;
@@ -147,7 +146,7 @@ impl PhotoLikeMapper {
         photo_id: PhotoId,
     ) -> Result<u64> {
         Entity::delete_many()
-            .filter(Column::PhotoId.eq(photo_id.0))
+            .filter(Column::PhotoId.eq(photo_id))
             .exec(db)
             .await
             .trace_internal_err("db_delete_err", "根据照片id删除所有点赞数据库错误")?

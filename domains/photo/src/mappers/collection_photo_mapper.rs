@@ -26,8 +26,8 @@ impl CollectionPhotoMapper {
         }
 
         Entity::find()
-            .filter(Column::CollectionId.eq(collection_id.0))
-            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+            .filter(Column::CollectionId.eq(collection_id))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .select_only()
             .column(Column::PhotoId)
             .into_tuple::<i64>()
@@ -90,7 +90,7 @@ impl CollectionPhotoMapper {
         collection_id: CollectionId,
     ) -> Result<u64> {
         Entity::find()
-            .filter(Column::CollectionId.eq(collection_id.0))
+            .filter(Column::CollectionId.eq(collection_id))
             .count(db)
             .await
             .trace_internal_err("db_query_err", "查询失败")
@@ -107,9 +107,9 @@ impl CollectionPhotoMapper {
         }
 
         let result = Entity::delete_many()
-            .filter(Column::CollectionId.eq(collection_id.0))
-            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::CollectionId.eq(collection_id))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
             .await
             .trace_internal_err("db_delete_err", "批量移除失败")?;
@@ -128,7 +128,7 @@ impl CollectionPhotoMapper {
         }
 
         let affected: HashMap<CollectionId, u64> = Entity::find()
-            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .select_only()
             .column(Column::CollectionId)
             .into_tuple::<i64>()
@@ -142,7 +142,7 @@ impl CollectionPhotoMapper {
             });
 
         Entity::delete_many()
-            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .exec(db)
             .await
             .trace_internal_err("db_delete_err", "批量移除失败")?;
@@ -158,8 +158,8 @@ impl CollectionPhotoMapper {
         size: u64,
     ) -> Result<Vec<PhotoId>> {
         let mut query = Entity::find()
-            .filter(Column::CollectionId.eq(collection_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::CollectionId.eq(collection_id))
+            .filter(Column::UserId.eq(user_id))
             .order_by_desc(Column::CreatedAt)
             .order_by_desc(Column::Id)
             .limit(size);
@@ -171,7 +171,7 @@ impl CollectionPhotoMapper {
                     .add(
                         sea_orm::Condition::all()
                             .add(Column::CreatedAt.eq(c.created_at))
-                            .add(Column::Id.lt(c.id.0)),
+                            .add(Column::Id.lt(c.id)),
                     ),
             );
         }
@@ -195,8 +195,8 @@ impl CollectionPhotoMapper {
         user_id: UserId,
     ) -> Result<u64> {
         let res = Entity::delete_many()
-            .filter(Column::CollectionId.eq(collection_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::CollectionId.eq(collection_id))
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
             .await
             .trace_internal_err("db_del_err", "删除收藏夹照片失败")?;
@@ -211,8 +211,8 @@ impl CollectionPhotoMapper {
         photo_id: PhotoId,
     ) -> Result<Vec<CollectionId>> {
         Entity::find()
-            .filter(Column::PhotoId.eq(photo_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::PhotoId.eq(photo_id))
+            .filter(Column::UserId.eq(user_id))
             .select_only()
             .column(Column::CollectionId)
             .into_tuple::<i64>()

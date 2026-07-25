@@ -22,7 +22,7 @@ pub struct PhotoCommentResult {
 impl From<CommentRecord> for PhotoCommentResult {
     fn from(record: CommentRecord) -> Self {
         Self {
-            id: record.id.0.to_string(),
+            id: record.id.to_string(),
             user_id: record.user_id.to_string(),
             content: record.content,
             like_count: record.like_count,

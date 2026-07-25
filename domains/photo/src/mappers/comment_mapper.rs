@@ -38,7 +38,7 @@ impl CommentMapper {
 impl CommentMapper {
     pub async fn exists(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<bool> {
         let count = Entity::find()
-            .filter(Column::Id.eq(comment_id.0))
+            .filter(Column::Id.eq(comment_id))
             .count(db)
             .await
             .trace_internal_err("db_query_err", "查询评论是否存在失败")?;
@@ -52,7 +52,7 @@ impl CommentMapper {
     ) -> Result<()> {
         Entity::update_many()
             .col_expr(Column::LikeCount, Expr::col(Column::LikeCount).add(delta))
-            .filter(Column::Id.eq(comment_id.0))
+            .filter(Column::Id.eq(comment_id))
             .exec(db)
             .await
             .trace_internal_err("db_update_err", "更新照片评论总点赞数数据库错误")?;
@@ -70,7 +70,7 @@ impl CommentMapper {
         size: u64,
     ) -> Result<Vec<CommentRecord>> {
         Entity::find()
-            .filter(Column::PhotoId.eq(photo_id.0))
+            .filter(Column::PhotoId.eq(photo_id))
             .filter(Column::LikeCount.gt(min_likes))
             .order_by_desc(Column::LikeCount)
             .limit(size)
@@ -88,12 +88,12 @@ impl CommentMapper {
         size: u64,
     ) -> Result<Vec<CommentRecord>> {
         let mut query = Entity::find()
-            .filter(Column::PhotoId.eq(photo_id.0))
+            .filter(Column::PhotoId.eq(photo_id))
             .order_by_desc(Column::CreatedAt)
             .limit(size);
 
         if !exclude_ids.is_empty() {
-            query = query.filter(Column::Id.is_not_in(exclude_ids.iter().map(|id| id.0)));
+            query = query.filter(Column::Id.is_not_in(exclude_ids.iter().copied()));
         }
 
         if let Some(c) = cursor {
@@ -112,7 +112,7 @@ impl CommentMapper {
         comment_id: CommentId,
     ) -> Result<PhotoId> {
         Entity::find()
-            .filter(Column::Id.eq(comment_id.0))
+            .filter(Column::Id.eq(comment_id))
             .select_only()
             .column(Column::PhotoId)
             .into_tuple::<i64>()
@@ -131,8 +131,8 @@ impl CommentMapper {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<bool> {
-        let ret = Entity::delete_by_id(comment_id.0)
-            .filter(Column::UserId.eq(user_id.0))
+        let ret = Entity::delete_by_id(comment_id)
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
             .await
             .trace_internal_err("db_del_err", "删除评论数据库错误")?;
@@ -152,7 +152,7 @@ impl CommentMapper {
         let comment_ids: Vec<CommentId> = Entity::find()
             .select_only()
             .column(Column::Id)
-            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .into_tuple::<i64>()
             .all(db)
             .await
@@ -163,7 +163,7 @@ impl CommentMapper {
 
         if !comment_ids.is_empty() {
             Entity::delete_many()
-                .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+                .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
                 .exec(db)
                 .await
                 .trace_internal_err("db_del_err", "批量删除评论失败")?;

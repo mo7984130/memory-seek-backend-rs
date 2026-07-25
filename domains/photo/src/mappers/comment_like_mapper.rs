@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use common::Result;
-use common::ext::{ResultErrExt, ToErr, ToOk, log_err};
+use common::ext::{ResultErrExt, ToErr, ToOk, log_err_with_err};
 use entities::photo::comment_like::*;
 use entities::{auth::user::UserId, photo::comment::CommentId};
 use sea_orm::ActiveValue::Set;
@@ -38,7 +38,7 @@ impl CommentLikeMapper {
         match result {
             Ok(_) => Ok(true),
             Err(DbErr::RecordNotInserted) => Ok(false),
-            Err(e) => log_err(
+            Err(e) => log_err_with_err(
                 "db_insert_err",
                 "插入照片评论喜欢时错误",
                 e,
@@ -66,8 +66,8 @@ impl CommentLikeMapper {
         Entity::find()
             .select_only()
             .column(Column::CommentId)
-            .filter(Column::UserId.eq(user_id.0))
-            .filter(Column::CommentId.is_in(comment_ids.into_iter().map(|id| id.0)))
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::CommentId.is_in(comment_ids.into_iter()))
             .into_tuple::<i64>()
             .all(db)
             .await
@@ -87,8 +87,8 @@ impl CommentLikeMapper {
         comment_id: CommentId,
     ) -> Result<bool> {
         let res = Entity::delete_many()
-            .filter(Column::CommentId.eq(comment_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::CommentId.eq(comment_id))
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
             .await
             .trace_internal_err("db_delete_err", "尝试删除照片评论喜欢错误")?;
@@ -101,7 +101,7 @@ impl CommentLikeMapper {
         comment_id: CommentId,
     ) -> Result<u64> {
         Entity::delete_many()
-            .filter(Column::CommentId.eq(comment_id.0))
+            .filter(Column::CommentId.eq(comment_id))
             .exec(db)
             .await
             .trace_internal_err("db_del_err", "根据评论id删除所有评论喜欢数据库错误")?
@@ -118,7 +118,7 @@ impl CommentLikeMapper {
         }
 
         Entity::delete_many()
-            .filter(Column::CommentId.is_in(comment_ids.iter().map(|id| id.0)))
+            .filter(Column::CommentId.is_in(comment_ids.iter().copied()))
             .exec(db)
             .await
             .trace_internal_err("db_del_err", "批量删除评论点赞失败")?
