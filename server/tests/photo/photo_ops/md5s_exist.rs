@@ -22,7 +22,7 @@ async fn test_md5s_exist_empty() {
     );
     let res = app.oneshot(req).await.unwrap();
 
-    // Md5sExistParam validates min=1, so empty vec returns 400
+    // ExistsByMd5BatchParam validates min=1, so empty vec returns 400
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 
     guard.cleanup().await;
