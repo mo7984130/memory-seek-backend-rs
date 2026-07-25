@@ -72,7 +72,7 @@ async fn verify_token(state: &AppState, user_id: i64, token: &str) -> Result<(),
         AppError::InternalServerError
     })?;
 
-    let key = RedisKeys::auth::user_access_token(user_id);
+    let key = RedisKeys::auth::user_access_token(UserId(user_id));
     let stored_token: Option<String> = conn.get(&key).await.map_err(|e| {
         tracing::error!("查询 Redis token 失败: {}", e);
         AppError::InternalServerError
