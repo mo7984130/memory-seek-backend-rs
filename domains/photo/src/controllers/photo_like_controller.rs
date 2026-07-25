@@ -132,10 +132,9 @@ impl PhotoLikeController {
         }
 
         // 构建 photo_id -> like_created_at 的映射
-        let like_time_map: HashMap<i64, DateTimeUtc> = photo_ids_with_like_time
+        let like_time_map: HashMap<PhotoId, DateTimeUtc> = photo_ids_with_like_time
             .into_iter()
             .take(photo_ids.len()) // 只取与 photo_ids 数量匹配的部分
-            .map(|(id, created_at)| (id.0, created_at))
             .collect();
 
         // 加载照片详细信息
@@ -146,7 +145,7 @@ impl PhotoLikeController {
             photos.last().and_then(|p| {
                 let id = PhotoId::from_str(&p.id).ok()?;
                 // 使用点赞时间生成游标，确保分页正确
-                let like_created_at = like_time_map.get(&id.0).copied()?;
+                let like_created_at = like_time_map.get(&id).copied()?;
                 Some(
                     PhotoLikeCursor {
                         created_at: like_created_at,

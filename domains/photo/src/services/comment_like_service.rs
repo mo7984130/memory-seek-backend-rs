@@ -2,7 +2,7 @@ use common::{
     Result,
     error::AppError,
     ext::{ToErr, log_warn},
-    metrics_group, metrics_success, metrics_timer_name, timed,
+    metrics_group, metrics_name, metrics_success, timed,
     utils::{DbUtils, MetricsTimerExt},
 };
 use entities::{auth::user::UserId, photo::comment::CommentId};
@@ -21,13 +21,12 @@ impl CommentLikeService {
 
         // 检查评论是否存在
         if !CommentMapper::exists(&state.db, comment_id)
-            .timed(metrics_timer_name!("like_comment", "check_exists"))
+            .timed(metrics_name!("like_comment", "check_exists"))
             .await?
         {
             return log_warn(
                 "comment_not_found",
                 "用户尝试点赞不存在的评论",
-                "",
                 AppError::not_found("评论不存在"),
             )
             .to_err();
@@ -43,7 +42,6 @@ impl CommentLikeService {
                         return log_warn(
                             "comment_like_already_exist",
                             "用户尝试点赞一个已经点赞过的评论",
-                            "",
                             AppError::bad_request("已经点赞过"),
                         )
                         .to_err();
@@ -81,8 +79,7 @@ impl CommentLikeService {
                     if !deleted {
                         return log_warn(
                             "comment_like_already_exist",
-                            "用户尝试取消点赞一个未点赞过的评论",
-                            "",
+                            "用户尝试取消点赞还未点赞过的",
                             AppError::bad_request("还未点赞"),
                         )
                         .to_err();

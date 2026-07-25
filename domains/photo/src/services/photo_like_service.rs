@@ -2,7 +2,7 @@ use common::{
     Result,
     error::AppError,
     ext::{ResultErrExt, ToErr, log_warn},
-    metrics_group, metrics_success, metrics_timer_name, timed,
+    metrics_group, metrics_name, metrics_success, timed,
     utils::{DbUtils, MetricsTimerExt},
 };
 use entities::{auth::user::UserId, photo::photo::PhotoId};
@@ -22,13 +22,12 @@ impl PhotoLikeService {
 
         // 检查照片是否存在
         if !PhotoMapper::exists(&state.db, photo_id)
-            .timed(metrics_timer_name!("like_photo", "check_exists"))
+            .timed(metrics_name!("like_photo", "check_exists"))
             .await?
         {
             return log_warn(
                 "photo_not_found",
                 "用户尝试点赞不存在的照片",
-                "",
                 AppError::not_found("照片不存在"),
             )
             .to_err();
@@ -43,7 +42,6 @@ impl PhotoLikeService {
                         return log_warn(
                             "photo_like_already_exist",
                             "用户尝试点赞一个已经点赞过的照片",
-                            "",
                             AppError::bad_request("已经点赞过"),
                         )
                         .to_err();
@@ -86,7 +84,7 @@ impl PhotoLikeService {
             decoded_cursor.map(|c| (c.created_at, c.id.0)),
             size,
         )
-        .timed(metrics_timer_name!("get_user_liked_photos", "query_ids"))
+        .timed(metrics_name!("get_user_liked_photos", "query_ids"))
         .await?;
 
         metrics_success!("get_user_liked_photos");
@@ -108,7 +106,6 @@ impl PhotoLikeService {
                         return log_warn(
                             "photo_like_not_exist",
                             "用户尝试取消点赞一个未点赞过的照片",
-                            "",
                             AppError::bad_request("还未点赞"),
                         )
                         .to_err();

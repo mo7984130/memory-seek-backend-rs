@@ -2,14 +2,17 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{CacheExtension, OkExt, ResultErrExt, ToErr, log_warn},
-    metrics_group, metrics_success, metrics_timer_name,
+    ext::{
+        BoolExt, CacheExtension, OkExt, ResultErrExt, ResultInspectErrAsync, ToErr, TraceExt,
+        log_warn,
+    },
+    metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
     utils::{DbUtils, FileValidator, MetricsTimerExt},
 };
 use constants::RedisKeys;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, entity::prelude::DateTimeUtc};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -24,6 +27,7 @@ use crate::{
     state::PhotoState,
 };
 use common::Result;
+use memory_seek_type::photo::models::{DeletePhotosParam, ExistsByMd5BatchParam, UploadPhotoParam};
 
 use entities::{
     auth::user::UserId,
@@ -34,10 +38,11 @@ pub(crate) struct PhotoService;
 
 // 查询
 impl PhotoService {
+    #[tracing::instrument(skip_all)]
     pub async fn load_photos_info(
         state: &PhotoState,
         user_id: UserId,
-        photo_ids: &[PhotoId],
+        photo_ids: &Vec<PhotoId>,
     ) -> Result<Vec<PhotoResult>> {
         let (photos_result, liked_photo_ids_result) = tokio::join!(
             state.redis.get_or_load_batch(
@@ -47,7 +52,7 @@ impl PhotoService {
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
                 |photo| photo.id,
             ),
-            PhotoLikeMapper::query_is_like_by_photo_ids(&state.db, user_id, photo_ids.to_vec())
+            PhotoLikeMapper::query_is_like_by_photo_ids(&state.db, user_id, photo_ids)
         );
         let photos = photos_result?;
         let liked_photo_ids = liked_photo_ids_result?;
@@ -55,46 +60,34 @@ impl PhotoService {
             .into_iter()
             .flatten()
             .map(|p| {
-                PhotoResult::from(p.clone())
-                    .with_liked(liked_photo_ids.contains(&p.id))
-                    .with_tokens(&p.file_id, &state.token_cipher)
+                let liked = liked_photo_ids.contains(&p.id);
+                let file_id = p.file_id.clone();
+                PhotoResult::from(p)
+                    .with_liked(liked)
+                    .with_tokens(&file_id, &state.token_cipher)
             })
             .collect::<Vec<_>>()
             .to_ok()
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn get_photo_cursor_page(
         state: &PhotoState,
         user_id: UserId,
         query: PhotoCursorParam,
     ) -> Result<CursorPage<PhotoResult, String>> {
-        metrics_group!("get_photo_cursor_page");
-
-        let size = query.size;
-        if size > Self::MD5_MAX_SIZE {
-            let err = log_warn(
-                "over_max_size",
-                "size超过最大值",
-                "",
-                AppError::bad_request("size超过最大值"),
-            );
-            return Err(err);
-        }
-
+        metrics_group!();
         let decoded_cursor = query.cursor.map(PhotoCursor::decode).transpose()?;
 
         // 获取photo_ids
         let photo_ids = PhotoMapper::query_cursor_page_ids(
             &state.db,
             decoded_cursor,
-            size + 1,
+            query.size + 1,
             query.direction,
             query.anchor_time,
         )
-        .timed(metrics_timer_name!(
-            "get_photo_cursor_page",
-            "find_cursor_page_ids"
-        ))
+        .timed(metrics_name!("find_cursor_page_ids"))
         .await?;
         if photo_ids.is_empty() {
             return Ok(CursorPage::empty());
@@ -104,39 +97,35 @@ impl PhotoService {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, size);
+        } = CursorPage::from_oversize(photo_ids, query.size);
 
         let photo_vos = Self::load_photos_info(state, user_id, &photo_ids)
-            .timed(metrics_timer_name!(
-                "get_photo_cursor_page",
-                "load_photos_info"
-            ))
+            .timed(metrics_name!("load_photos_info"))
             .await?;
 
         // 获取next_cursor
         let next_cursor = if has_more {
-            photo_vos.last().and_then(|vo| {
-                // 解析错误概率很小, 不返回错误, 而是返回空CursorPage
-                let id = vo
-                    .id
-                    .parse::<i64>()
-                    .trace_internal_err("parse_photo_vo_id_err", "解析照片VOid错误");
-                match id {
-                    Ok(id) => Some(
+            match photo_vos.last() {
+                Some(last_vo) => {
+                    let id = last_vo
+                        .id
+                        .parse::<i64>()
+                        .trace_internal_err("parse_photo_vo_id_err", "解析照片VOid错误")?;
+                    Some(
                         PhotoCursor {
                             id: PhotoId(id),
-                            created_at: vo.created_at,
+                            created_at: last_vo.created_at,
                         }
                         .encode(),
-                    ),
-                    Err(_) => None,
+                    )
                 }
-            })
+                None => None,
+            }
         } else {
             None
         };
 
-        metrics_success!("get_photo_cursor_page");
+        metrics_success!();
 
         Ok(CursorPage {
             records: photo_vos,
@@ -147,38 +136,19 @@ impl PhotoService {
 }
 
 impl PhotoService {
-    #[instrument(name = "photo_upload", skip_all, fields(user_id, file_name))]
+    #[instrument(skip_all, fields(user_id, file_name = %param.file_name))]
     pub async fn upload_photo(
         state: &PhotoState,
         user_id: UserId,
         file_data: Bytes,
-        file_name: String,
-        content_type: String,
-        created_at: Option<DateTimeUtc>,
+        param: UploadPhotoParam,
     ) -> Result<PhotoResult> {
-        metrics_group!("upload_photo");
+        metrics_group!();
 
         // 效验文件
         let metadata = {
-            let file_data_clone = file_data.clone();
-            timed!("upload_photo", "validate_photo", {
-                tokio::task::spawn_blocking(move || {
-                    FileValidator::validate_image(&file_data_clone, &file_name, &content_type)
-                })
-                .await
-                .trace_internal_err(
-                    "spawn_blocking_validate_photo_err",
-                    "tokio spawn_blocking join err",
-                )?
-                .map_err(|e| {
-                    let msg = e.to_string();
-                    log_warn(
-                        "upload_photo:invalid_photo",
-                        "用户上传图片时, 图片校验未通过",
-                        msg.clone(),
-                        AppError::bad_request(msg),
-                    )
-                })?
+            timed!("validate_photo", {
+                FileValidator::validate_image(&file_data, &param.file_name, &param.content_type)?
             })
         };
 
@@ -186,29 +156,21 @@ impl PhotoService {
         let md5_hash = {
             let file_data_clone = file_data.clone();
             timed!(
-                "upload_photo",
                 "md5_hash",
                 tokio::task::spawn_blocking(move || format!(
                     "{:x}",
                     md5::compute(&file_data_clone)
                 ))
-                .await
-                .trace_internal_err(
-                    "spawn_blocking_md5_compute_err",
-                    "tokio spawn_blocking join err"
-                )?
+                .await?
             )
         };
-        let existing_md5s = PhotoMapper::exists_by_md5_batch(&state.db, &[&md5_hash]).await?;
-        if existing_md5s.contains(&md5_hash) {
-            let err = log_warn(
+        PhotoMapper::exists_by_md5(&state.db, &md5_hash)
+            .await?
+            .false_or_warn(
                 "upload_photo:img_exist",
                 "图片已存在",
-                md5_hash,
                 AppError::bad_request("图片已存在"),
-            );
-            return Err(err);
-        }
+            )?;
 
         // 上传文件
         let date_path = chrono::Local::now().format("%Y/%m/%d");
@@ -217,13 +179,12 @@ impl PhotoService {
         state
             .s3_client
             .upload(&file_id, &file_data, &metadata.mime_type)
-            .timed(metrics_timer_name!("upload_photo", "s3_upload"))
-            .await
-            .trace_internal_err("photo::upload:s3_upload_err", "s3上传失败")?;
+            .timed(metrics_name!("s3_upload"))
+            .await?;
 
         // 更新数据库
         let now = Utc::now();
-        let insert_result = ActiveModel {
+        let photo = ActiveModel {
             user_id: Set(user_id.0),
             name: Set(metadata.name),
             size: Set(file_data.len() as i64),
@@ -232,33 +193,23 @@ impl PhotoService {
             mime_type: Set(metadata.mime_type),
             md5: Set(md5_hash),
             file_id: Set(file_id.clone()),
-            created_at: Set(created_at.unwrap_or(now)),
+            created_at: Set(param.created_at.unwrap_or(now)),
             updated_at: Set(now),
             ..Default::default()
         }
         .insert(&state.db)
-        .timed(metrics_timer_name!("upload_photo", "db_insert"))
+        .timed(metrics_name!("db_insert"))
         .await
-        .trace_internal_err("photo::upload:db_insert_err", "保存照片失败");
-
-        //更新数据库失败的话 删除文件
-        let photo = match insert_result {
-            Ok(photo) => photo,
-            Err(e) => {
-                let _ = state
-                    .s3_client
-                    .delete(&file_id)
-                    .await
-                    .trace_internal_err("photo::upload:s3_delete_err", "删除文件失败");
-                return Err(e);
-            }
-        };
+        .inspect_err_async(|_| async {
+            let _ = state.s3_client.delete(&file_id).await.trace();
+        })
+        .await?;
 
         // 增加时间线统计
         // 错误不返回
         let _ = TimelineStatMapper::incr_stat(&state.db, photo.created_at).await;
 
-        metrics_success!("upload_photo");
+        metrics_success!();
 
         let file_id = photo.file_id.clone();
         PhotoResult::from(PhotoRecord::from(photo))
@@ -266,23 +217,15 @@ impl PhotoService {
             .to_ok()
     }
 
-    const MD5_MAX_SIZE: u64 = 1024;
-
-    pub async fn exists_by_md5_batch(state: &PhotoState, md5s: &[String]) -> Result<Vec<bool>> {
+    pub async fn exists_by_md5_batch(
+        state: &PhotoState,
+        param: ExistsByMd5BatchParam,
+    ) -> Result<Vec<bool>> {
         metrics_group!("exists_by_md5_batch");
 
-        if md5s.len() > Self::MD5_MAX_SIZE as usize {
-            return log_warn(
-                "over_md5_size",
-                "md5的数量超过最大值",
-                "",
-                AppError::bad_request("md5的数量超过最大值"),
-            )
-            .to_err();
-        }
-
-        let existing = PhotoMapper::exists_by_md5_batch(&state.db, md5s).await?;
-        let res = md5s
+        let existing = PhotoMapper::exists_by_md5_batch(&state.db, &param.md5s).await?;
+        let res = param
+            .md5s
             .iter()
             .map(|md5| existing.contains(md5))
             .collect::<Vec<bool>>();
@@ -294,12 +237,23 @@ impl PhotoService {
     pub async fn delete_photos(
         state: &PhotoState,
         user_id: UserId,
-        photo_ids: Vec<PhotoId>,
+        param: DeletePhotosParam,
     ) -> Result<()> {
         metrics_group!("delete_photos");
 
+        let photo_ids: Vec<PhotoId> = param
+            .photo_ids
+            .into_iter()
+            .filter_map(|id| id.parse::<i64>().ok().map(PhotoId))
+            .collect();
+
         if photo_ids.is_empty() {
-            return Ok(());
+            return log_warn(
+                "delete_photos_invalid_ids",
+                "有效的照片ID为空",
+                AppError::bad_request("没有有效的照片ID"),
+            )
+            .to_err();
         }
 
         // 数据库方面
@@ -313,7 +267,6 @@ impl PhotoService {
                     return log_warn(
                         "del_photos_not_belong",
                         "用户尝试删除不属于它的照片",
-                        "",
                         AppError::bad_request("无法删除不属于自己的照片"),
                     )
                     .to_err();
@@ -341,7 +294,7 @@ impl PhotoService {
                 Ok(photos)
             })
         })
-        .timed(metrics_timer_name!("delete_photos", "db_transaction"))
+        .timed(metrics_name!("delete_photos", "db_transaction"))
         .await
         .trace_internal_err("db_txn_err", "数据库事务错误")?;
 
@@ -350,7 +303,7 @@ impl PhotoService {
         state
             .s3_client
             .delete_batch(file_ids)
-            .timed(metrics_timer_name!("delete_photos", "s3_delete_batch"))
+            .timed(metrics_name!("delete_photos", "s3_delete_batch"))
             .await?;
 
         // 更新照片时间线统计
@@ -358,7 +311,7 @@ impl PhotoService {
             &state.db,
             &photos.iter().map(|p| p.created_at).collect::<Vec<_>>(),
         )
-        .timed(metrics_timer_name!("delete_photos", "timeline_decr_stat"))
+        .timed(metrics_name!("delete_photos", "timeline_decr_stat"))
         .await?;
 
         metrics_success!("delete_photos");

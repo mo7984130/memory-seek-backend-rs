@@ -5,7 +5,7 @@ use crate::state::PhotoState;
 use common::Result;
 use common::ext::OkExt;
 use common::utils::DbUtils;
-use common::{metrics_group, metrics_success, metrics_timer_name, timed, utils::MetricsTimerExt};
+use common::{metrics_group, metrics_success, metrics_name, timed, utils::MetricsTimerExt};
 use entities::auth::user::UserId;
 use entities::photo::collection::CollectionId;
 
@@ -21,7 +21,7 @@ impl CollectionService {
 
         // 获取用户收藏夹
         let collections = CollectionMapper::query_by_user_id(&state.db, user_id)
-            .timed(metrics_timer_name!(
+            .timed(metrics_name!(
                 "get_collection_list",
                 "query_by_user_id"
             ))
@@ -49,7 +49,7 @@ impl CollectionService {
         metrics_group!("create_collection");
 
         let collection = CollectionMapper::insert(&state.db, user_id, name, description)
-            .timed(metrics_timer_name!("create_collection", "db_insert"))
+            .timed(metrics_name!("create_collection", "db_insert"))
             .await?;
 
         metrics_success!("create_collection");
@@ -70,7 +70,7 @@ impl CollectionService {
 
         // 修改时鉴权
         CollectionMapper::update_info(&state.db, collection_id, user_id, name, description)
-            .timed(metrics_timer_name!("update_collection_info", "db_update"))
+            .timed(metrics_name!("update_collection_info", "db_update"))
             .await?;
 
         metrics_success!("update_collection_info");

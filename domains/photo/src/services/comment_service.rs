@@ -13,7 +13,7 @@ use common::{
     Result,
     error::AppError,
     ext::{ToErr, ToOk, log_warn},
-    metrics_group, metrics_success, metrics_timer_name,
+    metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
     utils::{DbUtils, MetricsTimerExt},
@@ -44,7 +44,6 @@ impl CommentService {
                         return log_warn(
                             "comment_publish_photo_not_exists",
                             "用户尝试评论不存在的照片",
-                            "",
                             AppError::bad_request("无法评论不存在的照片"),
                         )
                         .to_err();
@@ -84,7 +83,6 @@ impl CommentService {
             return log_warn(
                 "comment_cursor_page_max_size",
                 "用户获取评论, 传入的size超过最大值",
-                "",
                 AppError::bad_request("size超过最大值"),
             )
             .to_err();
@@ -98,7 +96,7 @@ impl CommentService {
                 HOT_COMMENT_MIN_LIKES,
                 HOT_COMMENT_MAX_COUNT,
             )
-            .timed(metrics_timer_name!(
+            .timed(metrics_name!(
                 "get_comment_cursor_page",
                 "query_hot_comments"
             ))
@@ -115,7 +113,7 @@ impl CommentService {
             cursor,
             size + 1,
         )
-        .timed(metrics_timer_name!(
+        .timed(metrics_name!(
             "get_comment_cursor_page",
             "query_by_photo_id"
         ))
@@ -141,10 +139,7 @@ impl CommentService {
             user_id,
             comments.iter().map(|c| c.id).collect(),
         )
-        .timed(metrics_timer_name!(
-            "get_comment_cursor_page",
-            "query_is_like"
-        ))
+        .timed(metrics_name!("get_comment_cursor_page", "query_is_like"))
         .await?;
 
         let records = comments
@@ -181,7 +176,6 @@ impl CommentService {
                         return log_warn(
                             "del_comment_not_deleted",
                             "用户尝试删除评论, 失败",
-                            "",
                             AppError::bad_request("删除评论失败"),
                         )
                         .to_err();

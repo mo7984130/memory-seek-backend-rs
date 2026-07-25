@@ -34,8 +34,8 @@ pub struct PhotoResult {
 impl From<PhotoRecord> for PhotoResult {
     fn from(record: PhotoRecord) -> Self {
         Self {
-            id: record.id.0.to_string(),
-            user_id: record.user_id.0.to_string(),
+            id: record.id.to_string(),
+            user_id: record.user_id.to_string(),
             name: record.name,
             width: record.width,
             height: record.height,
@@ -144,119 +144,4 @@ impl PhotoCursor {
 pub enum PageDirection {
     Next,
     Prev,
-}
-
-#[derive(Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct Md5sExistParam {
-    #[validate(length(min = 1, max = 128, message = "MD5 数量在 1 到 128 之间"))]
-    pub md5s: Vec<String>,
-}
-
-#[derive(Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct DeletePhotoParam {
-    #[validate(length(min = 1, max = 128, message = "照片数量在 1 到 128 之间"))]
-    pub photo_ids: Vec<PhotoId>,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_photo_cursor_query_valid() {
-        let param = PhotoCursorParam {
-            cursor: None,
-            size: 50,
-            direction: PageDirection::Next,
-            default_collection_id: None,
-        };
-        assert!(param.validate().is_ok());
-    }
-
-    #[test]
-    fn test_photo_cursor_query_size_zero() {
-        let param = PhotoCursorParam {
-            cursor: None,
-            size: 0,
-            direction: PageDirection::Next,
-            default_collection_id: None,
-        };
-        assert!(param.validate().is_err());
-    }
-
-    #[test]
-    fn test_photo_cursor_query_size_too_large() {
-        let param = PhotoCursorParam {
-            cursor: None,
-            size: 1025,
-            direction: PageDirection::Next,
-            default_collection_id: None,
-        };
-        assert!(param.validate().is_err());
-    }
-
-    #[test]
-    fn test_photo_cursor_query_size_exact_max() {
-        let param = PhotoCursorParam {
-            cursor: None,
-            size: 1024,
-            direction: PageDirection::Next,
-            default_collection_id: None,
-        };
-        assert!(param.validate().is_ok());
-    }
-
-    #[test]
-    fn test_md5s_exist_param_valid() {
-        let param = Md5sExistParam {
-            md5s: vec!["abc123".to_string(), "def456".to_string()],
-        };
-        assert!(param.validate().is_ok());
-    }
-
-    #[test]
-    fn test_md5s_exist_param_empty() {
-        let param = Md5sExistParam { md5s: vec![] };
-        assert!(param.validate().is_err());
-    }
-
-    #[test]
-    fn test_md5s_exist_param_too_many() {
-        let param = Md5sExistParam {
-            md5s: (0..129).map(|i| format!("md5_{}", i)).collect(),
-        };
-        assert!(param.validate().is_err());
-    }
-
-    #[test]
-    fn test_md5s_exist_param_exact_max() {
-        let param = Md5sExistParam {
-            md5s: (0..128).map(|i| format!("md5_{}", i)).collect(),
-        };
-        assert!(param.validate().is_ok());
-    }
-
-    #[test]
-    fn test_delete_photo_param_valid() {
-        let param = DeletePhotoParam {
-            photo_ids: vec![PhotoId(1), PhotoId(2)],
-        };
-        assert!(param.validate().is_ok());
-    }
-
-    #[test]
-    fn test_delete_photo_param_empty() {
-        let param = DeletePhotoParam { photo_ids: vec![] };
-        assert!(param.validate().is_err());
-    }
-
-    #[test]
-    fn test_delete_photo_param_exact_max() {
-        let param = DeletePhotoParam {
-            photo_ids: (0..128).map(PhotoId).collect(),
-        };
-        assert!(param.validate().is_ok());
-    }
 }

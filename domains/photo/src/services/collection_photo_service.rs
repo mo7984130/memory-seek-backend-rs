@@ -17,7 +17,7 @@ use common::{
     Result,
     error::AppError,
     ext::{OkExt, ToErr, log_warn},
-    metrics_group, metrics_success, metrics_timer_name,
+    metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
     utils::{DbUtils, MetricsTimerExt},
@@ -77,10 +77,7 @@ impl CollectionPhotoService {
             decoded_cursor.as_ref(),
             size + 1,
         )
-        .timed(metrics_timer_name!(
-            "get_collection_photos",
-            "query_photo_ids"
-        ))
+        .timed(metrics_name!("get_collection_photos", "query_photo_ids"))
         .await?;
 
         let CursorPage {
@@ -90,10 +87,7 @@ impl CollectionPhotoService {
         } = CursorPage::from_oversize(photo_ids, size);
 
         let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
-            .timed(metrics_timer_name!(
-                "get_collection_photos",
-                "load_photos_info"
-            ))
+            .timed(metrics_name!("get_collection_photos", "load_photos_info"))
             .await?;
         let next_cursor = photo_vos.last().and_then(|vo| {
             PhotoId::parse_from_str_or_none(&vo.id).map(|id| {
@@ -132,13 +126,12 @@ impl CollectionPhotoService {
 
         // 插入前, 需要鉴权
         if !CollectionMapper::is_belong(&state.db, user_id, collection_id)
-            .timed(metrics_timer_name!("add_collection_photos", "auth_check"))
+            .timed(metrics_name!("add_collection_photos", "auth_check"))
             .await?
         {
             return log_warn(
                 "collection_not_belong_user",
                 "用户尝试添加照片到不是用户的收藏夹",
-                "",
                 AppError::forbidden("该收藏夹不属于你"),
             )
             .to_err();

@@ -12,7 +12,7 @@ use common::{
     Result,
     ext::{ResultErrExt, ResultRExt},
     extractors::{ValidatedJson, ValidatedQuery},
-    metrics_group, metrics_success, metrics_timer_name,
+    metrics_group, metrics_name, metrics_success,
     models::{CursorPage, ImageToken, ImageTokenType},
     traits::controller::ControllerRouter,
     utils::MetricsTimerExt,
@@ -23,10 +23,11 @@ use futures::StreamExt;
 use tracing::debug;
 
 use crate::{
-    models::photo::{DeletePhotoParam, Md5sExistParam, PhotoCursorParam, PhotoResult},
+    models::photo::{PhotoCursorParam, PhotoResult},
     services::photo_service::PhotoService,
     state::PhotoState,
 };
+use memory_seek_type::photo::models::{DeletePhotosParam, ExistsByMd5BatchParam};
 
 pub struct PhotoController;
 
@@ -68,7 +69,12 @@ impl PhotoController {
             .await
             .trace_internal_err("read_file_err", "读取文件失败")?;
 
-        PhotoService::upload_photo(&state, user_id, file_data, file_name, content_type, None)
+        let param = memory_seek_type::photo::models::UploadPhotoParam {
+            file_name,
+            content_type,
+            created_at: None,
+        };
+        PhotoService::upload_photo(&state, user_id, file_data, param)
             .await
             .to_r_ok()
     }
@@ -85,9 +91,9 @@ impl PhotoController {
 
     async fn md5s_exist(
         State(state): State<Arc<PhotoState>>,
-        ValidatedJson(data): ValidatedJson<Md5sExistParam>,
+        ValidatedJson(data): ValidatedJson<ExistsByMd5BatchParam>,
     ) -> Result<R<Vec<bool>>> {
-        PhotoService::exists_by_md5_batch(&state, &data.md5s)
+        PhotoService::exists_by_md5_batch(&state, data)
             .await
             .to_r_ok()
     }
@@ -138,7 +144,7 @@ impl PhotoController {
                 let bytes = state
                     .s3_client
                     .download_with_process(&token.file_id, &process_param)
-                    .timed(metrics_timer_name!("get_image", "s3_download_process"))
+                    .timed(metrics_name!("get_image", "s3_download_process"))
                     .await?;
 
                 Ok(Response::builder()
@@ -153,7 +159,7 @@ impl PhotoController {
                 let stream_resp = state
                     .s3_client
                     .get_download_stream_response(&token.file_id)
-                    .timed(metrics_timer_name!("get_image", "s3_download_stream"))
+                    .timed(metrics_name!("get_image", "s3_download_stream"))
                     .await?;
 
                 let stream = stream_resp
@@ -188,9 +194,9 @@ impl PhotoController {
     async fn delete_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedJson(data): ValidatedJson<DeletePhotoParam>,
+        ValidatedJson(data): ValidatedJson<DeletePhotosParam>,
     ) -> Result<R<()>> {
-        PhotoService::delete_photos(&state, user_id, data.photo_ids)
+        PhotoService::delete_photos(&state, user_id, data)
             .await
             .to_r_ok()
     }
