@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-common = { path = "../../common" }
+common = { path = "../../common", features = ["s3"] }
 serde = { workspace = true }
 bytes = { workspace = true }
 reqwest = { workspace = true }

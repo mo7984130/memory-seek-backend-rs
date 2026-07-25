@@ -1,12 +1,12 @@
 use bytes::Bytes;
-use common::error::AppError;
-use common::ext::ResultErrExt;
 use futures::{Stream, StreamExt};
 use s3::creds::Credentials;
-use s3::request::ResponseDataStream;
+use s3::error::S3Error;
+use s3::request::{ResponseData, ResponseDataStream};
 use s3::{Bucket, Region};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -93,12 +93,10 @@ impl S3Client {
         key: &str,
         data: impl AsRef<[u8]>,
         content_type: &str,
-    ) -> Result<(), AppError> {
+    ) -> Result<ResponseData, S3Error> {
         self.bucket
             .put_object_with_content_type(key, data.as_ref(), content_type)
             .await
-            .trace_internal_err("oss_upload_err", "OSS文件存储失败")?;
-        Ok(())
     }
 
     /// 删除单个文件
@@ -111,15 +109,11 @@ impl S3Client {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: OSS 删除操作失败
-    pub async fn delete(&self, key: &str) -> Result<(), AppError> {
-        self.bucket
-            .delete_object(key)
-            .await
-            .trace_internal_err("oss_delete_err", "OSS文件删除失败")?;
-        Ok(())
+    pub async fn delete(&self, key: &str) -> Result<ResponseData, S3Error> {
+        self.bucket.delete_object(key).await
     }
 
-    /// 批量删除文件，分片并发执行
+    /// 批量删除文件，分片并发执行，遇错即停
     ///
     /// # 参数
     /// - `keys`: 待删除的文件路径/键名列表
@@ -128,46 +122,23 @@ impl S3Client {
     /// 全部删除成功返回 `()`
     ///
     /// # 错误
-    /// - `AppError::InternalServerError`: 部分文件删除失败
-    pub async fn delete_batch(&self, keys: Vec<String>) -> Result<(), AppError> {
-        let mut failed_keys: Vec<&str> = Vec::new();
-
+    /// - `AppError::InternalServerError`: 删除文件失败
+    pub async fn delete_batch(&self, keys: Vec<String>) -> Result<(), S3Error> {
         for concurrent_chunks in keys.chunks(CHUNK_SIZE * CONCURRENCY) {
             let futures: Vec<_> = concurrent_chunks
                 .chunks(CHUNK_SIZE)
                 .map(|chunk| async move {
-                    let mut chunk_failed: Vec<&str> = Vec::new();
                     for key in chunk {
-                        if let Err(e) = self
-                            .bucket
-                            .delete_object(key.as_str())
-                            .await
-                            .trace_internal_err("oss_del_err", "OSS文件删除失败")
-                        {
-                            tracing::warn!(key = %key, err = ?e, "文件删除失败");
-                            chunk_failed.push(key.as_str());
-                        }
+                        self.bucket.delete_object(key.as_str()).await?;
                     }
-                    chunk_failed
+                    Ok::<_, S3Error>(())
                 })
                 .collect();
 
-            let results = futures::future::join_all(futures).await;
-            for chunk_failed in results {
-                failed_keys.extend(chunk_failed);
-            }
+            futures::future::try_join_all(futures).await?;
         }
 
-        if failed_keys.is_empty() {
-            Ok(())
-        } else {
-            tracing::error!(
-                keys = ?failed_keys,
-                count = failed_keys.len(),
-                "批量删除部分文件失败"
-            );
-            Err(AppError::InternalServerError)
-        }
+        Ok(())
     }
 
     /// 获取文件的公开访问 URL
@@ -192,7 +163,7 @@ impl S3Client {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: OSS 签名生成失败
-    pub async fn get_signed_url(&self, key: &str, expires: Duration) -> Result<String, AppError> {
+    pub async fn get_signed_url(&self, key: &str, expires: Duration) -> Result<String, S3Error> {
         self.get_signed_url_with_params(key, expires, None).await
     }
 
@@ -213,7 +184,7 @@ impl S3Client {
         key: &str,
         expires: Duration,
         process: Option<String>,
-    ) -> Result<String, AppError> {
+    ) -> Result<String, S3Error> {
         let custom_queries = if let Some(p) = process {
             let mut queries = HashMap::new();
             queries.insert("x-oss-process".to_string(), p);
@@ -221,14 +192,9 @@ impl S3Client {
         } else {
             None
         };
-
-        let url = self
-            .bucket
+        self.bucket
             .presign_get(key, expires.as_secs() as u32, custom_queries)
             .await
-            .trace_internal_err("oss_sign_url_err", "OSS 签名失败")?;
-
-        Ok(url)
     }
 
     /// 下载文件
@@ -241,90 +207,51 @@ impl S3Client {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: OSS 下载操作失败
-    pub async fn download(&self, key: &str) -> Result<Bytes, AppError> {
-        let response_data = self
-            .bucket
-            .get_object(key)
-            .await
-            .trace_internal_err("oss_download_err", "OSS下载失败")?;
+    pub async fn download(&self, key: &str) -> Result<Bytes, S3Error> {
+        let response_data = self.bucket.get_object(key).await?;
 
-        Ok(Bytes::from(response_data.bytes().to_vec()))
+        Ok(response_data.into_bytes())
     }
 
     pub async fn get_download_stream_response(
         &self,
         key: &str,
-    ) -> Result<ResponseDataStream, AppError> {
-        self.bucket
-            .get_object_stream(key)
-            .await
-            .trace_internal_err("oss_download_err", "OSS流下载失败")
+    ) -> Result<ResponseDataStream, S3Error> {
+        self.bucket.get_object_stream(key).await
     }
 
-    // pub async fn download_stream(
-    //     &self,
-    //     key: String,
-    // ) -> Result<impl Stream<Item = Result<Bytes, AppError>>, AppError> {
-    //     let response = self
-    //         .bucket
-    //         .get_object_stream(key)
-    //         .await
-    //         .trace_internal_err("oss_download_err", "OSS流下载失败")?;
-
-    //     let stream = response
-    //         .bytes
-    //         .map(|chunk| chunk.trace_internal_err("oss_stream_err", "OSS流读取失败"));
-
-    //     Ok(stream)
-    // }
-
-    pub async fn download_with_process(&self, key: &str, process: &str) -> Result<Bytes, AppError> {
+    pub async fn download_with_process(&self, key: &str, process: &str) -> Result<Bytes, S3Error> {
         let mut custom_queries = HashMap::new();
         custom_queries.insert("x-oss-process".to_string(), process.to_string());
 
         let url = self
             .bucket
             .presign_get(key, 3600, Some(custom_queries))
-            .await
-            .trace_internal_err("oss_sign_url_err", "OSS签名失败")?;
+            .await?;
 
-        let response = reqwest::get(&url)
-            .await
-            .trace_internal_err("oss_download_err", "OSS下载失败")?
-            .error_for_status()
-            .trace_internal_err("oss_bad_status_err", "OSS返回了错误状态码")?;
+        let response = reqwest::get(&url).await?.error_for_status()?;
 
-        let bytes = response
-            .bytes()
-            .await
-            .trace_internal_err("oss_read_data_err", "OSS读取数据失败")?;
-
-        Ok(bytes)
+        response.bytes().await.map_err(|e| S3Error::Reqwest(e))
     }
 
     pub async fn download_stream_with_process(
         &self,
         key: &str,
         process: &str,
-    ) -> Result<impl Stream<Item = Result<Bytes, AppError>>, AppError> {
+    ) -> Result<impl Stream<Item = Result<Bytes, S3Error>>, S3Error> {
         let mut custom_queries = HashMap::new();
         custom_queries.insert("x-oss-process".to_string(), process.to_string());
 
         let url = self
             .bucket
             .presign_get(key, 3600, Some(custom_queries))
-            .await
-            .trace_internal_err("oss_sign_url_err", "OSS签名失败")?;
+            .await?;
 
-        let response = reqwest::get(&url)
-            .await
-            .trace_internal_err("oss_download_err", "OSS下载失败")?
-            .error_for_status()
-            .trace_internal_err("oss_bad_status_err", "OSS返回了错误状态码")?;
+        let response = reqwest::get(&url).await?.error_for_status()?;
 
         let bytes = response
             .bytes_stream()
-            .map(|r| r.trace_internal_err("oss_read_data_err", "OSS读取数据失败"));
+            .map(|r| r.map_err(|e| S3Error::Reqwest(e)));
 
         Ok(bytes)
     }
