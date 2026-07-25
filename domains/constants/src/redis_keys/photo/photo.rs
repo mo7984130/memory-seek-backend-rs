@@ -10,7 +10,7 @@ use entities::photo::photo::PhotoId;
 #[inline]
 pub fn photo_info(photo_id: PhotoId) -> String {
     //photo:photo:info
-    format!("p:p:i:{}", photo_id.0)
+    format!("p:p:i:{}", photo_id)
 }
 
 #[cfg(test)]

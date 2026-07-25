@@ -3,10 +3,6 @@ use serde::Deserialize;
 /// 定时备份调度配置（GFS 分层保留策略）
 #[derive(Debug, Clone, Deserialize)]
 pub struct BackupScheduleConfig {
-    /// 是否启用定时备份
-    #[serde(default = "default_schedule_enabled")]
-    pub enabled: bool,
-
     /// Cron 表达式，默认每天凌晨 6 点
     #[serde(default = "default_schedule_cron")]
     pub schedule: String,
@@ -27,17 +23,12 @@ pub struct BackupScheduleConfig {
 impl Default for BackupScheduleConfig {
     fn default() -> Self {
         Self {
-            enabled: default_schedule_enabled(),
             schedule: default_schedule_cron(),
             daily_retention: default_daily_retention(),
             weekly_retention: default_weekly_retention(),
             monthly_retention: default_monthly_retention(),
         }
     }
-}
-
-fn default_schedule_enabled() -> bool {
-    true
 }
 
 fn default_schedule_cron() -> String {

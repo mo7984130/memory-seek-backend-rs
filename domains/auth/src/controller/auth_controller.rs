@@ -9,6 +9,7 @@ use common::ext::{OptionExt, ResultErrExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use common::traits::controller::ControllerRouter;
+use entities::auth::user::UserId;
 use memory_seek_type::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
 };
@@ -128,7 +129,8 @@ impl AuthController {
                 "x-user-id_invalid",
                 "鉴权时, x-user-id 必须是数字",
                 AppError::bad_request("x-user-id 必须是数字"),
-            )?;
+            )
+            .map(UserId)?;
 
         let refresh_token = headers
             .get("x-refresh-token")

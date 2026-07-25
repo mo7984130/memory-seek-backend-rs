@@ -28,7 +28,7 @@ impl BackupController {
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<serde_json::Value>> {
-        if user_id.0 != 1 {
+        if user_id != UserId(1) {
             return Err(AppError::forbidden("仅管理员可执行定时备份"));
         }
 
@@ -48,7 +48,7 @@ impl BackupController {
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<serde_json::Value>> {
-        if user_id.0 != 1 {
+        if user_id != UserId(1) {
             return Err(AppError::forbidden("仅管理员可执行手动备份"));
         }
 

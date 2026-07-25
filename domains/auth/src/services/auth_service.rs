@@ -4,15 +4,15 @@ use chrono::{DateTime, Duration, Utc};
 use common::Result;
 use common::error::AppError;
 use common::ext::{
-    BoolExt, OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, log_err_with_err, log_warn,
-    log_warn_with_err,
+    BoolExt, OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, TraceExt, log_err_with_err,
+    log_warn, log_warn_with_err,
 };
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{metrics_group, metrics_name, metrics_success};
 use constants::RedisKeys;
 use constants::redis_keys;
 use deadpool_redis::Pool;
-use entities::auth::user;
+use entities::auth::user::{self, UserId};
 use memory_seek_type::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
 };
@@ -159,7 +159,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     state
         .redis
         .set_ex(
-            RedisKeys::auth::user_access_token(user.id),
+            RedisKeys::auth::user_access_token(UserId(user.id)),
             &new_access_token,
             ACCESS_TOKEN_EXPIRE_SECONDS as u64,
         )
@@ -177,9 +177,9 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     .inspect_err_async(|_| async {
         let _ = state
             .redis
-            .del(RedisKeys::auth::user_access_token(user.id))
+            .del(RedisKeys::auth::user_access_token(UserId(user.id)))
             .await
-            .trace_err("redis_err", "删除用户access_token错误", AppError::Ignore);
+            .trace();
     })
     .await?;
 
@@ -384,7 +384,7 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
 #[tracing::instrument(skip_all, fields(user_id = %user_id))]
 pub async fn refresh_access_token(
     state: &AuthState,
-    user_id: i64,
+    user_id: UserId,
     refresh_token: String,
 ) -> Result<RefreshAccessTokenResponse> {
     metrics_group!();
@@ -399,7 +399,7 @@ pub async fn refresh_access_token(
     state
         .redis
         .set_ex(
-            &RedisKeys::auth::user_access_token(user_id),
+            &RedisKeys::auth::user_access_token(user_id.into()),
             &new_access_token,
             ACCESS_TOKEN_EXPIRE_SECONDS as u64,
         )
@@ -456,7 +456,7 @@ struct RefreshTokenValidation {
 // 校验用户的 refresh_token：查询数据库验证匹配性和有效期，不匹配或过期返回 Unauthorized
 async fn verify_refresh_token(
     db: &DatabaseConnection,
-    user_id: i64,
+    user_id: UserId,
     refresh_token: &str,
 ) -> Result<()> {
     // 从数据库中获取RefreshToken 和 RefreshTokenExpireAt
