@@ -30,7 +30,7 @@
       },
       "id": 1,
       "panels": [],
-      "title": "上传照片 (upload_photo)",
+      "title": "\u4e0a\u4f20\u7167\u7247 (upload_photo)",
       "type": "row"
     },
     {
@@ -105,7 +105,7 @@
           "sort": "none"
         }
       },
-      "title": "上传照片耗时",
+      "title": "\u4e0a\u4f20\u7167\u7247\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -201,7 +201,7 @@
           "sort": "none"
         }
       },
-      "title": "上传照片子步骤耗时",
+      "title": "\u4e0a\u4f20\u7167\u7247\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -210,7 +210,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:upload_photo:md5_hash:duration_quantile_sum[5m]) / rate(photo:upload_photo:md5_hash:duration_quantile_count[5m])",
-          "legendFormat": "MD5计算",
+          "legendFormat": "MD5\u8ba1\u7b97",
           "refId": "A"
         },
         {
@@ -219,7 +219,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:upload_photo:validate_photo:duration_quantile_sum[5m]) / rate(photo:upload_photo:validate_photo:duration_quantile_count[5m])",
-          "legendFormat": "文件校验",
+          "legendFormat": "\u6587\u4ef6\u6821\u9a8c",
           "refId": "B"
         },
         {
@@ -228,7 +228,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:upload_photo:s3_upload:duration_quantile_sum[5m]) / rate(photo:upload_photo:s3_upload:duration_quantile_count[5m])",
-          "legendFormat": "S3上传",
+          "legendFormat": "S3\u4e0a\u4f20",
           "refId": "C"
         },
         {
@@ -237,7 +237,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:upload_photo:db_insert:duration_quantile_sum[5m]) / rate(photo:upload_photo:db_insert:duration_quantile_count[5m])",
-          "legendFormat": "DB写入",
+          "legendFormat": "DB\u5199\u5165",
           "refId": "D"
         }
       ]
@@ -288,7 +288,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -297,7 +297,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -351,7 +351,7 @@
           "sort": "none"
         }
       },
-      "title": "上传照片调用量成功率",
+      "title": "\u4e0a\u4f20\u7167\u7247\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -369,7 +369,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:upload_photo:success[5m]) / rate(photo:upload_photo:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -384,7 +384,7 @@
       },
       "id": 5,
       "panels": [],
-      "title": "查询照片列表 (get_photo_cursor_page)",
+      "title": "\u67e5\u8be2\u7167\u7247\u5217\u8868 (get_photo_cursor_page)",
       "type": "row"
     },
     {
@@ -459,7 +459,7 @@
           "sort": "none"
         }
       },
-      "title": "查询照片列表耗时",
+      "title": "\u67e5\u8be2\u7167\u7247\u5217\u8868\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -555,7 +555,7 @@
           "sort": "none"
         }
       },
-      "title": "查询照片列表子步骤耗时",
+      "title": "\u67e5\u8be2\u7167\u7247\u5217\u8868\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -564,7 +564,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_photo_cursor_page:find_cursor_page_ids:duration_quantile_sum[5m]) / rate(photo:get_photo_cursor_page:find_cursor_page_ids:duration_quantile_count[5m])",
-          "legendFormat": "DB查询",
+          "legendFormat": "DB\u67e5\u8be2",
           "refId": "A"
         },
         {
@@ -573,7 +573,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_photo_cursor_page:load_photos_info:duration_quantile_sum[5m]) / rate(photo:get_photo_cursor_page:load_photos_info:duration_quantile_count[5m])",
-          "legendFormat": "加载照片信息",
+          "legendFormat": "\u52a0\u8f7d\u7167\u7247\u4fe1\u606f",
           "refId": "B"
         }
       ]
@@ -624,7 +624,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -633,7 +633,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -687,7 +687,7 @@
           "sort": "none"
         }
       },
-      "title": "查询照片列表调用量成功率",
+      "title": "\u67e5\u8be2\u7167\u7247\u5217\u8868\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -705,7 +705,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_photo_cursor_page:success[5m]) / rate(photo:get_photo_cursor_page:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -720,7 +720,7 @@
       },
       "id": 9,
       "panels": [],
-      "title": "删除照片 (delete_photos)",
+      "title": "\u5220\u9664\u7167\u7247 (delete_photos)",
       "type": "row"
     },
     {
@@ -795,7 +795,7 @@
           "sort": "none"
         }
       },
-      "title": "删除照片耗时",
+      "title": "\u5220\u9664\u7167\u7247\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -891,7 +891,7 @@
           "sort": "none"
         }
       },
-      "title": "删除照片子步骤耗时",
+      "title": "\u5220\u9664\u7167\u7247\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -900,7 +900,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:delete_photos:db_transaction:duration_quantile_sum[5m]) / rate(photo:delete_photos:db_transaction:duration_quantile_count[5m])",
-          "legendFormat": "DB事务",
+          "legendFormat": "DB\u4e8b\u52a1",
           "refId": "A"
         },
         {
@@ -909,7 +909,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:delete_photos:s3_delete_batch:duration_quantile_sum[5m]) / rate(photo:delete_photos:s3_delete_batch:duration_quantile_count[5m])",
-          "legendFormat": "S3删除",
+          "legendFormat": "S3\u5220\u9664",
           "refId": "B"
         },
         {
@@ -918,7 +918,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:delete_photos:timeline_decr_stat:duration_quantile_sum[5m]) / rate(photo:delete_photos:timeline_decr_stat:duration_quantile_count[5m])",
-          "legendFormat": "时间线更新",
+          "legendFormat": "\u65f6\u95f4\u7ebf\u66f4\u65b0",
           "refId": "C"
         }
       ]
@@ -969,7 +969,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -978,7 +978,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -1032,7 +1032,7 @@
           "sort": "none"
         }
       },
-      "title": "删除照片调用量成功率",
+      "title": "\u5220\u9664\u7167\u7247\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -1050,7 +1050,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:delete_photos:success[5m]) / rate(photo:delete_photos:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -1065,7 +1065,7 @@
       },
       "id": 13,
       "panels": [],
-      "title": "获取图片 (get_image)",
+      "title": "\u83b7\u53d6\u56fe\u7247 (get_image)",
       "type": "row"
     },
     {
@@ -1140,7 +1140,7 @@
           "sort": "none"
         }
       },
-      "title": "获取图片耗时",
+      "title": "\u83b7\u53d6\u56fe\u7247\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -1236,7 +1236,7 @@
           "sort": "none"
         }
       },
-      "title": "获取图片子步骤耗时",
+      "title": "\u83b7\u53d6\u56fe\u7247\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -1245,7 +1245,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_image:s3_download_process:duration_quantile_sum[5m]) / rate(photo:get_image:s3_download_process:duration_quantile_count[5m])",
-          "legendFormat": "S3下载+处理",
+          "legendFormat": "S3\u4e0b\u8f7d+\u5904\u7406",
           "refId": "A"
         },
         {
@@ -1254,7 +1254,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_image:s3_download_stream:duration_quantile_sum[5m]) / rate(photo:get_image:s3_download_stream:duration_quantile_count[5m])",
-          "legendFormat": "S3流式下载",
+          "legendFormat": "S3\u6d41\u5f0f\u4e0b\u8f7d",
           "refId": "B"
         }
       ]
@@ -1305,7 +1305,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -1314,7 +1314,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -1368,7 +1368,7 @@
           "sort": "none"
         }
       },
-      "title": "获取图片调用量成功率",
+      "title": "\u83b7\u53d6\u56fe\u7247\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -1386,7 +1386,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_image:success[5m]) / rate(photo:get_image:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -1401,7 +1401,7 @@
       },
       "id": 17,
       "panels": [],
-      "title": "收藏夹操作 (collection)",
+      "title": "\u6536\u85cf\u5939\u64cd\u4f5c (collection)",
       "type": "row"
     },
     {
@@ -1414,7 +1414,7 @@
       },
       "id": 18,
       "panels": [],
-      "title": "获取收藏夹列表 (get_collection_list)",
+      "title": "\u83b7\u53d6\u6536\u85cf\u5939\u5217\u8868 (get_collection_list)",
       "type": "row"
     },
     {
@@ -1489,7 +1489,7 @@
           "sort": "none"
         }
       },
-      "title": "获取收藏夹列表耗时",
+      "title": "\u83b7\u53d6\u6536\u85cf\u5939\u5217\u8868\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -1585,7 +1585,7 @@
           "sort": "none"
         }
       },
-      "title": "获取收藏夹列表子步骤耗时",
+      "title": "\u83b7\u53d6\u6536\u85cf\u5939\u5217\u8868\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -1594,7 +1594,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_collection_list:query_by_user_id:duration_quantile_sum[5m]) / rate(photo:get_collection_list:query_by_user_id:duration_quantile_count[5m])",
-          "legendFormat": "DB查询",
+          "legendFormat": "DB\u67e5\u8be2",
           "refId": "A"
         }
       ]
@@ -1645,7 +1645,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -1654,7 +1654,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -1708,7 +1708,7 @@
           "sort": "none"
         }
       },
-      "title": "获取收藏夹列表调用量成功率",
+      "title": "\u83b7\u53d6\u6536\u85cf\u5939\u5217\u8868\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -1726,7 +1726,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_collection_list:success[5m]) / rate(photo:get_collection_list:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -1741,7 +1741,7 @@
       },
       "id": 22,
       "panels": [],
-      "title": "创建收藏夹 (create_collection)",
+      "title": "\u521b\u5efa\u6536\u85cf\u5939 (create_collection)",
       "type": "row"
     },
     {
@@ -1816,7 +1816,7 @@
           "sort": "none"
         }
       },
-      "title": "创建收藏夹耗时",
+      "title": "\u521b\u5efa\u6536\u85cf\u5939\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -1912,7 +1912,7 @@
           "sort": "none"
         }
       },
-      "title": "创建收藏夹子步骤耗时",
+      "title": "\u521b\u5efa\u6536\u85cf\u5939\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -1921,7 +1921,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:create_collection:db_insert:duration_quantile_sum[5m]) / rate(photo:create_collection:db_insert:duration_quantile_count[5m])",
-          "legendFormat": "DB插入",
+          "legendFormat": "DB\u63d2\u5165",
           "refId": "A"
         }
       ]
@@ -1972,7 +1972,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -1981,7 +1981,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -2035,7 +2035,7 @@
           "sort": "none"
         }
       },
-      "title": "创建收藏夹调用量成功率",
+      "title": "\u521b\u5efa\u6536\u85cf\u5939\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -2053,7 +2053,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:create_collection:success[5m]) / rate(photo:create_collection:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -2068,7 +2068,7 @@
       },
       "id": 26,
       "panels": [],
-      "title": "修改收藏夹 (update_collection_info)",
+      "title": "\u4fee\u6539\u6536\u85cf\u5939 (update_collection_info)",
       "type": "row"
     },
     {
@@ -2143,7 +2143,7 @@
           "sort": "none"
         }
       },
-      "title": "修改收藏夹耗时",
+      "title": "\u4fee\u6539\u6536\u85cf\u5939\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -2239,7 +2239,7 @@
           "sort": "none"
         }
       },
-      "title": "修改收藏夹子步骤耗时",
+      "title": "\u4fee\u6539\u6536\u85cf\u5939\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -2248,7 +2248,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:update_collection_info:db_update:duration_quantile_sum[5m]) / rate(photo:update_collection_info:db_update:duration_quantile_count[5m])",
-          "legendFormat": "DB更新",
+          "legendFormat": "DB\u66f4\u65b0",
           "refId": "A"
         }
       ]
@@ -2299,7 +2299,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -2308,7 +2308,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -2362,7 +2362,7 @@
           "sort": "none"
         }
       },
-      "title": "修改收藏夹调用量成功率",
+      "title": "\u4fee\u6539\u6536\u85cf\u5939\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -2380,7 +2380,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:update_collection_info:success[5m]) / rate(photo:update_collection_info:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -2395,7 +2395,7 @@
       },
       "id": 30,
       "panels": [],
-      "title": "删除收藏夹 (delete_collection)",
+      "title": "\u5220\u9664\u6536\u85cf\u5939 (delete_collection)",
       "type": "row"
     },
     {
@@ -2470,7 +2470,7 @@
           "sort": "none"
         }
       },
-      "title": "删除收藏夹耗时",
+      "title": "\u5220\u9664\u6536\u85cf\u5939\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -2566,7 +2566,7 @@
           "sort": "none"
         }
       },
-      "title": "删除收藏夹子步骤耗时",
+      "title": "\u5220\u9664\u6536\u85cf\u5939\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -2575,7 +2575,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:delete_collection:db_transaction:duration_quantile_sum[5m]) / rate(photo:delete_collection:db_transaction:duration_quantile_count[5m])",
-          "legendFormat": "DB事务",
+          "legendFormat": "DB\u4e8b\u52a1",
           "refId": "A"
         }
       ]
@@ -2626,7 +2626,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -2635,7 +2635,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -2689,7 +2689,7 @@
           "sort": "none"
         }
       },
-      "title": "删除收藏夹调用量成功率",
+      "title": "\u5220\u9664\u6536\u85cf\u5939\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -2707,7 +2707,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:delete_collection:success[5m]) / rate(photo:delete_collection:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -2722,7 +2722,7 @@
       },
       "id": 34,
       "panels": [],
-      "title": "获取收藏夹照片 (get_collection_photos)",
+      "title": "\u83b7\u53d6\u6536\u85cf\u5939\u7167\u7247 (get_collection_photos)",
       "type": "row"
     },
     {
@@ -2797,7 +2797,7 @@
           "sort": "none"
         }
       },
-      "title": "获取收藏夹照片耗时",
+      "title": "\u83b7\u53d6\u6536\u85cf\u5939\u7167\u7247\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -2893,7 +2893,7 @@
           "sort": "none"
         }
       },
-      "title": "获取收藏夹照片子步骤耗时",
+      "title": "\u83b7\u53d6\u6536\u85cf\u5939\u7167\u7247\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -2902,7 +2902,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_collection_photos:query_photo_ids:duration_quantile_sum[5m]) / rate(photo:get_collection_photos:query_photo_ids:duration_quantile_count[5m])",
-          "legendFormat": "DB查询照片ID",
+          "legendFormat": "DB\u67e5\u8be2\u7167\u7247ID",
           "refId": "A"
         },
         {
@@ -2911,7 +2911,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_collection_photos:load_photos_info:duration_quantile_sum[5m]) / rate(photo:get_collection_photos:load_photos_info:duration_quantile_count[5m])",
-          "legendFormat": "加载照片信息",
+          "legendFormat": "\u52a0\u8f7d\u7167\u7247\u4fe1\u606f",
           "refId": "B"
         }
       ]
@@ -2962,7 +2962,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -2971,7 +2971,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -3025,7 +3025,7 @@
           "sort": "none"
         }
       },
-      "title": "获取收藏夹照片调用量成功率",
+      "title": "\u83b7\u53d6\u6536\u85cf\u5939\u7167\u7247\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -3043,7 +3043,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_collection_photos:success[5m]) / rate(photo:get_collection_photos:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -3058,7 +3058,7 @@
       },
       "id": 38,
       "panels": [],
-      "title": "添加收藏夹照片 (add_collection_photos)",
+      "title": "\u6dfb\u52a0\u6536\u85cf\u5939\u7167\u7247 (add_collection_photos)",
       "type": "row"
     },
     {
@@ -3133,7 +3133,7 @@
           "sort": "none"
         }
       },
-      "title": "添加收藏夹照片耗时",
+      "title": "\u6dfb\u52a0\u6536\u85cf\u5939\u7167\u7247\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -3229,7 +3229,7 @@
           "sort": "none"
         }
       },
-      "title": "添加收藏夹照片子步骤耗时",
+      "title": "\u6dfb\u52a0\u6536\u85cf\u5939\u7167\u7247\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -3238,7 +3238,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:add_collection_photos:auth_check:duration_quantile_sum[5m]) / rate(photo:add_collection_photos:auth_check:duration_quantile_count[5m])",
-          "legendFormat": "鉴权检查",
+          "legendFormat": "\u9274\u6743\u68c0\u67e5",
           "refId": "A"
         },
         {
@@ -3247,7 +3247,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:add_collection_photos:db_transaction:duration_quantile_sum[5m]) / rate(photo:add_collection_photos:db_transaction:duration_quantile_count[5m])",
-          "legendFormat": "DB事务",
+          "legendFormat": "DB\u4e8b\u52a1",
           "refId": "B"
         }
       ]
@@ -3298,7 +3298,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -3307,7 +3307,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -3361,7 +3361,7 @@
           "sort": "none"
         }
       },
-      "title": "添加收藏夹照片调用量成功率",
+      "title": "\u6dfb\u52a0\u6536\u85cf\u5939\u7167\u7247\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -3379,7 +3379,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:add_collection_photos:success[5m]) / rate(photo:add_collection_photos:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -3394,7 +3394,7 @@
       },
       "id": 42,
       "panels": [],
-      "title": "移除收藏夹照片 (remove_collection_photos)",
+      "title": "\u79fb\u9664\u6536\u85cf\u5939\u7167\u7247 (remove_collection_photos)",
       "type": "row"
     },
     {
@@ -3469,7 +3469,7 @@
           "sort": "none"
         }
       },
-      "title": "移除收藏夹照片耗时",
+      "title": "\u79fb\u9664\u6536\u85cf\u5939\u7167\u7247\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -3565,7 +3565,7 @@
           "sort": "none"
         }
       },
-      "title": "移除收藏夹照片子步骤耗时",
+      "title": "\u79fb\u9664\u6536\u85cf\u5939\u7167\u7247\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -3574,7 +3574,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:remove_collection_photos:db_transaction:duration_quantile_sum[5m]) / rate(photo:remove_collection_photos:db_transaction:duration_quantile_count[5m])",
-          "legendFormat": "DB事务",
+          "legendFormat": "DB\u4e8b\u52a1",
           "refId": "A"
         }
       ]
@@ -3625,7 +3625,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -3634,7 +3634,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -3688,7 +3688,7 @@
           "sort": "none"
         }
       },
-      "title": "移除收藏夹照片调用量成功率",
+      "title": "\u79fb\u9664\u6536\u85cf\u5939\u7167\u7247\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -3706,7 +3706,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:remove_collection_photos:success[5m]) / rate(photo:remove_collection_photos:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -3721,7 +3721,7 @@
       },
       "id": 46,
       "panels": [],
-      "title": "评论操作 (comment)",
+      "title": "\u8bc4\u8bba\u64cd\u4f5c (comment)",
       "type": "row"
     },
     {
@@ -3734,7 +3734,7 @@
       },
       "id": 47,
       "panels": [],
-      "title": "发表评论 (publish_comment)",
+      "title": "\u53d1\u8868\u8bc4\u8bba (publish_comment)",
       "type": "row"
     },
     {
@@ -3809,7 +3809,7 @@
           "sort": "none"
         }
       },
-      "title": "发表评论耗时",
+      "title": "\u53d1\u8868\u8bc4\u8bba\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -3905,7 +3905,7 @@
           "sort": "none"
         }
       },
-      "title": "发表评论子步骤耗时",
+      "title": "\u53d1\u8868\u8bc4\u8bba\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -3914,7 +3914,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:publish_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:publish_comment:db_transaction:duration_quantile_count[5m])",
-          "legendFormat": "DB事务",
+          "legendFormat": "DB\u4e8b\u52a1",
           "refId": "A"
         }
       ]
@@ -3965,7 +3965,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -3974,7 +3974,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -4028,7 +4028,7 @@
           "sort": "none"
         }
       },
-      "title": "发表评论调用量成功率",
+      "title": "\u53d1\u8868\u8bc4\u8bba\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -4046,7 +4046,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:publish_comment:success[5m]) / rate(photo:publish_comment:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -4061,7 +4061,7 @@
       },
       "id": 51,
       "panels": [],
-      "title": "获取评论列表 (get_comment_cursor_page)",
+      "title": "\u83b7\u53d6\u8bc4\u8bba\u5217\u8868 (get_comment_cursor_page)",
       "type": "row"
     },
     {
@@ -4136,7 +4136,7 @@
           "sort": "none"
         }
       },
-      "title": "获取评论列表耗时",
+      "title": "\u83b7\u53d6\u8bc4\u8bba\u5217\u8868\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -4232,7 +4232,7 @@
           "sort": "none"
         }
       },
-      "title": "获取评论列表子步骤耗时",
+      "title": "\u83b7\u53d6\u8bc4\u8bba\u5217\u8868\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -4241,7 +4241,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_comment_cursor_page:query_hot_comments:duration_quantile_sum[5m]) / rate(photo:get_comment_cursor_page:query_hot_comments:duration_quantile_count[5m])",
-          "legendFormat": "热门评论查询",
+          "legendFormat": "\u70ed\u95e8\u8bc4\u8bba\u67e5\u8be2",
           "refId": "A"
         },
         {
@@ -4250,7 +4250,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_comment_cursor_page:query_by_photo_id:duration_quantile_sum[5m]) / rate(photo:get_comment_cursor_page:query_by_photo_id:duration_quantile_count[5m])",
-          "legendFormat": "评论列表查询",
+          "legendFormat": "\u8bc4\u8bba\u5217\u8868\u67e5\u8be2",
           "refId": "B"
         },
         {
@@ -4259,7 +4259,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_comment_cursor_page:query_is_like:duration_quantile_sum[5m]) / rate(photo:get_comment_cursor_page:query_is_like:duration_quantile_count[5m])",
-          "legendFormat": "点赞状态查询",
+          "legendFormat": "\u70b9\u8d5e\u72b6\u6001\u67e5\u8be2",
           "refId": "C"
         }
       ]
@@ -4310,7 +4310,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -4319,7 +4319,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -4373,7 +4373,7 @@
           "sort": "none"
         }
       },
-      "title": "获取评论列表调用量成功率",
+      "title": "\u83b7\u53d6\u8bc4\u8bba\u5217\u8868\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -4391,7 +4391,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:get_comment_cursor_page:success[5m]) / rate(photo:get_comment_cursor_page:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -4406,7 +4406,7 @@
       },
       "id": 55,
       "panels": [],
-      "title": "删除评论 (delete_comment)",
+      "title": "\u5220\u9664\u8bc4\u8bba (delete_comment)",
       "type": "row"
     },
     {
@@ -4481,7 +4481,7 @@
           "sort": "none"
         }
       },
-      "title": "删除评论耗时",
+      "title": "\u5220\u9664\u8bc4\u8bba\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -4577,7 +4577,7 @@
           "sort": "none"
         }
       },
-      "title": "删除评论子步骤耗时",
+      "title": "\u5220\u9664\u8bc4\u8bba\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -4586,7 +4586,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:delete_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:delete_comment:db_transaction:duration_quantile_count[5m])",
-          "legendFormat": "DB事务",
+          "legendFormat": "DB\u4e8b\u52a1",
           "refId": "A"
         }
       ]
@@ -4637,7 +4637,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -4646,7 +4646,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -4700,7 +4700,7 @@
           "sort": "none"
         }
       },
-      "title": "删除评论调用量成功率",
+      "title": "\u5220\u9664\u8bc4\u8bba\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -4718,7 +4718,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:delete_comment:success[5m]) / rate(photo:delete_comment:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -4733,7 +4733,7 @@
       },
       "id": 59,
       "panels": [],
-      "title": "点赞 (like_comment)",
+      "title": "\u70b9\u8d5e (like_comment)",
       "type": "row"
     },
     {
@@ -4808,7 +4808,7 @@
           "sort": "none"
         }
       },
-      "title": "点赞耗时",
+      "title": "\u70b9\u8d5e\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -4904,7 +4904,7 @@
           "sort": "none"
         }
       },
-      "title": "点赞子步骤耗时",
+      "title": "\u70b9\u8d5e\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -4913,7 +4913,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:like_comment:check_exists:duration_quantile_sum[5m]) / rate(photo:like_comment:check_exists:duration_quantile_count[5m])",
-          "legendFormat": "评论存在检查",
+          "legendFormat": "\u8bc4\u8bba\u5b58\u5728\u68c0\u67e5",
           "refId": "A"
         },
         {
@@ -4922,7 +4922,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:like_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:like_comment:db_transaction:duration_quantile_count[5m])",
-          "legendFormat": "DB事务",
+          "legendFormat": "DB\u4e8b\u52a1",
           "refId": "B"
         }
       ]
@@ -4973,7 +4973,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -4982,7 +4982,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -5036,7 +5036,7 @@
           "sort": "none"
         }
       },
-      "title": "点赞调用量成功率",
+      "title": "\u70b9\u8d5e\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -5054,7 +5054,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:like_comment:success[5m]) / rate(photo:like_comment:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
         }
       ]
@@ -5069,7 +5069,7 @@
       },
       "id": 63,
       "panels": [],
-      "title": "取消点赞 (unlike_comment)",
+      "title": "\u53d6\u6d88\u70b9\u8d5e (unlike_comment)",
       "type": "row"
     },
     {
@@ -5144,7 +5144,7 @@
           "sort": "none"
         }
       },
-      "title": "取消点赞耗时",
+      "title": "\u53d6\u6d88\u70b9\u8d5e\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -5240,7 +5240,7 @@
           "sort": "none"
         }
       },
-      "title": "取消点赞子步骤耗时",
+      "title": "\u53d6\u6d88\u70b9\u8d5e\u5b50\u6b65\u9aa4\u8017\u65f6",
       "type": "timeseries",
       "targets": [
         {
@@ -5249,7 +5249,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:unlike_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:unlike_comment:db_transaction:duration_quantile_count[5m])",
-          "legendFormat": "DB事务",
+          "legendFormat": "DB\u4e8b\u52a1",
           "refId": "A"
         }
       ]
@@ -5300,7 +5300,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "成功率"
+              "options": "\u6210\u529f\u7387"
             },
             "properties": [
               {
@@ -5309,7 +5309,7 @@
               },
               {
                 "id": "custom.axisLabel",
-                "value": "成功率"
+                "value": "\u6210\u529f\u7387"
               },
               {
                 "id": "unit",
@@ -5363,7 +5363,7 @@
           "sort": "none"
         }
       },
-      "title": "取消点赞调用量成功率",
+      "title": "\u53d6\u6d88\u70b9\u8d5e\u8c03\u7528\u91cf\u6210\u529f\u7387",
       "type": "timeseries",
       "targets": [
         {
@@ -5381,8 +5381,1010 @@
             "uid": "Prometheus"
           },
           "expr": "rate(photo:unlike_comment:success[5m]) / rate(photo:unlike_comment:attempts[5m]) * 100",
-          "legendFormat": "成功率",
+          "legendFormat": "\u6210\u529f\u7387",
           "refId": "B"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 146
+      },
+      "id": 67,
+      "panels": [],
+      "title": "\u4eba\u8138\u8ba1\u7b97 (face_compute)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 147
+      },
+      "id": 77,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "\u4eba\u8138\u8ba1\u7b97\u8017\u65f6",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:duration_quantile{quantile=\"0.5\"}",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:duration_quantile{quantile=\"0.95\"}",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:duration_quantile{quantile=\"0.99\"}",
+          "legendFormat": "P99",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 147
+      },
+      "id": 78,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "\u4eba\u8138\u8ba1\u7b97\u5b50\u6b65\u9aa4\u8017\u65f6",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:backup:duration_quantile_sum[5m]) / rate(photo:face:compute:backup:duration_quantile_count[5m])",
+          "legendFormat": "\u5907\u4efd",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:cleanup:duration_quantile_sum[5m]) / rate(photo:face:compute:cleanup:duration_quantile_count[5m])",
+          "legendFormat": "\u6e05\u9664",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:query:duration_quantile_sum[5m]) / rate(photo:face:compute:query:duration_quantile_count[5m])",
+          "legendFormat": "DB\u67e5\u8be2",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:download:duration_quantile_sum[5m]) / rate(photo:face:compute:download:duration_quantile_count[5m])",
+          "legendFormat": "S3\u4e0b\u8f7d",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:detect:duration_quantile_sum[5m]) / rate(photo:face:compute:detect:duration_quantile_count[5m])",
+          "legendFormat": "\u4eba\u8138\u68c0\u6d4b",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:insert:duration_quantile_sum[5m]) / rate(photo:face:compute:insert:duration_quantile_count[5m])",
+          "legendFormat": "DB\u5199\u5165",
+          "refId": "F"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "\u6210\u529f\u7387"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "\u6210\u529f\u7387"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 95
+                    },
+                    {
+                      "color": "green",
+                      "value": 99
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 147
+      },
+      "id": 79,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "\u4eba\u8138\u8ba1\u7b97\u8c03\u7528\u91cf\u6210\u529f\u7387",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:attempts[5m])",
+          "legendFormat": "QPS",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:success[5m]) / rate(photo:face:compute:attempts[5m]) * 100",
+          "legendFormat": "\u6210\u529f\u7387",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "\u7a7a\u95f2"
+                },
+                "1": {
+                  "color": "orange",
+                  "text": "\u8ba1\u7b97\u4e2d"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 155
+      },
+      "id": 68,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:running",
+          "refId": "A"
+        }
+      ],
+      "title": "\u8fd0\u884c\u72b6\u6001",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "blue",
+                  "text": "\u589e\u91cf"
+                },
+                "1": {
+                  "color": "purple",
+                  "text": "\u5168\u91cf"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "purple",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 155
+      },
+      "id": 69,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:mode",
+          "refId": "A"
+        }
+      ],
+      "title": "\u8ba1\u7b97\u6a21\u5f0f",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 155
+      },
+      "id": 70,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:batch",
+          "refId": "A"
+        }
+      ],
+      "title": "\u5f53\u524d\u6279\u6b21",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 12,
+        "y": 155
+      },
+      "id": 71,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:photos_processed",
+          "refId": "A"
+        }
+      ],
+      "title": "\u7d2f\u8ba1\u7167\u7247",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 15,
+        "y": 155
+      },
+      "id": 72,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:faces_detected",
+          "refId": "A"
+        }
+      ],
+      "title": "\u7d2f\u8ba1\u4eba\u8138",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 18,
+        "y": 155
+      },
+      "id": 73,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:errors",
+          "refId": "A"
+        }
+      ],
+      "title": "\u7d2f\u8ba1\u9519\u8bef",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 155
+      },
+      "id": 74,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:no_face_photos",
+          "refId": "A"
+        }
+      ],
+      "title": "\u65e0\u4eba\u8138\u6570",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 159
+      },
+      "id": 75,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "\u5904\u7406\u901f\u7387",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:photos_processed[1m]) * 60",
+          "legendFormat": "\u7167\u7247/\u5206\u949f",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:faces_detected[1m]) * 60",
+          "legendFormat": "\u4eba\u8138/\u5206\u949f",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(photo:face:compute:errors[1m]) * 60",
+          "legendFormat": "\u9519\u8bef/\u5206\u949f",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 159
+      },
+      "id": 76,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "\u7d2f\u8ba1\u8d8b\u52bf",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:photos_processed",
+          "legendFormat": "\u7d2f\u8ba1\u7167\u7247",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:faces_detected",
+          "legendFormat": "\u7d2f\u8ba1\u4eba\u8138",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "photo:face:compute:no_face_photos",
+          "legendFormat": "\u65e0\u4eba\u8138\u6570",
+          "refId": "C"
         }
       ]
     }
@@ -5402,7 +6404,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Photo 模块监控",
+  "title": "Photo \u6a21\u5757\u76d1\u63a7",
   "uid": "photo-monitoring",
-  "version": 3
+  "version": 4
 }
