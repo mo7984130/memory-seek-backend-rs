@@ -6,6 +6,10 @@ pub use app_error::AppError;
 mod app_error_response;
 mod db_error;
 mod redis_error;
-mod semaphore_error;
+#[cfg(feature = "s3")]
+mod s3_error;
+mod serde_error;
+#[cfg(feature = "tokio")]
+mod tokio_error;
 
 pub type Result<T> = std::result::Result<T, AppError>;
