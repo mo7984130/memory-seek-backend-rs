@@ -1,4 +1,4 @@
-pub mod models;
+mod models;
 pub mod services;
 mod state;
 
