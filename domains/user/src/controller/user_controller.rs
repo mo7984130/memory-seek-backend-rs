@@ -7,12 +7,12 @@ use common::ext::{OptionExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use common::traits::controller::ControllerRouter;
-use entities::auth::user::UserId;
 use std::sync::Arc;
+use types::auth::user::UserId;
 
 use crate::UserState;
 use crate::services as user_service;
-use memory_seek_type::user::{
+use types::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeResult,
     UpdateAvatarParam, UserInfo, UserInfoResult,
 };

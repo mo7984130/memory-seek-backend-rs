@@ -1,9 +1,10 @@
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use common::models::ImageToken;
-use entities::photo::{collection::CollectionRecord, photo::PhotoId};
 use img_url_generator::TokenCipher;
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use types::photo::photo::PhotoId;
+use types::photo::{collection::CollectionRecord, models::PhotoIds};
 use validator::Validate;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -14,6 +15,7 @@ pub struct CollectionResult {
     pub description: Option<String>,
     pub photo_count: i64,
     pub cover_token: Option<String>,
+    pub cover_photo_id: Option<i64>,
     pub created_at: DateTimeUtc,
 }
 
@@ -25,6 +27,7 @@ impl From<CollectionRecord> for CollectionResult {
             description: record.description,
             photo_count: record.photo_count,
             cover_token: record.cover_file_id,
+            cover_photo_id: record.cover_photo_id,
             created_at: record.created_at,
         }
     }
@@ -76,49 +79,26 @@ pub struct CollectionUpdateParam {
     pub description: Option<String>,
 }
 
+pub const COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
+
+fn collection_photo_cursor_page_default_size() -> u64 {
+    COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
+}
+
+/// 收藏夹照片游标参数（`cursor` 为 `TimeIdCursor<PhotoId>` 的 Base64 编码）
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionPhotoCursorPageParam {
     pub cursor: Option<String>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
-    pub size: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CollectionPhotoCursor {
-    pub created_at: DateTimeUtc,
-    pub id: PhotoId,
-}
-
-impl CollectionPhotoCursor {
-    /// 将游标编码为 URL 安全的 Base64 字符串
-    ///
-    /// # 返回
-    /// 返回 Base64 编码后的游标字符串
-    pub fn encode(&self) -> String {
-        let json = serde_json::to_string(self).unwrap_or_default();
-        URL_SAFE_NO_PAD.encode(json.as_bytes())
-    }
-
-    /// 从 URL 安全的 Base64 字符串解码游标
-    ///
-    /// # 参数
-    /// - `s`: Base64 编码的游标字符串
-    ///
-    /// # 返回
-    /// 解码成功返回 `Some(CollectionPhotoCursor)`，失败返回 `None`
-    pub fn decode(s: &str) -> Option<Self> {
-        let bytes = URL_SAFE_NO_PAD.decode(s).ok()?;
-        let json = String::from_utf8(bytes).ok()?;
-        serde_json::from_str(&json).ok()
-    }
+    #[serde(default = "collection_photo_cursor_page_default_size")]
+    pub size: u64,
 }
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionPhotoAddBatchParam {
-    #[validate(length(min = 1, max = 128, message = "照片数量在 1 到 128 之间"))]
-    pub photo_ids: Vec<PhotoId>,
+    pub photo_ids: PhotoIds,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -130,8 +110,7 @@ pub struct CollectionPhotoAddBatchResult {
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionPhotoRemoveBatchParam {
-    #[validate(length(min = 1, max = 128, message = "照片数量在 1 到 128 之间"))]
-    pub photo_ids: Vec<PhotoId>,
+    pub photo_ids: PhotoIds,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -201,22 +180,22 @@ mod tests {
     #[test]
     fn test_collection_photo_add_batch_param_valid() {
         let param = CollectionPhotoAddBatchParam {
-            photo_ids: vec![PhotoId(1), PhotoId(2)],
+            photo_ids: PhotoIds::new(vec![PhotoId(1), PhotoId(2)]).unwrap(),
         };
         assert!(param.validate().is_ok());
     }
 
     #[test]
     fn test_collection_photo_add_batch_param_empty() {
-        let param = CollectionPhotoAddBatchParam { photo_ids: vec![] };
-        assert!(param.validate().is_err());
+        let result = PhotoIds::new(vec![]);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_collection_photo_cursor_page_query_valid() {
         let param = CollectionPhotoCursorPageParam {
             cursor: None,
-            size: Some(50),
+            size: 50,
         };
         assert!(param.validate().is_ok());
     }
@@ -225,7 +204,7 @@ mod tests {
     fn test_collection_photo_cursor_page_query_size_too_large() {
         let param = CollectionPhotoCursorPageParam {
             cursor: None,
-            size: Some(1025),
+            size: 1025,
         };
         assert!(param.validate().is_err());
     }
@@ -233,15 +212,15 @@ mod tests {
     #[test]
     fn test_collection_photo_remove_batch_param_valid() {
         let param = CollectionPhotoRemoveBatchParam {
-            photo_ids: vec![PhotoId(1), PhotoId(2)],
+            photo_ids: PhotoIds::new(vec![PhotoId(1), PhotoId(2)]).unwrap(),
         };
         assert!(param.validate().is_ok());
     }
 
     #[test]
     fn test_collection_photo_remove_batch_param_empty() {
-        let param = CollectionPhotoRemoveBatchParam { photo_ids: vec![] };
-        assert!(param.validate().is_err());
+        let result = PhotoIds::new(vec![]);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -256,7 +235,7 @@ mod tests {
     #[test]
     fn test_collection_photo_add_batch_param_exact_max() {
         let param = CollectionPhotoAddBatchParam {
-            photo_ids: (0..128).map(PhotoId).collect(),
+            photo_ids: PhotoIds::new((0..1024).map(PhotoId).collect()).unwrap(),
         };
         assert!(param.validate().is_ok());
     }
@@ -265,7 +244,7 @@ mod tests {
     fn test_collection_photo_cursor_page_query_exact_max() {
         let param = CollectionPhotoCursorPageParam {
             cursor: None,
-            size: Some(1024),
+            size: 1024,
         };
         assert!(param.validate().is_ok());
     }
@@ -274,7 +253,7 @@ mod tests {
     fn test_collection_photo_cursor_page_query_size_zero() {
         let param = CollectionPhotoCursorPageParam {
             cursor: None,
-            size: Some(0),
+            size: 0,
         };
         assert!(param.validate().is_err());
     }

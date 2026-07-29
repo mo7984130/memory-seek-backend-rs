@@ -1,8 +1,9 @@
 use common::models::ImageToken;
 use common::utils::TokenCipher;
-use memory_seek_type::user::UserInfoResult;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
+use types::auth::user::UserId;
+use types::user::UserInfoResult;
 
 /// 用户信息数据库查询结果（后端内部使用）
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
@@ -22,7 +23,7 @@ pub fn user_info_result_from_dto(dto: UserInfoRow, token_cipher: &TokenCipher) -
     });
 
     UserInfoResult {
-        user_id: dto.user_id.to_string(),
+        user_id: UserId(dto.user_id),
         nickname: dto.nickname,
         avatar_token,
     }
@@ -46,7 +47,7 @@ mod tests {
             avatar_file_id: Some("file123".to_string()),
         };
         let vo = user_info_result_from_dto(dto, &cipher);
-        assert_eq!(vo.user_id, "42");
+        assert_eq!(vo.user_id, UserId(42));
         assert_eq!(vo.nickname, "Alice");
         assert!(vo.avatar_token.is_some());
     }
@@ -60,7 +61,7 @@ mod tests {
             avatar_file_id: None,
         };
         let vo = user_info_result_from_dto(dto, &cipher);
-        assert_eq!(vo.user_id, "1");
+        assert_eq!(vo.user_id, UserId(1));
         assert_eq!(vo.nickname, "Bob");
         assert!(vo.avatar_token.is_none());
     }

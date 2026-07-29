@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{Extension, Router, extract::State, routing::get};
 use common::{Result, ext::ResultRExt, r::R, traits::controller::ControllerRouter};
-use entities::auth::user::UserId;
+use types::auth::user::UserId;
 
 use crate::{PhotoState, services::face_service::FaceService};
 

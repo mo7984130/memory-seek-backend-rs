@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use common::{Result, ext::ResultErrExt};
-use entities::photo::timeline_stat::*;
 use sea_orm::{
     ActiveValue::Set,
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     entity::prelude::DateTimeUtc,
     sea_query::{Alias, CaseStatement, Expr, Func, OnConflict, SimpleExpr},
 };
+use types::photo::timeline_stat::*;
 
 use crate::models::timeline_stat::MonthStat;
 
@@ -43,7 +43,7 @@ impl TimelineStatMapper {
 
     pub async fn decr_stat_by_created_ats(
         db: &impl ConnectionTrait,
-        created_ats: &[DateTimeUtc],
+        created_ats: &[&DateTimeUtc],
     ) -> Result<()> {
         let mut date_count_map: HashMap<String, i64> = HashMap::new();
         for created_at in created_ats {
@@ -81,8 +81,7 @@ impl TimelineStatMapper {
             .col_expr(Column::UpdatedAt, Expr::current_timestamp().into())
             .filter(Column::DateStr.is_in(date_strs))
             .exec(db)
-            .await
-            .trace_internal_err("db_update_err", "批量更新照片时间线统计错误")?;
+            .await?;
 
         Ok(())
     }

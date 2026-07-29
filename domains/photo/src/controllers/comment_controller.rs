@@ -2,22 +2,21 @@ use std::sync::Arc;
 
 use axum::{
     Extension, Router,
-    extract::{Path, State},
+    extract::State,
     routing::{delete, get, post},
 };
 use common::{
     Result,
     ext::ResultRExt,
-    extractors::{ValidatedJson, ValidatedQuery},
-    models::CursorPage,
+    extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
+    models::{CursorPage, TimeIdCursor},
     r::R,
     traits::controller::ControllerRouter,
 };
-use entities::{
+use types::{
     auth::user::UserId,
     photo::{comment::CommentId, photo::PhotoId},
 };
-use sea_orm::entity::prelude::DateTimeUtc;
 
 use crate::{
     models::comment::{CommentCursorPageParam, CommentPublishParam, PhotoCommentResult},
@@ -53,7 +52,7 @@ impl CommentController {
     async fn publish(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(photo_id): Path<PhotoId>,
+        ValidatedPath(photo_id): ValidatedPath<PhotoId>,
         ValidatedJson(param): ValidatedJson<CommentPublishParam>,
     ) -> Result<R<PhotoCommentResult>> {
         CommentService::publish(&state, photo_id, user_id, param.content)
@@ -70,10 +69,14 @@ impl CommentController {
     async fn get_cursor_page(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(photo_id): Path<PhotoId>,
+        ValidatedPath(photo_id): ValidatedPath<PhotoId>,
         ValidatedQuery(param): ValidatedQuery<CommentCursorPageParam>,
-    ) -> Result<R<CursorPage<PhotoCommentResult, DateTimeUtc>>> {
-        CommentService::get_cursor_page(&state, photo_id, user_id, param.cursor, param.size)
+    ) -> Result<R<CursorPage<PhotoCommentResult, String>>> {
+        let CommentCursorPageParam { cursor, size } = param;
+
+        let cursor = cursor.map(TimeIdCursor::<CommentId>::decode).transpose()?;
+
+        CommentService::get_cursor_page(&state, photo_id, user_id, cursor, size)
             .await
             .to_r_ok()
     }
@@ -84,7 +87,7 @@ impl CommentController {
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path((photo_id, comment_id)): Path<(PhotoId, CommentId)>,
+        ValidatedPath((photo_id, comment_id)): ValidatedPath<(PhotoId, CommentId)>,
     ) -> Result<R<()>> {
         let _ = photo_id;
         CommentService::delete(&state, user_id, comment_id)
@@ -98,7 +101,7 @@ impl CommentController {
     async fn like(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path((photo_id, comment_id)): Path<(PhotoId, CommentId)>,
+        ValidatedPath((photo_id, comment_id)): ValidatedPath<(PhotoId, CommentId)>,
     ) -> Result<R<()>> {
         let _ = photo_id;
         CommentLikeService::like(&state, user_id, comment_id)
@@ -109,7 +112,7 @@ impl CommentController {
     async fn unlike(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path((photo_id, comment_id)): Path<(PhotoId, CommentId)>,
+        ValidatedPath((photo_id, comment_id)): ValidatedPath<(PhotoId, CommentId)>,
     ) -> Result<R<()>> {
         let _ = photo_id;
         CommentLikeService::unlike(&state, user_id, comment_id)

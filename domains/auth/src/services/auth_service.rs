@@ -12,11 +12,6 @@ use common::{metrics_group, metrics_name, metrics_success};
 use constants::RedisKeys;
 use constants::redis_keys;
 use deadpool_redis::Pool;
-use entities::auth::user::{self, UserId};
-use memory_seek_type::auth::{
-    LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
-};
-use memory_seek_type::user::UserInfo;
 use sea_orm::error::DbErr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
@@ -26,6 +21,11 @@ use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task;
 use tracing::{error, info, warn};
+use types::auth::user::{self, UserId};
+use types::auth::{
+    LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
+};
+use types::user::UserInfo;
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
 static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
@@ -120,7 +120,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         let verify_result =
             result.trace_internal_err("verify_password_error", "密码验证内部错误")?;
 
-        verify_result.0.ok_or_warn(
+        verify_result.0.true_or_warn(
             "invalid_password",
             "用户登录时密码错误",
             AppError::bad_request("账号或者密码错误"),
@@ -265,7 +265,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     .map_err(handle_user_insert_err)?;
 
     // 删除已使用的邮箱验证码，防止重放
-    let _ = state
+    state
         .redis
         .del(&redis_keys::auth::email_verify_code(&user_model.email))
         .await?;
@@ -399,7 +399,7 @@ pub async fn refresh_access_token(
     state
         .redis
         .set_ex(
-            &RedisKeys::auth::user_access_token(user_id.into()),
+            &RedisKeys::auth::user_access_token(user_id),
             &new_access_token,
             ACCESS_TOKEN_EXPIRE_SECONDS as u64,
         )

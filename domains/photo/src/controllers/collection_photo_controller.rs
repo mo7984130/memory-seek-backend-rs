@@ -1,4 +1,4 @@
-use std::{sync::Arc, vec};
+use std::sync::Arc;
 
 use crate::{
     models::{
@@ -14,20 +14,20 @@ use crate::{
 };
 use axum::{
     Extension, Router,
-    extract::{Path, State},
+    extract::State,
     routing::{delete, get},
 };
 use common::{
     Result,
     ext::ResultRExt,
-    extractors::{ValidatedJson, ValidatedQuery},
-    models::CursorPage,
+    extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
+    models::{CursorPage, TimeIdCursor},
     r::R,
     traits::controller::ControllerRouter,
 };
-use entities::{
+use types::{
     auth::user::UserId,
-    photo::{collection::CollectionId, photo::PhotoId},
+    photo::{collection::CollectionId, models::PhotoIds, photo::PhotoId},
 };
 
 pub struct CollectionPhotoController;
@@ -57,7 +57,7 @@ impl CollectionPhotoController {
     async fn get_collections_by_photo(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(photo_id): Path<PhotoId>,
+        ValidatedPath(photo_id): ValidatedPath<PhotoId>,
     ) -> Result<R<Vec<PhotoCollectionResult>>> {
         CollectionPhotoService::get_collections_by_photo(&state, user_id, photo_id)
             .await
@@ -70,7 +70,7 @@ impl CollectionPhotoController {
     async fn add_batch(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(collection_id): Path<CollectionId>,
+        ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedJson(param): ValidatedJson<CollectionPhotoAddBatchParam>,
     ) -> Result<R<CollectionPhotoAddBatchResult>> {
         CollectionPhotoService::add_photos(&state, user_id, collection_id, param.photo_ids)
@@ -84,11 +84,12 @@ impl CollectionPhotoController {
     async fn get_cursor_page(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(collection_id): Path<CollectionId>,
+        ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedQuery(query): ValidatedQuery<CollectionPhotoCursorPageParam>,
     ) -> Result<R<CursorPage<PhotoResult, String>>> {
         let CollectionPhotoCursorPageParam { cursor, size } = query;
-        let size = size.unwrap_or(32) as u64;
+
+        let cursor = cursor.map(TimeIdCursor::<PhotoId>::decode).transpose()?;
 
         CollectionPhotoService::get_photos(&state, user_id, collection_id, cursor, size)
             .await
@@ -104,17 +105,22 @@ impl CollectionPhotoController {
     async fn remove(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path((collection_id, photo_id)): Path<(CollectionId, PhotoId)>,
+        ValidatedPath((collection_id, photo_id)): ValidatedPath<(CollectionId, PhotoId)>,
     ) -> Result<R<()>> {
-        CollectionPhotoService::remove_photos(&state, user_id, collection_id, vec![photo_id])
-            .await?;
+        CollectionPhotoService::remove_photos(
+            &state,
+            user_id,
+            collection_id,
+            PhotoIds::new(vec![photo_id]).unwrap(),
+        )
+        .await?;
         Ok(R::ok(()))
     }
 
     async fn remove_batch(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(collection_id): Path<CollectionId>,
+        ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedJson(param): ValidatedJson<CollectionPhotoRemoveBatchParam>,
     ) -> Result<R<CollectionPhotoRemoveBatchResult>> {
         CollectionPhotoService::remove_photos(&state, user_id, collection_id, param.photo_ids)

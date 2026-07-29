@@ -1,15 +1,21 @@
+use std::collections::HashMap;
+
 use common::{
     Result,
     error::AppError,
-    ext::{ResultErrExt, ToErr, log_warn},
-    metrics_group, metrics_name, metrics_success, timed,
+    ext::{ToErr, log_warn},
+    metrics_group, metrics_name, metrics_success,
+    models::{CursorPage, TimeIdCursor},
+    timed,
     utils::{DbUtils, MetricsTimerExt},
 };
-use entities::{auth::user::UserId, photo::photo::PhotoId};
 use sea_orm::entity::prelude::DateTimeUtc;
+use types::{auth::user::UserId, photo::photo::PhotoId};
 
 use crate::{
     mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper},
+    models::photo::PhotoResult,
+    services::photo_service::PhotoService,
     state::PhotoState,
 };
 
@@ -17,26 +23,16 @@ pub(crate) struct PhotoLikeService;
 
 // 创建
 impl PhotoLikeService {
+    #[tracing::instrument(skip_all)]
     pub async fn like(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
-        metrics_group!("like_photo");
+        metrics_group!();
 
-        // 检查照片是否存在
-        if !PhotoMapper::exists(&state.db, photo_id)
-            .timed(metrics_name!("like_photo", "check_exists"))
-            .await?
-        {
-            return log_warn(
-                "photo_not_found",
-                "用户尝试点赞不存在的照片",
-                AppError::not_found("照片不存在"),
-            )
-            .to_err();
-        }
-
-        timed!("like_photo", "db_transaction", {
+        timed!("db_transaction", {
             DbUtils::write(&state.db, |txn| {
                 Box::pin(async move {
-                    let inserted = PhotoLikeMapper::insert_ignore(txn, user_id, photo_id).await?;
+                    PhotoMapper::ensure_exist(txn, photo_id).await?;
+
+                    let inserted = PhotoLikeMapper::insert(txn, user_id, photo_id).await?;
 
                     if !inserted {
                         return log_warn(
@@ -55,49 +51,84 @@ impl PhotoLikeService {
             .await
         })?;
 
-        metrics_success!("like_photo");
+        metrics_success!();
         Ok(())
     }
 }
 
 // 查询
 impl PhotoLikeService {
-    /// 查询用户点赞的照片列表
-    ///
-    /// 返回 `(PhotoId, DateTimeUtc)` 元组，其中 DateTimeUtc 为点赞时间，
-    /// 用于生成正确的分页游标。
+    /// 查询用户点赞的照片列表（带分页和照片详情）
+    #[tracing::instrument(skip_all)]
     pub async fn get_user_liked_photos(
         state: &PhotoState,
         user_id: UserId,
-        cursor: Option<String>,
+        cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
-    ) -> Result<Vec<(PhotoId, DateTimeUtc)>> {
-        metrics_group!("get_user_liked_photos");
+    ) -> Result<CursorPage<PhotoResult, String>> {
+        metrics_group!();
 
-        let decoded_cursor = cursor
-            .as_ref()
-            .and_then(|s| PhotoLikeCursor::decode(s).ok());
+        // 查询用户点赞的照片ID列表和点赞时间（多查一个用于判断 has_more）
+        let photo_ids_with_like_time =
+            PhotoLikeMapper::query_user_liked_photo_ids(&state.db, user_id, &cursor, size + 1)
+                .timed(metrics_name!("query_ids"))
+                .await?;
 
-        let photo_ids_with_like_time = PhotoLikeMapper::query_user_liked_photo_ids(
-            &state.db,
-            user_id,
-            decoded_cursor.map(|c| (c.created_at, c.id.0)),
-            size,
-        )
-        .timed(metrics_name!("get_user_liked_photos", "query_ids"))
-        .await?;
+        // 构建 CursorPage（只提取 photo_id 用于分页判断）
+        let photo_ids: Vec<PhotoId> = photo_ids_with_like_time.iter().map(|(id, _)| *id).collect();
+        let CursorPage {
+            records: photo_ids,
+            has_more,
+            ..
+        } = CursorPage::from_oversize(photo_ids, size);
 
-        metrics_success!("get_user_liked_photos");
-        Ok(photo_ids_with_like_time)
+        if photo_ids.is_empty() {
+            metrics_success!();
+            return Ok(CursorPage::empty());
+        }
+
+        // 构建 photo_id -> like_created_at 的映射
+        let like_time_map: HashMap<PhotoId, DateTimeUtc> = photo_ids_with_like_time
+            .into_iter()
+            .take(photo_ids.len())
+            .collect();
+
+        // 加载照片详细信息
+        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids).await?;
+
+        // 生成 next_cursor（使用点赞时间而非照片上传时间）
+        let next_cursor = if has_more {
+            photos.last().and_then(|p| {
+                let id = PhotoId::parse_from_str_or_none(&p.id)?;
+                let like_created_at = like_time_map.get(&id).copied()?;
+                Some(
+                    TimeIdCursor {
+                        created_at: like_created_at,
+                        id,
+                    }
+                    .encode(),
+                )
+            })
+        } else {
+            None
+        };
+
+        metrics_success!();
+        Ok(CursorPage {
+            records: photos,
+            next_cursor,
+            has_more,
+        })
     }
 }
 
 // 删除
 impl PhotoLikeService {
+    #[tracing::instrument(skip_all)]
     pub async fn unlike(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
-        metrics_group!("unlike_photo");
+        metrics_group!();
 
-        timed!("unlike_photo", "db_transaction", {
+        timed!("db_transaction", {
             DbUtils::write(&state.db, |txn| {
                 Box::pin(async move {
                     let deleted = PhotoLikeMapper::delete(txn, user_id, photo_id).await?;
@@ -119,45 +150,7 @@ impl PhotoLikeService {
             .await
         })?;
 
-        metrics_success!("unlike_photo");
+        metrics_success!();
         Ok(())
-    }
-}
-
-/// 点赞游标，用于复合游标分页
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub(crate) struct PhotoLikeCursor {
-    pub created_at: sea_orm::entity::prelude::DateTimeUtc,
-    pub id: PhotoId,
-}
-
-impl PhotoLikeCursor {
-    pub fn encode(&self) -> String {
-        let json = serde_json::to_string(self).unwrap_or_default();
-        base64::Engine::encode(
-            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-            json.as_bytes(),
-        )
-    }
-
-    pub fn decode(s: &str) -> Result<Self> {
-        use base64::Engine;
-        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .decode(s)
-            .trace_warn_bad_request(
-                "photo_like_cursor:decode_err",
-                "解码photo_like_cursor错误, base64解码失败",
-                "解码photo_like_cursor错误",
-            )?;
-        let json = String::from_utf8(bytes).trace_warn_bad_request(
-            "photo_like_cursor:from_utf8_err",
-            "解码photo_like_cursor错误, bytes转String错误",
-            "解码photo_like_cursor错误",
-        )?;
-        serde_json::from_str(&json).trace_warn_bad_request(
-            "photo_like_cursor:from_str_err",
-            "解码photo_like_cursor错误, json解析失败",
-            "解码photo_like_cursor错误",
-        )
     }
 }

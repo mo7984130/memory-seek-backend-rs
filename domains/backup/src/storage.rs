@@ -120,7 +120,8 @@ impl BackupStorage {
         for table_name in tables {
             let (path, hash) = CsvExporter::export(db, table_name, &temp_dir).await?;
             tracing::info!(table = %table_name, hash = %hash, "表已导出");
-            self.save(table_name, &path, backup_type.clone(), &run_id).await?;
+            self.save(table_name, &path, backup_type.clone(), &run_id)
+                .await?;
             let _ = std::fs::remove_file(&path);
         }
 
@@ -189,10 +190,10 @@ impl BackupStorage {
                 continue;
             }
 
-            if !s3_keys.is_empty() {
-                if let Err(e) = self.s3_client.delete_batch(s3_keys).await {
-                    tracing::warn!(run = %run_id, dir = %rel_dir, err = %e, "GFS cleanup partial S3 deletion");
-                }
+            if !s3_keys.is_empty()
+                && let Err(e) = self.s3_client.delete_batch(s3_keys).await
+            {
+                tracing::warn!(run = %run_id, dir = %rel_dir, err = %e, "GFS cleanup partial S3 deletion");
             }
 
             removed += 1;
@@ -215,10 +216,10 @@ impl BackupStorage {
                 let path = entry.path();
                 if path.is_dir() {
                     self.collect_csv_keys(&path, keys);
-                } else if path.extension().is_some_and(|e| e == "csv") {
-                    if let Ok(relative) = path.strip_prefix(&self.local_path) {
-                        keys.push(format!("{}{}", self.s3_prefix, relative.display()));
-                    }
+                } else if path.extension().is_some_and(|e| e == "csv")
+                    && let Ok(relative) = path.strip_prefix(&self.local_path)
+                {
+                    keys.push(format!("{}{}", self.s3_prefix, relative.display()));
                 }
             }
         }

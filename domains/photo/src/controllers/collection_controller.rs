@@ -2,13 +2,17 @@ use std::sync::Arc;
 
 use axum::{
     Extension, Router,
-    extract::{Path, State},
+    extract::State,
     routing::{get, patch},
 };
 use common::{
-    Result, ext::ResultRExt, extractors::ValidatedJson, r::R, traits::controller::ControllerRouter,
+    Result,
+    ext::ResultRExt,
+    extractors::{ValidatedJson, ValidatedPath},
+    r::R,
+    traits::controller::ControllerRouter,
 };
-use entities::{auth::user::UserId, photo::collection::CollectionId};
+use types::{auth::user::UserId, photo::collection::CollectionId};
 
 use crate::{
     models::collection::{CollectionCreateParam, CollectionResult, CollectionUpdateParam},
@@ -62,7 +66,7 @@ impl CollectionController {
     async fn update_info(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(collection_id): Path<CollectionId>,
+        ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedJson(param): ValidatedJson<CollectionUpdateParam>,
     ) -> Result<R<()>> {
         CollectionService::update_collection_info(
@@ -82,7 +86,7 @@ impl CollectionController {
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(collection_id): Path<CollectionId>,
+        ValidatedPath(collection_id): ValidatedPath<CollectionId>,
     ) -> Result<R<()>> {
         CollectionService::delete_collection(&state, user_id, collection_id)
             .await

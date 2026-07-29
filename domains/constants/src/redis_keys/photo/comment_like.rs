@@ -1,4 +1,4 @@
-use entities::photo::comment::CommentId;
+use types::photo::comment::CommentId;
 
 pub fn likes_count(comment_id: CommentId) -> String {
     // photo:comment_like:likes_count:{comment_id}

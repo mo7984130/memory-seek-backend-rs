@@ -1,16 +1,18 @@
 use std::collections::HashSet;
 
 use common::Result;
-use common::ext::{OkExt, ResultErrExt};
+use common::error::AppError;
+use common::ext::{BoolExt, OkExt};
+use common::models::TimeIdCursor;
 use sea_orm::entity::prelude::DateTimeUtc;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
-use entities::photo::photo::*;
+use types::photo::photo::*;
 
-use crate::models::photo::{PageDirection, PhotoCursor};
+use crate::models::photo::PageDirection;
 
 pub(crate) struct PhotoMapper;
 
@@ -31,8 +33,7 @@ impl PhotoMapper {
             )
             .filter(Column::Id.eq(photo_id))
             .exec(db)
-            .await
-            .trace_internal_err("db_update_err", "更新照片评论总数数数据库错误")?;
+            .await?;
 
         Ok(())
     }
@@ -47,8 +48,7 @@ impl PhotoMapper {
             .col_expr(Column::LikeCount, Expr::col(Column::LikeCount).add(delta))
             .filter(Column::Id.eq(photo_id))
             .exec(db)
-            .await
-            .trace_internal_err("db_update_err", "更新照片点赞数错误")?;
+            .await?;
 
         Ok(())
     }
@@ -60,9 +60,16 @@ impl PhotoMapper {
         let count = Entity::find()
             .filter(Column::Id.eq(photo_id))
             .count(db)
-            .await
-            .trace_internal_err("db_query_err", "查询照片是否存在失败")?;
+            .await?;
         Ok(count > 0)
+    }
+
+    pub async fn ensure_exist(db: &impl ConnectionTrait, photo_id: PhotoId) -> Result<()> {
+        Self::exists(db, photo_id).await?.true_or_warn(
+            "photo_not_exist",
+            "照片不存在",
+            AppError::not_found("照片不存在"),
+        )
     }
 
     pub async fn exists_by_md5_batch(
@@ -72,15 +79,16 @@ impl PhotoMapper {
         if md5s.is_empty() {
             return Ok(HashSet::new());
         }
-        let existing = Entity::find()
+        Entity::find()
             .filter(Column::Md5.is_in(md5s.iter().map(|s| s.as_ref())))
             .select_only()
             .column(Column::Md5)
             .into_tuple::<String>()
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "批量查询MD5失败")?;
-        Ok(existing.into_iter().collect())
+            .await?
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .to_ok()
     }
 
     pub async fn exists_by_md5(db: &impl ConnectionTrait, md5: impl AsRef<str>) -> Result<bool> {
@@ -89,7 +97,7 @@ impl PhotoMapper {
     }
 
     fn build_cursor_query(
-        cursor: Option<&PhotoCursor>,
+        cursor: Option<&TimeIdCursor<PhotoId>>,
         size: u64,
         direction: PageDirection,
         anchor_time: Option<DateTimeUtc>,
@@ -152,7 +160,7 @@ impl PhotoMapper {
 
     pub async fn query_cursor_page_ids(
         db: &impl ConnectionTrait,
-        cursor: Option<PhotoCursor>,
+        cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
         direction: PageDirection,
         anchor_time: Option<DateTimeUtc>,
@@ -162,8 +170,7 @@ impl PhotoMapper {
             .column(Column::Id)
             .into_tuple::<i64>()
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询 ID 列表失败")?
+            .await?
             .into_iter()
             .map(PhotoId::from)
             .collect::<Vec<_>>()
@@ -186,6 +193,33 @@ impl PhotoMapper {
             .collect::<Vec<_>>()
             .to_ok()
     }
+
+    #[expect(dead_code)]
+    pub async fn query_by_id(
+        db: &impl ConnectionTrait,
+        id: PhotoId,
+    ) -> Result<Option<PhotoRecord>> {
+        Entity::find()
+            .filter(Column::Id.eq(id))
+            .one(db)
+            .await?
+            .map(PhotoRecord::from)
+            .to_ok()
+    }
+
+    pub async fn query_file_id_by_id(
+        db: &impl ConnectionTrait,
+        id: PhotoId,
+    ) -> Result<Option<String>> {
+        Entity::find()
+            .select_only()
+            .column(Column::FileId)
+            .filter(Column::Id.eq(id))
+            .into_tuple::<String>()
+            .one(db)
+            .await?
+            .to_ok()
+    }
 }
 
 // 删除
@@ -197,8 +231,7 @@ impl PhotoMapper {
         Entity::delete_many()
             .filter(Column::Id.is_in(ids.iter().copied()))
             .exec(db)
-            .await
-            .trace_internal_err("db_delete_err", "删除照片失败")?;
+            .await?;
         Ok(())
     }
 }

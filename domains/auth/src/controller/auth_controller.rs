@@ -9,12 +9,12 @@ use common::ext::{OptionExt, ResultErrExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use common::traits::controller::ControllerRouter;
-use entities::auth::user::UserId;
-use memory_seek_type::auth::{
+use std::sync::Arc;
+use types::auth::user::UserId;
+use types::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
 };
-use memory_seek_type::user::UserInfo;
-use std::sync::Arc;
+use types::user::UserInfo;
 
 pub struct AuthController;
 

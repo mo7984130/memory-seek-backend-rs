@@ -1,12 +1,9 @@
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
-use common::Result;
-use common::ext::ResultErrExt;
 use common::models::ImageToken;
 use common::utils::TokenCipher;
-use entities::photo::photo::{PhotoId, PhotoRecord};
 use sea_orm::entity::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
+use types::photo::photo::PhotoRecord;
 use validator::Validate;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -85,6 +82,7 @@ impl PhotoResult {
     }
 }
 
+/// 照片游标参数（`cursor` 为 `TimeIdCursor<PhotoId>` 的 Base64 编码）
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PhotoCursorParam {
@@ -105,37 +103,6 @@ impl Default for PhotoCursorParam {
             default_collection_id: None,
             anchor_time: None,
         }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PhotoCursor {
-    pub created_at: DateTimeUtc,
-    pub id: PhotoId,
-}
-
-impl PhotoCursor {
-    pub fn encode(&self) -> String {
-        let json = serde_json::to_string(self).unwrap_or_default();
-        URL_SAFE_NO_PAD.encode(json.as_bytes())
-    }
-
-    pub fn decode(s: impl AsRef<[u8]>) -> Result<Self> {
-        let bytes = URL_SAFE_NO_PAD.decode(s).trace_warn_bad_request(
-            "photo_cursor:decode_err",
-            "解码photo_curosr错误, base64解码失败",
-            "解码photo_curosr错误",
-        )?;
-        let json = String::from_utf8(bytes).trace_warn_bad_request(
-            "photo_cursor:from_utf8_err",
-            "解码photo_curosr错误, bytes转String错误",
-            "解码photo_curosr错误",
-        )?;
-        serde_json::from_str(&json).trace_warn_bad_request(
-            "photo_cursor:from_str_err",
-            "解码photo_curosr错误, json解析失败",
-            "解码photo_curosr错误",
-        )
     }
 }
 

@@ -1,4 +1,4 @@
-use entities::photo::photo::PhotoId;
+use types::photo::photo::PhotoId;
 
 /// 生成照片信息的 Redis 缓存键
 ///

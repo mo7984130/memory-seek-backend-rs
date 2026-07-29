@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
-use axum::{
-    Extension, Router,
-    extract::{Path, State},
-    routing::post,
+use axum::{Extension, Router, extract::State, routing::post};
+use common::{
+    Result, ext::ResultRExt, extractors::ValidatedPath, r::R, traits::controller::ControllerRouter,
 };
-use common::{Result, ext::ResultRExt, r::R, traits::controller::ControllerRouter};
-use entities::{auth::user::UserId, photo::comment::CommentId};
+use types::{auth::user::UserId, photo::comment::CommentId};
 
 use crate::{services::comment_like_service::CommentLikeService, state::PhotoState};
 
@@ -29,7 +27,7 @@ impl CommentLikeController {
     async fn like(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(comment_id): Path<CommentId>,
+        ValidatedPath(comment_id): ValidatedPath<CommentId>,
     ) -> Result<R<()>> {
         CommentLikeService::like(&state, user_id, comment_id)
             .await
@@ -48,7 +46,7 @@ impl CommentLikeController {
     async fn unlike(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(comment_id): Path<CommentId>,
+        ValidatedPath(comment_id): ValidatedPath<CommentId>,
     ) -> Result<R<()>> {
         CommentLikeService::unlike(&state, user_id, comment_id)
             .await

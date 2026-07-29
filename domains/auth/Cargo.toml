@@ -9,11 +9,10 @@ metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum", "dep:serde_json"]
 
 [dependencies]
-memory-seek-type = { workspace = true }
+types = { workspace = true, features = ["orm"] }
 common = { path = "../../common", features = ["validators", "metrics", "tokio"] }
 constants = { path = "../constants" }
 sea-orm = { workspace = true }
-entities = { path = "../../entities" }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 validator = { workspace = true }

@@ -11,14 +11,13 @@ use tokio::task::spawn_blocking;
 use tracing::info;
 
 use crate::UserState;
-use crate::config::GET_USER_INFO_BATCH_MAX_LEN;
 use crate::models::{UserInfoRow, user_info_result_from_dto};
 use common::error::AppError;
 use common::ext::{CacheExtension, OptionExt, RedisExt, ResultInspectErrAsync, TraceExt, log_err};
 use common::utils::{DbUtils, MetricsTimerExt};
 use common::utils::{FileValidator, rand_utils};
-use entities::auth::user::{self, UserId};
-use memory_seek_type::user::{
+use types::auth::user::{self, UserId};
+use types::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeResult,
     UpdateAvatarParam, UserInfo, UserInfoResult,
 };
@@ -420,21 +419,7 @@ pub async fn get_user_info_batch(
 ) -> Result<Vec<Option<UserInfoResult>>, AppError> {
     metrics_group!();
 
-    let user_ids: Vec<UserId> = param
-        .user_ids
-        .into_iter()
-        .filter_map(|id| id.parse::<i64>().ok().map(UserId))
-        .collect();
-
-    // 空列表直接返回
-    if user_ids.is_empty() {
-        return Ok(vec![]);
-    }
-
-    // 单次获取的最大长度限制为1000
-    if user_ids.len() > GET_USER_INFO_BATCH_MAX_LEN {
-        return Err(AppError::bad_request("超出了单次获取的最大长度限制"));
-    }
+    let user_ids = param.user_ids.into_inner();
 
     // 带redis缓存的获取用户信息
     let result: Vec<Option<UserInfoRow>> = state

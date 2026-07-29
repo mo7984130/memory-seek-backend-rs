@@ -137,8 +137,7 @@ impl BackupRunner {
         state: &BackupState,
         table_name: &str,
     ) -> Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-        let (csv_path, _) =
-            CsvExporter::export(&state.db, table_name, &state.temp_dir).await?;
+        let (csv_path, _) = CsvExporter::export(&state.db, table_name, &state.temp_dir).await?;
         Ok(csv_path)
     }
 }

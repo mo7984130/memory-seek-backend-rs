@@ -11,8 +11,7 @@ controller = ["dep:axum"]
 [dependencies]
 common = { path = "../../common", features = ["file_validator", "validators", "metrics", "tokio"] }
 constants = { path = "../constants" }
-entities = { path = "../../entities" }
-memory-seek-type = { workspace = true }
+types = { workspace = true, features = ["orm"] }
 oss = { path = "../../libs/oss" }
 serde = { workspace = true }
 validator = { workspace = true }

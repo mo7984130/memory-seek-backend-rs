@@ -1,4 +1,4 @@
-use entities::auth::user::UserId;
+use types::auth::user::UserId;
 
 /// 生成用户访问令牌的 Redis 缓存键
 ///

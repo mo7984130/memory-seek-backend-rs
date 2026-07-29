@@ -6,14 +6,6 @@ use common::{
     inc_counter, metrics_group, metrics_name, metrics_success, set_gauge, timed,
     utils::{GaugeGuard, MetricsTimer, MetricsTimerExt},
 };
-use entities::{
-    auth::user::UserId,
-    photo::{
-        face::{self, NewFaceRecord},
-        person,
-        photo::{self, PhotoId},
-    },
-};
 use sea_orm::{
     ColumnTrait, Condition, EntityTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
     sea_query::{Expr, Query},
@@ -22,6 +14,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
+use types::{
+    auth::user::UserId,
+    photo::{
+        face::{self, NewFaceRecord},
+        person,
+        photo::{self, PhotoId},
+    },
+};
 
 use crate::PhotoState;
 
@@ -206,21 +206,11 @@ impl FaceService {
                     .map_err(|_| AppError::InternalServerError)?;
 
                     let models = match run_result {
-                        Ok(faces) if !faces.is_empty() => {
-                            match faces
-                                .into_iter()
-                                .map(|f| NewFaceRecord::from_detected(photo_id, f))
-                                .map(|f| face::ActiveModel::try_from(f))
-                                .collect::<Result<Vec<face::ActiveModel>>>()
-                            {
-                                Ok(m) => m,
-                                Err(e) => {
-                                    warn!(pid = ?photo_id, "转换人脸记录失败: {}", e);
-                                    deerr.fetch_add(1, Ordering::Relaxed);
-                                    Vec::new()
-                                }
-                            }
-                        }
+                        Ok(faces) if !faces.is_empty() => faces
+                            .into_iter()
+                            .map(|f| NewFaceRecord::from_detected(photo_id, f))
+                            .map(face::ActiveModel::from)
+                            .collect::<Vec<face::ActiveModel>>(),
                         Ok(_) => Vec::new(),
                         Err(e) => {
                             warn!(pid = ?photo_id, "人脸检测失败: {:?}", e);

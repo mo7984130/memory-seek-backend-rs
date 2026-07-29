@@ -4,8 +4,8 @@ use axum::{Extension, Router, extract::State, routing::post};
 use common::{
     Result, error::AppError, ext::ResultErrExt, r::R, traits::controller::ControllerRouter,
 };
-use entities::auth::user::UserId;
 use std::sync::Arc;
+use types::auth::user::UserId;
 
 pub struct BackupController;
 
