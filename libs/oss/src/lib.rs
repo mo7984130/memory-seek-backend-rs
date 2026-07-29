@@ -123,13 +123,13 @@ impl S3Client {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: 删除文件失败
-    pub async fn delete_batch(&self, keys: Vec<String>) -> Result<(), S3Error> {
+    pub async fn delete_batch(&self, keys: Vec<impl AsRef<str>>) -> Result<(), S3Error> {
         for concurrent_chunks in keys.chunks(CHUNK_SIZE * CONCURRENCY) {
             let futures: Vec<_> = concurrent_chunks
                 .chunks(CHUNK_SIZE)
                 .map(|chunk| async move {
                     for key in chunk {
-                        self.bucket.delete_object(key.as_str()).await?;
+                        self.bucket.delete_object(key.as_ref()).await?;
                     }
                     Ok::<_, S3Error>(())
                 })
@@ -231,7 +231,7 @@ impl S3Client {
 
         let response = reqwest::get(&url).await?.error_for_status()?;
 
-        response.bytes().await.map_err(|e| S3Error::Reqwest(e))
+        response.bytes().await.map_err(S3Error::Reqwest)
     }
 
     pub async fn download_stream_with_process(
@@ -249,9 +249,7 @@ impl S3Client {
 
         let response = reqwest::get(&url).await?.error_for_status()?;
 
-        let bytes = response
-            .bytes_stream()
-            .map(|r| r.map_err(|e| S3Error::Reqwest(e)));
+        let bytes = response.bytes_stream().map(|r| r.map_err(S3Error::Reqwest));
 
         Ok(bytes)
     }
