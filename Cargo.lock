@@ -342,9 +342,7 @@ dependencies = [
  "deadpool-redis",
  "dotenvy",
  "email",
- "entities",
  "hdrhistogram",
- "memory-seek-type",
  "metrics",
  "num_cpus",
  "sea-orm",
@@ -353,6 +351,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tracing",
+ "types",
  "uuid",
  "validator",
  "wiremock",
@@ -540,7 +539,6 @@ dependencies = [
  "chrono",
  "common",
  "csv",
- "entities",
  "hex",
  "oss",
  "sea-orm",
@@ -550,6 +548,7 @@ dependencies = [
  "tokio",
  "tokio-cron-scheduler",
  "tracing",
+ "types",
 ]
 
 [[package]]
@@ -954,6 +953,7 @@ dependencies = [
  "axum-client-ip",
  "base64 0.22.1",
  "bcrypt",
+ "chrono",
  "const_format",
  "deadpool-redis",
  "fancy-regex",
@@ -1060,7 +1060,7 @@ name = "constants"
 version = "0.1.0"
 dependencies = [
  "common",
- "entities",
+ "types",
 ]
 
 [[package]]
@@ -1491,20 +1491,6 @@ name = "endian-type"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
-
-[[package]]
-name = "entities"
-version = "0.1.0"
-dependencies = [
- "common",
- "insight-face-rs",
- "memory-seek-type",
- "pgvector",
- "sea-orm",
- "serde",
- "serde_json",
- "sqlx",
-]
 
 [[package]]
 name = "equator"
@@ -2750,18 +2736,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
-name = "memory-seek-type"
-version = "0.1.2"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "ts-rs",
- "validator",
- "wasm-bindgen-test",
-]
-
-[[package]]
 name = "metrics"
 version = "0.24.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2860,16 +2834,6 @@ checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
 dependencies = [
  "mime",
  "unicase",
-]
-
-[[package]]
-name = "minicov"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4869b6a491569605d66d3952bcdf03df789e5b536e5f0cf7758a7f08a55ae24d"
-dependencies = [
- "cc",
- "walkdir",
 ]
 
 [[package]]
@@ -3459,13 +3423,11 @@ dependencies = [
  "common",
  "constants",
  "deadpool-redis",
- "entities",
  "futures",
  "image",
  "img_url_generator",
  "insight-face-rs",
  "md5",
- "memory-seek-type",
  "metrics",
  "moka",
  "once_cell",
@@ -3475,6 +3437,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "types",
  "uuid",
  "validator",
 ]
@@ -4732,7 +4695,6 @@ dependencies = [
  "deadpool-redis",
  "dotenvy",
  "email",
- "entities",
  "insight-face-rs",
  "metrics",
  "metrics-exporter-prometheus",
@@ -4751,6 +4713,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "types",
  "user",
  "uuid",
 ]
@@ -5734,6 +5697,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
+name = "types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "common",
+ "insight-face-rs",
+ "pgvector",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "ts-rs",
+ "validator",
+]
+
+[[package]]
 name = "ucd-trie"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5851,8 +5831,6 @@ dependencies = [
  "common",
  "constants",
  "deadpool-redis",
- "entities",
- "memory-seek-type",
  "metrics",
  "num_cpus",
  "oss",
@@ -5862,6 +5840,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tracing",
+ "types",
  "uuid",
  "validator",
 ]
@@ -6049,45 +6028,6 @@ checksum = "dc1b4cb0cc549fcf58d7dfc081778139b3d283a081644e833e84682ad71cea24"
 dependencies = [
  "unicode-ident",
 ]
-
-[[package]]
-name = "wasm-bindgen-test"
-version = "0.3.76"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0d555ca874445df8d314f94f5c948a4e74e5418f332c89f660a3d8310a96f4"
-dependencies = [
- "async-trait",
- "cast",
- "js-sys",
- "libm",
- "minicov",
- "nu-ansi-term",
- "num-traits",
- "oorandom",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test-macro",
- "wasm-bindgen-test-shared",
-]
-
-[[package]]
-name = "wasm-bindgen-test-macro"
-version = "0.3.76"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94eb68555b95bcea5e8cf4abe280b529049479fa995bfc23734af96a6aedc120"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "wasm-bindgen-test-shared"
-version = "0.2.126"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c31d56021e873866c968588ed85ccdf56db5c426e44afdb4618c39895104b920"
 
 [[package]]
 name = "wasm-streams"
