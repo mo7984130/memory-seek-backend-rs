@@ -1,7 +1,7 @@
 use std::env;
 
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
-use entities::photo::photo::{Entity, Model};
+use types::photo::photo::{Entity, Model};
 use rexif::{ExifData, ExifTag};
 use s3::{Bucket, Region, creds::Credentials};
 use sea_orm::{

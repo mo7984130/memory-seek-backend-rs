@@ -9,4 +9,4 @@ rexif = "0.7.5"
 s3.workspace = true
 sea-orm.workspace = true
 tokio.workspace = true
-entities = { path = "../../entities" }
+types = { path = "../../types", features = ["orm"] }

@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS photo_collection (
     description TEXT,
     photo_count BIGINT DEFAULT 0 NOT NULL,
     cover_file_id VARCHAR,
+    cover_photo_id BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -119,6 +120,7 @@ COMMENT ON COLUMN photo_collection.name IS '收藏夹名称';
 COMMENT ON COLUMN photo_collection.description IS '收藏夹详细描述';
 COMMENT ON COLUMN photo_collection.photo_count IS '逻辑字段：统计该收藏夹下的图片总数';
 COMMENT ON COLUMN photo_collection.cover_file_id IS '收藏夹封面图的文件ID';
+COMMENT ON COLUMN photo_collection.cover_photo_id IS '收藏夹封面图的照片ID';
 COMMENT ON COLUMN photo_collection.created_at IS '创建时间';
 COMMENT ON COLUMN photo_collection.updated_at IS '更新时间';
 
