@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::ext::TraceExt;
+use crate::ext::error_ext::TraceExt;
 use deadpool_redis::{Connection, Pool, PoolError};
 use indexmap::IndexMap;
 use redis::{AsyncCommands, FromRedisValue, ToSingleRedisArg};

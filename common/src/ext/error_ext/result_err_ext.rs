@@ -1,6 +1,6 @@
 use crate::{
     error::AppError,
-    ext::{log_err_with_err, log_warn_with_err},
+    ext::error_ext::{log_err_with_err, log_warn_with_err},
 };
 use std::fmt::Debug;
 
@@ -80,6 +80,27 @@ impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
     }
 }
 
+pub trait ResultInspectErrAsync<T, E> {
+    #[allow(async_fn_in_trait)]
+    async fn inspect_err_async<F, Fut>(self, f: F) -> Result<T, E>
+    where
+        F: FnOnce(&E) -> Fut + Send,
+        Fut: std::future::Future<Output = ()> + Send;
+}
+
+impl<T: Send, E: Send> ResultInspectErrAsync<T, E> for Result<T, E> {
+    async fn inspect_err_async<F, Fut>(self, f: F) -> Result<T, E>
+    where
+        F: FnOnce(&E) -> Fut + Send,
+        Fut: std::future::Future<Output = ()> + Send,
+    {
+        if let Err(e) = &self {
+            f(e).await;
+        }
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,33 +156,5 @@ mod tests {
             AppError::BadRequest("custom".into()),
         );
         assert!(matches!(result.unwrap_err(), AppError::BadRequest(_)));
-    }
-}
-
-pub trait ResultInspectErrAsync<T, E> {
-    fn inspect_err_async<F, Fut>(
-        self,
-        f: F,
-    ) -> impl std::future::Future<Output = Result<T, E>> + Send
-    where
-        F: FnOnce(&E) -> Fut + Send,
-        Fut: std::future::Future<Output = ()> + Send;
-}
-
-impl<T: Send, E: Send> ResultInspectErrAsync<T, E> for Result<T, E> {
-    fn inspect_err_async<F, Fut>(
-        self,
-        f: F,
-    ) -> impl std::future::Future<Output = Result<T, E>> + Send
-    where
-        F: FnOnce(&E) -> Fut + Send,
-        Fut: std::future::Future<Output = ()> + Send,
-    {
-        async move {
-            if let Err(e) = &self {
-                f(e).await;
-            }
-            self
-        }
     }
 }

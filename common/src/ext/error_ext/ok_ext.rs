@@ -3,6 +3,7 @@ pub trait OkExt<T, E> {
 }
 
 impl<T, E> OkExt<T, E> for T {
+    #[inline]
     fn to_ok(self) -> Result<T, E> {
         Ok(self)
     }

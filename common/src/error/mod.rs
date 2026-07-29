@@ -3,13 +3,14 @@
 /// 提供统一的应用层错误类型 `AppError`，涵盖认证、请求参数、资源不存在、权限不足等场景。
 mod app_error;
 pub use app_error::AppError;
-mod app_error_response;
-mod db_error;
-mod redis_error;
+pub mod app_error_response;
+pub mod cursor_error;
+pub mod db_error;
+pub mod redis_error;
 #[cfg(feature = "s3")]
-mod s3_error;
-mod serde_error;
+pub mod s3_error;
+pub mod serde_error;
 #[cfg(feature = "tokio")]
-mod tokio_error;
+pub mod tokio_error;
 
 pub type Result<T> = std::result::Result<T, AppError>;

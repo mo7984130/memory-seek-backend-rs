@@ -1,6 +1,6 @@
 use crate::{
     error::AppError,
-    ext::{log_err, log_warn},
+    ext::error_ext::{log_err, log_warn},
 };
 
 /// 为 `Option<T>` 提供到 `AppError` 的便捷转换方法

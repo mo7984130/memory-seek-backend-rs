@@ -1,4 +1,5 @@
-use crate::{error::AppError, ext::log_warn};
+use crate::error::AppError;
+use crate::ext::error_ext::log_warn;
 
 /// 为 `bool` 提供条件校验便捷方法
 pub trait BoolExt {
@@ -13,7 +14,7 @@ pub trait BoolExt {
     ///
     /// # 错误
     /// - `AppError::BadRequest`: 值为 `false` 时
-    fn ok_or_warn(
+    fn true_or_warn(
         self,
         reason: &'static str,
         context: &'static str,
@@ -41,7 +42,7 @@ impl BoolExt for bool {
     /// # 错误
     /// - `AppError::BadRequest`: 值为 `false` 时
     #[track_caller]
-    fn ok_or_warn(
+    fn true_or_warn(
         self,
         reason: &'static str,
         context: &'static str,
@@ -74,7 +75,7 @@ mod tests {
 
     #[test]
     fn true_ok_or_warn_returns_ok() {
-        let result = true.ok_or_warn(
+        let result = true.true_or_warn(
             "test_reason",
             "test_context",
             AppError::BadRequest("bad".into()),
@@ -84,7 +85,7 @@ mod tests {
 
     #[test]
     fn false_ok_or_warn_returns_err() {
-        let result = false.ok_or_warn(
+        let result = false.true_or_warn(
             "test_reason",
             "test_context",
             AppError::BadRequest("bad".into()),

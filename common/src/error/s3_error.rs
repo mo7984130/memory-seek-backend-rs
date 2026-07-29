@@ -1,4 +1,4 @@
-use s3::error::S3Error;
+pub use s3::error::S3Error;
 use std::fmt::Debug;
 
 use crate::{
