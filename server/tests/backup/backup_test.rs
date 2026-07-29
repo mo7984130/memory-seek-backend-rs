@@ -232,10 +232,7 @@ async fn test_backup_config_minimal_json() {
 async fn test_backup_config_from_test_config() {
     let cfg = test_config();
 
-    let backup_cfg = cfg.backup;
-    assert!(backup_cfg.is_some(), "测试配置应包含 backup 配置");
-
-    let config = backup_cfg.unwrap();
+    let config = &cfg.backup;
     assert_eq!(config.scheduled.schedule, "0 0 6 * * *");
     assert_eq!(config.scheduled.daily_retention, 7);
     assert!(config.tables.is_none());
@@ -324,8 +321,7 @@ async fn test_full_backup_flow() {
     let (user_id, _) = insert_test_user(&db, "full_flow").await;
 
     // 获取 S3 客户端
-    let s3_config = cfg.s3.expect("测试配置应包含 S3 配置");
-    let s3_client = Arc::new(oss::S3Client::new(&s3_config.to_oss_config()));
+    let s3_client = Arc::new(oss::S3Client::new(&cfg.s3.to_oss_config()));
 
     // 创建备份配置（只备份 auth_user 表）
     let backup_config = BackupConfig {
@@ -364,8 +360,7 @@ async fn test_backup_state_creation() {
     let cfg = test_config();
     let db = get_test_db().await;
 
-    let s3_config = cfg.s3.expect("测试配置应包含 S3 配置");
-    let s3_client = Arc::new(oss::S3Client::new(&s3_config.to_oss_config()));
+    let s3_client = Arc::new(oss::S3Client::new(&cfg.s3.to_oss_config()));
 
     let backup_config = BackupConfig {
         local_path: "/tmp/test-state-creation".to_string(),

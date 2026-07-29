@@ -16,6 +16,5 @@ pub async fn client_ip_middleware(request: Request, next: Next) -> Response {
         request.extensions_mut().insert(ip);
     }
 
-    let response = next.run(request).await;
-    response
+    next.run(request).await
 }

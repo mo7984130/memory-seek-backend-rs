@@ -1,8 +1,8 @@
 use crate::state::AppState;
 use axum::{extract::Request, middleware::Next, response::Response};
 use common::{error::AppError, ext::OptionExt};
-use entities::auth::user::UserId;
 use std::sync::Arc;
+use types::auth::user::UserId;
 
 /// 认证中间件
 ///

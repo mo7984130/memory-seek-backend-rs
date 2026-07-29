@@ -35,7 +35,7 @@ backup = { path = "../domains/backup", optional = true }
 # 基础设施
 common = { path = "../common" }
 constants = { path = "../domains/constants" }
-entities = { path = "../entities" }
+types = { path = "../types", features = ["orm"] }
 email = { path = "../libs/email" }
 config = { workspace = true }
 dotenvy = { workspace = true }
