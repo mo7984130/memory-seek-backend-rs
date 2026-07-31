@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use tracing::info;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
     EnvFilter, Registry,
@@ -12,12 +13,12 @@ use tracing_subscriber::{
 /// 参数 `cli_log_dir` 和 `cli_log_file` 为 CLI 传入值（优先级最高），
 /// 未提供时回退到环境变量 `MEMORY_SEEK_LOG_DIR` / `MEMORY_SEEK_LOG_FILE`，
 /// 最终默认 `/var/log/memory-seek-server` / `app.log`。
-pub fn init(cli_log_dir: Option<String>, cli_log_file: Option<String>) -> Option<WorkerGuard> {
-    let log_dir = cli_log_dir
+pub fn init(log_dir: Option<String>, log_file: Option<String>) -> WorkerGuard {
+    let log_dir = log_dir
         .map(PathBuf::from)
         .or_else(|| std::env::var("MEMORY_SEEK_LOG_DIR").ok().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("/var/log/memory-seek-server"));
-    let log_file_name = cli_log_file
+    let log_file_name = log_file
         .or_else(|| std::env::var("MEMORY_SEEK_LOG_FILE").ok())
         .unwrap_or_else(|| "app.log".to_string());
 
@@ -43,16 +44,7 @@ pub fn init(cli_log_dir: Option<String>, cli_log_file: Option<String>) -> Option
         registry.with(MetricsLayer::new())
     };
 
-    match registry.try_init() {
-        Ok(()) => {
-            tracing::info!("日志系统初始化完成");
-            Some(guard)
-        }
-        Err(_) => {
-            // 全局 subscriber 已存在，丢弃文件写入器避免无用线程
-            drop(guard);
-            tracing::warn!("日志系统已在启动阶段初始化，跳过文件日志配置");
-            None
-        }
-    }
+    registry.init();
+    info!("日志系统初始化完成");
+    guard
 }

@@ -1,7 +1,10 @@
 use crate::state::AppState;
 use axum::{extract::Request, middleware::Next, response::Response};
-use common::{error::AppError, ext::OptionExt};
-use std::sync::Arc;
+use common::{
+    error::AppError,
+    ext::{OptionExt, RedisExt, ResultErrExt},
+};
+use std::{str::FromStr, sync::Arc};
 use types::auth::user::UserId;
 
 /// 认证中间件
@@ -10,7 +13,7 @@ use types::auth::user::UserId;
 /// 验证 token 是否是该 user_id 的有效 token，然后将 user_id 注入到请求扩展中
 pub async fn auth_middleware(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
     // 从 Authorization header 中提取 Bearer user_id access_token
@@ -20,8 +23,7 @@ pub async fn auth_middleware(
     verify_token(&state, user_id, token).await?;
 
     // 将 user_id 注入到请求扩展中
-    let mut request = request;
-    request.extensions_mut().insert(UserId(user_id));
+    request.extensions_mut().insert(user_id);
 
     Ok(next.run(request).await)
 }
@@ -29,7 +31,7 @@ pub async fn auth_middleware(
 /// 从 Authorization header 中解析 user_id 和 access_token
 ///
 /// 格式: `Bearer user_id access_token`
-fn extract_bearer(request: &Request) -> Result<(i64, &str), AppError> {
+fn extract_bearer(request: &Request) -> Result<(UserId, &str), AppError> {
     let header = request
         .headers()
         .get("Authorization")
@@ -52,10 +54,11 @@ fn extract_bearer(request: &Request) -> Result<(i64, &str), AppError> {
         AppError::Unauthorized,
     )?;
 
-    let user_id: i64 = user_id_str.parse().map_err(|_| {
-        tracing::warn!(user_id_str, "user_id 不是有效的数字");
-        AppError::Unauthorized
-    })?;
+    let user_id = UserId::from_str(user_id_str).trace_err(
+        "auth_parse_error",
+        "认证的时候 user_id parse错误",
+        AppError::Unauthorized,
+    )?;
 
     Ok((user_id, token))
 }
@@ -63,26 +66,14 @@ fn extract_bearer(request: &Request) -> Result<(i64, &str), AppError> {
 /// 验证 token 是否是该 user_id 的有效 token
 ///
 /// 从 Redis 获取 `a:u:at:{user_id}` 对应的 token，与请求中的 token 比对
-async fn verify_token(state: &AppState, user_id: i64, token: &str) -> Result<(), AppError> {
+async fn verify_token(state: &AppState, user_id: UserId, token: &str) -> Result<(), AppError> {
     use constants::RedisKeys;
-    use deadpool_redis::redis::AsyncCommands;
 
-    let mut conn = state.redis.get().await.map_err(|e| {
-        tracing::error!("获取 Redis 连接失败: {}", e);
-        AppError::InternalServerError
-    })?;
-
-    let key = RedisKeys::auth::user_access_token(UserId(user_id));
-    let stored_token: Option<String> = conn.get(&key).await.map_err(|e| {
-        tracing::error!("查询 Redis token 失败: {}", e);
-        AppError::InternalServerError
-    })?;
+    let key = RedisKeys::auth::user_access_token(user_id);
+    let stored_token: Option<String> = state.redis.get_as(&key).await?;
 
     match stored_token {
         Some(stored) if stored == token => Ok(()),
-        _ => {
-            tracing::warn!(user_id, "access_token 无效或已过期");
-            Err(AppError::Unauthorized)
-        }
+        _ => Err(AppError::Unauthorized),
     }
 }
