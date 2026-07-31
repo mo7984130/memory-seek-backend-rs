@@ -1,7 +1,9 @@
 use clap::Parser;
 use common::ext::ResultErrExt;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
 
 mod config;
 mod metrics;
@@ -46,11 +48,16 @@ async fn main() -> Result<(), common::error::AppError> {
     // 初始化应用（内部会初始化日志、数据库、Redis、metrics 等）
     let app_setup = AppSetup::init(&cfg).await?;
 
-    // 启动后台指标采集
+    // 创建全局取消令牌，用于通知所有后台任务退出
+    let cancel_token = CancellationToken::new();
+
+    // 启动后台指标采集（传入 cancel token，采集任务会在收到取消信号后退出）
     #[cfg(feature = "metrics")]
-    {
-        metrics::start_collector(app_setup.state.db.clone(), app_setup.state.redis.clone());
-    }
+    metrics::start_collector(
+        app_setup.state.db.clone(),
+        app_setup.state.redis.clone(),
+        cancel_token.child_token(),
+    );
 
     // 克隆 state 用于优雅关闭（router 会消费 app_setup.state）
     let graceful_state = app_setup.state.clone();
@@ -86,18 +93,28 @@ async fn main() -> Result<(), common::error::AppError> {
         .trace_internal_err("tcp_bind_err", "端口绑定失败")?;
     tracing::info!("Server listening on {}", cfg.server_addr());
 
-    let shutdown_signal = shutdown_signal(graceful_state);
+    let shutdown_signal = shutdown_signal(graceful_state, cancel_token);
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal)
         .await
         .trace_internal_err("server_err", "服务器运行异常")?;
 
+    tracing::info!("服务已完全关闭");
     Ok(())
 }
 
-/// 优雅关闭信号处理：等待 SIGINT/SIGTERM，停止备份调度器
-async fn shutdown_signal(_state: Arc<crate::state::AppState>) {
+/// 优雅关闭信号处理
+///
+/// 流程：
+/// 1. 等待 SIGINT 或 SIGTERM
+/// 2. 触发 CancellationToken 通知后台任务退出
+/// 3. 停止备份调度器（带超时）
+/// 4. 关闭数据库连接池
+/// 5. 关闭 Redis 连接池
+/// 6. _log_guard 在此函数返回后被 drop，自动 flush 日志文件
+async fn shutdown_signal(state: Arc<crate::state::AppState>, cancel_token: CancellationToken) {
+    // ---- 1. 等待 OS 信号 ----
     let sigint = async {
         tokio::signal::ctrl_c()
             .await
@@ -121,13 +138,45 @@ async fn shutdown_signal(_state: Arc<crate::state::AppState>) {
     #[cfg(not(unix))]
     sigint.await;
 
-    tracing::info!("收到关闭信号，开始优雅关闭");
+    tracing::info!("收到关闭信号，开始优雅关闭...");
 
+    // ---- 2. 通知所有后台任务退出 ----
+    cancel_token.cancel();
+    tracing::info!("已通知后台任务退出");
+
+    // 给后台任务一点时间响应取消信号
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // ---- 3. 停止备份调度器（带超时兜底） ----
     #[cfg(feature = "backup")]
     {
         tracing::info!("正在停止备份调度器...");
-        if let Err(e) = _state.backup_scheduler.stop().await {
-            tracing::error!("停止备份调度器失败: {}", e);
+        let stop_result =
+            tokio::time::timeout(Duration::from_secs(10), state.backup_scheduler.stop()).await;
+
+        match stop_result {
+            Ok(Ok(())) => tracing::info!("备份调度器已停止"),
+            Ok(Err(e)) => tracing::error!("停止备份调度器失败: {}", e),
+            Err(_) => tracing::error!("停止备份调度器超时"),
         }
     }
+
+    // ---- 4. 关闭数据库连接池 ----
+    tracing::info!("正在关闭数据库连接池...");
+    // close() 消费 self，需要从 Arc 中 clone 出一份来关闭
+    if let Err(e) = state.db.clone().close().await {
+        tracing::error!("关闭数据库连接池失败: {}", e);
+    } else {
+        tracing::info!("数据库连接池已关闭");
+    }
+
+    // ---- 5. 关闭 Redis 连接池 ----
+    tracing::info!("正在关闭 Redis 连接池...");
+    state.redis.close();
+    tracing::info!("Redis 连接池已关闭");
+
+    // ---- 6. 完成 ----
+    // _log_guard 在 main 中持有，此函数返回时不会被 drop。
+    // 日志 flush 在 _log_guard 被 drop（main 退出）时自动完成。
+    tracing::info!("优雅关闭完成，服务即将退出");
 }
