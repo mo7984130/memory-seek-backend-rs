@@ -4708,6 +4708,7 @@ dependencies = [
  "sysinfo 0.31.4",
  "tikv-jemallocator",
  "tokio",
+ "tokio-util",
  "tower",
  "tower-http",
  "tracing",

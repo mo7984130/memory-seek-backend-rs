@@ -19,6 +19,7 @@ face-engine = ["dep:insight-face-rs", "photo/face", "backup"]
 
 [dependencies]
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 axum = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
