@@ -14,5 +14,4 @@ pub fn collect_db_metrics(db: &DatabaseConnection) {
 
     gauge!("database.connections.active").set(size - idle);
     gauge!("database.connections.idle").set(idle);
-    gauge!("database.connections.waiting").set(0.0); // sqlx 不直接暴露等待数
 }
