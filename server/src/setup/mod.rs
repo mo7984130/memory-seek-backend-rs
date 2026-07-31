@@ -33,6 +33,7 @@ impl AppSetup {
             db: bases.db,
             redis: bases.redis,
             token_cipher: libs.token_cipher,
+            #[cfg(feature = "email")]
             email_client: libs.email_client,
             #[cfg(feature = "s3")]
             s3_client: libs.s3_client,

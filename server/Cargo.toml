@@ -9,9 +9,11 @@ path = "src/main.rs"
 
 [features]
 default = []
-auth = ["dep:auth"]
+auth = ["dep:auth", "email"]
 user = ["dep:user", "s3"]
 photo = ["dep:photo", "s3"]
+
+email = ["dep:email"]
 metrics = ["dep:metrics", "photo?/metrics"]
 s3 = ["dep:oss"]
 backup = ["dep:backup"]
@@ -37,7 +39,7 @@ backup = { path = "../domains/backup", optional = true }
 common = { path = "../common" }
 constants = { path = "../domains/constants" }
 types = { path = "../types", features = ["orm"] }
-email = { path = "../libs/email" }
+email = { path = "../libs/email", optional = true }
 config = { workspace = true }
 dotenvy = { workspace = true }
 clap = { workspace = true }

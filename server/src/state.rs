@@ -1,8 +1,11 @@
 use common::utils::TokenCipher;
 use deadpool_redis::Pool;
-use email::EmailClient;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+
+#[cfg(feature = "email")]
+use email::EmailClient;
+
 #[cfg(feature = "face-engine")]
 use std::sync::Mutex;
 
@@ -21,6 +24,8 @@ pub struct AppBases {
 // ============ Libs ============
 pub struct AppLibs {
     pub token_cipher: Arc<TokenCipher>,
+
+    #[cfg(feature = "email")]
     pub email_client: EmailClient,
 
     #[cfg(feature = "s3")]
@@ -32,12 +37,11 @@ pub struct AppLibs {
 
 // ============ AppState ============
 pub struct AppState {
-    #[allow(dead_code)]
     pub db: DatabaseConnection,
     pub redis: Pool,
-    #[allow(dead_code)]
     pub token_cipher: Arc<TokenCipher>,
-    #[allow(dead_code)]
+
+    #[cfg(feature = "email")]
     pub email_client: EmailClient,
 
     #[cfg(feature = "s3")]
