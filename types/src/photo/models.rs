@@ -30,6 +30,19 @@ crate::validated_newtype!(
     "评论内容不能超过1024个字符"
 );
 
+// ============================================================
+// PersonName — 校验型人物名称
+// ============================================================
+
+crate::validated_newtype!(
+    PersonName,
+    String,
+    64,
+    "photo/",
+    "人物名称不能为空",
+    "人物名称长度不能超过64个字符"
+);
+
 crate::in_dto!(UploadPhotoParam, "photo/", serialize, docs = "上传照片请求参数（文件的二进制数据由 multipart 单独传递）"; {
     /// 文件名
     #[validate(length(min = 1, max = 255, message = "文件名长度在 1 到 255 个字符"))]
@@ -142,6 +155,45 @@ mod tests {
         // Deref to &str
         let s: &str = &c;
         assert_eq!(s, "hello");
+    }
+
+    // ==================== PersonName construction ====================
+
+    #[test]
+    fn test_person_name_new_valid() {
+        let n = PersonName::new("Alice".to_string());
+        assert!(n.is_ok());
+    }
+
+    #[test]
+    fn test_person_name_new_empty() {
+        let n = PersonName::new("".to_string());
+        assert!(n.is_err());
+    }
+
+    #[test]
+    fn test_person_name_new_too_long() {
+        let n = PersonName::new("a".repeat(65));
+        assert!(n.is_err());
+    }
+
+    #[test]
+    fn test_person_name_new_exact_max() {
+        let n = PersonName::new("a".repeat(64));
+        assert!(n.is_ok());
+    }
+
+    #[test]
+    fn test_person_name_deref() {
+        let n = PersonName::new("Alice".to_string()).unwrap();
+        let s: &str = &n;
+        assert_eq!(s, "Alice");
+    }
+
+    #[test]
+    fn test_person_name_validate_is_noop() {
+        let n = PersonName::new("Alice".to_string()).unwrap();
+        assert!(n.validate().is_ok());
     }
 
     // ==================== UploadPhotoParam validation ====================

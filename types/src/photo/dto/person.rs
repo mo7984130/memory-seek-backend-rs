@@ -1,3 +1,4 @@
+use crate::photo::models::PersonName;
 use crate::photo::person::PersonId;
 
 crate::in_dto!(PersonCursorParam, "photo/", serde_default; {
@@ -37,8 +38,7 @@ crate::in_dto!(PersonPhotoCursorParam, "photo/", docs = "人物照片游标参�
 });
 
 crate::in_dto!(RenamePersonParam, "photo/", docs = "重命名人物参数"; {
-    #[validate(length(min = 1, max = 64, message = "人物名称长度在 1 到 64 之间"))]
-    pub new_name: String,
+    pub new_name: PersonName,
 });
 
 crate::in_dto!(MergePersonParam, "photo/", docs = "合并人物参数"; {

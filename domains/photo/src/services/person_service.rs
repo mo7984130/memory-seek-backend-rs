@@ -22,6 +22,7 @@ use types::{
         dto::face::bbox_from_insight,
         dto::photo::PhotoView,
         face,
+        models::PersonName,
         person::{self, NewPerson, PersonId, PersonRecord},
         photo::PhotoId,
     },
@@ -168,16 +169,8 @@ impl PersonService {
     pub async fn rename_person(
         state: &PhotoState,
         person_id: PersonId,
-        new_name: String,
+        new_name: PersonName,
     ) -> Result<()> {
-        let new_name = new_name.trim();
-        if new_name.is_empty() {
-            return Err(AppError::bad_request("人物名称不能为空"));
-        }
-        if new_name.chars().count() > 64 {
-            return Err(AppError::bad_request("人物名称长度不能超过 64 个字符"));
-        }
-
         // 校验人物存在
         PersonMapper::query_by_id(&state.db, person_id)
             .await?
@@ -187,7 +180,7 @@ impl PersonService {
                 AppError::not_found("人物不存在"),
             )?;
 
-        PersonMapper::rename(&state.db, person_id, new_name.to_string())
+        PersonMapper::rename(&state.db, person_id, new_name.into_inner())
             .await?
             .no_zero_or_warn(
                 "person_rename_fail",
