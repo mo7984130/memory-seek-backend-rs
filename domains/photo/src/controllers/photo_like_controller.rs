@@ -14,12 +14,10 @@ use common::{
 };
 use types::{
     auth::user::UserId,
-    photo::{models::LikedPhotosQuery, photo::PhotoId},
+    photo::{dto::photo::PhotoView, models::LikedPhotosQuery, photo::PhotoId},
 };
 
-use crate::{
-    models::photo::PhotoResult, services::photo_like_service::PhotoLikeService, state::PhotoState,
-};
+use crate::{services::photo_like_service::PhotoLikeService, state::PhotoState};
 use common::traits::controller::ControllerRouter;
 
 pub struct PhotoLikeController;
@@ -73,7 +71,7 @@ impl PhotoLikeController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(query): ValidatedQuery<LikedPhotosQuery>,
-    ) -> Result<R<CursorPage<PhotoResult, String>>> {
+    ) -> Result<R<CursorPage<PhotoView, String>>> {
         let size = query.size.unwrap_or(20).min(100);
         let cursor = query
             .cursor

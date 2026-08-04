@@ -25,6 +25,7 @@ use types::auth::user::{self, UserId};
 use types::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
 };
+use types::photo::ImageToken;
 use types::user::UserInfo;
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
@@ -184,9 +185,8 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     .await?;
 
     // 加密头像file_id
-    let avatar_token = state
-        .token_cipher
-        .encrypt_avatar_token(user.avatar_file_id.as_deref());
+    let avatar_token =
+        ImageToken::encrypt_avatar_token(&state.token_cipher, user.avatar_file_id.as_deref());
 
     metrics_success!();
     info!(status="success", user_id = %user.id, username = %updated_user.username, "用户登录成功");

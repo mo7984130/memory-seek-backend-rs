@@ -12,19 +12,22 @@ use common::{
     Result,
     ext::{ResultErrExt, ResultRExt},
     extractors::{ValidatedJson, ValidatedQuery},
-    models::{CursorPage, ImageToken, TimeIdCursor},
+    models::{CursorPage, TimeIdCursor},
     traits::controller::ControllerRouter,
 };
 use common::{ext::OptionExt, r::R};
 use types::auth::user::UserId;
-use types::photo::photo::PhotoId;
+use types::photo::{
+    ImageToken,
+    dto::photo::{PhotoCursorParam, PhotoView},
+    models::{DeletePhotosParam, ExistsByMd5BatchParam},
+    photo::PhotoId,
+};
 
 use crate::{
-    models::photo::{PhotoCursorParam, PhotoResult},
     services::photo_service::{ImageDownloadData, PhotoService},
     state::PhotoState,
 };
-use types::photo::models::{DeletePhotosParam, ExistsByMd5BatchParam};
 
 pub struct PhotoController;
 
@@ -52,7 +55,7 @@ impl PhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         mut multipart: Multipart,
-    ) -> Result<R<PhotoResult>> {
+    ) -> Result<R<PhotoView>> {
         let field = multipart
             .next_field()
             .await
@@ -80,7 +83,7 @@ impl PhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(query): ValidatedQuery<PhotoCursorParam>,
-    ) -> Result<R<CursorPage<PhotoResult, String>>> {
+    ) -> Result<R<CursorPage<PhotoView, String>>> {
         let PhotoCursorParam {
             cursor,
             size,

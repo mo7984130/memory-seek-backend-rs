@@ -3,12 +3,6 @@ use crate::{
         collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
         photo_mapper::PhotoMapper,
     },
-    models::{
-        collection::{
-            CollectionPhotoAddBatchResult, CollectionPhotoRemoveBatchResult, PhotoCollectionResult,
-        },
-        photo::PhotoResult,
-    },
     services::photo_service::PhotoService,
     state::PhotoState,
 };
@@ -21,7 +15,15 @@ use common::{
 };
 use types::{
     auth::user::UserId,
-    photo::{collection::CollectionId, models::PhotoIds, photo::PhotoId},
+    photo::{
+        collection::CollectionId,
+        dto::collection::{
+            CollectionBriefView, CollectionPhotoAddBatchResult, CollectionPhotoRemoveBatchResult,
+        },
+        dto::photo::PhotoView,
+        models::PhotoIds,
+        photo::PhotoId,
+    },
 };
 
 pub(crate) struct CollectionPhotoService;
@@ -29,11 +31,12 @@ pub(crate) struct CollectionPhotoService;
 // 查询
 impl CollectionPhotoService {
     /// 获取包含指定照片的所有收藏夹
+    #[tracing::instrument(skip_all)]
     pub async fn get_collections_by_photo(
         state: &PhotoState,
         user_id: UserId,
         photo_id: PhotoId,
-    ) -> Result<Vec<PhotoCollectionResult>> {
+    ) -> Result<Vec<CollectionBriefView>> {
         metrics_group!();
 
         let collection_ids =
@@ -48,20 +51,21 @@ impl CollectionPhotoService {
         let collections = CollectionMapper::query_by_ids(&state.db, &collection_ids)
             .await?
             .into_iter()
-            .map(PhotoCollectionResult::from)
+            .map(CollectionBriefView::from)
             .collect();
 
         metrics_success!();
         Ok(collections)
     }
 
+    #[tracing::instrument(name = "get_collection_photos", skip_all)]
     pub async fn get_photos(
         state: &PhotoState,
         user_id: UserId,
         collection_id: CollectionId,
         cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
-    ) -> Result<CursorPage<PhotoResult, String>> {
+    ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
         let photo_ids = CollectionPhotoMapper::query_photo_id_by_collection_id(
@@ -105,6 +109,7 @@ impl CollectionPhotoService {
 
 // 添加
 impl CollectionPhotoService {
+    #[tracing::instrument(name = "add_collection_photos", skip_all)]
     pub async fn add_photos(
         state: &PhotoState,
         user_id: UserId,
@@ -151,6 +156,7 @@ impl CollectionPhotoService {
 
 // 删除
 impl CollectionPhotoService {
+    #[tracing::instrument(name = "remove_collection_photos", skip_all)]
     pub async fn remove_photos(
         state: &PhotoState,
         user_id: UserId,

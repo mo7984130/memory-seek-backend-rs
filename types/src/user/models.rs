@@ -1,9 +1,6 @@
 //! 用户相关类型定义
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::ops::Deref;
-use validator::Validate;
 
 use super::validators::*;
 use crate::auth::user::UserId;
@@ -12,65 +9,16 @@ use crate::auth::user::UserId;
 // UserIds — 校验型用户 ID 批量列表
 // ============================================================
 
-/// 用户 ID 批量列表，构造即保证：非空，且不超过 1024 个
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(try_from = "Vec<UserId>", into = "Vec<UserId>")]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(type = "Array<UserId>"))]
-pub struct UserIds(Vec<UserId>);
+crate::validated_newtype!(
+    UserIds,
+    Vec<UserId>,
+    1024,
+    "user/",
+    "用户ID列表不能为空",
+    "用户数量不能超过1024"
+);
 
-impl UserIds {
-    pub const MAX_COUNT: usize = 1024;
-
-    pub fn new(ids: Vec<UserId>) -> Result<Self, &'static str> {
-        if ids.is_empty() {
-            return Err("用户ID列表不能为空");
-        }
-        if ids.len() > Self::MAX_COUNT {
-            return Err("用户数量不能超过1024");
-        }
-        Ok(Self(ids))
-    }
-
-    pub fn into_inner(self) -> Vec<UserId> {
-        self.0
-    }
-}
-
-impl Deref for UserIds {
-    type Target = [UserId];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl TryFrom<Vec<UserId>> for UserIds {
-    type Error = &'static str;
-
-    fn try_from(ids: Vec<UserId>) -> Result<Self, Self::Error> {
-        Self::new(ids)
-    }
-}
-
-impl From<UserIds> for Vec<UserId> {
-    fn from(ids: UserIds) -> Self {
-        ids.0
-    }
-}
-
-impl Validate for UserIds {
-    fn validate(&self) -> Result<(), validator::ValidationErrors> {
-        Ok(())
-    }
-}
-
-/// 用户信息（返回给前端）
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserInfo {
+crate::out_dto!(UserInfo, "user/", Debug; {
     /// 用户ID
     pub id: UserId,
 
@@ -88,92 +36,34 @@ pub struct UserInfo {
 
     /// 创建时间
     pub created_at: DateTime<Utc>,
-}
+});
 
-/// 用户详情响应
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GetUserResponse {
-    /// 用户信息
-    pub user: UserInfo,
-}
-
-/// 更新用户资料请求
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateUserRequest {
-    /// 昵称
-    pub nickname: Option<String>,
-
-    /// 头像令牌
-    pub avatar_token: Option<String>,
-}
-
-/// 更新用户资料响应
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateUserResponse {
-    /// 用户信息
-    pub user: UserInfo,
-}
-
-/// 修改密码请求
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangePasswordParam {
+crate::in_dto!(ChangePasswordParam, "user/", serialize; {
     #[validate(custom(function = "validate_password"))]
     pub old_password: String,
 
     #[validate(custom(function = "validate_password"))]
     pub new_password: String,
-}
+});
 
-/// 修改昵称请求
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangeNicknameParam {
+crate::in_dto!(ChangeNicknameParam, "user/", serialize; {
     #[validate(
         length(min = 1, max = 20, message = "昵称长度在 1 到 20 个字符"),
         custom(function = "validate_normal_char")
     )]
     pub new_nickname: String,
-}
+});
 
-/// 批量获取用户信息请求
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct GetUserInfoBatchParam {
+crate::in_dto!(GetUserInfoBatchParam, "user/", serialize; {
     pub user_ids: UserIds,
-}
+});
 
-/// 邀请码响应
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InviterCodeResult {
+crate::out_dto!(InviterCodeView, "user/", rename = "InviterCode"; {
     pub inviter_code: String,
     pub expire_at: DateTime<Utc>,
-}
+});
 
-/// 更新头像请求参数（文件二进制数据由 multipart 单独传递）
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Validate, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateAvatarParam {
+crate::in_dto!(UpdateAvatarParam, "user/", serialize, docs = "更新头像请求参数（文件二进制数据由 multipart 单独传递）"; {
     /// 文件名
     #[validate(length(min = 1, max = 255, message = "文件名不能为空"))]
     pub file_name: String,
@@ -181,22 +71,18 @@ pub struct UpdateAvatarParam {
     /// 文件 MIME 类型
     #[validate(length(min = 1, max = 100, message = "文件类型不能为空"))]
     pub content_type: String,
-}
+});
 
-/// 用户信息响应（批量查询返回）
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserInfoResult {
+crate::out_dto!(UserBriefView, "user/", rename = "UserBrief"; {
     pub user_id: UserId,
     pub nickname: String,
     pub avatar_token: Option<String>,
-}
+});
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use validator::Validate;
 
     #[test]
     fn test_user_ids_new_valid() {

@@ -13,8 +13,8 @@ use types::auth::user::UserId;
 use crate::UserState;
 use crate::services as user_service;
 use types::user::{
-    ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeResult,
-    UpdateAvatarParam, UserInfo, UserInfoResult,
+    ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
+    UpdateAvatarParam, UserBriefView, UserInfo,
 };
 
 /// 用户模块 HTTP 控制器，处理用户相关的 API 请求
@@ -72,7 +72,7 @@ impl UserController {
     async fn generate_inviter_code(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<InviterCodeResult>, AppError> {
+    ) -> Result<R<InviterCodeView>, AppError> {
         user_service::generate_inviter_code(&state, user_id)
             .await
             .to_r_ok()
@@ -193,7 +193,7 @@ impl UserController {
     async fn get_user_info_batch(
         State(state): State<Arc<UserState>>,
         ValidatedJson(req): ValidatedJson<GetUserInfoBatchParam>,
-    ) -> Result<R<Vec<Option<UserInfoResult>>>, AppError> {
+    ) -> Result<R<Vec<Option<UserBriefView>>>, AppError> {
         user_service::get_user_info_batch(&state, req)
             .await
             .to_r_ok()

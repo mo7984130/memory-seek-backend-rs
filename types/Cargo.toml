@@ -28,8 +28,9 @@ serde_json = { workspace = true, optional = true }
 chrono = { workspace = true }
 validator = { workspace = true }
 thiserror = { workspace = true }
+derive_more = { workspace = true }
 
-ts-rs = { version = "10", features = ["chrono-impl"], optional = true }
+ts-rs = { workspace = true, optional = true }
 
 sea-orm = { workspace = true, features = ["sqlx-postgres", "macros"], optional = true }
 sqlx = { workspace = true, optional = true }
@@ -39,8 +40,3 @@ insight-face-rs = { workspace = true, features = ["pgvector"], optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
-
-[[bin]]
-name = "export-ts"
-path = "src/bin/export_ts.rs"
-required-features = ["ts"]

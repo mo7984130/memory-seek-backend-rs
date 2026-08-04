@@ -4,11 +4,9 @@ use axum::{Router, extract::State, routing::get};
 use common::Result;
 use common::ext::ResultRExt;
 use common::r::R;
+use types::photo::dto::timeline_stat::MonthStat;
 
-use crate::{
-    models::timeline_stat::MonthStat, services::timeline_stat_service::TimelineStatService,
-    state::PhotoState,
-};
+use crate::{services::timeline_stat_service::TimelineStatService, state::PhotoState};
 
 pub struct TimelineStatController;
 

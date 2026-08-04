@@ -1,9 +1,9 @@
-use common::models::ImageToken;
 use common::utils::TokenCipher;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use types::auth::user::UserId;
-use types::user::UserInfoResult;
+use types::photo::ImageToken;
+use types::user::UserBriefView;
 
 /// 用户信息数据库查询结果（后端内部使用）
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
@@ -15,14 +15,14 @@ pub struct UserInfoRow {
 }
 
 /// 将数据库查询结果转换为 API 响应类型，对头像文件 ID 进行加密
-pub fn user_info_result_from_dto(dto: UserInfoRow, token_cipher: &TokenCipher) -> UserInfoResult {
+pub fn user_brief_view_from_dto(dto: UserInfoRow, token_cipher: &TokenCipher) -> UserBriefView {
     let avatar_token = dto.avatar_file_id.as_ref().and_then(|key| {
         token_cipher
             .encrypt(&ImageToken::thumbnail(key.clone()), Some(key))
             .ok()
     });
 
-    UserInfoResult {
+    UserBriefView {
         user_id: UserId(dto.user_id),
         nickname: dto.nickname,
         avatar_token,
@@ -46,7 +46,7 @@ mod tests {
             nickname: "Alice".to_string(),
             avatar_file_id: Some("file123".to_string()),
         };
-        let vo = user_info_result_from_dto(dto, &cipher);
+        let vo = user_brief_view_from_dto(dto, &cipher);
         assert_eq!(vo.user_id, UserId(42));
         assert_eq!(vo.nickname, "Alice");
         assert!(vo.avatar_token.is_some());
@@ -60,7 +60,7 @@ mod tests {
             nickname: "Bob".to_string(),
             avatar_file_id: None,
         };
-        let vo = user_info_result_from_dto(dto, &cipher);
+        let vo = user_brief_view_from_dto(dto, &cipher);
         assert_eq!(vo.user_id, UserId(1));
         assert_eq!(vo.nickname, "Bob");
         assert!(vo.avatar_token.is_none());

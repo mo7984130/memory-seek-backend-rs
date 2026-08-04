@@ -35,6 +35,8 @@ sqlx.version = "=0.8.6"
 pgvector = "=0.4.1"
 chrono = { version = "0.4.44", features = ["serde"] }
 thiserror = "2.0.18"
+derive_more = { version = "1", default-features = false, features = ["from", "into", "display", "deref"] }
+ts-rs = { version = "12", features = ["chrono-impl", "no-serde-warnings"] }
 bcrypt = "0.19.0"
 argon2 = { version = "0.5", features = ["std"] }
 password-hash = "0.5"
@@ -69,7 +71,7 @@ metrics = "0.24.3"
 
 # HTTP & S3
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
-s3 = { package = "rust-s3", version = "0.37", default-features = false, features = ["tokio-rustls-tls"] }
+s3 = { package = "rust-s3", version = "0.37", default-features = false, features = ["tokio-rustls-tls", "fail-on-err"] }
 bytes = "1.10"
 axum-client-ip = "1.3.1"
 
@@ -83,7 +85,7 @@ wiremock = "0.6"
 
 indexmap = "2.14.0"
 
-insight-face-rs = { version = "1.6.1" , features = ["pgvector"] }
+insight-face-rs = { version = "2.0.0" , features = ["pgvector"] }
 
 
 # Backup

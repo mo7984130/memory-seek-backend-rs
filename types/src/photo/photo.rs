@@ -1,104 +1,13 @@
-use std::fmt;
-use std::str::FromStr;
-
-use serde::de::{self, Visitor};
-use serde::{Deserialize, Deserializer, Serialize};
-
-#[cfg(feature = "ts")]
-use ts_rs::TS;
-
-use crate::error::ParseIdError;
-
 // ============================================================
 // PhotoId
 // ============================================================
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
-#[cfg_attr(feature = "ts", derive(TS))]
-#[cfg_attr(feature = "ts", ts(type = "string"))]
-pub struct PhotoId(pub i64);
-
-/// 序列化为字符串（如 "42"），而非数字
-impl Serialize for PhotoId {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0.to_string())
-    }
-}
-
-/// 反序列化时同时接受字符串 ("42") 和数字 (42)
-impl<'de> Deserialize<'de> for PhotoId {
-    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        struct PhotoIdVisitor;
-
-        impl<'de> Visitor<'de> for PhotoIdVisitor {
-            type Value = PhotoId;
-
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a photo ID as a number or string")
-            }
-
-            fn visit_i64<E: de::Error>(self, v: i64) -> Result<PhotoId, E> {
-                Ok(PhotoId(v))
-            }
-
-            fn visit_u64<E: de::Error>(self, v: u64) -> Result<PhotoId, E> {
-                Ok(PhotoId(v as i64))
-            }
-
-            fn visit_str<E: de::Error>(self, v: &str) -> Result<PhotoId, E> {
-                v.parse::<i64>()
-                    .map(PhotoId)
-                    .map_err(|_| de::Error::custom("PhotoId 格式错误"))
-            }
-        }
-
-        d.deserialize_any(PhotoIdVisitor)
-    }
-}
-
-impl From<i64> for PhotoId {
-    fn from(id: i64) -> Self {
-        Self(id)
-    }
-}
-
-impl From<PhotoId> for i64 {
-    fn from(id: PhotoId) -> Self {
-        id.0
-    }
-}
-
-impl fmt::Display for PhotoId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for PhotoId {
-    type Err = ParseIdError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<i64>()
-            .map(PhotoId)
-            .map_err(|_| ParseIdError("无效 photo_id"))
-    }
-}
+crate::id_type!(PhotoId, "photo/");
 
 impl PhotoId {
     pub fn parse_from_str_or_none(s: &str) -> Option<Self> {
         let id = s.parse::<i64>().ok()?;
         Some(Self(id))
-    }
-}
-
-// ============================================================
-// SeaORM 支持（仅 orm feature）
-// ============================================================
-
-#[cfg(feature = "orm")]
-impl From<PhotoId> for sea_orm::Value {
-    fn from(val: PhotoId) -> Self {
-        sea_orm::Value::BigInt(Some(val.0))
     }
 }
 

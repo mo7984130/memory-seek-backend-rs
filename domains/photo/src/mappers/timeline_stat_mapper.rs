@@ -8,9 +8,7 @@ use sea_orm::{
     entity::prelude::DateTimeUtc,
     sea_query::{Alias, CaseStatement, Expr, Func, OnConflict, SimpleExpr},
 };
-use types::photo::timeline_stat::*;
-
-use crate::models::timeline_stat::MonthStat;
+use types::photo::{dto::timeline_stat::MonthStat, timeline_stat::*};
 
 pub(crate) struct TimelineStatMapper;
 

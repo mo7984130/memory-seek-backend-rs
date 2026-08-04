@@ -2,55 +2,31 @@
 
 use super::validators::*;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use validator::Validate;
 
-use crate::auth::user::UserId;
-
-/// 登录请求
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Validate, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LoginRequest {
+crate::in_dto!(LoginRequest, "auth/", serialize; {
     #[validate(custom(function = "validate_account"))]
     pub account: String,
 
     #[validate(custom(function = "validate_password"))]
     pub password: String,
-}
+});
 
-/// 登录响应
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LoginResponse {
+crate::out_dto!(LoginResponse, "auth/"; {
     pub user: crate::user::models::UserInfo,
     pub access_token: String,
     pub access_token_expire_at: DateTime<Utc>,
     pub refresh_token: String,
     pub refresh_token_expire_at: DateTime<Utc>,
-}
+});
 
-/// Token 刷新响应
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RefreshAccessTokenResponse {
+crate::out_dto!(RefreshAccessTokenResponse, "auth/"; {
     /// 访问令牌
     pub access_token: String,
     /// 访问令牌过期时间
     pub access_token_expire_at: DateTime<Utc>,
-}
+});
 
-/// 注册请求
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Validate, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RegisterRequest {
+crate::in_dto!(RegisterRequest, "auth/", serialize; {
     /// 用户名
     #[validate(custom(function = "validate_username"))]
     pub username: String,
@@ -74,51 +50,19 @@ pub struct RegisterRequest {
     /// 邮箱验证码
     #[validate(length(min = 6, max = 6, message = "邮箱验证码长度为6个字符"))]
     pub email_verify_code: String,
-}
+});
 
-/// 注册响应
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RegisterResponse {
-    /// 用户ID
-    pub user_id: UserId,
-
-    /// 访问令牌
-    pub access_token: String,
-
-    /// 访问令牌过期时间
-    pub access_token_expire_at: DateTime<Utc>,
-}
-
-/// 发送邮箱验证码请求
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Validate, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SendEmailCodeRequest {
+crate::in_dto!(SendEmailCodeRequest, "auth/", serialize; {
     /// 邮箱
     #[validate(custom(function = "validate_email"))]
     pub email: String,
-}
-
-/// 发送邮箱验证码响应
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SendEmailCodeResponse {
-    /// 是否成功
-    pub success: bool,
-
-    /// 消息
-    pub message: String,
-}
+});
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::user::UserId;
+    use validator::Validate;
 
     // ==================== LoginRequest validation ====================
 

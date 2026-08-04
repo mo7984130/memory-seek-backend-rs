@@ -1,42 +1,8 @@
-use std::fmt;
-
-use serde::{Deserialize, Serialize};
-
 // ============================================================
 // CollectionPhotoId
 // ============================================================
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
-pub struct CollectionPhotoId(pub i64);
-
-impl From<i64> for CollectionPhotoId {
-    fn from(id: i64) -> Self {
-        Self(id)
-    }
-}
-
-impl From<CollectionPhotoId> for i64 {
-    fn from(id: CollectionPhotoId) -> Self {
-        id.0
-    }
-}
-
-impl fmt::Display for CollectionPhotoId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-// ============================================================
-// SeaORM 支持（仅 orm feature）
-// ============================================================
-
-#[cfg(feature = "orm")]
-impl From<CollectionPhotoId> for sea_orm::Value {
-    fn from(val: CollectionPhotoId) -> Self {
-        sea_orm::Value::BigInt(Some(val.0))
-    }
-}
+crate::id_type!(CollectionPhotoId, "photo/");
 
 // ============================================================
 // SeaORM 实体（仅 orm feature）

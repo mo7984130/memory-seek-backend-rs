@@ -2,20 +2,20 @@ use std::pin::Pin;
 
 use bytes::Bytes;
 use chrono::Utc;
-use common::error::s3_error::S3Error;
 use common::{
     error::AppError,
     ext::{
         BoolExt, CacheExtension, OkExt, OptionExt, ResultErrExt, ResultInspectErrAsync, ToErr,
-        TraceExt, log_warn,
+        log_warn,
     },
     metrics_group, metrics_name, metrics_success,
-    models::{CursorPage, ImageToken, ImageTokenType, TimeIdCursor},
+    models::{CursorPage, TimeIdCursor},
     timed,
     utils::{DbUtils, FileValidator, MetricsTimerExt},
 };
 use constants::RedisKeys;
 use futures::Stream;
+use oss::OssError;
 use sea_orm::entity::prelude::DateTimeUtc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use tracing::instrument;
@@ -28,11 +28,14 @@ use crate::{
         photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper,
         timeline_stat_mapper::TimelineStatMapper,
     },
-    models::photo::{PageDirection, PhotoResult},
     state::PhotoState,
 };
 use common::Result;
-use types::photo::models::{DeletePhotosParam, ExistsByMd5BatchParam, UploadPhotoParam};
+use types::photo::{
+    ImageToken, ImageTokenType,
+    dto::photo::{PageDirection, PhotoView},
+    models::{DeletePhotosParam, ExistsByMd5BatchParam, UploadPhotoParam},
+};
 
 use types::{
     auth::user::UserId,
@@ -48,7 +51,7 @@ impl PhotoService {
         state: &PhotoState,
         user_id: UserId,
         photo_ids: &[PhotoId],
-    ) -> Result<Vec<PhotoResult>> {
+    ) -> Result<Vec<PhotoView>> {
         let (photos_result, liked_photo_ids_result) = tokio::join!(
             state.redis.get_or_load_batch(
                 photo_ids,
@@ -67,7 +70,7 @@ impl PhotoService {
             .map(|p| {
                 let liked = liked_photo_ids.contains(&p.id);
                 let file_id = p.file_id.clone();
-                PhotoResult::from(p)
+                PhotoView::from(p)
                     .with_liked(liked)
                     .with_tokens(&file_id, &state.token_cipher)
             })
@@ -83,7 +86,7 @@ impl PhotoService {
         size: u64,
         direction: PageDirection,
         anchor_time: Option<DateTimeUtc>,
-    ) -> Result<CursorPage<PhotoResult, String>> {
+    ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
         // 获取photo_ids
@@ -144,7 +147,7 @@ impl PhotoService {
         user_id: UserId,
         file_data: Bytes,
         param: UploadPhotoParam,
-    ) -> Result<PhotoResult> {
+    ) -> Result<PhotoView> {
         metrics_group!();
 
         // 效验文件
@@ -203,7 +206,11 @@ impl PhotoService {
         .timed(metrics_name!("db_insert"))
         .await
         .inspect_err_async(|_| async {
-            let _ = state.s3_client.delete(&file_id).await.trace();
+            let _ = state
+                .s3_client
+                .delete(&file_id)
+                .await
+                .map_err(AppError::from);
         })
         .await?;
 
@@ -214,7 +221,7 @@ impl PhotoService {
         metrics_success!();
 
         let file_id = photo.file_id.clone();
-        PhotoResult::from(PhotoRecord::from(photo))
+        PhotoView::from(PhotoRecord::from(photo))
             .with_tokens(&file_id, &state.token_cipher)
             .to_ok()
     }
@@ -315,7 +322,7 @@ pub(crate) enum ImageDownloadData {
     /// 原始图片，以流式返回，动态内容类型
     Original {
         /// 图片字节流
-        stream: Pin<Box<dyn Stream<Item = std::result::Result<Bytes, S3Error>> + Send>>,
+        stream: Pin<Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>>,
         /// 根据文件扩展名推断的 MIME 类型
         content_type: &'static str,
     },
@@ -343,10 +350,16 @@ impl PhotoService {
                             "token不包含裁剪信息",
                         )?;
                         let size = 200;
-                        format!(
-                            "image/crop,x_{},y_{},w_{},h_{}/resize,w_{}/format,webp",
-                            bbox.x, bbox.y, bbox.w, bbox.h, size
-                        )
+                        let (width, height) =
+                            PhotoMapper::query_dimensions_by_file_id(&state.db, &token.file_id)
+                                .await?
+                                .ok_or_warn_bad_request(
+                                    "photo_not_found",
+                                    "裁剪图片不存在",
+                                    "照片不存在",
+                                )?;
+                        let (x, y, w, h) = bbox.to_pixel_rect(width as u32, height as u32);
+                        format!("image/crop,x_{x},y_{y},w_{w},h_{h}/resize,w_{size}/format,webp")
                     }
                     _ => unreachable!(),
                 };
@@ -367,8 +380,8 @@ impl PhotoService {
                     .await?;
 
                 let stream: Pin<
-                    Box<dyn Stream<Item = std::result::Result<Bytes, S3Error>> + Send>,
-                > = Box::pin(stream_resp.bytes);
+                    Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>,
+                > = Box::pin(stream_resp);
 
                 let content_type = Self::get_image_content_type(&token.file_id);
                 metrics_success!();

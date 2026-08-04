@@ -1,17 +1,6 @@
 use std::sync::Arc;
 
-use crate::{
-    models::{
-        collection::{
-            CollectionPhotoAddBatchParam, CollectionPhotoAddBatchResult,
-            CollectionPhotoCursorPageParam, CollectionPhotoRemoveBatchParam,
-            CollectionPhotoRemoveBatchResult, PhotoCollectionResult,
-        },
-        photo::PhotoResult,
-    },
-    services::collection_photo_service::CollectionPhotoService,
-    state::PhotoState,
-};
+use crate::{services::collection_photo_service::CollectionPhotoService, state::PhotoState};
 use axum::{
     Extension, Router,
     extract::State,
@@ -27,7 +16,17 @@ use common::{
 };
 use types::{
     auth::user::UserId,
-    photo::{collection::CollectionId, models::PhotoIds, photo::PhotoId},
+    photo::{
+        collection::CollectionId,
+        dto::collection::{
+            CollectionBriefView, CollectionPhotoAddBatchParam, CollectionPhotoAddBatchResult,
+            CollectionPhotoCursorPageParam, CollectionPhotoRemoveBatchParam,
+            CollectionPhotoRemoveBatchResult,
+        },
+        dto::photo::PhotoView,
+        models::PhotoIds,
+        photo::PhotoId,
+    },
 };
 
 pub struct CollectionPhotoController;
@@ -58,7 +57,7 @@ impl CollectionPhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
-    ) -> Result<R<Vec<PhotoCollectionResult>>> {
+    ) -> Result<R<Vec<CollectionBriefView>>> {
         CollectionPhotoService::get_collections_by_photo(&state, user_id, photo_id)
             .await
             .to_r_ok()
@@ -86,7 +85,7 @@ impl CollectionPhotoController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedQuery(query): ValidatedQuery<CollectionPhotoCursorPageParam>,
-    ) -> Result<R<CursorPage<PhotoResult, String>>> {
+    ) -> Result<R<CursorPage<PhotoView, String>>> {
         let CollectionPhotoCursorPageParam { cursor, size } = query;
 
         let cursor = cursor.map(TimeIdCursor::<PhotoId>::decode).transpose()?;

@@ -11,15 +11,16 @@ use tokio::task::spawn_blocking;
 use tracing::info;
 
 use crate::UserState;
-use crate::models::{UserInfoRow, user_info_result_from_dto};
+use crate::models::{UserInfoRow, user_brief_view_from_dto};
 use common::error::AppError;
 use common::ext::{CacheExtension, OptionExt, RedisExt, ResultInspectErrAsync, TraceExt, log_err};
 use common::utils::{DbUtils, MetricsTimerExt};
 use common::utils::{FileValidator, rand_utils};
 use types::auth::user::{self, UserId};
+use types::photo::ImageToken;
 use types::user::{
-    ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeResult,
-    UpdateAvatarParam, UserInfo, UserInfoResult,
+    ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
+    UpdateAvatarParam, UserBriefView, UserInfo,
 };
 
 use crate::config::{
@@ -66,9 +67,10 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
 
     let user_record = user::UserRecord::from(user);
     let mut user_info = user::create_user_info(&user_record);
-    user_info.avatar_token = state
-        .token_cipher
-        .encrypt_avatar_token(user_record.avatar_file_id.as_deref());
+    user_info.avatar_token = ImageToken::encrypt_avatar_token(
+        &state.token_cipher,
+        user_record.avatar_file_id.as_deref(),
+    );
     Ok(user_info)
 }
 
@@ -90,7 +92,7 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
 pub async fn generate_inviter_code(
     state: &UserState,
     user_id: UserId,
-) -> Result<InviterCodeResult, AppError> {
+) -> Result<InviterCodeView, AppError> {
     metrics_group!();
 
     // 循环生成邀请码, 防止冲突
@@ -115,7 +117,7 @@ pub async fn generate_inviter_code(
 
             info!(status = "success", "生成邀请码成功");
 
-            return Ok(InviterCodeResult {
+            return Ok(InviterCodeView {
                 inviter_code: code,
                 expire_at: Utc::now() + Duration::try_seconds(INVITER_CODE_TTL_SECONDS).unwrap(),
             });
@@ -232,7 +234,11 @@ pub async fn update_avatar(
     .await
     // 如果更新数据库失败的话, 删除刚才上传的文件
     .inspect_err_async(|_| async {
-        let _ = state.s3_client.delete(&new_key).await.trace();
+        let _ = state
+            .s3_client
+            .delete(&new_key)
+            .await
+            .map_err(AppError::from);
     })
     .await?;
 
@@ -251,13 +257,11 @@ pub async fn update_avatar(
             .delete(&old_key)
             .timed(metrics_name!("s3_delete"))
             .await
-            .trace();
+            .map_err(AppError::from);
     }
 
     // 生成头像Token
-    let avatar_token = state
-        .token_cipher
-        .encrypt_avatar_token(Some(&new_key))
+    let avatar_token = ImageToken::encrypt_avatar_token(&state.token_cipher, Some(&new_key))
         .ok_or_warn(
             "encrypt_avatar_token_err",
             "加密头像Token错误",
@@ -416,7 +420,7 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<(), AppError> 
 pub async fn get_user_info_batch(
     state: &UserState,
     param: GetUserInfoBatchParam,
-) -> Result<Vec<Option<UserInfoResult>>, AppError> {
+) -> Result<Vec<Option<UserBriefView>>, AppError> {
     metrics_group!();
 
     let user_ids = param.user_ids.into_inner();
@@ -455,6 +459,6 @@ pub async fn get_user_info_batch(
 
     Ok(result
         .into_iter()
-        .map(|opt| opt.map(|dto| user_info_result_from_dto(dto, &state.token_cipher)))
+        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, &state.token_cipher)))
         .collect())
 }

@@ -14,16 +14,16 @@ use types::{auth::user::UserId, photo::photo::PhotoId};
 
 use crate::{
     mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper},
-    models::photo::PhotoResult,
     services::photo_service::PhotoService,
     state::PhotoState,
 };
+use types::photo::dto::photo::PhotoView;
 
 pub(crate) struct PhotoLikeService;
 
 // 创建
 impl PhotoLikeService {
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(name = "like_photo", skip_all)]
     pub async fn like(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
         metrics_group!();
 
@@ -65,7 +65,7 @@ impl PhotoLikeService {
         user_id: UserId,
         cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
-    ) -> Result<CursorPage<PhotoResult, String>> {
+    ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
         // 查询用户点赞的照片ID列表和点赞时间（多查一个用于判断 has_more）
@@ -124,7 +124,7 @@ impl PhotoLikeService {
 
 // 删除
 impl PhotoLikeService {
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(name = "unlike_photo", skip_all)]
     pub async fn unlike(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
         metrics_group!();
 

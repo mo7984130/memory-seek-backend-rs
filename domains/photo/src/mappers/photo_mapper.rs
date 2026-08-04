@@ -10,9 +10,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
-use types::photo::photo::*;
-
-use crate::models::photo::PageDirection;
+use types::photo::{dto::photo::PageDirection, photo::*};
 
 pub(crate) struct PhotoMapper;
 
@@ -194,6 +192,47 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    /// 按 ID 集合查询照片分页 ID(游标过滤, 按 created_at/id 倒序)
+    pub async fn query_ids_page_by_ids(
+        db: &impl ConnectionTrait,
+        photo_ids: &[PhotoId],
+        cursor: Option<&TimeIdCursor<PhotoId>>,
+        size: u64,
+    ) -> Result<Vec<PhotoId>> {
+        if photo_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut query = Entity::find()
+            .filter(Column::Id.is_in(photo_ids.iter().copied()))
+            .order_by_desc(Column::CreatedAt)
+            .order_by_desc(Column::Id)
+            .limit(size);
+
+        if let Some(c) = cursor {
+            query = query.filter(
+                sea_orm::Condition::any()
+                    .add(Column::CreatedAt.lt(c.created_at))
+                    .add(
+                        sea_orm::Condition::all()
+                            .add(Column::CreatedAt.eq(c.created_at))
+                            .add(Column::Id.lt(c.id)),
+                    ),
+            );
+        }
+
+        query
+            .select_only()
+            .column(Column::Id)
+            .into_tuple::<i64>()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(PhotoId)
+            .collect::<Vec<_>>()
+            .to_ok()
+    }
+
     #[expect(dead_code)]
     pub async fn query_by_id(
         db: &impl ConnectionTrait,
@@ -204,6 +243,22 @@ impl PhotoMapper {
             .one(db)
             .await?
             .map(PhotoRecord::from)
+            .to_ok()
+    }
+
+    /// 根据文件 ID 查询图片宽高（裁剪 token 归一化坐标换算用）
+    pub async fn query_dimensions_by_file_id(
+        db: &impl ConnectionTrait,
+        file_id: &str,
+    ) -> Result<Option<(i32, i32)>> {
+        Entity::find()
+            .select_only()
+            .column(Column::Width)
+            .column(Column::Height)
+            .filter(Column::FileId.eq(file_id))
+            .into_tuple::<(i32, i32)>()
+            .one(db)
+            .await?
             .to_ok()
     }
 

@@ -1,28 +1,8 @@
-use std::fmt;
-
 // ============================================================
 // TimelineStatId
 // ============================================================
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub struct TimelineStatId(pub String);
-
-impl fmt::Display for TimelineStatId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-// ============================================================
-// SeaORM 支持（仅 orm feature）
-// ============================================================
-
-#[cfg(feature = "orm")]
-impl From<TimelineStatId> for sea_orm::Value {
-    fn from(val: TimelineStatId) -> Self {
-        sea_orm::Value::String(Some(Box::new(val.0)))
-    }
-}
+crate::id_type!(TimelineStatId, String, "photo/");
 
 // ============================================================
 // SeaORM 实体（仅 orm feature）

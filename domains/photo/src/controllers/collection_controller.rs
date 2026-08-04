@@ -12,13 +12,15 @@ use common::{
     r::R,
     traits::controller::ControllerRouter,
 };
-use types::{auth::user::UserId, photo::collection::CollectionId};
-
-use crate::{
-    models::collection::{CollectionCreateParam, CollectionResult, CollectionUpdateParam},
-    services::collection_service::CollectionService,
-    state::PhotoState,
+use types::{
+    auth::user::UserId,
+    photo::{
+        collection::CollectionId,
+        dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView},
+    },
 };
+
+use crate::{services::collection_service::CollectionService, state::PhotoState};
 
 pub struct CollectionController;
 
@@ -42,7 +44,7 @@ impl CollectionController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedJson(data): ValidatedJson<CollectionCreateParam>,
-    ) -> Result<R<CollectionResult>> {
+    ) -> Result<R<CollectionView>> {
         CollectionService::create_collection(&state, user_id, data.name, data.description)
             .await
             .to_r_ok()
@@ -54,7 +56,7 @@ impl CollectionController {
     async fn get_list(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<Vec<CollectionResult>>> {
+    ) -> Result<R<Vec<CollectionView>>> {
         CollectionService::get_collection_list(&state, user_id)
             .await
             .to_r_ok()

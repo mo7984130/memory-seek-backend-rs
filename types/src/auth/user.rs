@@ -1,59 +1,8 @@
-use std::fmt;
-use std::str::FromStr;
-
-use serde::{Deserialize, Serialize};
-
-#[cfg(feature = "ts")]
-use ts_rs::TS;
-
-use crate::error::ParseIdError;
-
 // ============================================================
 // UserId
 // ============================================================
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts", derive(TS))]
-pub struct UserId(pub i64);
-
-impl From<i64> for UserId {
-    fn from(id: i64) -> Self {
-        Self(id)
-    }
-}
-
-impl From<UserId> for i64 {
-    fn from(id: UserId) -> Self {
-        id.0
-    }
-}
-
-impl fmt::Display for UserId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for UserId {
-    type Err = ParseIdError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<i64>()
-            .map(UserId)
-            .map_err(|_| ParseIdError("无效 user_id"))
-    }
-}
-
-// ============================================================
-// SeaORM 支持（仅 orm feature）
-// ============================================================
-
-#[cfg(feature = "orm")]
-impl From<UserId> for sea_orm::Value {
-    fn from(val: UserId) -> Self {
-        sea_orm::Value::BigInt(Some(val.0))
-    }
-}
+crate::id_type!(UserId, "user/");
 
 // ============================================================
 // SeaORM 实体（仅 orm feature）

@@ -3,7 +3,6 @@ use crate::{
         comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper,
         photo_mapper::PhotoMapper,
     },
-    models::comment::{HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES, PhotoCommentResult},
     state::PhotoState,
 };
 use common::{
@@ -17,20 +16,25 @@ use common::{
 };
 use types::{
     auth::user::UserId,
-    photo::{comment::CommentId, models::CommentContent, photo::PhotoId},
+    photo::{
+        comment::CommentId,
+        dto::comment::{CommentView, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES},
+        models::CommentContent,
+        photo::PhotoId,
+    },
 };
 
 pub(crate) struct CommentService;
 
 // 创建
 impl CommentService {
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(name = "publish_comment", skip_all)]
     pub async fn publish(
         state: &PhotoState,
         photo_id: PhotoId,
         user_id: UserId,
         content: CommentContent,
-    ) -> Result<PhotoCommentResult> {
+    ) -> Result<CommentView> {
         metrics_group!();
 
         let comment = timed!("db_transaction", {
@@ -51,7 +55,7 @@ impl CommentService {
         })?;
 
         metrics_success!();
-        PhotoCommentResult::from(comment).to_ok()
+        CommentView::from(comment).to_ok()
     }
 }
 
@@ -60,13 +64,14 @@ impl CommentService {}
 
 // 查询
 impl CommentService {
+    #[tracing::instrument(name = "get_comment_cursor_page", skip_all)]
     pub async fn get_cursor_page(
         state: &PhotoState,
         photo_id: PhotoId,
         user_id: UserId,
         cursor: Option<TimeIdCursor<CommentId>>,
         size: u64,
-    ) -> Result<CursorPage<PhotoCommentResult, String>> {
+    ) -> Result<CursorPage<CommentView, String>> {
         metrics_group!();
 
         // 如果是第一次(不带Cursor)获取的话, 展示热门评论
@@ -129,7 +134,7 @@ impl CommentService {
             .into_iter()
             .map(|c| {
                 let is_liked = is_like.contains(&c.id);
-                PhotoCommentResult::from(c).with_liked(is_liked)
+                CommentView::from(c).with_liked(is_liked)
             })
             .collect();
 
@@ -145,6 +150,7 @@ impl CommentService {
 
 // 删除
 impl CommentService {
+    #[tracing::instrument(name = "delete_comment", skip_all)]
     pub async fn delete(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
         metrics_group!();
 

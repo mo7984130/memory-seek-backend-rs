@@ -1,39 +1,44 @@
-use common::models::ImageToken;
-use img_url_generator::TokenCipher;
-use sea_orm::entity::prelude::DateTimeUtc;
-use serde::{Deserialize, Serialize};
-#[cfg(test)]
-use types::photo::photo::PhotoId;
-use types::photo::{collection::CollectionRecord, models::PhotoIds};
-use validator::Validate;
+use chrono::{DateTime, Utc};
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionResult {
+#[cfg(feature = "orm")]
+use crate::photo::collection::CollectionRecord;
+use crate::photo::models::PhotoIds;
+#[cfg(test)]
+use crate::photo::photo::PhotoId;
+#[cfg(feature = "orm")]
+use crate::photo::ImageToken;
+#[cfg(feature = "orm")]
+use common::utils::TokenCipher;
+
+crate::out_dto!(CollectionView, "photo/", rename = "Collection"; {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub photo_count: i64,
     pub cover_token: Option<String>,
-    pub cover_photo_id: Option<i64>,
-    pub created_at: DateTimeUtc,
-}
+    /// 封面照片 ID（字符串）
+    pub cover_photo_id: Option<String>,
+    pub created_at: DateTime<Utc>,
+});
 
-impl From<CollectionRecord> for CollectionResult {
+#[cfg(feature = "orm")]
+impl From<CollectionRecord> for CollectionView {
     fn from(record: CollectionRecord) -> Self {
-        CollectionResult {
+        CollectionView {
             id: record.id.0.to_string(),
             name: record.name,
             description: record.description,
             photo_count: record.photo_count,
             cover_token: record.cover_file_id,
-            cover_photo_id: record.cover_photo_id,
+            cover_photo_id: record.cover_photo_id.map(|id| id.to_string()),
             created_at: record.created_at,
         }
     }
 }
 
-impl CollectionResult {
+#[cfg(feature = "orm")]
+impl CollectionView {
     pub fn with_generate_cover_token(mut self, cipher: &TokenCipher) -> Self {
         self.cover_token = self.cover_token.as_ref().and_then(|fid| {
             cipher
@@ -44,40 +49,34 @@ impl CollectionResult {
     }
 }
 
-/// 照片所属收藏夹的简要信息
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct PhotoCollectionResult {
+crate::out_dto!(CollectionBriefView, "photo/", rename = "CollectionBrief"; {
     pub id: String,
     pub name: String,
-}
+});
 
-impl From<CollectionRecord> for PhotoCollectionResult {
+#[cfg(feature = "orm")]
+impl From<CollectionRecord> for CollectionBriefView {
     fn from(record: CollectionRecord) -> Self {
-        PhotoCollectionResult {
+        CollectionBriefView {
             id: record.id.0.to_string(),
             name: record.name,
         }
     }
 }
 
-#[derive(Debug, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionCreateParam {
+crate::in_dto!(CollectionCreateParam, "photo/"; {
     #[validate(length(min = 1, max = 128, message = "相册名长度在 1 到 128 个字符"))]
     pub name: String,
     #[validate(length(max = 512, message = "描述长度不能超过 512 个字符"))]
     pub description: Option<String>,
-}
+});
 
-#[derive(Debug, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionUpdateParam {
+crate::in_dto!(CollectionUpdateParam, "photo/"; {
     #[validate(length(min = 1, max = 128, message = "相册名长度在 1 到 128 个字符"))]
     pub name: Option<String>,
     #[validate(length(max = 512, message = "描述长度不能超过 512 个字符"))]
     pub description: Option<String>,
-}
+});
 
 pub const COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 
@@ -85,43 +84,36 @@ fn collection_photo_cursor_page_default_size() -> u64 {
     COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }
 
-/// 收藏夹照片游标参数（`cursor` 为 `TimeIdCursor<PhotoId>` 的 Base64 编码）
-#[derive(Debug, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionPhotoCursorPageParam {
+crate::in_dto!(CollectionPhotoCursorPageParam, "photo/", docs = "收藏夹照片游标参数（cursor 为 TimeIdCursor<PhotoId> 的 Base64 编码）"; {
     pub cursor: Option<String>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "collection_photo_cursor_page_default_size")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size: u64,
-}
+});
 
-#[derive(Debug, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionPhotoAddBatchParam {
+crate::in_dto!(CollectionPhotoAddBatchParam, "photo/"; {
     pub photo_ids: PhotoIds,
-}
+});
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionPhotoAddBatchResult {
+crate::out_dto!(CollectionPhotoAddBatchResult, "photo/", Default; {
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub new_photo_count: u64,
-}
+});
 
-#[derive(Debug, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionPhotoRemoveBatchParam {
+crate::in_dto!(CollectionPhotoRemoveBatchParam, "photo/"; {
     pub photo_ids: PhotoIds,
-}
+});
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct CollectionPhotoRemoveBatchResult {
+crate::out_dto!(CollectionPhotoRemoveBatchResult, "photo/", Default; {
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub removed_photo_count: u64,
-}
+});
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use validator::Validate;
 
     #[test]
     fn test_collection_create_param_valid() {

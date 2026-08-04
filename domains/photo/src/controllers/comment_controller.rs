@@ -15,11 +15,14 @@ use common::{
 };
 use types::{
     auth::user::UserId,
-    photo::{comment::CommentId, photo::PhotoId},
+    photo::{
+        comment::CommentId,
+        dto::comment::{CommentCursorPageParam, CommentPublishParam, CommentView},
+        photo::PhotoId,
+    },
 };
 
 use crate::{
-    models::comment::{CommentCursorPageParam, CommentPublishParam, PhotoCommentResult},
     services::{comment_like_service::CommentLikeService, comment_service::CommentService},
     state::PhotoState,
 };
@@ -54,7 +57,7 @@ impl CommentController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
         ValidatedJson(param): ValidatedJson<CommentPublishParam>,
-    ) -> Result<R<PhotoCommentResult>> {
+    ) -> Result<R<CommentView>> {
         CommentService::publish(&state, photo_id, user_id, param.content)
             .await
             .to_r_ok()
@@ -71,7 +74,7 @@ impl CommentController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
         ValidatedQuery(param): ValidatedQuery<CommentCursorPageParam>,
-    ) -> Result<R<CursorPage<PhotoCommentResult, String>>> {
+    ) -> Result<R<CursorPage<CommentView, String>>> {
         let CommentCursorPageParam { cursor, size } = param;
 
         let cursor = cursor.map(TimeIdCursor::<CommentId>::decode).transpose()?;

@@ -1,6 +1,5 @@
 use crate::mappers::collection_mapper::CollectionMapper;
 use crate::mappers::collection_photo_mapper::CollectionPhotoMapper;
-use crate::models::collection::CollectionResult;
 use crate::state::PhotoState;
 use common::Result;
 use common::error::AppError;
@@ -9,15 +8,17 @@ use common::utils::DbUtils;
 use common::{metrics_group, metrics_name, metrics_success, utils::MetricsTimerExt};
 use types::auth::user::UserId;
 use types::photo::collection::CollectionId;
+use types::photo::dto::collection::CollectionView;
 
 pub(crate) struct CollectionService;
 
 // 查询
 impl CollectionService {
+    #[tracing::instrument(skip_all)]
     pub async fn get_collection_list(
         state: &PhotoState,
         user_id: UserId,
-    ) -> Result<Vec<CollectionResult>> {
+    ) -> Result<Vec<CollectionView>> {
         metrics_group!();
 
         // 获取用户收藏夹
@@ -26,9 +27,9 @@ impl CollectionService {
             .await?;
 
         // 组装结果
-        let result: Vec<CollectionResult> = collections
+        let result: Vec<CollectionView> = collections
             .into_iter()
-            .map(|c| CollectionResult::from(c).with_generate_cover_token(&state.token_cipher))
+            .map(|c| CollectionView::from(c).with_generate_cover_token(&state.token_cipher))
             .collect();
 
         metrics_success!();
@@ -38,12 +39,13 @@ impl CollectionService {
 
 // 添加
 impl CollectionService {
+    #[tracing::instrument(skip_all)]
     pub async fn create_collection(
         state: &PhotoState,
         user_id: UserId,
         name: String,
         description: Option<String>,
-    ) -> Result<CollectionResult> {
+    ) -> Result<CollectionView> {
         metrics_group!();
 
         let collection = CollectionMapper::insert(&state.db, user_id, name, description)
@@ -51,12 +53,13 @@ impl CollectionService {
             .await?;
 
         metrics_success!();
-        CollectionResult::from(collection).to_ok()
+        CollectionView::from(collection).to_ok()
     }
 }
 
 // 修改
 impl CollectionService {
+    #[tracing::instrument(skip_all)]
     pub async fn update_collection_info(
         state: &PhotoState,
         user_id: UserId,
@@ -83,6 +86,7 @@ impl CollectionService {
 
 // 删除
 impl CollectionService {
+    #[tracing::instrument(skip_all)]
     pub async fn delete_collection(
         state: &PhotoState,
         user_id: UserId,
