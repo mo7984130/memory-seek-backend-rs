@@ -242,12 +242,30 @@ CREATE INDEX IF NOT EXISTS idx_photo_face_person_id ON photo_face(person_id);
 
 -- 人物表
 CREATE TABLE IF NOT EXISTS photo_person (
-    id            BIGSERIAL PRIMARY KEY,
-    name          VARCHAR(32) NULL,
-    name_initials VARCHAR(32) NOT NULL,
-    cover_face_id BIGINT NULL,
-    centroid      vector(512) NOT NULL,
-    face_count    BIGINT NOT NULL DEFAULT 0,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id             BIGSERIAL PRIMARY KEY,
+    name           VARCHAR(32) NULL,
+    name_initials  VARCHAR(32) NULL,
+    cover_face_id  BIGINT NULL,
+    cover_photo_id BIGINT NOT NULL,
+    cover_file_id  VARCHAR(255) NOT NULL,
+    cover_bbox     JSONB NOT NULL,
+    centroid       vector(512) NOT NULL,
+    face_count     BIGINT NOT NULL DEFAULT 0,
+    weight         DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+COMMENT ON TABLE photo_person IS '人物表(聚类结果)';
+COMMENT ON COLUMN photo_person.id IS '主键ID';
+COMMENT ON COLUMN photo_person.name IS '人物名称';
+COMMENT ON COLUMN photo_person.name_initials IS '姓名首字母';
+COMMENT ON COLUMN photo_person.cover_face_id IS '封面人脸ID(cluster 内 score 最高)';
+COMMENT ON COLUMN photo_person.cover_photo_id IS '封面人脸所属照片ID(冗余自 photo_face.photo_id, 消除封面查询 N+1)';
+COMMENT ON COLUMN photo_person.cover_file_id IS '封面照片 file_id(冗余自 photo_photo.file_id, 消除封面查询 N+1)';
+COMMENT ON COLUMN photo_person.cover_bbox IS '封面人脸归一化 bbox(冗余自 photo_face.bbox, 消除封面查询 N+1)';
+COMMENT ON COLUMN photo_person.centroid IS 'score 加权向量和 Σ(score*embedding), 未归一化, 读取时 normalize(增量维护)';
+COMMENT ON COLUMN photo_person.face_count IS '人脸数量';
+COMMENT ON COLUMN photo_person.weight IS '该人物所有人脸 score 之和(增量维护质心的权重)';
+COMMENT ON COLUMN photo_person.created_at IS '创建时间';
+COMMENT ON COLUMN photo_person.updated_at IS '更新时间';

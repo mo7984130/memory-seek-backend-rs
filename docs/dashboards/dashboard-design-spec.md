@@ -8,9 +8,12 @@
 
 ### 指标命名
 
-- 使用冒号 `:` 分隔层级：`module:operation:target:metric_type`
-- 计时指标使用 `duration_quantile`（summary 预计算分位数）
-- 示例：`auth:login:duration_quantile`、`user:get_user_info:db_query:duration_quantile`
+- 使用冒号 `:` 分隔层级：`{crate}:{func}:{step}`
+- 计时指标为原生 histogram，Prometheus 导出为 `{name}_bucket` / `{name}_sum` / `{name}_count`
+- 示例：`auth:login:attempts`、`auth:login:duration_seconds`、`user:get_user_info:db_query`
+- 系统指标使用点号层级，导出后变为下划线（`system.cpu.usage` → `system_cpu_usage`）
+
+完整清单见 [metrics-naming.md](./metrics-naming.md)。
 
 ### Row 标题
 
@@ -52,6 +55,9 @@
 
 ## Panel 配置
 
+> 耗时指标的原始单位为**秒**（`MetricsTimer` 记录 `as_secs_f64`），
+> 面板以 `ms` 为单位展示，因此所有耗时表达式末尾追加 `* 1000`。
+
 ### 耗时面板 (timeseries)
 
 ```json
@@ -77,14 +83,19 @@
     }
   },
   "targets": [
-    { "expr": "<metric>:duration_quantile{quantile=\"0.5\"}", "legendFormat": "P50" },
-    { "expr": "<metric>:duration_quantile{quantile=\"0.95\"}", "legendFormat": "P95" },
-    { "expr": "<metric>:duration_quantile{quantile=\"0.99\"}", "legendFormat": "P99" }
+    { "expr": "histogram_quantile(0.5, sum(rate(<metric>:duration_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "P50" },
+    { "expr": "histogram_quantile(0.95, sum(rate(<metric>:duration_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "P95" },
+    { "expr": "histogram_quantile(0.99, sum(rate(<metric>:duration_seconds_bucket[5m])) by (le)) * 1000", "legendFormat": "P99" }
   ]
 }
 ```
 
 ### 子步骤耗时面板 (timeseries - filled)
+
+子步骤耗时有两类命名：
+
+1. `.timed(metrics_name!("step"))` 产生的 histogram：`{crate}:{func}:{step}`，查询 `<metric>:<step>_sum/_count`
+2. `timed!("step", ...)` 产生的 histogram：`{crate}:{func}:{step}:duration_seconds`，查询 `<metric>:<step>:duration_seconds_sum/_count`
 
 ```json
 {
@@ -103,7 +114,7 @@
     }
   },
   "targets": [
-    { "expr": "rate(<metric>:<step>:duration_quantile_sum[5m]) / rate(<metric>:<step>:duration_quantile_count[5m])", "legendFormat": "<步骤中文名>" }
+    { "expr": "rate(<metric>:<step>_sum[5m]) / rate(<metric>:<step>_count[5m]) * 1000", "legendFormat": "<步骤中文名>" }
   ]
 }
 ```
@@ -159,8 +170,8 @@
 
 | 指标类型 | 单位 | 说明 |
 |----------|------|------|
-| 耗时 | `ms` | 毫秒 |
-| 子步骤耗时 | `ms` | 毫秒 |
+| 耗时 | `ms` | 原始值（秒）经 `* 1000` 换算 |
+| 子步骤耗时 | `ms` | 原始值（秒）经 `* 1000` 换算 |
 | QPS | `reqps` | 每秒请求数 |
 | 成功率 | `percent` | 百分比（不设上限） |
 
@@ -248,3 +259,5 @@ Auth 模块监控
 - 2026-06-19: 默认时间范围改为 5 分钟，刷新间隔改为 5 秒
 - 2026-06-19: 移除并发度相关设计（底部汇总区、并发度 target/override、单位/阈值定义）
 - 2026-06-19: 明确单行布局（6+6+12 同一 y 值），Panel 标题去掉"与"，成功率阈值移至 override
+- 2026-08-01: 指标命名改为 `{crate}:{func}:{step}`，耗时改用原生 histogram
+  （`histogram_quantile` + `_bucket` / 平均耗时 `_sum / _count`），耗时单位换算 `* 1000`

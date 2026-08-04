@@ -1,5 +1,6 @@
 use clap::Parser;
 use common::ext::ResultErrExt;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -95,10 +96,13 @@ async fn main() -> Result<(), common::error::AppError> {
 
     let shutdown_signal = shutdown_signal(graceful_state, cancel_token);
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal)
-        .await
-        .trace_internal_err("server_err", "服务器运行异常")?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal)
+    .await
+    .trace_internal_err("server_err", "服务器运行异常")?;
 
     tracing::info!("服务已完全关闭");
     Ok(())

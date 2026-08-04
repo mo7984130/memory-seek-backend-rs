@@ -545,6 +545,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-cron-scheduler",
  "tracing",
@@ -968,7 +969,6 @@ dependencies = [
  "rand 0.10.2",
  "redis",
  "regex",
- "rust-s3",
  "sea-orm",
  "serde",
  "serde_json",
@@ -976,6 +976,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "ts-rs",
  "validator",
 ]
 
@@ -1380,11 +1381,32 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+dependencies = [
+ "derive_more-impl 1.0.0",
+]
+
+[[package]]
+name = "derive_more"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d751e9e49156b02b44f9c1815bcb94b984cdcc4396ecc32521c739452808b134"
 dependencies = [
- "derive_more-impl",
+ "derive_more-impl 2.1.1",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -2413,9 +2435,9 @@ dependencies = [
 
 [[package]]
 name = "insight-face-rs"
-version = "1.6.1"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4234814f5e98692e1d4b58bd857dbc465ce205c5db9f1e075aeddf8fcbb3e845"
+checksum = "56252201a764146abc2e84aa5cf15c3f1d285f4178ec96ca16abaa165223e43a"
 dependencies = [
  "image",
  "imageproc",
@@ -2424,6 +2446,7 @@ dependencies = [
  "ort",
  "pgvector",
  "serde",
+ "serde-big-array",
  "thiserror 2.0.18",
 ]
 
@@ -3250,6 +3273,8 @@ dependencies = [
  "reqwest",
  "rust-s3",
  "serde",
+ "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 
@@ -3402,6 +3427,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "petal-clustering"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65c8e67a7465f5f3b14fc47c99dfe154a6de9c29a96a908ecff40dfdbe5bc3c6"
+dependencies = [
+ "itertools 0.14.0",
+ "ndarray",
+ "num-traits",
+ "petal-neighbors",
+ "rayon",
+ "serde",
+ "succinct",
+]
+
+[[package]]
+name = "petal-neighbors"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16fd9983c4b760302fe9cee8ad204ee6555ed967df8fab30974138a001026c91"
+dependencies = [
+ "ndarray",
+ "num-traits",
+ "ordered-float 5.3.0",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "pgvector"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3430,11 +3482,14 @@ dependencies = [
  "md5",
  "metrics",
  "moka",
+ "ndarray",
  "once_cell",
  "oss",
+ "petal-clustering",
  "sea-orm",
  "serde",
  "serde_json",
+ "smallvec",
  "tokio",
  "tracing",
  "types",
@@ -4491,7 +4546,7 @@ dependencies = [
  "async-trait",
  "bigdecimal",
  "chrono",
- "derive_more",
+ "derive_more 2.1.1",
  "futures-util",
  "log",
  "ouroboros",
@@ -4602,6 +4657,15 @@ checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
  "serde_derive",
+]
+
+[[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -5133,6 +5197,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
+name = "succinct"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7798b62081a999bcf090b2f220fee8845dd1c6ffeb17e1bc6ca783825f62a418"
+dependencies = [
+ "byteorder",
+ "num-traits",
+]
+
+[[package]]
 name = "symlink"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5657,21 +5731,20 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "ts-rs"
-version = "10.1.0"
+version = "12.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e640d9b0964e9d39df633548591090ab92f7a4567bc31d3891af23471a3365c6"
+checksum = "756050066659291d47a554a9f558125db17428b073c5ffce1daf5dcb0f7231d8"
 dependencies = [
  "chrono",
- "lazy_static",
  "thiserror 2.0.18",
  "ts-rs-macros",
 ]
 
 [[package]]
 name = "ts-rs-macros"
-version = "10.1.0"
+version = "12.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e9d8656589772eeec2cf7a8264d9cda40fb28b9bc53118ceb9e8c07f8f38730"
+checksum = "38d90eea51bc7988ef9e674bf80a85ba6804739e535e9cab48e4bb34a8b652aa"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5703,6 +5776,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "common",
+ "derive_more 1.0.0",
  "insight-face-rs",
  "pgvector",
  "sea-orm",

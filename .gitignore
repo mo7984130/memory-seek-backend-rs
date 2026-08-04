@@ -1,5 +1,6 @@
 /target
 /models
+/bindings
 **/.DS_Store
 **/logs
 config.json
@@ -8,6 +9,7 @@ config.test.json
 !tests/load/config.test.json
 !tests/load/config/config.json
 !tests/load/config/config.yaml
+scripts
 .env
 .env.test
 memo.md
@@ -15,4 +17,7 @@ memo.md
 
 docs
 !docs/sql
-!docs/dashborads
+!docs/dashboards
+
+Dockerfile
+build.sh

@@ -72,7 +72,7 @@ impl AppConfig {
 
         let cfg = Config::builder()
             .add_source(File::with_name(&config_path))
-            .add_source(Environment::with_prefix("MEMORY_SEEK"))
+            .add_source(Environment::with_prefix("MEMORY_SEEK").separator("__"))
             .build()?;
 
         cfg.try_deserialize()
