@@ -1,0 +1,176 @@
+use common::{Result, ext::ToOk};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, sea_query::Expr,
+};
+use types::photo::{face::*, person::PersonId, photo::PhotoId};
+
+pub struct FaceMapper;
+
+// 创建
+impl FaceMapper {
+    pub async fn query_by_photo_id(
+        db: &impl ConnectionTrait,
+        photo_id: PhotoId,
+    ) -> Result<Vec<FaceRecord>> {
+        Entity::find()
+            .filter(Column::PhotoId.eq(photo_id))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(FaceRecord::try_from)
+            .collect()
+    }
+}
+
+// 修改
+impl FaceMapper {
+    pub async fn update_person_id(
+        db: &impl ConnectionTrait,
+        person_id: PersonId,
+        face_ids: impl IntoIterator<Item = FaceId>,
+    ) -> Result<u64> {
+        Entity::update_many()
+            .filter(Column::Id.is_in(face_ids))
+            .col_expr(Column::PersonId, Expr::value(person_id))
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
+
+    /// 清空所有人脸的 person_id(全量聚类重建前调用, 避免悬空引用)
+    pub async fn clear_person_id(db: &impl ConnectionTrait) -> Result<u64> {
+        Entity::update_many()
+            .col_expr(Column::PersonId, Expr::value(sea_orm::Value::BigInt(None)))
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
+
+    /// 修改单张人脸归属
+    pub async fn update_face_person_id(
+        db: &impl ConnectionTrait,
+        face_id: FaceId,
+        person_id: PersonId,
+    ) -> Result<u64> {
+        Entity::update_many()
+            .filter(Column::Id.eq(face_id))
+            .col_expr(Column::PersonId, Expr::value(person_id))
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
+
+    /// 将某人物下的全部人脸归属转移到另一人物(合并)
+    pub async fn move_person_faces(
+        db: &impl ConnectionTrait,
+        source_person_id: PersonId,
+        target_person_id: PersonId,
+    ) -> Result<u64> {
+        Entity::update_many()
+            .filter(Column::PersonId.eq(source_person_id))
+            .col_expr(Column::PersonId, Expr::value(target_person_id))
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
+
+    /// 清空某人物下所有人脸的归属(删除人物前调用, 避免悬空引用)
+    pub async fn clear_person_id_by_person(
+        db: &impl ConnectionTrait,
+        person_id: PersonId,
+    ) -> Result<u64> {
+        Entity::update_many()
+            .filter(Column::PersonId.eq(person_id))
+            .col_expr(Column::PersonId, Expr::value(sea_orm::Value::BigInt(None)))
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
+}
+
+// 查询
+impl FaceMapper {
+    /// 查询属于该人物的全部去重照片 ID(photo_face.person_id → photo_id)
+    pub async fn query_photo_ids_by_person_id(
+        db: &impl ConnectionTrait,
+        person_id: PersonId,
+    ) -> Result<Vec<PhotoId>> {
+        Entity::find()
+            .filter(Column::PersonId.eq(person_id))
+            .select_only()
+            .column(Column::PhotoId)
+            .distinct()
+            .into_tuple::<i64>()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(PhotoId)
+            .collect::<Vec<_>>()
+            .to_ok()
+    }
+
+    pub async fn query_by_id(db: &impl ConnectionTrait, id: FaceId) -> Result<Option<FaceRecord>> {
+        Entity::find()
+            .filter(Column::Id.eq(id))
+            .one(db)
+            .await?
+            .map(FaceRecord::try_from)
+            .transpose()
+    }
+
+    /// 按 ID 加行锁查询(`SELECT ... FOR UPDATE`, 供转移归属等读-改-写流程使用)
+    pub async fn query_by_id_for_update(
+        db: &impl ConnectionTrait,
+        face_id: FaceId,
+    ) -> Result<Option<FaceRecord>> {
+        Entity::find()
+            .filter(Column::Id.eq(face_id))
+            .lock_exclusive()
+            .one(db)
+            .await?
+            .map(FaceRecord::try_from)
+            .transpose()
+    }
+
+    /// 查询某人物下 score 最高的人脸(封面决策/封面回退用)
+    pub async fn query_top_score_by_person_id(
+        db: &impl ConnectionTrait,
+        person_id: PersonId,
+    ) -> Result<Option<FaceRecord>> {
+        Entity::find()
+            .filter(Column::PersonId.eq(person_id))
+            .order_by(Column::Score, Order::Desc)
+            .one(db)
+            .await?
+            .map(FaceRecord::try_from)
+            .transpose()
+    }
+
+    pub async fn query_all(db: &impl ConnectionTrait) -> Result<Vec<FaceRecord>> {
+        Entity::find()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(FaceRecord::try_from)
+            .collect()
+    }
+
+    /// 统计某人物的人脸数量
+    #[expect(dead_code)]
+    pub async fn count_by_person_id(db: &impl ConnectionTrait, person_id: PersonId) -> Result<u64> {
+        let count = Entity::find()
+            .filter(Column::PersonId.eq(person_id))
+            .count(db)
+            .await?;
+        Ok(count as u64)
+    }
+}
+
+// 删除
+impl FaceMapper {}

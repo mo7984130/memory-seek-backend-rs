@@ -8,3 +8,10 @@ pub(crate) mod timeline_stat_service;
 
 #[cfg(feature = "face")]
 pub(crate) mod face_service;
+#[cfg(feature = "face")]
+pub(crate) mod person_service;
+
+#[cfg(feature = "face")]
+pub(crate) mod embedding_math;
+#[cfg(feature = "face")]
+pub(crate) mod person_cover;

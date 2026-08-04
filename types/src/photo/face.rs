@@ -1,40 +1,8 @@
-use std::fmt;
-
 // ============================================================
 // FaceId
 // ============================================================
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
-pub struct FaceId(pub i64);
-
-impl From<i64> for FaceId {
-    fn from(id: i64) -> Self {
-        Self(id)
-    }
-}
-
-impl From<FaceId> for i64 {
-    fn from(id: FaceId) -> Self {
-        id.0
-    }
-}
-
-impl fmt::Display for FaceId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-// ============================================================
-// SeaORM 支持（仅 orm feature）
-// ============================================================
-
-#[cfg(feature = "orm")]
-impl From<FaceId> for sea_orm::Value {
-    fn from(val: FaceId) -> Self {
-        sea_orm::Value::BigInt(Some(val.0))
-    }
-}
+crate::id_type!(FaceId, "photo/");
 
 // ============================================================
 // SeaORM 实体（仅 face-engine feature）
@@ -52,8 +20,6 @@ mod entity {
     use super::*;
     use crate::photo::person::PersonId;
     use crate::photo::photo::PhotoId;
-
-    pub const TABLE_NAME: &str = "photo_face";
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "photo_face")]
@@ -79,12 +45,15 @@ mod entity {
     pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 
+    #[derive(Serialize)]
     pub struct FaceRecord {
         pub id: FaceId,
         pub photo_id: PhotoId,
         pub person_id: Option<PersonId>,
 
+        /// 归一化边界框,坐标范围 [0,1](insight-face-rs 2.x 起输出相对坐标)
         pub bbox: BoundingBox,
+        /// 归一化关键点(5 点),坐标范围 [0,1]
         pub landmarks: FaceLandmarks,
         pub score: f32,
 
@@ -119,7 +88,9 @@ mod entity {
     pub struct NewFaceRecord {
         pub photo_id: PhotoId,
         pub person_id: Option<PersonId>,
+        /// 归一化边界框,坐标范围 [0,1](直接透传检测结果)
         pub bbox: BoundingBox,
+        /// 归一化关键点(5 点),坐标范围 [0,1]
         pub landmarks: FaceLandmarks,
         pub score: f32,
         pub embedding: FaceEmbedding,

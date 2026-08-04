@@ -9,7 +9,9 @@ pub mod collection_photo_controller;
 pub mod comment_controller;
 pub mod comment_like_controller;
 #[cfg(feature = "face")]
-mod face_controller;
+pub mod face_controller;
+#[cfg(feature = "face")]
+pub mod person_controller;
 pub mod photo_controller;
 pub mod photo_like_controller;
 pub mod timeline_stat_controller;
@@ -19,6 +21,8 @@ use collection_photo_controller::CollectionPhotoController;
 use comment_controller::CommentController;
 #[cfg(feature = "face")]
 pub use face_controller::FaceController;
+#[cfg(feature = "face")]
+pub use person_controller::PersonController;
 use photo_controller::PhotoController;
 use photo_like_controller::PhotoLikeController;
 use timeline_stat_controller::TimelineStatController;
@@ -55,6 +59,8 @@ impl ControllerRouter for Controller {
 
         #[cfg(feature = "face")]
         let router = router.nest("/photo/face", FaceController::protected_routes());
+        #[cfg(feature = "face")]
+        let router = router.nest("/photo/person", PersonController::protected_routes());
 
         router
     }

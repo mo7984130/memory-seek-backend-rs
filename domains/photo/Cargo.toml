@@ -9,9 +9,11 @@ metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum"]
 file_validator = ["common/file_validator"]
 face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]
+# TypeScript 类型导出
+ts = ["types/ts", "common/ts"]
 
 [dependencies]
-common = { path = "../../common", features = ["validators", "file_validator", "metrics", "s3", "tokio"] }
+common = { path = "../../common", features = ["validators", "file_validator", "metrics", "tokio"] }
 constants = { path = "../constants" }
 
 oss = { path = "../../libs/oss" }
@@ -38,3 +40,6 @@ insight-face-rs = { workspace = true, optional = true }
 backup = { path = "../backup", optional = true }
 image.workspace = true
 types = { workspace = true, features = ["full"] }
+smallvec = "1.15.2"
+petal-clustering = "0.13.0"
+ndarray = "0.17.2"
