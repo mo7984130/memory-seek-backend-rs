@@ -20,6 +20,7 @@ use types::{
     photo::{
         ImageToken, PersonView,
         dto::face::bbox_from_insight,
+        dto::person::MergePersonParam,
         dto::photo::PhotoView,
         face,
         models::PersonName,
@@ -195,12 +196,12 @@ impl PersonService {
     #[tracing::instrument(skip_all)]
     pub async fn merge_person(
         state: &PhotoState,
-        source_person_id: PersonId,
-        target_person_id: PersonId,
+        param: MergePersonParam,
     ) -> Result<PersonView> {
-        if source_person_id == target_person_id {
-            return Err(AppError::bad_request("不能将人物合并到自身"));
-        }
+        let MergePersonParam {
+            source_person_id,
+            target_person_id,
+        } = param;
 
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {

@@ -76,9 +76,7 @@ impl PersonController {
         State(state): State<Arc<PhotoState>>,
         ValidatedJson(param): ValidatedJson<MergePersonParam>,
     ) -> Result<R<PersonView>> {
-        PersonService::merge_person(&state, param.source_person_id, param.target_person_id)
-            .await
-            .to_r_ok()
+        PersonService::merge_person(&state, param).await.to_r_ok()
     }
 }
 

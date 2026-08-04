@@ -41,7 +41,56 @@ crate::in_dto!(RenamePersonParam, "photo/", docs = "重命名人物参数"; {
     pub new_name: PersonName,
 });
 
-crate::in_dto!(MergePersonParam, "photo/", docs = "合并人物参数"; {
+/// 合并人物参数
+#[derive(Debug, serde::Deserialize, validator::Validate)]
+#[serde(rename_all = "camelCase", try_from = "MergePersonParamInner")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export, export_to = "photo/"))]
+pub struct MergePersonParam {
     pub source_person_id: PersonId,
     pub target_person_id: PersonId,
-});
+}
+
+/// 反序列化中间类型: 反序列化后经 `TryFrom` 校验跨字段关系
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MergePersonParamInner {
+    source_person_id: PersonId,
+    target_person_id: PersonId,
+}
+
+impl TryFrom<MergePersonParamInner> for MergePersonParam {
+    type Error = String;
+
+    fn try_from(inner: MergePersonParamInner) -> Result<Self, Self::Error> {
+        if inner.source_person_id == inner.target_person_id {
+            return Err("不能将人物合并到自身".to_string());
+        }
+        Ok(Self {
+            source_person_id: inner.source_person_id,
+            target_person_id: inner.target_person_id,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use validator::Validate;
+
+    #[test]
+    fn test_merge_person_param_deserialize_valid() {
+        let json = r#"{"sourcePersonId": 1, "targetPersonId": 2}"#;
+        let param: MergePersonParam = serde_json::from_str(json).unwrap();
+        assert_eq!(param.source_person_id, PersonId(1));
+        assert_eq!(param.target_person_id, PersonId(2));
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn test_merge_person_param_deserialize_self_merge_rejected() {
+        let json = r#"{"sourcePersonId": 1, "targetPersonId": 1}"#;
+        let result = serde_json::from_str::<MergePersonParam>(json);
+        assert!(result.is_err());
+    }
+}
