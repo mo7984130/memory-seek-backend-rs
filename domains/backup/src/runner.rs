@@ -1,3 +1,4 @@
+use crate::error::BackupError;
 use crate::exporter::CsvExporter;
 use crate::hasher::TableHasher;
 use crate::state::BackupState;
@@ -9,9 +10,7 @@ pub struct BackupRunner;
 
 impl BackupRunner {
     /// 获取需要备份的表名列表
-    async fn get_tables(
-        state: &BackupState,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn get_tables(state: &BackupState) -> Result<Vec<String>, BackupError> {
         if let Some(ref tables) = state.config.tables {
             return Ok(tables.clone());
         }
@@ -19,9 +18,7 @@ impl BackupRunner {
     }
 
     /// 定时调度备份：导出并保存到 daily / weekly / monthly，然后 GFS 清理
-    pub async fn execute_scheduled(
-        state: Arc<BackupState>,
-    ) -> Result<BackupResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult, BackupError> {
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
@@ -82,9 +79,7 @@ impl BackupRunner {
     }
 
     /// 手动备份：导出并保存到 manual 目录（永不清理）
-    pub async fn execute_manual(
-        state: Arc<BackupState>,
-    ) -> Result<BackupResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn execute_manual(state: Arc<BackupState>) -> Result<BackupResult, BackupError> {
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
@@ -136,7 +131,7 @@ impl BackupRunner {
     async fn export_table(
         state: &BackupState,
         table_name: &str,
-    ) -> Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<std::path::PathBuf, BackupError> {
         let (csv_path, _) = CsvExporter::export(&state.db, table_name, &state.temp_dir).await?;
         Ok(csv_path)
     }

@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-common = { path = "../../common", features = ["s3"] }
+common = { path = "../../common" }
 serde = { workspace = true }
 bytes = { workspace = true }
 reqwest = { workspace = true }
 s3 = { workspace = true }
+tokio = { workspace = true }
 futures = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }

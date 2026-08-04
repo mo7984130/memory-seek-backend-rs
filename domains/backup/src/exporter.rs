@@ -1,3 +1,4 @@
+use crate::error::BackupError;
 use crate::hasher::TableHasher;
 use csv::Writer;
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
@@ -15,10 +16,13 @@ impl CsvExporter {
         db: &DatabaseConnection,
         table_name: &str,
         output_path: &Path,
-    ) -> Result<(PathBuf, String), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(PathBuf, String), BackupError> {
         let columns = TableHasher::get_column_names(db, table_name).await?;
         if columns.is_empty() {
-            return Err(format!("Table {} does not exist", table_name).into());
+            return Err(BackupError::Msg(format!(
+                "Table {} does not exist",
+                table_name
+            )));
         }
         let pks = TableHasher::get_primary_key_columns(db, table_name).await?;
         let select_cols = columns
@@ -73,7 +77,7 @@ impl CsvExporter {
         db: &DatabaseConnection,
         table_name: &str,
         output_dir: &Path,
-    ) -> Result<(PathBuf, String), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(PathBuf, String), BackupError> {
         let output_path = output_dir.join(format!("{}.csv", table_name));
         Self::export_to_path(db, table_name, &output_path).await
     }

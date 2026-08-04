@@ -1,4 +1,5 @@
 use crate::config::BackupScheduleConfig;
+use crate::error::BackupError;
 use crate::exporter::CsvExporter;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
@@ -51,7 +52,7 @@ impl BackupStorage {
         csv_path: &std::path::Path,
         backup_type: BackupType,
         run_id: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), BackupError> {
         let file_name = format!("{}.csv", table_name);
 
         let local_dir = self
@@ -94,7 +95,7 @@ impl BackupStorage {
         table_name: &str,
         csv_path: &std::path::Path,
         run_id: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), BackupError> {
         self.save(table_name, csv_path, BackupType::ScheduledDaily, run_id)
             .await?;
         self.save(table_name, csv_path, BackupType::ScheduledWeekly, run_id)
@@ -112,7 +113,7 @@ impl BackupStorage {
         db: &DatabaseConnection,
         tables: &[&str],
         backup_type: BackupType,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), BackupError> {
         let temp_dir = std::env::temp_dir().join("memory-seek-table-backup");
         std::fs::create_dir_all(&temp_dir)?;
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
@@ -129,10 +130,7 @@ impl BackupStorage {
     }
 
     /// GFS 分层清理：按保留数清理 daily / weekly / monthly 目录
-    pub async fn cleanup_gfs(
-        &self,
-        config: &BackupScheduleConfig,
-    ) -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn cleanup_gfs(&self, config: &BackupScheduleConfig) -> Result<u32, BackupError> {
         let mut removed = 0;
 
         if !self.local_path.exists() {
@@ -156,11 +154,7 @@ impl BackupStorage {
     /// 清理指定子目录下超出保留数的历史备份 run
     ///
     /// 每个子目录是一个备份运行（按 run_id 命名），删除整个目录 = 删除该次所有表。
-    async fn cleanup_subdir(
-        &self,
-        rel_dir: &str,
-        keep_count: u32,
-    ) -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
+    async fn cleanup_subdir(&self, rel_dir: &str, keep_count: u32) -> Result<u32, BackupError> {
         let dir = self.local_path.join(rel_dir);
         if !dir.exists() {
             return Ok(0);
