@@ -209,25 +209,9 @@ impl PersonService {
             return Err(AppError::bad_request("不能将人物合并到自身"));
         }
 
-        // 校验两个人物都存在
-        PersonMapper::query_by_id(&state.db, source_person_id)
-            .await?
-            .ok_or_error(
-                "person_not_found",
-                "源人物不存在",
-                AppError::not_found("源人物不存在"),
-            )?;
-        PersonMapper::query_by_id(&state.db, target_person_id)
-            .await?
-            .ok_or_error(
-                "person_not_found",
-                "目标人物不存在",
-                AppError::not_found("目标人物不存在"),
-            )?;
-
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
-                // 按 id 升序加行锁两个人物, 避免并发合并互相死锁
+                // 按 id 升序加行锁两个人物(存在性校验在锁内完成, 避免 TOCTOU), 防并发死锁
                 let (source, target) = if source_person_id.0 < target_person_id.0 {
                     let source = PersonMapper::query_by_id_for_update(txn, source_person_id)
                         .await?
