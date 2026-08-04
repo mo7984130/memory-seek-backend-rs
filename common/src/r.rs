@@ -7,6 +7,8 @@ use serde::Serialize;
 /// 成功时包含 `code` 和 `data`，失败时包含 `code` 和 `msg`。
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export, export_to = "common/"))]
 pub struct R<T> {
     pub code: u16,
     #[serde(skip_serializing_if = "Option::is_none")]

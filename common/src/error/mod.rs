@@ -6,9 +6,8 @@ pub use app_error::AppError;
 pub mod app_error_response;
 pub mod cursor_error;
 pub mod db_error;
+pub mod mutex_error;
 pub mod redis_error;
-#[cfg(feature = "s3")]
-pub mod s3_error;
 pub mod serde_error;
 #[cfg(feature = "tokio")]
 pub mod tokio_error;

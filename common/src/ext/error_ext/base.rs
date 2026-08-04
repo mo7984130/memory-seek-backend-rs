@@ -22,14 +22,18 @@ pub fn log_and_map(
                     error = ?e,
                     caller.file = loc.file(),
                     caller.line = loc.line(),
-                    "{context}"
+                    "{context} ({}:{})",    // <-- 加入 path:line
+                    loc.file(),
+                    loc.line()
                 ),
                 None => tracing::$lvl!(
                     reason,
                     status = "failed",
                     caller.file = loc.file(),
                     caller.line = loc.line(),
-                    "{context}"
+                    "{context} ({}:{})",
+                    loc.file(),
+                    loc.line()
                 ),
             }
         };

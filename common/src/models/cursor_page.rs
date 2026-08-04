@@ -2,6 +2,8 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export, export_to = "common/"))]
 pub struct CursorPage<T, C> {
     pub records: Vec<T>,
     pub next_cursor: Option<C>,
@@ -29,6 +31,31 @@ impl<T> CursorPage<T, ()> {
             records,
             next_cursor: None,
             has_more,
+        }
+    }
+}
+
+impl<T, C> CursorPage<T, C> {
+    pub fn from_oversize_fn<F>(mut records: Vec<T>, size: u64, get_cursor: F) -> Self
+    where
+        F: FnOnce(&T) -> C,
+    {
+        if records.len() > size as usize {
+            records.pop();
+
+            let next_cursor = records.last().map(get_cursor);
+
+            Self {
+                records,
+                next_cursor,
+                has_more: true,
+            }
+        } else {
+            Self {
+                records,
+                next_cursor: None,
+                has_more: false,
+            }
         }
     }
 }

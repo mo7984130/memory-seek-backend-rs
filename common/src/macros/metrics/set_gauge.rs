@@ -14,7 +14,7 @@
 macro_rules! set_gauge {
     ($step:literal, $value:expr) => {
         #[cfg(feature = "metrics")]
-        $crate::metrics::gauge!($crate::metrics_name!($step)).set($value.into());
+        $crate::metrics::gauge!($crate::metrics_name!($step)).set($value);
     };
     ($func_name:literal, $step:literal, $value:expr) => {
         #[cfg(feature = "metrics")]

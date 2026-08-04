@@ -1,6 +1,9 @@
 use crate::{
     error::AppError,
-    ext::error_ext::{log_err, log_warn},
+    ext::{
+        ToErr,
+        error_ext::{log_err, log_warn},
+    },
 };
 
 /// 为 `Option<T>` 提供到 `AppError` 的便捷转换方法
@@ -14,6 +17,7 @@ pub trait OptionExt<T> {
     ///
     /// # 返回
     /// `Some` 时返回内部值，`None` 时返回 `AppError::BadRequest(msg)`
+    #[track_caller]
     fn ok_or_warn(
         self,
         reason: &'static str,
@@ -21,6 +25,7 @@ pub trait OptionExt<T> {
         app_err: AppError,
     ) -> Result<T, AppError>;
 
+    #[track_caller]
     fn ok_or_warn_bad_request(
         self,
         reason: &'static str,
@@ -36,6 +41,7 @@ pub trait OptionExt<T> {
     ///
     /// # 返回
     /// `Some` 时返回内部值，`None` 时返回 `AppError::InternalServerError`
+    #[track_caller]
     fn ok_or_error(
         self,
         reason: &'static str,
@@ -61,7 +67,10 @@ impl<T> OptionExt<T> for Option<T> {
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError> {
-        self.ok_or_else(|| log_warn(reason, context, app_err))
+        match self {
+            Some(v) => Ok(v),
+            None => log_warn(reason, context, app_err).to_err(),
+        }
     }
 
     #[inline]
@@ -72,7 +81,10 @@ impl<T> OptionExt<T> for Option<T> {
         context: &'static str,
         msg: &'static str,
     ) -> Result<T, AppError> {
-        self.ok_or_else(|| log_warn(reason, context, AppError::bad_request(msg)))
+        match self {
+            Some(v) => Ok(v),
+            None => log_warn(reason, context, AppError::bad_request(msg)).to_err(),
+        }
     }
 
     #[inline]
@@ -83,7 +95,10 @@ impl<T> OptionExt<T> for Option<T> {
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError> {
-        self.ok_or_else(|| log_err(reason, context, app_err))
+        match self {
+            Some(v) => Ok(v),
+            None => log_err(reason, context, app_err).to_err(),
+        }
     }
 }
 

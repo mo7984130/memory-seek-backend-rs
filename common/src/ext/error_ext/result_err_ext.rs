@@ -47,7 +47,10 @@ impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError> {
-        self.map_err(|e| log_err_with_err(reason, context, e, app_err))
+        match self {
+            Ok(v) => Ok(v),
+            Err(e) => Err(log_err_with_err(reason, context, e, app_err)),
+        }
     }
 
     #[track_caller]
@@ -56,7 +59,15 @@ impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
         reason: &'static str,
         context: &'static str,
     ) -> Result<T, AppError> {
-        self.trace_err(reason, context, AppError::InternalServerError)
+        match self {
+            Ok(v) => Ok(v),
+            Err(e) => Err(log_err_with_err(
+                reason,
+                context,
+                e,
+                AppError::InternalServerError,
+            )),
+        }
     }
 
     #[track_caller]
@@ -66,7 +77,10 @@ impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
         context: &'static str,
         app_err: AppError,
     ) -> Result<T, AppError> {
-        self.map_err(|e| log_warn_with_err(reason, context, e, app_err))
+        match self {
+            Ok(v) => Ok(v),
+            Err(e) => Err(log_warn_with_err(reason, context, e, app_err)),
+        }
     }
 
     #[track_caller]
@@ -76,7 +90,15 @@ impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
         context: &'static str,
         msg: &'static str,
     ) -> Result<T, AppError> {
-        self.trace_warn(reason, context, AppError::bad_request(msg))
+        match self {
+            Ok(v) => Ok(v),
+            Err(e) => Err(log_warn_with_err(
+                reason,
+                context,
+                e,
+                AppError::bad_request(msg),
+            )),
+        }
     }
 }
 
