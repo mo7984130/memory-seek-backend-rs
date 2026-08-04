@@ -205,7 +205,7 @@ impl FaceService {
     async fn detect_photo(state: &PhotoState, img: Img) -> Result<Vec<Face>> {
         debug!("检测照片中");
         let face_engine_clone = Arc::clone(&state.face_engine);
-        let faces = spawn_blocking(move || {
+        spawn_blocking(move || {
             debug!("获取face-engine 锁");
             let mut eng = face_engine_clone.lock()?;
             debug!("获取成功");
@@ -215,8 +215,7 @@ impl FaceService {
             debug!("转换成功");
             Ok(faces)
         })
-        .await?;
-        faces
+        .await?
     }
 
     async fn insert_faces(state: &PhotoState, faces: Vec<face::NewFaceRecord>) -> Result<()> {
