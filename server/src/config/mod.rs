@@ -19,6 +19,7 @@ pub struct AppConfig {
     #[cfg(feature = "s3")]
     pub s3: crate::setup::libs::s3::Config,
 
+    #[cfg(feature = "token_cipher")]
     pub token_cipher: crate::setup::libs::token_cipher::Config,
 
     #[cfg(feature = "metrics")]
