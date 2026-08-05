@@ -121,26 +121,10 @@ impl PhotoMapper {
             // 有游标时，按游标分页
             if filter {
                 // Next: 倒序遍历，找比游标小的
-                query = query.filter(
-                    sea_orm::Condition::any()
-                        .add(Column::CreatedAt.lt(c.created_at))
-                        .add(
-                            sea_orm::Condition::all()
-                                .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.lt(c.id)),
-                        ),
-                );
+                query = query.filter(c.before(Column::CreatedAt, Column::Id));
             } else {
                 // Prev: 正序遍历，找比游标大的
-                query = query.filter(
-                    sea_orm::Condition::any()
-                        .add(Column::CreatedAt.gt(c.created_at))
-                        .add(
-                            sea_orm::Condition::all()
-                                .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.gt(c.id)),
-                        ),
-                );
+                query = query.filter(c.after(Column::CreatedAt, Column::Id));
             }
         } else if let Some(anchor) = anchor_time {
             // 无游标但有锚点时间时，用锚点时间作为虚拟游标

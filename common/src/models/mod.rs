@@ -6,4 +6,4 @@ pub mod cursor_page;
 pub use cursor_page::CursorPage;
 
 pub mod cursor;
-pub use cursor::TimeIdCursor;
+pub use cursor::{KeysetDirection, TimeIdCursor};

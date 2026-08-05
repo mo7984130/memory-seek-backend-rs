@@ -2,10 +2,20 @@ use std::fmt::Debug;
 
 use base64::Engine;
 use chrono::{DateTime, Utc};
+use sea_orm::{ColumnTrait, Condition, Value};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::error::cursor_error::CursorDecodeError;
+
+/// keyset 分页排序方向, 需与查询的 `ORDER BY` 保持一致
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeysetDirection {
+    /// 倒序: `ORDER BY time DESC, id DESC`, 游标取 `(time, id) < cursor`
+    Desc,
+    /// 正序: `ORDER BY time ASC, id ASC`, 游标取 `(time, id) > cursor`
+    Asc,
+}
 
 /// 通用时间+ID 复合游标，适用于 `(created_at, id)` 排序的分页场景。
 ///
@@ -35,9 +45,67 @@ impl<I: Serialize + DeserializeOwned> TimeIdCursor<I> {
     }
 }
 
+impl<I: Clone + Into<Value>> TimeIdCursor<I> {
+    /// 构造 keyset 分页过滤条件, 需与 `ORDER BY time <dir>, id <dir>` 配套使用。
+    ///
+    /// - `Desc`: 返回 `(time, id) < (self.created_at, self.id)` 的行(向前翻页)
+    /// - `Asc`: 返回 `(time, id) > (self.created_at, self.id)` 的行(向后翻页)
+    pub fn keyset_condition<C: ColumnTrait>(
+        &self,
+        time_col: C,
+        id_col: C,
+        direction: KeysetDirection,
+    ) -> Condition {
+        match direction {
+            KeysetDirection::Desc => Condition::any()
+                .add(time_col.lt(self.created_at))
+                .add(
+                    Condition::all()
+                        .add(time_col.eq(self.created_at))
+                        .add(id_col.lt(self.id.clone())),
+                ),
+            KeysetDirection::Asc => Condition::any()
+                .add(time_col.gt(self.created_at))
+                .add(
+                    Condition::all()
+                        .add(time_col.eq(self.created_at))
+                        .add(id_col.gt(self.id.clone())),
+                ),
+        }
+    }
+
+    /// 便捷方法: `Desc` 方向, 见 [`TimeIdCursor::keyset_condition`]
+    pub fn before<C: ColumnTrait>(&self, time_col: C, id_col: C) -> Condition {
+        self.keyset_condition(time_col, id_col, KeysetDirection::Desc)
+    }
+
+    /// 便捷方法: `Asc` 方向, 见 [`TimeIdCursor::keyset_condition`]
+    pub fn after<C: ColumnTrait>(&self, time_col: C, id_col: C) -> Condition {
+        self.keyset_condition(time_col, id_col, KeysetDirection::Asc)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::DateTime;
+    use sea_orm::{
+        DbBackend, QueryFilter, QueryTrait,
+        entity::prelude::*,
+    };
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "test_entity")]
+    pub struct Model {
+        #[sea_orm(primary_key)]
+        pub id: i64,
+        pub created_at: DateTimeUtc,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
     struct TestId(i64);
@@ -80,5 +148,72 @@ mod tests {
         assert!(!encoded.contains('+'));
         assert!(!encoded.contains('/'));
         assert!(!encoded.contains('='));
+    }
+
+    // ============ keyset 过滤条件 ============
+
+    fn cursor() -> TimeIdCursor<i64> {
+        TimeIdCursor {
+            created_at: DateTime::from_timestamp_nanos(1712345678000000000),
+            id: 42,
+        }
+    }
+
+    fn build_sql(cond: Condition) -> String {
+        Entity::find()
+            .filter(cond)
+            .build(DbBackend::Postgres)
+            .to_string()
+    }
+
+    #[test]
+    fn test_keyset_desc_before() {
+        let sql = build_sql(cursor().before(Column::CreatedAt, Column::Id));
+        // (created_at, id) < cursor: created_at < ? OR (created_at = ? AND id < 42)
+        assert!(
+            sql.contains("\"created_at\" < ") && sql.contains("\"created_at\" = "),
+            "before sql: {sql}"
+        );
+        // 时间相等时的 tiebreaker 必须用 id
+        let eq_pos = sql.find("\"created_at\" = ").expect("equal branch");
+        assert!(
+            sql[eq_pos..].contains("\"id\" < 42"),
+            "before tiebreaker: {sql}"
+        );
+    }
+
+    #[test]
+    fn test_keyset_asc_after() {
+        let sql = build_sql(cursor().after(Column::CreatedAt, Column::Id));
+        // (created_at, id) > cursor: created_at > ? OR (created_at = ? AND id > 42)
+        assert!(
+            sql.contains("\"created_at\" > ") && sql.contains("\"created_at\" = "),
+            "after sql: {sql}"
+        );
+        let eq_pos = sql.find("\"created_at\" = ").expect("equal branch");
+        assert!(
+            sql[eq_pos..].contains("\"id\" > 42"),
+            "after tiebreaker: {sql}"
+        );
+    }
+
+    #[test]
+    fn test_keyset_direction_matches_keyset_condition() {
+        assert_eq!(
+            build_sql(cursor().before(Column::CreatedAt, Column::Id)),
+            build_sql(cursor().keyset_condition(
+                Column::CreatedAt,
+                Column::Id,
+                KeysetDirection::Desc
+            ))
+        );
+        assert_eq!(
+            build_sql(cursor().after(Column::CreatedAt, Column::Id)),
+            build_sql(cursor().keyset_condition(
+                Column::CreatedAt,
+                Column::Id,
+                KeysetDirection::Asc
+            ))
+        );
     }
 }

@@ -86,15 +86,7 @@ impl PhotoLikeMapper {
             .order_by_desc(Column::PhotoId);
 
         if let Some(c) = cursor {
-            query = query.filter(
-                sea_orm::Condition::any()
-                    .add(Column::CreatedAt.lt(c.created_at))
-                    .add(
-                        sea_orm::Condition::all()
-                            .add(Column::CreatedAt.eq(c.created_at))
-                            .add(Column::Id.lt(c.id.0)),
-                    ),
-            );
+            query = query.filter(c.before(Column::CreatedAt, Column::PhotoId));
         }
 
         query

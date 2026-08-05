@@ -1,9 +1,13 @@
-use common::{Result, ext::ToOk};
+use common::{Result, ext::ToOk, models::TimeIdCursor};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, sea_query::Expr,
 };
-use types::photo::{face::*, person::PersonId, photo::PhotoId};
+use types::photo::{
+    face::*,
+    person::PersonId,
+    photo::{PhotoId, PhotoRecord},
+};
 
 pub struct FaceMapper;
 
@@ -124,8 +128,21 @@ impl FaceMapper {
             .transpose()
     }
 
+    pub async fn query_by_ids(
+        db: &impl ConnectionTrait,
+        ids: &[FaceId],
+    ) -> Result<Vec<FaceRecord>> {
+        Entity::find()
+            .filter(Column::Id.is_in(ids.iter().copied()))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(FaceRecord::try_from)
+            .collect()
+    }
+
     /// 按 ID 加行锁查询(`SELECT ... FOR UPDATE`, 供转移归属等读-改-写流程使用)
-    pub async fn query_by_id_for_update(
+    pub async fn lock_by_id(
         db: &impl ConnectionTrait,
         face_id: FaceId,
     ) -> Result<Option<FaceRecord>> {
@@ -159,6 +176,34 @@ impl FaceMapper {
             .into_iter()
             .map(FaceRecord::try_from)
             .collect()
+    }
+
+    pub async fn query_photo_ids_cursor_page(
+        db: &impl ConnectionTrait,
+        person_id: PersonId,
+        cursor: Option<TimeIdCursor<PhotoId>>,
+        size: u64,
+    ) -> Result<Vec<PhotoId>> {
+        let mut query = Entity::find()
+            .select_only()
+            .column(Column::PhotoId)
+            .filter(Column::PersonId.eq(person_id))
+            .order_by(Column::CreatedAt, Order::Desc)
+            .order_by(Column::Id, Order::Desc)
+            .limit(size);
+
+        if let Some(cursor) = cursor {
+            query = query.filter(cursor.before(Column::CreatedAt, Column::Id));
+        }
+
+        query
+            .into_tuple::<i64>()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(PhotoId::from)
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     /// 统计某人物的人脸数量

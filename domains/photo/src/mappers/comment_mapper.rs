@@ -110,15 +110,7 @@ impl CommentMapper {
         }
 
         if let Some(c) = cursor {
-            query = query.filter(
-                sea_orm::Condition::any()
-                    .add(Column::CreatedAt.lt(c.created_at))
-                    .add(
-                        sea_orm::Condition::all()
-                            .add(Column::CreatedAt.eq(c.created_at))
-                            .add(Column::Id.lt(c.id)),
-                    ),
-            );
+            query = query.filter(c.before(Column::CreatedAt, Column::Id));
         }
 
         query
