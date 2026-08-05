@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 
+use crate::cursor::TimeIdCursor;
 #[cfg(feature = "orm")]
 use crate::photo::collection::CollectionRecord;
 use crate::photo::models::PhotoIds;
-#[cfg(test)]
 use crate::photo::photo::PhotoId;
 #[cfg(feature = "orm")]
 use crate::photo::ImageToken;
@@ -85,7 +85,8 @@ fn collection_photo_cursor_page_default_size() -> u64 {
 }
 
 crate::in_dto!(CollectionPhotoCursorPageParam, "photo/", docs = "收藏夹照片游标参数（cursor 为 TimeIdCursor<PhotoId> 的 Base64 编码）"; {
-    pub cursor: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+    pub cursor: Option<TimeIdCursor<PhotoId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "collection_photo_cursor_page_default_size")]
     #[cfg_attr(feature = "ts", ts(type = "number"))]

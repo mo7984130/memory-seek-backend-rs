@@ -1,5 +1,7 @@
+use crate::cursor::TimeIdCursor;
 use crate::photo::models::PersonName;
 use crate::photo::person::PersonId;
+use crate::photo::photo::PhotoId;
 
 crate::in_dto!(PersonCursorParam, "photo/", serde_default; {
     pub cursor: Option<PersonId>,
@@ -30,7 +32,8 @@ fn person_photo_cursor_page_default_size() -> u64 {
 }
 
 crate::in_dto!(PersonPhotoCursorParam, "photo/", docs = "人物照片游标参数(cursor 为 TimeIdCursor<PhotoId> 的 Base64 编码)"; {
-    pub cursor: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+    pub cursor: Option<TimeIdCursor<PhotoId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "person_photo_cursor_page_default_size")]
     #[cfg_attr(feature = "ts", ts(type = "number"))]

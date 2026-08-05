@@ -1,8 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
+use crate::cursor::TimeIdCursor;
 #[cfg(feature = "orm")]
 use crate::photo::photo::PhotoRecord;
+use crate::photo::photo::PhotoId;
 #[cfg(feature = "orm")]
 use crate::photo::ImageToken;
 #[cfg(feature = "orm")]
@@ -89,7 +91,8 @@ impl PhotoView {
 }
 
 crate::in_dto!(PhotoCursorParam, "photo/", serde_default, docs = "照片游标参数（cursor 为 TimeIdCursor<PhotoId> 的 Base64 编码）"; {
-    pub cursor: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+    pub cursor: Option<TimeIdCursor<PhotoId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size: u64,

@@ -4,6 +4,3 @@
 /// - `UserId`: 用户 ID 的 newtype 封装
 pub mod cursor_page;
 pub use cursor_page::CursorPage;
-
-pub mod cursor;
-pub use cursor::{KeysetDirection, TimeIdCursor};

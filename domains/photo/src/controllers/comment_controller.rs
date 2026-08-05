@@ -9,7 +9,7 @@ use common::{
     Result,
     ext::ResultRExt,
     extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     r::R,
     traits::controller::ControllerRouter,
 };
@@ -76,8 +76,6 @@ impl CommentController {
         ValidatedQuery(param): ValidatedQuery<CommentCursorPageParam>,
     ) -> Result<R<CursorPage<CommentView, String>>> {
         let CommentCursorPageParam { cursor, size } = param;
-
-        let cursor = cursor.map(TimeIdCursor::<CommentId>::decode).transpose()?;
 
         CommentService::get_cursor_page(&state, photo_id, user_id, cursor, size)
             .await

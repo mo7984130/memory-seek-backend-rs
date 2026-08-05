@@ -3,13 +3,13 @@ use std::collections::HashSet;
 use common::Result;
 use common::error::AppError;
 use common::ext::{BoolExt, OkExt};
-use common::models::TimeIdCursor;
 use sea_orm::entity::prelude::DateTimeUtc;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
+use types::cursor::TimeIdCursor;
 use types::photo::{dto::photo::PageDirection, photo::*};
 
 pub(crate) struct PhotoMapper;

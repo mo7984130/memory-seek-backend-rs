@@ -9,7 +9,7 @@ use common::{
         log_warn,
     },
     metrics_group, metrics_name, metrics_success,
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     timed,
     utils::{DbUtils, FileValidator, MetricsTimerExt},
 };
@@ -39,6 +39,7 @@ use types::photo::{
 
 use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::photo::{ActiveModel, PhotoId, PhotoRecord},
 };
 

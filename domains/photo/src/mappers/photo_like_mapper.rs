@@ -2,12 +2,12 @@ use std::collections::HashSet;
 
 use common::Result;
 use common::ext::ToOk;
-use common::models::TimeIdCursor;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     entity::prelude::DateTimeUtc,
 };
+use types::cursor::TimeIdCursor;
 use types::photo::photo_like::*;
 use types::{auth::user::UserId, photo::photo::PhotoId};
 

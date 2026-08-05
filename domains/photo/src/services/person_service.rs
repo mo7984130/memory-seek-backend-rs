@@ -6,7 +6,7 @@ use common::{
     error::AppError,
     ext::{OkExt, OptionExt, ResultErrExt, UintExt},
     metrics_group, metrics_name, metrics_success,
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     utils::{DbUtils, MetricsTimerExt},
 };
 use insight_face_rs::types::DIMS;
@@ -17,6 +17,7 @@ use tokio::{spawn, task::spawn_blocking};
 use tracing::{info, instrument};
 use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::{
         ImageToken, PersonView,
         dto::face::bbox_from_insight,

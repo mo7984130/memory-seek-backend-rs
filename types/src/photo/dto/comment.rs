@@ -1,7 +1,9 @@
 use chrono::{DateTime, Utc};
 
+use crate::cursor::TimeIdCursor;
 #[cfg(feature = "orm")]
 use crate::photo::comment::CommentRecord;
+use crate::photo::comment::CommentId;
 use crate::photo::models::CommentContent;
 
 pub const COMMENT_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
@@ -51,7 +53,8 @@ crate::in_dto!(CommentPublishParam, "photo/"; {
 });
 
 crate::in_dto!(CommentCursorPageParam, "photo/", docs = "评论游标参数（cursor 为 TimeIdCursor<CommentId> 的 Base64 编码）"; {
-    pub cursor: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+    pub cursor: Option<TimeIdCursor<CommentId>>,
     #[validate(range(min = 1, max = 128, message = "分页大小在 1 到 128 之间"))]
     #[serde(default = "comment_cursor_page_default_size")]
     #[cfg_attr(feature = "ts", ts(type = "number"))]

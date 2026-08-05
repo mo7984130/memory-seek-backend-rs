@@ -10,11 +10,12 @@ use common::{
     Result,
     ext::OkExt,
     metrics_group, metrics_name, metrics_success,
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     utils::{DbUtils, MetricsTimerExt},
 };
 use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::{
         collection::CollectionId,
         dto::collection::{

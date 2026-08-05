@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 
+use crate::cursor::TimeIdCursor;
 use crate::photo::photo::PhotoId;
 
 // ============================================================
@@ -69,7 +70,8 @@ crate::in_dto!(DeletePhotosParam, "photo/", serialize; {
 
 crate::in_dto!(LikedPhotosQuery, "photo/"; {
     /// 分页游标（可选，首次查询不传）
-    pub cursor: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+    pub cursor: Option<TimeIdCursor<PhotoId>>,
 
     /// 每页大小（可选，默认 20，最大 100）
     #[validate(range(min = 1, max = 100, message = "size 在 1 到 100 之间"))]

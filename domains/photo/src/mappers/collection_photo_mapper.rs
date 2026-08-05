@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use common::Result;
 use common::ext::OkExt;
-use common::models::TimeIdCursor;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use types::auth::user::UserId;
+use types::cursor::TimeIdCursor;
 use types::photo::collection_photo::*;
 use types::photo::{collection::CollectionId, photo::PhotoId};
 

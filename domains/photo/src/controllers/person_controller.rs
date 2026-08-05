@@ -9,12 +9,13 @@ use common::{
     Result,
     ext::ResultRExt,
     extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     r::R,
     traits::controller::ControllerRouter,
 };
 use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::{
         PersonView,
         dto::person::{
@@ -97,10 +98,8 @@ impl PersonController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(person_id): ValidatedPath<PersonId>,
         ValidatedQuery(query): ValidatedQuery<PersonPhotoCursorParam>,
-    ) -> Result<R<CursorPage<PhotoView, String>>> {
+    ) -> Result<R<CursorPage<PhotoView, TimeIdCursor<PhotoId>>>> {
         let PersonPhotoCursorParam { cursor, size } = query;
-
-        let cursor = cursor.map(TimeIdCursor::<PhotoId>::decode).transpose()?;
 
         PersonService::get_person_photos(&state, user_id, person_id, cursor, size)
             .await

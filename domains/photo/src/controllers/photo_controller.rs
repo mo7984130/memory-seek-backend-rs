@@ -12,7 +12,7 @@ use common::{
     Result,
     ext::{ResultErrExt, ResultRExt},
     extractors::{ValidatedJson, ValidatedQuery},
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     traits::controller::ControllerRouter,
 };
 use common::{ext::OptionExt, r::R};
@@ -21,7 +21,6 @@ use types::photo::{
     ImageToken,
     dto::photo::{PhotoCursorParam, PhotoView},
     models::{DeletePhotosParam, ExistsByMd5BatchParam},
-    photo::PhotoId,
 };
 
 use crate::{
@@ -91,8 +90,6 @@ impl PhotoController {
             anchor_time,
             ..
         } = query;
-
-        let cursor = cursor.map(TimeIdCursor::<PhotoId>::decode).transpose()?;
 
         PhotoService::get_photo_cursor_page(&state, user_id, cursor, size, direction, anchor_time)
             .await

@@ -5,12 +5,16 @@ use common::{
     error::AppError,
     ext::{ToErr, log_warn},
     metrics_group, metrics_name, metrics_success,
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     timed,
     utils::{DbUtils, MetricsTimerExt},
 };
 use sea_orm::entity::prelude::DateTimeUtc;
-use types::{auth::user::UserId, photo::photo::PhotoId};
+use types::{
+    auth::user::UserId,
+    cursor::TimeIdCursor,
+    photo::photo::PhotoId,
+};
 
 use crate::{
     mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper},

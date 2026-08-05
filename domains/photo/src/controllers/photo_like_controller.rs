@@ -9,7 +9,7 @@ use common::{
     Result,
     ext::ResultRExt,
     extractors::{ValidatedPath, ValidatedQuery},
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     r::R,
 };
 use types::{
@@ -73,12 +73,9 @@ impl PhotoLikeController {
         ValidatedQuery(query): ValidatedQuery<LikedPhotosQuery>,
     ) -> Result<R<CursorPage<PhotoView, String>>> {
         let size = query.size.unwrap_or(20).min(100);
-        let cursor = query
-            .cursor
-            .map(TimeIdCursor::<PhotoId>::decode)
-            .transpose()?;
 
-        let result = PhotoLikeService::get_user_liked_photos(&state, user_id, cursor, size).await?;
+        let result = PhotoLikeService::get_user_liked_photos(&state, user_id, query.cursor, size)
+            .await?;
 
         Ok(result).to_r_ok()
     }

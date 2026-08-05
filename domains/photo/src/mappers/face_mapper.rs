@@ -1,8 +1,9 @@
-use common::{Result, ext::ToOk, models::TimeIdCursor};
+use common::{Result, ext::ToOk};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
     QuerySelect, sea_query::Expr,
 };
+use types::cursor::TimeIdCursor;
 use types::photo::{
     face::*,
     person::PersonId,

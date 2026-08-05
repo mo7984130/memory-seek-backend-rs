@@ -10,12 +10,13 @@ use common::{
     error::AppError,
     ext::{BoolExt, ToOk},
     metrics_group, metrics_name, metrics_success,
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     timed,
     utils::{DbUtils, MetricsTimerExt},
 };
 use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::{
         comment::CommentId,
         dto::comment::{CommentView, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES},

@@ -10,7 +10,7 @@ use common::{
     Result,
     ext::ResultRExt,
     extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
-    models::{CursorPage, TimeIdCursor},
+    models::CursorPage,
     r::R,
     traits::controller::ControllerRouter,
 };
@@ -87,8 +87,6 @@ impl CollectionPhotoController {
         ValidatedQuery(query): ValidatedQuery<CollectionPhotoCursorPageParam>,
     ) -> Result<R<CursorPage<PhotoView, String>>> {
         let CollectionPhotoCursorPageParam { cursor, size } = query;
-
-        let cursor = cursor.map(TimeIdCursor::<PhotoId>::decode).transpose()?;
 
         CollectionPhotoService::get_photos(&state, user_id, collection_id, cursor, size)
             .await

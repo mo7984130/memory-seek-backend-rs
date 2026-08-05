@@ -1,6 +1,5 @@
 use common::error::AppError;
 use common::ext::OkExt;
-use common::models::TimeIdCursor;
 use common::{
     Result,
     ext::{BoolExt, OptionExt, ResultErrExt},
@@ -11,6 +10,7 @@ use sea_orm::{
 };
 use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::{comment::*, photo::PhotoId},
 };
 
