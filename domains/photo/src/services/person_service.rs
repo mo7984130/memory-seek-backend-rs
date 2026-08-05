@@ -1,15 +1,17 @@
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::sync::Arc;
 
+use common::ext::ToOk;
 use common::{
     Result,
     error::AppError,
-    ext::{OkExt, OptionExt, ResultErrExt, UintExt},
+    ext::{OptionExt, ResultErrExt, UintExt},
     metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     utils::{DbUtils, MetricsTimerExt},
 };
-use insight_face_rs::types::DIMS;
+use insight_face_rs::types::{DIMS, FaceEmbedding};
 use ndarray::Array2;
 use petal_clustering::{Fit, HDbscan};
 use sea_orm::{EntityName, EntityTrait};
@@ -33,8 +35,12 @@ use types::{
 
 use crate::{
     PhotoState,
-    mappers::{face_mapper::FaceMapper, person_mapper::PersonMapper, photo_mapper::PhotoMapper},
-    services::{embedding_math, person_cover, photo_service::PhotoService},
+    mappers::{
+        face_mapper::FaceMapper,
+        person_mapper::{PersonCoverUpdate, PersonMapper},
+        photo_mapper::PhotoMapper,
+    },
+    services::photo_service::PhotoService,
 };
 
 pub struct PersonService;
@@ -121,7 +127,7 @@ impl PersonService {
                         .map(|&idx| &faces[idx])
                         .expect("cluster should not be empty");
                     // score 加权质心: (weight, centroid) = (Σscore, Σ(score×embedding))
-                    let (weight, centroid) = embedding_math::weighted_sum(
+                    let (weight, centroid) = FaceEmbedding::weighted_sum(
                         embedding_ids
                             .iter()
                             .map(|idx| (faces[*idx].score, &faces[*idx].embedding)),
@@ -175,14 +181,6 @@ impl PersonService {
         param: RenamePersonParam,
     ) -> Result<()> {
         // 校验人物存在
-        PersonMapper::query_by_id(&state.db, person_id)
-            .await?
-            .ok_or_error(
-                "person_not_found",
-                "人物不存在",
-                AppError::not_found("人物不存在"),
-            )?;
-
         PersonMapper::rename(&state.db, person_id, param.new_name.into_inner())
             .await?
             .no_zero_or_warn(
@@ -196,10 +194,7 @@ impl PersonService {
 
     /// 合并人物: 将 source 的全部人脸归属转移到 target, 并删除 source
     #[tracing::instrument(skip_all)]
-    pub async fn merge_person(
-        state: &PhotoState,
-        param: MergePersonParam,
-    ) -> Result<PersonView> {
+    pub async fn merge_person(state: &PhotoState, param: MergePersonParam) -> Result<PersonView> {
         let MergePersonParam {
             source_person_id,
             target_person_id,
@@ -207,63 +202,68 @@ impl PersonService {
 
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
-                // 按 id 升序加行锁两个人物(存在性校验在锁内完成, 避免 TOCTOU), 防并发死锁
-                let (source, target) = if source_person_id.0 < target_person_id.0 {
-                    let source = PersonMapper::query_by_id_for_update(txn, source_person_id)
-                        .await?
-                        .ok_or_error(
+                let (source, target) = DbUtils::ensure_lock_two_ordered(
+                    txn,
+                    source_person_id,
+                    target_person_id,
+                    PersonMapper::lock_by_id,
+                    |person| {
+                        person.ok_or_warn_bad_request(
                             "person_not_found",
-                            "源人物不存在",
-                            AppError::not_found("源人物不存在"),
-                        )?;
-                    let target = PersonMapper::query_by_id_for_update(txn, target_person_id)
-                        .await?
-                        .ok_or_error(
-                            "person_not_found",
-                            "目标人物不存在",
-                            AppError::not_found("目标人物不存在"),
-                        )?;
-                    (source, target)
-                } else {
-                    let target = PersonMapper::query_by_id_for_update(txn, target_person_id)
-                        .await?
-                        .ok_or_error(
-                            "person_not_found",
-                            "目标人物不存在",
-                            AppError::not_found("目标人物不存在"),
-                        )?;
-                    let source = PersonMapper::query_by_id_for_update(txn, source_person_id)
-                        .await?
-                        .ok_or_error(
-                            "person_not_found",
-                            "源人物不存在",
-                            AppError::not_found("源人物不存在"),
-                        )?;
-                    (source, target)
-                };
+                            "合并人物时, 人物不存在",
+                            "人物不存在",
+                        )
+                    },
+                )
+                .await?;
 
                 // 转移人脸归属
                 FaceMapper::move_person_faces(txn, source_person_id, target_person_id).await?;
 
                 // 封面: 合并后取两者封面中 score 更高者(集合取并, 极值 = max(两个封面))
-                let source_cover_face = FaceMapper::query_by_id(txn, source.cover_face_id)
-                    .await?
-                    .ok_or_error(
-                    "person_cover_face_not_found",
-                    "人物封面人脸不存在",
-                    AppError::InternalServerError,
-                )?;
-                let target_cover_face = FaceMapper::query_by_id(txn, target.cover_face_id)
-                    .await?
-                    .ok_or_error(
-                    "person_cover_face_not_found",
-                    "人物封面人脸不存在",
-                    AppError::InternalServerError,
-                )?;
-                let cover = if source_cover_face.score > target_cover_face.score {
-                    person_cover::cover_update_from_face(txn, &source_cover_face).await?
-                } else {
-                    None
+                let cover = {
+                    let faces = FaceMapper::query_by_ids(
+                        txn,
+                        &[source.cover_face_id, target.cover_face_id],
+                    )
+                    .await?;
+
+                    let source_cover_face = faces
+                        .iter()
+                        .find(|f| f.id == source.cover_face_id)
+                        .ok_or_error(
+                            "person_cover_face_not_found",
+                            "人物封面人脸不存在",
+                            AppError::InternalServerError,
+                        )?;
+
+                    let target_cover_face = faces
+                        .iter()
+                        .find(|f| f.id == target.cover_face_id)
+                        .ok_or_error(
+                            "person_cover_face_not_found",
+                            "人物封面人脸不存在",
+                            AppError::InternalServerError,
+                        )?;
+
+                    if source_cover_face.score > target_cover_face.score {
+                        let file_id =
+                            PhotoMapper::query_file_id_by_id(txn, source_cover_face.photo_id)
+                                .await?
+                                .ok_or_error(
+                                    "person_cover_photo_not_found",
+                                    "封面人脸所属照片不存在",
+                                    AppError::InternalServerError,
+                                )?;
+                        Some(PersonCoverUpdate {
+                            cover_face_id: source_cover_face.id,
+                            cover_photo_id: source_cover_face.photo_id,
+                            cover_file_id: file_id,
+                            cover_bbox: bbox_from_insight(source_cover_face.bbox),
+                        })
+                    } else {
+                        None
+                    }
                 };
 
                 // 目标人物: 数量/权重/质心合并(封面可能替换)
@@ -272,7 +272,7 @@ impl PersonService {
                     target_person_id,
                     target.face_count + source.face_count,
                     target.weight + source.weight,
-                    embedding_math::add(&target.centroid, &source.centroid),
+                    target.centroid.add(&source.centroid),
                     cover,
                 )
                 .await?;
@@ -307,7 +307,7 @@ impl PersonService {
             .into_iter()
             .map(|person| Self::to_view(state, person))
             .collect::<Vec<_>>();
-        let page = CursorPage::from_oversize_fn(views, param.size, |person| person.id);
+        let page = CursorPage::from_oversize_fn(views, param.size, |person| Ok(person.id))?;
         Ok(page)
     }
 
@@ -338,46 +338,29 @@ impl PersonService {
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
         metrics_group!();
 
-        let photo_ids = FaceMapper::query_photo_ids_by_person_id(&state.db, person_id)
-            .timed(metrics_name!("query_photo_ids"))
-            .await?;
+        let photo_ids =
+            FaceMapper::query_photo_ids_cursor_page(&state.db, person_id, param.cursor, param.size)
+                .timed(metrics_name!("query_photo_ids"))
+                .await?;
         if photo_ids.is_empty() {
             metrics_success!();
             return Ok(CursorPage::empty());
         }
 
-        let photo_ids = PhotoMapper::query_ids_page_by_ids(
-            &state.db,
-            &photo_ids,
-            param.cursor.as_ref(),
-            param.size + 1,
-        )
-        .timed(metrics_name!("query_photo_page_ids"))
-        .await?;
-
-        let CursorPage {
-            records: photo_ids,
-            has_more,
-            ..
-        } = CursorPage::from_oversize(photo_ids, param.size);
-
-        let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
+        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))
             .await?;
-        let next_cursor = photo_vos.last().and_then(|vo| {
-            PhotoId::parse_from_str_or_none(&vo.id).map(|id| TimeIdCursor {
-                created_at: vo.created_at,
-                id,
-            })
-        });
+
+        let page = CursorPage::from_oversize_fn(photos, param.size, |photo| {
+            TimeIdCursor {
+                created_at: photo.created_at,
+                id: PhotoId::from_str(&photo.id)?,
+            }
+            .to_ok()
+        })?;
 
         metrics_success!();
-        CursorPage {
-            records: photo_vos,
-            has_more,
-            next_cursor,
-        }
-        .to_ok()
+        Ok(page)
     }
 }
 

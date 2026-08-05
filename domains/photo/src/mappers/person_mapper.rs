@@ -44,7 +44,7 @@ impl PersonMapper {
     }
 
     /// 按 ID 加行锁查询(`SELECT ... FOR UPDATE`, 供转移归属/合并等读-改-写流程使用)
-    pub async fn query_by_id_for_update(
+    pub async fn lock_by_id(
         db: &impl ConnectionTrait,
         person_id: PersonId,
     ) -> Result<Option<PersonRecord>> {

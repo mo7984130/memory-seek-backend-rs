@@ -176,47 +176,6 @@ impl PhotoMapper {
             .to_ok()
     }
 
-    /// 按 ID 集合查询照片分页 ID(游标过滤, 按 created_at/id 倒序)
-    pub async fn query_ids_page_by_ids(
-        db: &impl ConnectionTrait,
-        photo_ids: &[PhotoId],
-        cursor: Option<&TimeIdCursor<PhotoId>>,
-        size: u64,
-    ) -> Result<Vec<PhotoId>> {
-        if photo_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let mut query = Entity::find()
-            .filter(Column::Id.is_in(photo_ids.iter().copied()))
-            .order_by_desc(Column::CreatedAt)
-            .order_by_desc(Column::Id)
-            .limit(size);
-
-        if let Some(c) = cursor {
-            query = query.filter(
-                sea_orm::Condition::any()
-                    .add(Column::CreatedAt.lt(c.created_at))
-                    .add(
-                        sea_orm::Condition::all()
-                            .add(Column::CreatedAt.eq(c.created_at))
-                            .add(Column::Id.lt(c.id)),
-                    ),
-            );
-        }
-
-        query
-            .select_only()
-            .column(Column::Id)
-            .into_tuple::<i64>()
-            .all(db)
-            .await?
-            .into_iter()
-            .map(PhotoId)
-            .collect::<Vec<_>>()
-            .to_ok()
-    }
-
     #[expect(dead_code)]
     pub async fn query_by_id(
         db: &impl ConnectionTrait,

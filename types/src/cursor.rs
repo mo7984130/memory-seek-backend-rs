@@ -91,20 +91,16 @@ impl<I: Clone + Into<sea_orm::Value>> TimeIdCursor<I> {
     ) -> sea_orm::Condition {
         use sea_orm::Condition;
         match direction {
-            KeysetDirection::Desc => Condition::any()
-                .add(time_col.lt(self.created_at))
-                .add(
-                    Condition::all()
-                        .add(time_col.eq(self.created_at))
-                        .add(id_col.lt(self.id.clone())),
-                ),
-            KeysetDirection::Asc => Condition::any()
-                .add(time_col.gt(self.created_at))
-                .add(
-                    Condition::all()
-                        .add(time_col.eq(self.created_at))
-                        .add(id_col.gt(self.id.clone())),
-                ),
+            KeysetDirection::Desc => Condition::any().add(time_col.lt(self.created_at)).add(
+                Condition::all()
+                    .add(time_col.eq(self.created_at))
+                    .add(id_col.lt(self.id.clone())),
+            ),
+            KeysetDirection::Asc => Condition::any().add(time_col.gt(self.created_at)).add(
+                Condition::all()
+                    .add(time_col.eq(self.created_at))
+                    .add(id_col.gt(self.id.clone())),
+            ),
         }
     }
 
@@ -187,7 +183,7 @@ mod tests {
     mod keyset_tests {
         use super::*;
         use chrono::DateTime;
-        use sea_orm::{DbBackend, QueryFilter, QueryTrait, entity::prelude::*};
+        use sea_orm::{entity::prelude::*, DbBackend, QueryFilter, QueryTrait};
 
         #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
         #[sea_orm(table_name = "test_entity")]

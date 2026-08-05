@@ -1,6 +1,5 @@
 use bytes::Bytes;
 use reqwest::StatusCode;
-use reqwest::header::HeaderMap;
 use thiserror::Error;
 
 use common::error::AppError;
@@ -27,7 +26,6 @@ pub enum OssError {
     Http {
         url: String,
         status: StatusCode,
-        headers: HeaderMap,
         body: Bytes,
     },
 }
@@ -50,14 +48,8 @@ impl OssError {
     pub async fn from_response(response: reqwest::Response) -> Self {
         let url = response.url().to_string();
         let status = response.status();
-        let headers = response.headers().clone();
         let body = response.bytes().await.unwrap_or_default();
-        Self::Http {
-            url,
-            status,
-            headers,
-            body,
-        }
+        Self::Http { url, status, body }
     }
 }
 

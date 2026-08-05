@@ -20,6 +20,8 @@ macro_rules! id_type {
         #[derive(
             PartialEq,
             Eq,
+            PartialOrd,
+            Ord,
             Hash,
             Copy,
             Clone,

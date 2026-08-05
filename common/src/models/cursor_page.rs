@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::{error::AppError, ext::ToOk};
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -36,14 +38,18 @@ impl<T> CursorPage<T, ()> {
 }
 
 impl<T, C> CursorPage<T, C> {
-    pub fn from_oversize_fn<F>(mut records: Vec<T>, size: u64, get_cursor: F) -> Self
+    pub fn from_oversize_fn<F>(
+        mut records: Vec<T>,
+        size: u64,
+        get_cursor: F,
+    ) -> Result<Self, AppError>
     where
-        F: FnOnce(&T) -> C,
+        F: FnOnce(&T) -> Result<C, AppError>,
     {
         if records.len() > size as usize {
             records.pop();
 
-            let next_cursor = records.last().map(get_cursor);
+            let next_cursor = records.last().map(get_cursor).transpose()?;
 
             Self {
                 records,
@@ -57,6 +63,7 @@ impl<T, C> CursorPage<T, C> {
                 has_more: false,
             }
         }
+        .to_ok()
     }
 }
 

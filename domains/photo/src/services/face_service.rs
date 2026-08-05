@@ -34,8 +34,8 @@ use crate::{
     mappers::{
         face_mapper::FaceMapper,
         person_mapper::{PersonCoverUpdate, PersonMapper},
+        photo_mapper::PhotoMapper,
     },
-    services::{embedding_math, person_cover},
 };
 
 pub(crate) struct FaceService;
@@ -251,13 +251,11 @@ impl FaceService {
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 // 加行锁读取人脸(读-改-写流程, 避免并发转移丢更新)
-                let face = FaceMapper::query_by_id_for_update(txn, face_id)
-                    .await?
-                    .ok_or_error(
-                        "face_not_found",
-                        "人脸不存在",
-                        AppError::not_found("人脸不存在"),
-                    )?;
+                let face = FaceMapper::lock_by_id(txn, face_id).await?.ok_or_error(
+                    "face_not_found",
+                    "人脸不存在",
+                    AppError::not_found("人脸不存在"),
+                )?;
 
                 // 归属未变化, 直接返回
                 if face.person_id == Some(person_id) {
@@ -277,13 +275,11 @@ impl FaceService {
                 let mut persons: HashMap<PersonId, PersonRecord> =
                     HashMap::with_capacity(lock_ids.len());
                 for id in lock_ids {
-                    let person = PersonMapper::query_by_id_for_update(txn, id)
-                        .await?
-                        .ok_or_error(
-                            "person_not_found",
-                            "人物不存在",
-                            AppError::not_found("人物不存在"),
-                        )?;
+                    let person = PersonMapper::lock_by_id(txn, id).await?.ok_or_error(
+                        "person_not_found",
+                        "人物不存在",
+                        AppError::not_found("人物不存在"),
+                    )?;
                     persons.insert(id, person);
                 }
                 let new_person = &persons[&person_id];
@@ -304,7 +300,7 @@ impl FaceService {
                     person_id,
                     new_person.face_count + 1,
                     new_person.weight + face.score as f64,
-                    embedding_math::add_scaled(&new_person.centroid, &face.embedding, face.score),
+                    new_person.centroid.add_scaled(&face.embedding, face.score),
                     new_cover,
                 )
                 .await?;
@@ -322,11 +318,7 @@ impl FaceService {
                             old_id,
                             old_person.face_count - 1,
                             old_person.weight - face.score as f64,
-                            embedding_math::sub_scaled(
-                                &old_person.centroid,
-                                &face.embedding,
-                                face.score,
-                            ),
+                            old_person.centroid.sub_scaled(&face.embedding, face.score),
                             old_cover,
                         )
                         .await?;
@@ -359,7 +351,19 @@ impl FaceService {
             )?
             .score;
         if face.score > cover_score {
-            person_cover::cover_update_from_face(txn, face).await
+            let file_id = PhotoMapper::query_file_id_by_id(txn, face.photo_id)
+                .await?
+                .ok_or_error(
+                    "person_cover_photo_not_found",
+                    "封面人脸所属照片不存在",
+                    AppError::InternalServerError,
+                )?;
+            Ok(Some(PersonCoverUpdate {
+                cover_face_id: face.id,
+                cover_photo_id: face.photo_id,
+                cover_file_id: file_id,
+                cover_bbox: bbox_from_insight(face.bbox),
+            }))
         } else {
             Ok(None)
         }
@@ -384,7 +388,19 @@ impl FaceService {
                 "人物封面人脸不存在",
                 AppError::InternalServerError,
             )?;
-        person_cover::cover_update_from_face(txn, &top).await
+        let file_id = PhotoMapper::query_file_id_by_id(txn, top.photo_id)
+            .await?
+            .ok_or_error(
+                "person_cover_photo_not_found",
+                "封面人脸所属照片不存在",
+                AppError::InternalServerError,
+            )?;
+        Ok(Some(PersonCoverUpdate {
+            cover_face_id: top.id,
+            cover_photo_id: top.photo_id,
+            cover_file_id: file_id,
+            cover_bbox: bbox_from_insight(top.bbox),
+        }))
     }
 }
 
@@ -420,5 +436,3 @@ impl FaceService {
 
 // 删除
 impl FaceService {}
-
-// todo smallvec

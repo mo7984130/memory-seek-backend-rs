@@ -85,7 +85,7 @@ wiremock = "0.6"
 
 indexmap = "2.14.0"
 
-insight-face-rs = { version = "2.0.0" , features = ["pgvector"] }
+insight-face-rs = { version = "2.1.0" , features = ["pgvector"] }
 
 
 # Backup

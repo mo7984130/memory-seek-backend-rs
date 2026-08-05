@@ -1,14 +1,10 @@
 use common::{Result, ext::ToOk};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, sea_query::Expr,
+    ColumnTrait, ConnectionTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
+    sea_query::Expr,
 };
 use types::cursor::TimeIdCursor;
-use types::photo::{
-    face::*,
-    person::PersonId,
-    photo::{PhotoId, PhotoRecord},
-};
+use types::photo::{face::*, person::PersonId, photo::PhotoId};
 
 pub struct FaceMapper;
 
@@ -101,25 +97,6 @@ impl FaceMapper {
 
 // 查询
 impl FaceMapper {
-    /// 查询属于该人物的全部去重照片 ID(photo_face.person_id → photo_id)
-    pub async fn query_photo_ids_by_person_id(
-        db: &impl ConnectionTrait,
-        person_id: PersonId,
-    ) -> Result<Vec<PhotoId>> {
-        Entity::find()
-            .filter(Column::PersonId.eq(person_id))
-            .select_only()
-            .column(Column::PhotoId)
-            .distinct()
-            .into_tuple::<i64>()
-            .all(db)
-            .await?
-            .into_iter()
-            .map(PhotoId)
-            .collect::<Vec<_>>()
-            .to_ok()
-    }
-
     pub async fn query_by_id(db: &impl ConnectionTrait, id: FaceId) -> Result<Option<FaceRecord>> {
         Entity::find()
             .filter(Column::Id.eq(id))
@@ -205,16 +182,6 @@ impl FaceMapper {
             .map(PhotoId::from)
             .collect::<Vec<_>>()
             .to_ok()
-    }
-
-    /// 统计某人物的人脸数量
-    #[expect(dead_code)]
-    pub async fn count_by_person_id(db: &impl ConnectionTrait, person_id: PersonId) -> Result<u64> {
-        let count = Entity::find()
-            .filter(Column::PersonId.eq(person_id))
-            .count(db)
-            .await?;
-        Ok(count as u64)
     }
 }
 

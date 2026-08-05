@@ -70,7 +70,6 @@ mod tests {
     use super::*;
     use bytes::Bytes;
     use reqwest::StatusCode;
-    use reqwest::header::HeaderMap;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -78,7 +77,6 @@ mod tests {
         OssError::Http {
             url: "http://oss.test/key".into(),
             status: StatusCode::TOO_MANY_REQUESTS,
-            headers: HeaderMap::new(),
             body: Bytes::new(),
         }
     }
@@ -94,7 +92,6 @@ mod tests {
         OssError::Http {
             url: "http://oss.test/key".into(),
             status: StatusCode::INTERNAL_SERVER_ERROR,
-            headers: HeaderMap::new(),
             body: Bytes::new(),
         }
     }

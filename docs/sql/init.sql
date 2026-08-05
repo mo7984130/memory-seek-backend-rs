@@ -231,7 +231,7 @@ CREATE TABLE IF NOT EXISTS photo_face (
     person_id  BIGINT NULL,
     bbox       JSONB NOT NULL,
     landmarks  JSONB NOT NULL,
-    score      REAL NOT NULL,
+    score      DOUBLE PRECISION NOT NULL,
     embedding  vector(512) NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
