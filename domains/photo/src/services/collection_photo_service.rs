@@ -19,7 +19,8 @@ use types::{
     photo::{
         collection::CollectionId,
         dto::collection::{
-            CollectionBriefView, CollectionPhotoAddBatchResult, CollectionPhotoRemoveBatchResult,
+            CollectionBriefView, CollectionPhotoAddBatchResult, CollectionPhotoCursorPageParam,
+            CollectionPhotoRemoveBatchResult,
         },
         dto::photo::PhotoView,
         models::PhotoIds,
@@ -64,8 +65,7 @@ impl CollectionPhotoService {
         state: &PhotoState,
         user_id: UserId,
         collection_id: CollectionId,
-        cursor: Option<TimeIdCursor<PhotoId>>,
-        size: u64,
+        param: CollectionPhotoCursorPageParam,
     ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
@@ -73,8 +73,8 @@ impl CollectionPhotoService {
             &state.db,
             user_id,
             collection_id,
-            cursor.as_ref(),
-            size + 1,
+            param.cursor.as_ref(),
+            param.size + 1,
         )
         .timed(metrics_name!("query_photo_ids"))
         .await?;
@@ -83,7 +83,7 @@ impl CollectionPhotoService {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, size);
+        } = CursorPage::from_oversize(photo_ids, param.size);
 
         let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))

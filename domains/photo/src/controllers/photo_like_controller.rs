@@ -72,10 +72,7 @@ impl PhotoLikeController {
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(query): ValidatedQuery<LikedPhotosQuery>,
     ) -> Result<R<CursorPage<PhotoView, String>>> {
-        let size = query.size.unwrap_or(20).min(100);
-
-        let result = PhotoLikeService::get_user_liked_photos(&state, user_id, query.cursor, size)
-            .await?;
+        let result = PhotoLikeService::get_user_liked_photos(&state, user_id, query).await?;
 
         Ok(result).to_r_ok()
     }

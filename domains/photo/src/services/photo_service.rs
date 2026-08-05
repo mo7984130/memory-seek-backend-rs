@@ -16,7 +16,6 @@ use common::{
 use constants::RedisKeys;
 use futures::Stream;
 use oss::OssError;
-use sea_orm::entity::prelude::DateTimeUtc;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use tracing::instrument;
 use uuid::Uuid;
@@ -33,7 +32,7 @@ use crate::{
 use common::Result;
 use types::photo::{
     ImageToken, ImageTokenType,
-    dto::photo::{PageDirection, PhotoView},
+    dto::photo::{PhotoCursorParam, PhotoView},
     models::{DeletePhotosParam, ExistsByMd5BatchParam, UploadPhotoParam},
 };
 
@@ -83,18 +82,20 @@ impl PhotoService {
     pub async fn get_photo_cursor_page(
         state: &PhotoState,
         user_id: UserId,
-        cursor: Option<TimeIdCursor<PhotoId>>,
-        size: u64,
-        direction: PageDirection,
-        anchor_time: Option<DateTimeUtc>,
+        param: PhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
         // 获取photo_ids
-        let photo_ids =
-            PhotoMapper::query_cursor_page_ids(&state.db, cursor, size + 1, direction, anchor_time)
-                .timed(metrics_name!("find_cursor_page_ids"))
-                .await?;
+        let photo_ids = PhotoMapper::query_cursor_page_ids(
+            &state.db,
+            param.cursor,
+            param.size + 1,
+            param.direction,
+            param.anchor_time,
+        )
+        .timed(metrics_name!("find_cursor_page_ids"))
+        .await?;
         if photo_ids.is_empty() {
             return Ok(CursorPage::empty());
         }
@@ -103,7 +104,7 @@ impl PhotoService {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, size);
+        } = CursorPage::from_oversize(photo_ids, param.size);
 
         let photo_vos = Self::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))

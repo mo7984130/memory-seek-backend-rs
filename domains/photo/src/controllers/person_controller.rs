@@ -67,7 +67,7 @@ impl PersonController {
         ValidatedPath(person_id): ValidatedPath<PersonId>,
         ValidatedJson(param): ValidatedJson<RenamePersonParam>,
     ) -> Result<R<()>> {
-        PersonService::rename_person(&state, person_id, param.new_name)
+        PersonService::rename_person(&state, person_id, param)
             .await
             .to_r_ok()
     }
@@ -87,9 +87,7 @@ impl PersonController {
         State(state): State<Arc<PhotoState>>,
         ValidatedQuery(query): ValidatedQuery<PersonCursorParam>,
     ) -> Result<R<CursorPage<PersonView, PersonId>>> {
-        PersonService::get_persons(&state, query.cursor, query.size)
-            .await
-            .to_r_ok()
+        PersonService::get_persons(&state, query).await.to_r_ok()
     }
 
     /// 获取人物的照片列表(游标分页)
@@ -99,9 +97,7 @@ impl PersonController {
         ValidatedPath(person_id): ValidatedPath<PersonId>,
         ValidatedQuery(query): ValidatedQuery<PersonPhotoCursorParam>,
     ) -> Result<R<CursorPage<PhotoView, TimeIdCursor<PhotoId>>>> {
-        let PersonPhotoCursorParam { cursor, size } = query;
-
-        PersonService::get_person_photos(&state, user_id, person_id, cursor, size)
+        PersonService::get_person_photos(&state, user_id, person_id, query)
             .await
             .to_r_ok()
     }

@@ -2,9 +2,9 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::cursor::TimeIdCursor;
+use crate::photo::photo::PhotoId;
 #[cfg(feature = "orm")]
 use crate::photo::photo::PhotoRecord;
-use crate::photo::photo::PhotoId;
 #[cfg(feature = "orm")]
 use crate::photo::ImageToken;
 #[cfg(feature = "orm")]
@@ -97,7 +97,6 @@ crate::in_dto!(PhotoCursorParam, "photo/", serde_default, docs = "照片游标�
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size: u64,
     pub direction: PageDirection,
-    pub default_collection_id: Option<String>,
     pub anchor_time: Option<DateTime<Utc>>,
 });
 
@@ -107,7 +106,6 @@ impl Default for PhotoCursorParam {
             cursor: None,
             size: 128,
             direction: PageDirection::Next,
-            default_collection_id: None,
             anchor_time: None,
         }
     }

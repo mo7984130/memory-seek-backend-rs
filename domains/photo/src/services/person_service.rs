@@ -21,10 +21,11 @@ use types::{
     photo::{
         ImageToken, PersonView,
         dto::face::bbox_from_insight,
-        dto::person::MergePersonParam,
+        dto::person::{
+            MergePersonParam, PersonCursorParam, PersonPhotoCursorParam, RenamePersonParam,
+        },
         dto::photo::PhotoView,
         face,
-        models::PersonName,
         person::{self, NewPerson, PersonId, PersonRecord},
         photo::PhotoId,
     },
@@ -171,7 +172,7 @@ impl PersonService {
     pub async fn rename_person(
         state: &PhotoState,
         person_id: PersonId,
-        new_name: PersonName,
+        param: RenamePersonParam,
     ) -> Result<()> {
         // 校验人物存在
         PersonMapper::query_by_id(&state.db, person_id)
@@ -182,7 +183,7 @@ impl PersonService {
                 AppError::not_found("人物不存在"),
             )?;
 
-        PersonMapper::rename(&state.db, person_id, new_name.into_inner())
+        PersonMapper::rename(&state.db, person_id, param.new_name.into_inner())
             .await?
             .no_zero_or_warn(
                 "person_rename_fail",
@@ -299,15 +300,14 @@ impl PersonService {
 impl PersonService {
     pub async fn get_persons(
         state: &PhotoState,
-        cursor: Option<PersonId>,
-        size: u64,
+        param: PersonCursorParam,
     ) -> Result<CursorPage<PersonView, PersonId>> {
-        let persons = PersonMapper::query(&state.db, cursor, size + 1).await?;
+        let persons = PersonMapper::query(&state.db, param.cursor, param.size + 1).await?;
         let views = persons
             .into_iter()
             .map(|person| Self::to_view(state, person))
             .collect::<Vec<_>>();
-        let page = CursorPage::from_oversize_fn(views, size, |person| person.id);
+        let page = CursorPage::from_oversize_fn(views, param.size, |person| person.id);
         Ok(page)
     }
 
@@ -334,9 +334,8 @@ impl PersonService {
         state: &PhotoState,
         user_id: UserId,
         person_id: PersonId,
-        cursor: Option<TimeIdCursor<PhotoId>>,
-        size: u64,
-    ) -> Result<CursorPage<PhotoView, String>> {
+        param: PersonPhotoCursorParam,
+    ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
         metrics_group!();
 
         let photo_ids = FaceMapper::query_photo_ids_by_person_id(&state.db, person_id)
@@ -347,27 +346,28 @@ impl PersonService {
             return Ok(CursorPage::empty());
         }
 
-        let photo_ids =
-            PhotoMapper::query_ids_page_by_ids(&state.db, &photo_ids, cursor.as_ref(), size + 1)
-                .timed(metrics_name!("query_photo_page_ids"))
-                .await?;
+        let photo_ids = PhotoMapper::query_ids_page_by_ids(
+            &state.db,
+            &photo_ids,
+            param.cursor.as_ref(),
+            param.size + 1,
+        )
+        .timed(metrics_name!("query_photo_page_ids"))
+        .await?;
 
         let CursorPage {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, size);
+        } = CursorPage::from_oversize(photo_ids, param.size);
 
         let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))
             .await?;
         let next_cursor = photo_vos.last().and_then(|vo| {
-            PhotoId::parse_from_str_or_none(&vo.id).map(|id| {
-                TimeIdCursor {
-                    created_at: vo.created_at,
-                    id,
-                }
-                .encode()
+            PhotoId::parse_from_str_or_none(&vo.id).map(|id| TimeIdCursor {
+                created_at: vo.created_at,
+                id,
             })
         });
 

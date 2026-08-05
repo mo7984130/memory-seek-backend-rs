@@ -45,7 +45,7 @@ impl CollectionController {
         Extension(user_id): Extension<UserId>,
         ValidatedJson(data): ValidatedJson<CollectionCreateParam>,
     ) -> Result<R<CollectionView>> {
-        CollectionService::create_collection(&state, user_id, data.name, data.description)
+        CollectionService::create_collection(&state, user_id, data)
             .await
             .to_r_ok()
     }
@@ -71,15 +71,9 @@ impl CollectionController {
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedJson(param): ValidatedJson<CollectionUpdateParam>,
     ) -> Result<R<()>> {
-        CollectionService::update_collection_info(
-            &state,
-            user_id,
-            collection_id,
-            param.name,
-            param.description,
-        )
-        .await
-        .to_r_ok()
+        CollectionService::update_collection_info(&state, user_id, collection_id, param)
+            .await
+            .to_r_ok()
     }
 }
 

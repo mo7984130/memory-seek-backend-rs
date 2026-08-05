@@ -10,11 +10,7 @@ use common::{
     utils::{DbUtils, MetricsTimerExt},
 };
 use sea_orm::entity::prelude::DateTimeUtc;
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    photo::photo::PhotoId,
-};
+use types::{auth::user::UserId, cursor::TimeIdCursor, photo::photo::PhotoId};
 
 use crate::{
     mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper},
@@ -22,6 +18,7 @@ use crate::{
     state::PhotoState,
 };
 use types::photo::dto::photo::PhotoView;
+use types::photo::models::LikedPhotosQuery;
 
 pub(crate) struct PhotoLikeService;
 
@@ -67,16 +64,19 @@ impl PhotoLikeService {
     pub async fn get_user_liked_photos(
         state: &PhotoState,
         user_id: UserId,
-        cursor: Option<TimeIdCursor<PhotoId>>,
-        size: u64,
+        param: LikedPhotosQuery,
     ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
         // 查询用户点赞的照片ID列表和点赞时间（多查一个用于判断 has_more）
-        let photo_ids_with_like_time =
-            PhotoLikeMapper::query_user_liked_photo_ids(&state.db, user_id, &cursor, size + 1)
-                .timed(metrics_name!("query_ids"))
-                .await?;
+        let photo_ids_with_like_time = PhotoLikeMapper::query_user_liked_photo_ids(
+            &state.db,
+            user_id,
+            &param.cursor,
+            param.size + 1,
+        )
+        .timed(metrics_name!("query_ids"))
+        .await?;
 
         // 构建 CursorPage（只提取 photo_id 用于分页判断）
         let photo_ids: Vec<PhotoId> = photo_ids_with_like_time.iter().map(|(id, _)| *id).collect();
@@ -84,7 +84,7 @@ impl PhotoLikeService {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, size);
+        } = CursorPage::from_oversize(photo_ids, param.size);
 
         if photo_ids.is_empty() {
             metrics_success!();

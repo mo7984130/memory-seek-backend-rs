@@ -86,9 +86,7 @@ impl CollectionPhotoController {
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedQuery(query): ValidatedQuery<CollectionPhotoCursorPageParam>,
     ) -> Result<R<CursorPage<PhotoView, String>>> {
-        let CollectionPhotoCursorPageParam { cursor, size } = query;
-
-        CollectionPhotoService::get_photos(&state, user_id, collection_id, cursor, size)
+        CollectionPhotoService::get_photos(&state, user_id, collection_id, query)
             .await
             .to_r_ok()
     }

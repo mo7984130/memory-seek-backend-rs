@@ -19,8 +19,10 @@ use types::{
     cursor::TimeIdCursor,
     photo::{
         comment::CommentId,
-        dto::comment::{CommentView, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES},
-        models::CommentContent,
+        dto::comment::{
+            CommentCursorPageParam, CommentPublishParam, CommentView, HOT_COMMENT_MAX_COUNT,
+            HOT_COMMENT_MIN_LIKES,
+        },
         photo::PhotoId,
     },
 };
@@ -34,9 +36,11 @@ impl CommentService {
         state: &PhotoState,
         photo_id: PhotoId,
         user_id: UserId,
-        content: CommentContent,
+        param: CommentPublishParam,
     ) -> Result<CommentView> {
         metrics_group!();
+
+        let CommentPublishParam { content } = param;
 
         let comment = timed!("db_transaction", {
             DbUtils::write(&state.db, |txn| {
@@ -70,13 +74,12 @@ impl CommentService {
         state: &PhotoState,
         photo_id: PhotoId,
         user_id: UserId,
-        cursor: Option<TimeIdCursor<CommentId>>,
-        size: u64,
+        param: CommentCursorPageParam,
     ) -> Result<CursorPage<CommentView, String>> {
         metrics_group!();
 
         // 如果是第一次(不带Cursor)获取的话, 展示热门评论
-        let hot_comments = if cursor.is_none() {
+        let hot_comments = if param.cursor.is_none() {
             CommentMapper::query_hot_comments(
                 &state.db,
                 photo_id,
@@ -96,8 +99,8 @@ impl CommentService {
             &state.db,
             photo_id,
             &exclude_ids,
-            cursor.as_ref(),
-            size,
+            param.cursor.as_ref(),
+            param.size,
         )
         .timed(metrics_name!("query_by_photo_id"))
         .await?;
@@ -106,7 +109,7 @@ impl CommentService {
             records: time_comments,
             has_more,
             ..
-        } = CursorPage::from_oversize(time_comments, size);
+        } = CursorPage::from_oversize(time_comments, param.size);
         let mut comments = hot_comments;
         comments.extend(time_comments);
 

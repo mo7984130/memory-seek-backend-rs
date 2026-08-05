@@ -58,7 +58,7 @@ impl CommentController {
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
         ValidatedJson(param): ValidatedJson<CommentPublishParam>,
     ) -> Result<R<CommentView>> {
-        CommentService::publish(&state, photo_id, user_id, param.content)
+        CommentService::publish(&state, photo_id, user_id, param)
             .await
             .to_r_ok()
     }
@@ -75,9 +75,7 @@ impl CommentController {
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
         ValidatedQuery(param): ValidatedQuery<CommentCursorPageParam>,
     ) -> Result<R<CursorPage<CommentView, String>>> {
-        let CommentCursorPageParam { cursor, size } = param;
-
-        CommentService::get_cursor_page(&state, photo_id, user_id, cursor, size)
+        CommentService::get_cursor_page(&state, photo_id, user_id, param)
             .await
             .to_r_ok()
     }

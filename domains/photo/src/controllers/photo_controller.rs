@@ -83,15 +83,7 @@ impl PhotoController {
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(query): ValidatedQuery<PhotoCursorParam>,
     ) -> Result<R<CursorPage<PhotoView, String>>> {
-        let PhotoCursorParam {
-            cursor,
-            size,
-            direction,
-            anchor_time,
-            ..
-        } = query;
-
-        PhotoService::get_photo_cursor_page(&state, user_id, cursor, size, direction, anchor_time)
+        PhotoService::get_photo_cursor_page(&state, user_id, query)
             .await
             .to_r_ok()
     }

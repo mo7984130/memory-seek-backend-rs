@@ -8,7 +8,7 @@ use common::utils::DbUtils;
 use common::{metrics_group, metrics_name, metrics_success, utils::MetricsTimerExt};
 use types::auth::user::UserId;
 use types::photo::collection::CollectionId;
-use types::photo::dto::collection::CollectionView;
+use types::photo::dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView};
 
 pub(crate) struct CollectionService;
 
@@ -43,11 +43,11 @@ impl CollectionService {
     pub async fn create_collection(
         state: &PhotoState,
         user_id: UserId,
-        name: String,
-        description: Option<String>,
+        param: CollectionCreateParam,
     ) -> Result<CollectionView> {
         metrics_group!();
 
+        let CollectionCreateParam { name, description } = param;
         let collection = CollectionMapper::insert(&state.db, user_id, name, description)
             .timed(metrics_name!("db_insert"))
             .await?;
@@ -64,20 +64,25 @@ impl CollectionService {
         state: &PhotoState,
         user_id: UserId,
         collection_id: CollectionId,
-        name: Option<String>,
-        description: Option<String>,
+        param: CollectionUpdateParam,
     ) -> Result<()> {
         metrics_group!();
 
         // 修改时鉴权
-        CollectionMapper::update_info(&state.db, collection_id, user_id, name, description)
-            .timed(metrics_name!("db_update"))
-            .await?
-            .no_zero_or_warn(
-                "collection_update_info_fail",
-                "修改收藏夹信息失败",
-                AppError::bad_request("修改收藏夹信息失败"),
-            )?;
+        CollectionMapper::update_info(
+            &state.db,
+            collection_id,
+            user_id,
+            param.name,
+            param.description,
+        )
+        .timed(metrics_name!("db_update"))
+        .await?
+        .no_zero_or_warn(
+            "collection_update_info_fail",
+            "修改收藏夹信息失败",
+            AppError::bad_request("修改收藏夹信息失败"),
+        )?;
 
         metrics_success!();
         Ok(())
