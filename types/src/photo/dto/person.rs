@@ -1,12 +1,13 @@
 use validator::Validate;
 
-use crate::cursor::TimeIdCursor;
+use crate::cursor::{FaceCountIdCursor, TimeIdCursor};
 use crate::photo::models::PersonName;
 use crate::photo::person::PersonId;
 use crate::photo::photo::PhotoId;
 
-crate::in_dto!(PersonCursorParam, "photo/", serde_default; {
-    pub cursor: Option<PersonId>,
+crate::in_dto!(PersonCursorParam, "photo/", serde_default, docs = "人物列表参数(cursor 为 FaceCountIdCursor<PersonId> 的 Base64 编码, 按 face_count 倒序分页)"; {
+    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+    pub cursor: Option<FaceCountIdCursor<PersonId>>,
     pub size: u64,
 });
 

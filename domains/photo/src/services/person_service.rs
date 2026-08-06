@@ -18,7 +18,7 @@ use tokio::{spawn, task::spawn_blocking};
 use tracing::{info, instrument};
 use types::{
     auth::user::{AdminId, UserId},
-    cursor::TimeIdCursor,
+    cursor::{FaceCountIdCursor, TimeIdCursor},
     photo::{
         ImageToken, PersonView,
         dto::face::bbox_from_insight,
@@ -474,13 +474,19 @@ impl PersonService {
     pub async fn get_persons(
         state: &PhotoState,
         param: PersonCursorParam,
-    ) -> Result<CursorPage<PersonView, PersonId>> {
+    ) -> Result<CursorPage<PersonView, FaceCountIdCursor<PersonId>>> {
         let persons = PersonMapper::query(&state.db, param.cursor, param.size).await?;
         let views = persons
             .into_iter()
             .map(|person| Self::to_view(state, person))
             .collect::<Vec<_>>();
-        let page = CursorPage::from_oversize_fn(views, param.size, |person| Ok(person.id))?;
+        let page = CursorPage::from_oversize_fn(views, param.size, |person| {
+            FaceCountIdCursor {
+                face_count: person.face_count,
+                id: person.id,
+            }
+            .to_ok()
+        })?;
         Ok(page)
     }
 

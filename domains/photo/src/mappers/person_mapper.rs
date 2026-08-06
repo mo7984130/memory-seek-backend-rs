@@ -4,7 +4,10 @@ use sea_orm::{
     ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::Expr, sea_query::extension::postgres::PgExpr,
 };
-use types::photo::{FaceBBox, face::FaceId, person::*, photo::PhotoId};
+use types::{
+    cursor::FaceCountIdCursor,
+    photo::{FaceBBox, face::FaceId, person::*, photo::PhotoId},
+};
 
 pub struct PersonMapper;
 
@@ -95,14 +98,17 @@ impl PersonMapper {
 
 // 查询
 impl PersonMapper {
+    /// 人物列表按 `face_count DESC, id DESC` keyset 分页
     pub async fn query(
         db: &impl ConnectionTrait,
-        cursor: Option<PersonId>,
+        cursor: Option<FaceCountIdCursor<PersonId>>,
         size: u64,
     ) -> Result<Vec<PersonRecord>> {
-        let mut query = Entity::find().order_by_desc(Column::Id);
-        if let Some(person_id) = cursor {
-            query = query.filter(Column::Id.lt(person_id));
+        let mut query = Entity::find()
+            .order_by_desc(Column::FaceCount)
+            .order_by_desc(Column::Id);
+        if let Some(cursor) = cursor {
+            query = query.filter(cursor.before(Column::FaceCount, Column::Id));
         }
         // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
         // 由 service 层用 CursorPage::from_oversize_fn 截断消费

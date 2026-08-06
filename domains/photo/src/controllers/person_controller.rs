@@ -15,7 +15,7 @@ use common::{
 };
 use types::{
     auth::user::{AdminId, UserId},
-    cursor::TimeIdCursor,
+    cursor::{FaceCountIdCursor, TimeIdCursor},
     photo::{
         PersonView,
         dto::person::{
@@ -102,7 +102,7 @@ impl PersonController {
     pub async fn get_persons(
         State(state): State<Arc<PhotoState>>,
         ValidatedQuery(query): ValidatedQuery<PersonCursorParam>,
-    ) -> Result<R<CursorPage<PersonView, PersonId>>> {
+    ) -> Result<R<CursorPage<PersonView, FaceCountIdCursor<PersonId>>>> {
         PersonService::get_persons(&state, query).await.to_r_ok()
     }
 
