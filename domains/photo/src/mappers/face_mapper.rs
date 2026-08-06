@@ -223,8 +223,10 @@ impl FaceMapper {
             .to_ok()
     }
 
-    /// 查询某人物的人脸照片 id(keyset 分页)
+    /// 查询某人物的人脸照片 id(keyset 分页, 基于照片的 (created_at, id))
     ///
+    /// 用 `EXISTS` 子查询过滤该人物的人脸, 保证同一照片多张人脸不产生重复行;
+    /// 排序与游标均基于 photo 表, 与 `next_cursor` 的编码维度一致。
     /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
     /// 由 service 层用 CursorPage::from_oversize_fn 截断消费。
     pub async fn query_photo_ids_cursor_page(
@@ -233,19 +235,36 @@ impl FaceMapper {
         cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
     ) -> Result<Vec<PhotoId>> {
-        let mut query = Entity::find()
-            .select_only()
-            .column(Column::PhotoId)
-            .filter(Column::PersonId.eq(person_id))
-            .order_by(Column::CreatedAt, Order::Desc)
-            .order_by(Column::Id, Order::Desc)
+        let subquery = Query::select()
+            .expr(Expr::val(1))
+            .from(Entity)
+            .and_where(
+                Expr::col((Entity, Column::PhotoId))
+                    .equals((types::photo::photo::Entity, types::photo::photo::Column::Id)),
+            )
+            .and_where(Column::PersonId.eq(person_id))
+            .to_owned();
+
+        let mut query = types::photo::photo::Entity::find()
+            .filter(Expr::exists(subquery))
+            .order_by(types::photo::photo::Column::CreatedAt, Order::Desc)
+            .order_by(types::photo::photo::Column::Id, Order::Desc)
             .limit(size + 1);
 
         if let Some(cursor) = cursor {
-            query = query.filter(cursor.before(Column::CreatedAt, Column::Id));
+            query = query.filter(cursor.before(
+                types::photo::photo::Column::CreatedAt,
+                types::photo::photo::Column::Id,
+            ));
         }
 
-        query.into_tuple::<PhotoId>().all(db).await?.to_ok()
+        query
+            .select_only()
+            .column(types::photo::photo::Column::Id)
+            .into_tuple::<PhotoId>()
+            .all(db)
+            .await?
+            .to_ok()
     }
 }
 
