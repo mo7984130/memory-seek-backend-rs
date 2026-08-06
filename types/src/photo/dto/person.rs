@@ -62,6 +62,17 @@ crate::in_dto!(RenamePersonParam, "photo/", docs = "重命名人物参数"; {
     pub new_name: PersonName,
 });
 
+fn secondary_cluster_default_threshold() -> f32 {
+    0.55
+}
+
+crate::in_dto!(SecondaryClusterParam, "photo/", docs = "二次聚类参数(将未分配人脸按 centroid 余弦相似度指派到已有人物)"; {
+    /// 余弦相似度阈值: 高于等于该值才指派, 否则保持未分配(范围 0 到 1, 默认 0.55)
+    #[validate(range(min = 0.0, max = 1.0, message = "相似度阈值在 0 到 1 之间"))]
+    #[serde(default = "secondary_cluster_default_threshold")]
+    pub threshold: f32,
+});
+
 /// 合并人物参数
 #[derive(Debug, serde::Deserialize, validator::Validate)]
 #[serde(rename_all = "camelCase", try_from = "MergePersonParamInner")]

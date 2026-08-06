@@ -114,6 +114,17 @@ impl PersonMapper {
             .collect::<std::result::Result<Vec<_>, _>>()
     }
 
+    /// 查询全部人物(id 升序, 供二次聚类等全量内存匹配使用)
+    pub async fn query_all(db: &impl ConnectionTrait) -> Result<Vec<PersonRecord>> {
+        Entity::find()
+            .order_by_asc(Column::Id)
+            .all(db)
+            .await?
+            .into_iter()
+            .map(PersonRecord::try_from)
+            .collect::<std::result::Result<Vec<_>, _>>()
+    }
+
     /// 按关键词前缀搜索人物(id 倒序分页, 与 `query` 分页语义一致)
     ///
     /// 匹配 `name` 或 `name_initials` 的前缀(ILIKE 忽略大小写);

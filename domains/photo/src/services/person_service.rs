@@ -24,10 +24,10 @@ use types::{
         dto::face::bbox_from_insight,
         dto::person::{
             MergePersonParam, PersonCursorParam, PersonPhotoCursorParam, PersonSearchParam,
-            RenamePersonParam,
+            RenamePersonParam, SecondaryClusterParam,
         },
         dto::photo::PhotoView,
-        face,
+        face::{self, FaceId},
         person::{self, NewPerson, PersonId, PersonRecord},
         photo::PhotoId,
     },
@@ -168,6 +168,177 @@ impl PersonService {
         .await?;
 
         Ok(())
+    }
+
+    /// 二次聚类: 将全部未分配人脸(`person_id IS NULL`)按 centroid 余弦相似度
+    /// 指派到已有人物, 低于阈值的人脸保持未分配。
+    ///
+    /// 人脸 embedding 已归一化(insight-face-rs 输出时 normalize);
+    /// person centroid 为未归一化加权和, 匹配前先 normalize。
+    pub async fn assign_unassigned_faces(
+        state: Arc<PhotoState>,
+        admin: AdminId,
+        param: SecondaryClusterParam,
+    ) -> Result<()> {
+        spawn(async move { Self::inner_assign_unassigned_faces(state, admin, param).await });
+        Ok(())
+    }
+
+    async fn inner_assign_unassigned_faces(
+        state: Arc<PhotoState>,
+        admin: AdminId,
+        param: SecondaryClusterParam,
+    ) -> Result<()> {
+        let user_id = admin.into_inner();
+        let SecondaryClusterParam { threshold } = param;
+        info!(user_id = %user_id, threshold, "管理员触发二次聚类");
+
+        let faces = FaceMapper::query_unassigned(&state.db).await?;
+        let persons = PersonMapper::query_all(&state.db).await?;
+        info!(
+            "加载完成: 未分配人脸 {} 张, 人物 {} 个",
+            faces.len(),
+            persons.len()
+        );
+        if faces.is_empty() || persons.is_empty() {
+            return Ok(());
+        }
+
+        // 内存分类(CPU 密集, 放入阻塞线程池; faces 原样带回供事务内使用)
+        let classified = spawn_blocking(move || {
+            let face_refs = faces
+                .iter()
+                .map(|f| (f.id, &f.embedding))
+                .collect::<Vec<_>>();
+            let person_refs = persons
+                .iter()
+                .map(|p| (p.id, &p.centroid))
+                .collect::<Vec<_>>();
+            let classified = Self::classify_unassigned(&face_refs, &person_refs, threshold);
+            Ok::<_, AppError>((classified, faces))
+        })
+        .await??;
+        let (classified, faces) = classified;
+
+        let matched = classified.len();
+        let unmatched = faces.len() - matched;
+        info!("分类完成: 匹配 {} 张, 未匹配 {} 张", matched, unmatched);
+        if classified.is_empty() {
+            return Ok(());
+        }
+
+        DbUtils::write(&state.db, |txn| {
+            Box::pin(async move {
+                // 按人物分组聚合(一次事务内批量写入, 保持不变量一致)
+                let face_by_id: HashMap<FaceId, &face::FaceRecord> =
+                    faces.iter().map(|f| (f.id, f)).collect();
+                let mut per_person: HashMap<PersonId, Vec<&face::FaceRecord>> = HashMap::new();
+                for (face_id, person_id) in &classified {
+                    per_person
+                        .entry(*person_id)
+                        .or_default()
+                        .push(face_by_id[face_id]);
+                }
+
+                // 涉及的人物按 id 升序加行锁(与 change_face_belonging 加锁顺序一致, 防死锁)
+                let mut person_ids: Vec<PersonId> = per_person.keys().copied().collect();
+                person_ids.sort_unstable();
+                for person_id in person_ids {
+                    let assigned_faces = &per_person[&person_id];
+                    let person = PersonMapper::lock_by_id(txn, person_id)
+                        .await?
+                        .ok_or_error(
+                            "person_not_found",
+                            "二次聚类时, 人物不存在",
+                            AppError::InternalServerError,
+                        )?;
+
+                    // Δweight / Δcentroid = Σscore / Σ(score×embedding)
+                    let (delta_weight, delta_centroid) = FaceEmbedding::weighted_sum(
+                        assigned_faces.iter().map(|f| (f.score, &f.embedding)),
+                    );
+
+                    // 封面: 集合新增多张人脸, 新封面 = max(当前封面, 组内 score 最高脸)
+                    let cover = {
+                        let top_in_group = assigned_faces
+                            .iter()
+                            .max_by(|&&a, &&b| a.score.total_cmp(&b.score))
+                            .expect("assigned_faces should not be empty");
+                        let current_cover_score =
+                            FaceMapper::query_by_id(txn, person.cover_face_id)
+                                .await?
+                                .ok_or_error(
+                                    "person_cover_face_not_found",
+                                    "人物封面人脸不存在",
+                                    AppError::InternalServerError,
+                                )?
+                                .score;
+                        if top_in_group.score > current_cover_score {
+                            let file_id =
+                                PhotoMapper::query_file_id_by_id(txn, top_in_group.photo_id)
+                                    .await?
+                                    .ok_or_error(
+                                        "person_cover_photo_not_found",
+                                        "封面人脸所属照片不存在",
+                                        AppError::InternalServerError,
+                                    )?;
+                            Some(PersonCoverUpdate {
+                                cover_face_id: top_in_group.id,
+                                cover_photo_id: top_in_group.photo_id,
+                                cover_file_id: file_id,
+                                cover_bbox: bbox_from_insight(top_in_group.bbox),
+                            })
+                        } else {
+                            None
+                        }
+                    };
+
+                    PersonMapper::update_stats(
+                        txn,
+                        person_id,
+                        person.face_count + assigned_faces.len() as u64,
+                        person.weight + delta_weight,
+                        person.centroid.add(&delta_centroid),
+                        cover,
+                    )
+                    .await?;
+
+                    FaceMapper::update_person_id(
+                        txn,
+                        person_id,
+                        assigned_faces.iter().map(|f| f.id),
+                    )
+                    .await?;
+                }
+                Ok(())
+            })
+        })
+        .await?;
+
+        Ok(())
+    }
+
+    /// 最近质心分类: 每张未分配人脸取与各人物 centroid(已归一化)余弦相似度最高者,
+    /// 相似度 `>= threshold` 才指派, 否则保持未分配。
+    fn classify_unassigned(
+        faces: &[(FaceId, &FaceEmbedding)],
+        persons: &[(PersonId, &FaceEmbedding)],
+        threshold: f32,
+    ) -> Vec<(FaceId, PersonId)> {
+        let mut assignments = Vec::new();
+        for (face_id, embedding) in faces {
+            let mut best: Option<(f32, PersonId)> = None;
+            for (person_id, centroid) in persons {
+                let sim = embedding.cosine_similarity(centroid);
+                if sim >= threshold && best.is_none_or(|(b, _)| sim > b) {
+                    best = Some((sim, *person_id));
+                }
+            }
+            if let Some((_, person_id)) = best {
+                assignments.push((*face_id, person_id));
+            }
+        }
+        assignments
     }
 }
 
@@ -455,28 +626,80 @@ impl PersonService {
 #[cfg(test)]
 mod tests {
     use super::PersonService;
+    use insight_face_rs::types::{DIMS, FaceEmbedding};
+    use types::photo::{face::FaceId, person::PersonId};
 
-    #[test]
-    fn compute_name_initials_chinese() {
-        assert_eq!(PersonService::compute_name_initials("张三"), Some("ZS".to_string()));
+    fn embedding_with(x: f32) -> FaceEmbedding {
+        let mut arr = [0.0f32; DIMS];
+        arr[0] = x;
+        arr[1] = 1.0 - x;
+        FaceEmbedding(arr).normalize()
+    }
+
+    fn person(id: i64, centroid: FaceEmbedding) -> (PersonId, FaceEmbedding) {
+        (PersonId(id), centroid)
+    }
+
+    fn face(id: i64, embedding: FaceEmbedding) -> (FaceId, FaceEmbedding) {
+        (FaceId(id), embedding)
+    }
+
+    fn classify(
+        faces: &[(FaceId, FaceEmbedding)],
+        persons: &[(PersonId, FaceEmbedding)],
+        threshold: f32,
+    ) -> Vec<(FaceId, PersonId)> {
+        let face_refs = faces.iter().map(|(id, e)| (*id, e)).collect::<Vec<_>>();
+        let person_refs = persons.iter().map(|(id, c)| (*id, c)).collect::<Vec<_>>();
+        PersonService::classify_unassigned(&face_refs, &person_refs, threshold)
     }
 
     #[test]
-    fn compute_name_initials_english() {
-        assert_eq!(PersonService::compute_name_initials("alice wang"), Some("AW".to_string()));
-        assert_eq!(PersonService::compute_name_initials("Bob"), Some("B".to_string()));
+    fn classify_assigns_to_most_similar_person_above_threshold() {
+        let persons = vec![
+            person(1, embedding_with(0.9)),
+            person(2, embedding_with(0.1)),
+        ];
+        let faces = vec![face(10, embedding_with(0.95))];
+        let result = classify(&faces, &persons, 0.55);
+        assert_eq!(result, vec![(FaceId(10), PersonId(1))]);
     }
 
     #[test]
-    fn compute_name_initials_mixed() {
-        assert_eq!(PersonService::compute_name_initials("张三Alice"), Some("ZSA".to_string()));
-        assert_eq!(PersonService::compute_name_initials("Alice-Wang"), Some("AW".to_string()));
+    fn classify_keeps_below_threshold_unassigned() {
+        let persons = vec![person(1, embedding_with(0.9))];
+        // (0,1) 与 (0.9,0.1) 归一化后余弦 ≈ 0.11, 低于阈值
+        let faces = vec![face(10, embedding_with(0.0))];
+        let result = classify(&faces, &persons, 0.55);
+        assert!(result.is_empty());
     }
 
     #[test]
-    fn compute_name_initials_empty_or_invalid() {
-        assert_eq!(PersonService::compute_name_initials(""), None);
-        assert_eq!(PersonService::compute_name_initials("123"), None);
-        assert_eq!(PersonService::compute_name_initials("- -"), None);
+    fn classify_picks_highest_similarity_person() {
+        let persons = vec![
+            person(1, embedding_with(0.2)),
+            person(2, embedding_with(0.8)),
+        ];
+        let faces = vec![face(10, embedding_with(0.85))];
+        let result = classify(&faces, &persons, 0.5);
+        assert_eq!(result, vec![(FaceId(10), PersonId(2))]);
+    }
+
+    #[test]
+    fn classify_empty_inputs_returns_empty() {
+        assert!(classify(&[], &[], 0.55).is_empty());
+        let persons = vec![person(1, embedding_with(0.9))];
+        assert!(classify(&[], &persons, 0.55).is_empty());
+        let faces = vec![face(10, embedding_with(0.9))];
+        assert!(classify(&faces, &[], 0.55).is_empty());
+    }
+
+    #[test]
+    fn classify_exact_threshold_is_assigned() {
+        let persons = vec![person(1, embedding_with(0.9))];
+        let faces = vec![face(10, embedding_with(0.9))];
+        // 相同单位向量余弦 = 1.0, 边界上应被指派
+        let result = classify(&faces, &persons, 1.0);
+        assert_eq!(result, vec![(FaceId(10), PersonId(1))]);
     }
 }

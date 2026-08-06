@@ -2200,7 +2200,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.2",
+ "windows-core 0.57.0",
 ]
 
 [[package]]
@@ -2436,9 +2436,9 @@ dependencies = [
 
 [[package]]
 name = "insight-face-rs"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b79186de0baef3db78997059394a5f0e8b04dfe590378222fe3ec07c35d7bc3a"
+checksum = "a0ad2445f932d2035a67b17182a7c355fc89064957aa2797de8f9ee97af59b72"
 dependencies = [
  "image",
  "imageproc",

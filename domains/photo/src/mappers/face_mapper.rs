@@ -156,6 +156,17 @@ impl FaceMapper {
             .collect()
     }
 
+    /// 查询全部未分配人脸(`person_id IS NULL`, 增量插入或聚类离群)
+    pub async fn query_unassigned(db: &impl ConnectionTrait) -> Result<Vec<FaceRecord>> {
+        Entity::find()
+            .filter(Column::PersonId.is_null())
+            .all(db)
+            .await?
+            .into_iter()
+            .map(FaceRecord::try_from)
+            .collect()
+    }
+
     pub async fn query_photo_ids_cursor_page(
         db: &impl ConnectionTrait,
         person_id: PersonId,

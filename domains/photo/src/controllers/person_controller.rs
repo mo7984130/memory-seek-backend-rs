@@ -20,7 +20,7 @@ use types::{
         PersonView,
         dto::person::{
             MergePersonParam, PersonCursorParam, PersonPhotoCursorParam, PersonSearchParam,
-            RenamePersonParam,
+            RenamePersonParam, SecondaryClusterParam,
         },
         dto::photo::PhotoView,
         person::PersonId,
@@ -38,6 +38,7 @@ impl ControllerRouter for PersonController {
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
             .route("/admin/full_scan", get(Self::full_scan))
+            .route("/admin/secondary_cluster", post(Self::secondary_cluster))
             .route("/", get(Self::get_persons))
             .route("/search", get(Self::search_persons))
             .route("/merge", post(Self::merge))
@@ -59,6 +60,18 @@ impl PersonController {
     ) -> Result<R<()>> {
         let admin = AdminId::new(user_id)?;
         PersonService::full_scan(state, admin).await.to_r_ok()
+    }
+
+    /// 二次聚类: 将未分配人脸按 centroid 余弦相似度指派到已有人物
+    pub async fn secondary_cluster(
+        State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        ValidatedJson(param): ValidatedJson<SecondaryClusterParam>,
+    ) -> Result<R<()>> {
+        let admin = AdminId::new(user_id)?;
+        PersonService::assign_unassigned_faces(state, admin, param)
+            .await
+            .to_r_ok()
     }
 }
 
