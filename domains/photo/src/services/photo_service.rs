@@ -107,16 +107,13 @@ impl PhotoService {
 
         // 获取next_cursor
         let next_cursor = if has_more {
-            match photo_vos.last() {
-                Some(last_vo) => Some(
-                    TimeIdCursor {
-                        id: last_vo.id,
-                        created_at: last_vo.created_at,
-                    }
-                    .encode(),
-                ),
-                None => None,
-            }
+            photo_vos.last().map(|last_vo| {
+                TimeIdCursor {
+                    id: last_vo.id,
+                    created_at: last_vo.created_at,
+                }
+                .encode()
+            })
         } else {
             None
         };

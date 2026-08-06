@@ -494,8 +494,7 @@ impl PersonService {
             cursor,
             size,
         } = param;
-        let persons =
-            PersonMapper::query_search(&state.db, &keyword, cursor, size + 1).await?;
+        let persons = PersonMapper::query_search(&state.db, &keyword, cursor, size + 1).await?;
         let views = persons
             .into_iter()
             .map(|person| Self::to_view(state, person))

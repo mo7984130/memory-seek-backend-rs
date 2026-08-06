@@ -173,7 +173,7 @@ impl CollectionPhotoService {
                 // 先检查封面是否需要更新
                 let need_update_cover = collection
                     .cover_photo_id
-                    .map(|cover_pid| photo_ids.iter().any(|pid| *pid == cover_pid))
+                    .map(|cover_pid| photo_ids.contains(&cover_pid))
                     .unwrap_or(false);
 
                 let rows = CollectionPhotoMapper::delete_by_collection_id_and_photo_ids(

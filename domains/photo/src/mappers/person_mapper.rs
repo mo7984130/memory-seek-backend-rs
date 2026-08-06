@@ -2,8 +2,7 @@ use common::{Result, ext::ToOk};
 use insight_face_rs::FaceEmbedding;
 use sea_orm::{
     ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
-    sea_query::extension::postgres::PgExpr,
-    sea_query::Expr,
+    sea_query::Expr, sea_query::extension::postgres::PgExpr,
 };
 use types::photo::{FaceBBox, face::FaceId, person::*, photo::PhotoId};
 
@@ -135,7 +134,10 @@ impl PersonMapper {
         cursor: Option<PersonId>,
         size: u64,
     ) -> Result<Vec<PersonRecord>> {
-        let escaped = keyword.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let escaped = keyword
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
         let mut query = Entity::find()
             .filter(
                 Condition::any()

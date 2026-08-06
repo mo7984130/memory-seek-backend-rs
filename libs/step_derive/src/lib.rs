@@ -37,9 +37,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::{
-    Ident, ImplItem, ItemImpl, LitBool, LitStr, Token, Type, bracketed, parse_macro_input,
-};
+use syn::{bracketed, parse_macro_input, Ident, ImplItem, ItemImpl, LitBool, LitStr, Token, Type};
 
 /// `#[declare_step(...)]` 属性宏入口
 #[proc_macro_attribute]
@@ -70,7 +68,11 @@ pub fn declare_step(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn declare_pipeline(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as PipelineArgs);
-    let PipelineArgs { ctx, slice, pipeline } = args;
+    let PipelineArgs {
+        ctx,
+        slice,
+        pipeline,
+    } = args;
     let expanded = quote! {
         #[linkme::distributed_slice]
         pub(crate) static #slice: [&'static dyn ::common::pipeline::Step<#ctx>] = [..];
@@ -96,7 +98,11 @@ impl Parse for PipelineArgs {
         let slice: Ident = input.parse()?;
         input.parse::<Token![,]>()?;
         let pipeline: Ident = input.parse()?;
-        Ok(PipelineArgs { ctx, slice, pipeline })
+        Ok(PipelineArgs {
+            ctx,
+            slice,
+            pipeline,
+        })
     }
 }
 
@@ -205,9 +211,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
             .segments
             .last()
             .map(|seg| seg.ident.clone())
-            .ok_or_else(|| {
-                syn::Error::new(item_impl.span(), "无法从 impl 目标类型提取名称")
-            })?,
+            .ok_or_else(|| syn::Error::new(item_impl.span(), "无法从 impl 目标类型提取名称"))?,
         _ => {
             return Err(syn::Error::new(
                 item_impl.span(),
