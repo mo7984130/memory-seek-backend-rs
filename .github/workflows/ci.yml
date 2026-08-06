@@ -37,6 +37,9 @@ jobs:
             - name: Run clippy
               run: cargo clippy --all-targets -- -D warnings
 
+            - name: Run step_boundary check
+              run: cargo run --release --manifest-path tools/step_boundary_check/Cargo.toml -- --root .
+
     unit-test:
         name: 单元测试
         runs-on: ubuntu-latest

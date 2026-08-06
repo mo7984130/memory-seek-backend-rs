@@ -158,3 +158,22 @@ impl PhotoLikeService {
         Ok(())
     }
 }
+
+// 照片删除步骤:照片点赞清理
+#[step_derive::declare_step(
+    ctx = crate::services::photo_service::PhotoDeleteContext,
+    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    name = "photo_like_cleanup",
+    owns = ["PhotoLikeMapper"],
+)]
+impl PhotoLikeService {
+    async fn on_photo_delete(
+        &self,
+        txn: &sea_orm::DatabaseTransaction,
+        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+    ) -> common::Result<()> {
+        let photo_ids = ctx.photo_ids();
+        PhotoLikeMapper::delete_all_by_photo_ids(txn, &photo_ids).await?;
+        Ok(())
+    }
+}

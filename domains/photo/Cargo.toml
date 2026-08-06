@@ -14,6 +14,9 @@ ts = ["types/ts", "common/ts"]
 
 [dependencies]
 common = { path = "../../common", features = ["validators", "file_validator", "metrics", "tokio"] }
+async-trait = { workspace = true }
+step_derive = { path = "../../libs/step_derive" }
+linkme = { workspace = true }
 constants = { path = "../constants" }
 
 oss = { path = "../../libs/oss" }

@@ -189,3 +189,25 @@ impl CommentService {
         Ok(())
     }
 }
+
+// 照片删除步骤:评论清理
+#[step_derive::declare_step(
+    ctx = crate::services::photo_service::PhotoDeleteContext,
+    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    name = "comment_cleanup",
+    owns = ["CommentMapper", "CommentLikeMapper"],
+)]
+impl CommentService {
+    async fn on_photo_delete(
+        &self,
+        txn: &sea_orm::DatabaseTransaction,
+        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+    ) -> common::Result<()> {
+        let photo_ids = ctx.photo_ids();
+        let comment_ids = CommentMapper::delete_by_photo_ids(txn, &photo_ids).await?;
+        if !comment_ids.is_empty() {
+            CommentLikeMapper::delete_by_comment_ids(txn, &comment_ids).await?;
+        }
+        Ok(())
+    }
+}

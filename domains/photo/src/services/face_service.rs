@@ -436,3 +436,25 @@ impl FaceService {
 
 // 删除
 impl FaceService {}
+
+// 照片删除步骤:人脸清理(占位)
+#[step_derive::declare_step(
+    ctx = crate::services::photo_service::PhotoDeleteContext,
+    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    name = "face_cleanup",
+    owns = ["FaceMapper", "PersonMapper"],
+)]
+impl FaceService {
+    /// 需删除 `photo_face` 并维护 `photo_person` 的
+    /// `face_count / weight / centroid / cover` 统计,逻辑参照
+    /// `FaceService::change_face_belonging`(见 `docs/change-face-belonging-plan.md`)。
+    /// 本次仅注册占位,保持与现状一致的"人脸暂不清理"行为。
+    async fn on_photo_delete(
+        &self,
+        _txn: &sea_orm::DatabaseTransaction,
+        _ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+    ) -> common::Result<()> {
+        // TODO: 删除照片的人脸记录并维护人物统计
+        Ok(())
+    }
+}

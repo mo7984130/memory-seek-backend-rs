@@ -4,14 +4,11 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{
-        BoolExt, CacheExtension, OkExt, OptionExt, ResultErrExt, ResultInspectErrAsync, ToErr,
-        log_warn,
-    },
+    ext::{BoolExt, CacheExtension, OkExt, OptionExt, ResultErrExt, ResultInspectErrAsync},
     metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
-    utils::{DbUtils, FileValidator, MetricsTimerExt},
+    utils::{FileValidator, MetricsTimerExt},
 };
 use constants::RedisKeys;
 use futures::Stream;
@@ -22,8 +19,6 @@ use uuid::Uuid;
 
 use crate::{
     mappers::{
-        collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
-        comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper,
         photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper,
         timeline_stat_mapper::TimelineStatMapper,
     },
@@ -254,57 +249,18 @@ impl PhotoService {
     ) -> Result<()> {
         metrics_group!();
 
-        // 数据库方面
-        let photos = DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                // 查询照片信息
-                let photos = PhotoMapper::query_by_ids(txn, &photo_ids).await?;
+        // 查询照片信息并鉴权
+        let photos = PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &photo_ids).await?;
 
-                // 鉴权
-                if photos.iter().any(|p| p.user_id != user_id) {
-                    return log_warn(
-                        "del_photos_not_belong",
-                        "用户尝试删除不属于它的照片",
-                        AppError::bad_request("无法删除不属于自己的照片"),
-                    )
-                    .to_err();
-                }
-
-                // 删除收藏夹照片
-                let affected_collections =
-                    CollectionPhotoMapper::delete_by_photo_ids(txn, &photo_ids).await?;
-
-                // 更新收藏夹照片计数
-                CollectionMapper::update_photo_count_delta_batch(txn, &affected_collections)
-                    .await?;
-
-                // 删除照片评论点赞
-                let comment_ids = CommentMapper::delete_by_photo_ids(txn, &photo_ids).await?;
-                CommentLikeMapper::delete_by_comment_ids(txn, &comment_ids).await?;
-
-                // 删除照片点赞
-                PhotoLikeMapper::delete_all_by_photo_ids(txn, &photo_ids).await?;
-
-                // 更新照片时间线统计
-                TimelineStatMapper::decr_stat_by_created_ats(
-                    txn,
-                    &photos.iter().map(|p| &p.created_at).collect::<Vec<_>>(),
-                )
-                .await?;
-
-                // todo 人脸部分
-
-                // 删除数据库照片
-                PhotoMapper::delete_by_ids(txn, &photo_ids).await?;
-
-                Ok(photos)
-            })
-        })
-        .timed(metrics_name!("db_transaction"))
-        .await?;
+        // 在单个事务内执行删除步骤管道(主表删除恒在最后),任一步失败整体回滚
+        let mut ctx = PhotoDeleteContext { photos };
+        DELETE_PIPELINE
+            .run(&state.db, &mut ctx)
+            .timed(metrics_name!("db_transaction"))
+            .await?;
 
         // 删除照片文件
-        let file_ids = photos.iter().map(|p| &p.file_id).collect::<Vec<_>>();
+        let file_ids = ctx.photos.iter().map(|p| &p.file_id).collect::<Vec<_>>();
         state
             .s3_client
             .delete_batch(file_ids)
@@ -313,6 +269,38 @@ impl PhotoService {
 
         metrics_success!();
 
+        Ok(())
+    }
+}
+
+/// 照片删除步骤共享上下文(由 `PhotoService::delete_photos` 提前查询并鉴权后填充)
+pub(crate) struct PhotoDeleteContext {
+    pub photos: Vec<PhotoRecord>,
+}
+
+impl PhotoDeleteContext {
+    pub fn photo_ids(&self) -> Vec<PhotoId> {
+        self.photos.iter().map(|p| p.id).collect()
+    }
+}
+
+step_derive::declare_pipeline!(PhotoDeleteContext, PHOTO_DELETE_STEPS, DELETE_PIPELINE);
+
+/// 删除照片主表记录(受外键约束,`is_final` 使其恒在管道最后执行)
+#[step_derive::declare_step(
+    ctx = crate::services::photo_service::PhotoDeleteContext,
+    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    name = "photo_record_delete",
+    owns = ["PhotoMapper"],
+    is_final = true,
+)]
+impl PhotoService {
+    async fn on_photo_delete(
+        &self,
+        txn: &sea_orm::DatabaseTransaction,
+        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+    ) -> common::Result<()> {
+        PhotoMapper::delete_by_ids(txn, &ctx.photo_ids()).await?;
         Ok(())
     }
 }
@@ -409,5 +397,25 @@ impl PhotoService {
             "bmp" => "image/bmp",
             _ => "image/jpeg",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::pipeline::Step;
+
+    /// 验证 `linkme` 定义即注册:全部清理步骤均被收集,且存在唯一的 final 步骤(主表删除)
+    #[test]
+    fn step_registry_collects_all_steps() {
+        let steps: Vec<&'static dyn Step<PhotoDeleteContext>> = PHOTO_DELETE_STEPS.to_vec();
+
+        #[cfg(feature = "face")]
+        assert_eq!(steps.len(), 6);
+        #[cfg(not(feature = "face"))]
+        assert_eq!(steps.len(), 5);
+
+        let finals: Vec<_> = steps.iter().filter(|step| step.is_final()).collect();
+        assert_eq!(finals.len(), 1);
     }
 }

@@ -9,6 +9,7 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
+use types::auth::user::UserId;
 use types::cursor::TimeIdCursor;
 use types::photo::{dto::photo::PageDirection, photo::*};
 
@@ -176,20 +177,24 @@ impl PhotoMapper {
             .to_ok()
     }
 
-    #[expect(dead_code)]
-    pub async fn query_by_id(
+    pub async fn query_by_user_id_and_ids(
         db: &impl ConnectionTrait,
-        id: PhotoId,
-    ) -> Result<Option<PhotoRecord>> {
+        user_id: UserId,
+        ids: &[PhotoId],
+    ) -> Result<Vec<PhotoRecord>> {
         Entity::find()
-            .filter(Column::Id.eq(id))
-            .one(db)
+            .filter(Column::Id.is_in(ids.iter().copied()))
+            .filter(Column::UserId.eq(user_id))
+            .all(db)
             .await?
+            .into_iter()
             .map(PhotoRecord::from)
+            .collect::<Vec<_>>()
             .to_ok()
     }
 
     /// 根据文件 ID 查询图片宽高（裁剪 token 归一化坐标换算用）
+    // todo delete
     pub async fn query_dimensions_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,

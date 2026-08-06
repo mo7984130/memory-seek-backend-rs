@@ -43,3 +43,4 @@ chrono = { workspace = true }
 indexmap = { workspace = true }
 tokio = { workspace = true, optional = true }
 ts-rs = { workspace = true, optional = true }
+async-trait = { workspace = true }
