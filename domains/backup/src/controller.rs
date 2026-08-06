@@ -2,7 +2,7 @@ use crate::runner::BackupRunner;
 use crate::state::BackupState;
 use axum::{Extension, Router, extract::State, routing::post};
 use common::{
-    Result, error::AppError, ext::ResultErrExt, r::R, traits::controller::ControllerRouter,
+    Result, ext::ResultErrExt, r::R, traits::controller::ControllerRouter,
 };
 use std::sync::Arc;
 use types::auth::user::UserId;
@@ -28,9 +28,7 @@ impl BackupController {
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<serde_json::Value>> {
-        if user_id != UserId(1) {
-            return Err(AppError::forbidden("仅管理员可执行定时备份"));
-        }
+        user_id.ensure_admin()?;
 
         let result = BackupRunner::execute_scheduled(state)
             .await
@@ -48,9 +46,7 @@ impl BackupController {
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<serde_json::Value>> {
-        if user_id != UserId(1) {
-            return Err(AppError::forbidden("仅管理员可执行手动备份"));
-        }
+        user_id.ensure_admin()?;
 
         let result = BackupRunner::execute_manual(state)
             .await

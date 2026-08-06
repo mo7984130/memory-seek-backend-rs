@@ -53,9 +53,7 @@ impl PersonService {
 
     #[instrument(skip_all)]
     pub async fn inner_full_scan(state: Arc<PhotoState>, user_id: UserId) -> Result<()> {
-        if user_id != UserId(1) {
-            return Err(AppError::forbidden("无权限"));
-        }
+        user_id.ensure_admin()?;
 
         // 保存表(聚类会重建 person 并改写 photo_face.person_id, 两张表都备份)
         info!("开始保存 person/face 表");

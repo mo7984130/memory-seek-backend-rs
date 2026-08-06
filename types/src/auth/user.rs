@@ -4,6 +4,26 @@
 
 crate::id_type!(UserId, "user/");
 
+impl UserId {
+    /// 管理员用户 ID
+    pub const ADMIN_ID: i64 = 1;
+
+    /// 是否为管理员
+    pub fn is_admin(&self) -> bool {
+        self.0 == Self::ADMIN_ID
+    }
+
+    /// 校验管理员权限，非管理员返回 403
+    #[cfg(feature = "orm")]
+    pub fn ensure_admin(self) -> Result<(), common::error::AppError> {
+        if self.is_admin() {
+            Ok(())
+        } else {
+            Err(common::error::AppError::forbidden("仅管理员可访问"))
+        }
+    }
+}
+
 // ============================================================
 // SeaORM 实体（仅 orm feature）
 // ============================================================

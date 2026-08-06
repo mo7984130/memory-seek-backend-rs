@@ -58,11 +58,7 @@ impl FaceService {
     async fn compute_inner(state: Arc<PhotoState>, user_id: UserId, full: bool) -> Result<()> {
         metrics_group!();
 
-        // 鉴权
-        if user_id != UserId(1) {
-            warn!("非管理员用户尝试人脸计算, id = {}", user_id);
-            return Err(AppError::Forbidden("非管理员无法访问".into()));
-        }
+        user_id.ensure_admin()?;
 
         // 如果是全量计算的话
         // 备份并且清空表
