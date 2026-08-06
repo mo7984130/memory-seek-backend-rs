@@ -98,3 +98,6 @@ tokio-cron-scheduler = "0.13"
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
+
+# 中文转拼音(人物姓名首字母)
+pinyin = "0.11.0"

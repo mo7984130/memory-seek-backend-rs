@@ -23,7 +23,8 @@ use types::{
         ImageToken, PersonView,
         dto::face::bbox_from_insight,
         dto::person::{
-            MergePersonParam, PersonCursorParam, PersonPhotoCursorParam, RenamePersonParam,
+            MergePersonParam, PersonCursorParam, PersonPhotoCursorParam, PersonSearchParam,
+            RenamePersonParam,
         },
         dto::photo::PhotoView,
         face,
@@ -172,15 +173,17 @@ impl PersonService {
 
 // 修改
 impl PersonService {
-    /// 重命名人物
+    /// 重命名人物(同步维护姓名首字母)
     #[tracing::instrument(skip_all)]
     pub async fn rename_person(
         state: &PhotoState,
         person_id: PersonId,
         param: RenamePersonParam,
     ) -> Result<()> {
+        let new_name = param.new_name.into_inner();
+        let name_initials = Self::compute_name_initials(&new_name);
         // 校验人物存在
-        PersonMapper::rename(&state.db, person_id, param.new_name.into_inner())
+        PersonMapper::rename(&state.db, person_id, new_name, name_initials)
             .await?
             .no_zero_or_warn(
                 "person_rename_fail",
@@ -215,10 +218,6 @@ impl PersonService {
                     },
                 )
                 .await?;
-
-                fn locak(a: u128) -> u128 {
-                    1 as u128
-                }
 
                 // 转移人脸归属
                 FaceMapper::move_person_faces(txn, source_person_id, target_person_id).await?;
@@ -314,6 +313,66 @@ impl PersonService {
         Ok(page)
     }
 
+    /// 按关键词前缀搜索人物(匹配完整名字或姓名首字母)
+    pub async fn search_persons(
+        state: &PhotoState,
+        param: PersonSearchParam,
+    ) -> Result<CursorPage<PersonView, PersonId>> {
+        let PersonSearchParam {
+            keyword,
+            cursor,
+            size,
+        } = param;
+        let persons =
+            PersonMapper::query_search(&state.db, &keyword, cursor, size + 1).await?;
+        let views = persons
+            .into_iter()
+            .map(|person| Self::to_view(state, person))
+            .collect::<Vec<_>>();
+        CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))
+    }
+
+    /// 计算姓名首字母(大写, 如 张三 -> ZS, Alice Wang -> AW)
+    ///
+    /// 逐字符处理: 汉字经拼音库取拼音首字母; ASCII 字母按单词取首字母;
+    /// 其余字符(空白/标点/数字)作为分隔或忽略。无有效字符时返回 `None`。
+    fn compute_name_initials(name: &str) -> Option<String> {
+        use pinyin::ToPinyin;
+
+        fn flush_word(ascii_word: &mut String, initials: &mut String) {
+            if let Some(first) = ascii_word.chars().next() {
+                initials.push(first.to_ascii_uppercase());
+            }
+            ascii_word.clear();
+        }
+
+        let mut initials = String::new();
+        let mut ascii_word = String::new();
+        for c in name.chars() {
+            if c.is_ascii_alphabetic() {
+                ascii_word.push(c);
+                continue;
+            }
+            flush_word(&mut ascii_word, &mut initials);
+            if let Some(py) = c.to_pinyin() {
+                let first = py
+                    .first_letter()
+                    .chars()
+                    .next()
+                    .unwrap_or_default()
+                    .to_ascii_uppercase();
+                initials.push(first);
+            }
+        }
+        flush_word(&mut ascii_word, &mut initials);
+
+        if initials.is_empty() {
+            None
+        } else {
+            Some(initials)
+        }
+    }
+
     /// 构建人物视图: 使用封面冗余字段直接内存组装裁剪 token, 加密后返回
     /// (与 `CollectionView::with_generate_cover_token` / `PhotoView::with_tokens` 一致)
     fn to_view(state: &PhotoState, person: PersonRecord) -> PersonView {
@@ -390,5 +449,34 @@ impl PersonService {
         .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PersonService;
+
+    #[test]
+    fn compute_name_initials_chinese() {
+        assert_eq!(PersonService::compute_name_initials("张三"), Some("ZS".to_string()));
+    }
+
+    #[test]
+    fn compute_name_initials_english() {
+        assert_eq!(PersonService::compute_name_initials("alice wang"), Some("AW".to_string()));
+        assert_eq!(PersonService::compute_name_initials("Bob"), Some("B".to_string()));
+    }
+
+    #[test]
+    fn compute_name_initials_mixed() {
+        assert_eq!(PersonService::compute_name_initials("张三Alice"), Some("ZSA".to_string()));
+        assert_eq!(PersonService::compute_name_initials("Alice-Wang"), Some("AW".to_string()));
+    }
+
+    #[test]
+    fn compute_name_initials_empty_or_invalid() {
+        assert_eq!(PersonService::compute_name_initials(""), None);
+        assert_eq!(PersonService::compute_name_initials("123"), None);
+        assert_eq!(PersonService::compute_name_initials("- -"), None);
     }
 }

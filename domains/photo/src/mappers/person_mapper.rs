@@ -1,7 +1,8 @@
 use common::{Result, ext::ToOk};
 use insight_face_rs::FaceEmbedding;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    sea_query::extension::postgres::PgExpr,
     sea_query::Expr,
 };
 use types::photo::{FaceBBox, face::FaceId, person::*, photo::PhotoId};
@@ -28,15 +29,17 @@ impl PersonMapper {
 
 // 修改
 impl PersonMapper {
-    /// 重命名人物
+    /// 重命名人物(同步维护姓名首字母)
     pub async fn rename(
         db: &impl ConnectionTrait,
         person_id: PersonId,
         new_name: String,
+        new_name_initials: Option<String>,
     ) -> Result<u64> {
         Entity::update_many()
             .filter(Column::Id.eq(person_id))
             .col_expr(Column::Name, Expr::value(new_name))
+            .col_expr(Column::NameInitials, Expr::value(new_name_initials))
             .exec(db)
             .await?
             .rows_affected
@@ -111,6 +114,36 @@ impl PersonMapper {
             .collect::<std::result::Result<Vec<_>, _>>()
     }
 
+    /// 按关键词前缀搜索人物(id 倒序分页, 与 `query` 分页语义一致)
+    ///
+    /// 匹配 `name` 或 `name_initials` 的前缀(ILIKE 忽略大小写);
+    /// `name_initials` 为 NULL 的存量数据仅能按 `name` 命中。
+    pub async fn query_search(
+        db: &impl ConnectionTrait,
+        keyword: &str,
+        cursor: Option<PersonId>,
+        size: u64,
+    ) -> Result<Vec<PersonRecord>> {
+        let escaped = keyword.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let mut query = Entity::find()
+            .filter(
+                Condition::any()
+                    .add(Expr::col(Column::Name).ilike(format!("{escaped}%")))
+                    .add(Expr::col(Column::NameInitials).ilike(format!("{escaped}%"))),
+            )
+            .order_by_desc(Column::Id);
+        if let Some(person_id) = cursor {
+            query = query.filter(Column::Id.lt(person_id));
+        }
+        query
+            .limit(size)
+            .all(db)
+            .await?
+            .into_iter()
+            .map(PersonRecord::try_from)
+            .collect::<std::result::Result<Vec<_>, _>>()
+    }
+
     /// 按 ID 查询人物
     pub async fn query_by_id(
         db: &impl ConnectionTrait,
@@ -122,23 +155,6 @@ impl PersonMapper {
             .await?
             .map(PersonRecord::try_from)
             .transpose()
-    }
-
-    /// 按 ID 批量查询人物
-    pub async fn query_by_ids(
-        db: &impl ConnectionTrait,
-        person_ids: &[PersonId],
-    ) -> Result<Vec<PersonRecord>> {
-        if person_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        Entity::find()
-            .filter(Column::Id.is_in(person_ids.iter().copied()))
-            .all(db)
-            .await?
-            .into_iter()
-            .map(PersonRecord::try_from)
-            .collect::<std::result::Result<Vec<_>, _>>()
     }
 
     /// 按 ID 批量查询人物 id 与 name

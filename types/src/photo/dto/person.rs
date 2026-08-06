@@ -17,6 +17,24 @@ impl Default for PersonCursorParam {
     }
 }
 
+crate::in_dto!(PersonSearchParam, "photo/", serde_default, docs = "人物搜索参数(keyword 前缀匹配完整名字或姓名首字母)"; {
+    /// 搜索关键词: 完整名字或姓名首字母(如 张三 / ZS)
+    #[validate(length(min = 1, max = 64, message = "搜索关键词长度在 1 到 64 之间"))]
+    pub keyword: String,
+    pub cursor: Option<PersonId>,
+    pub size: u64,
+});
+
+impl Default for PersonSearchParam {
+    fn default() -> Self {
+        Self {
+            keyword: String::new(),
+            cursor: None,
+            size: 32,
+        }
+    }
+}
+
 crate::out_dto!(PersonView, "photo/", rename = "Person"; {
     pub id: PersonId,
     pub name: String,

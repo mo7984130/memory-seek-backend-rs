@@ -19,7 +19,8 @@ use types::{
     photo::{
         PersonView,
         dto::person::{
-            MergePersonParam, PersonCursorParam, PersonPhotoCursorParam, RenamePersonParam,
+            MergePersonParam, PersonCursorParam, PersonPhotoCursorParam, PersonSearchParam,
+            RenamePersonParam,
         },
         dto::photo::PhotoView,
         person::PersonId,
@@ -38,6 +39,7 @@ impl ControllerRouter for PersonController {
         Router::new()
             .route("/admin/full_scan", get(Self::full_scan))
             .route("/", get(Self::get_persons))
+            .route("/search", get(Self::search_persons))
             .route("/merge", post(Self::merge))
             .route("/{person_id}/name", post(Self::rename))
             .route("/{person_id}/photos", get(Self::get_person_photos))
@@ -89,6 +91,14 @@ impl PersonController {
         ValidatedQuery(query): ValidatedQuery<PersonCursorParam>,
     ) -> Result<R<CursorPage<PersonView, PersonId>>> {
         PersonService::get_persons(&state, query).await.to_r_ok()
+    }
+
+    /// 按关键词前缀搜索人物(完整名字或姓名首字母)
+    pub async fn search_persons(
+        State(state): State<Arc<PhotoState>>,
+        ValidatedQuery(query): ValidatedQuery<PersonSearchParam>,
+    ) -> Result<R<CursorPage<PersonView, PersonId>>> {
+        PersonService::search_persons(&state, query).await.to_r_ok()
     }
 
     /// 获取人物的照片列表(游标分页)

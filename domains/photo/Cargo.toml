@@ -44,5 +44,6 @@ backup = { path = "../backup", optional = true }
 image.workspace = true
 types = { workspace = true, features = ["full"] }
 smallvec = "1.15.2"
+pinyin = { workspace = true }
 petal-clustering = "0.13.0"
 ndarray = "0.17.2"

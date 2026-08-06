@@ -10,7 +10,7 @@ use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityName, EntityTrait, Iden,
-    IdenStatic, PaginatorTrait, QueryFilter, QueryOrder, Statement,
+    IdenStatic, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
 use types::photo::collection::{self, CollectionId};
 use types::photo::collection_photo;
@@ -199,24 +199,6 @@ impl CollectionMapper {
             .one(db)
             .await?
             .map(CollectionRecord::from)
-            .to_ok()
-    }
-
-    pub async fn query_by_ids(
-        db: &impl ConnectionTrait,
-        ids: &[CollectionId],
-    ) -> Result<Vec<CollectionRecord>> {
-        if ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        Entity::find()
-            .filter(Column::Id.is_in(ids.iter().copied()))
-            .all(db)
-            .await?
-            .into_iter()
-            .map(CollectionRecord::from)
-            .collect::<Vec<_>>()
             .to_ok()
     }
 
