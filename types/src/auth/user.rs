@@ -14,13 +14,31 @@ impl UserId {
     }
 
     /// 校验管理员权限，非管理员返回 403
+    ///
+    /// 通过后返回 [`AdminId`] 包裹，service 层以此类型接收参数，
+    /// 从类型层面保证调用方已通过管理员校验。
     #[cfg(feature = "orm")]
-    pub fn ensure_admin(self) -> Result<(), common::error::AppError> {
+    pub fn ensure_admin(self) -> Result<AdminId, common::error::AppError> {
         if self.is_admin() {
-            Ok(())
+            Ok(AdminId(self))
         } else {
             Err(common::error::AppError::forbidden("仅管理员可访问"))
         }
+    }
+}
+
+/// 已通过管理员校验的用户身份
+///
+/// 由 [`UserId::ensure_admin`] 构造，只有管理员才能取得。
+/// 作为 service 层参数，内部通过 [`AdminId::into_inner`] 展开为 [`UserId`] 使用。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, derive_more::Display)]
+#[display("{}", _0)]
+pub struct AdminId(UserId);
+
+impl AdminId {
+    /// 展开为内部 [`UserId`]
+    pub fn into_inner(self) -> UserId {
+        self.0
     }
 }
 

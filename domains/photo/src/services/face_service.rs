@@ -19,7 +19,7 @@ use sea_orm::{
 use tokio::{spawn, task::spawn_blocking};
 use tracing::{debug, info, warn};
 use types::{
-    auth::user::UserId,
+    auth::user::AdminId,
     photo::{
         FaceView,
         dto::face::bbox_from_insight,
@@ -46,19 +46,20 @@ impl FaceService {
     #[tracing::instrument(
         skip_all,
         fields(
-            user_id = %user_id,
+            user_id = %admin,
             full = %full
         )
     )]
-    pub async fn compute(state: Arc<PhotoState>, user_id: UserId, full: bool) -> Result<()> {
-        spawn(async move { Self::compute_inner(state, user_id, full).await });
+    pub async fn compute(state: Arc<PhotoState>, admin: AdminId, full: bool) -> Result<()> {
+        spawn(async move { Self::compute_inner(state, admin, full).await });
         Ok(())
     }
 
-    async fn compute_inner(state: Arc<PhotoState>, user_id: UserId, full: bool) -> Result<()> {
+    async fn compute_inner(state: Arc<PhotoState>, admin: AdminId, full: bool) -> Result<()> {
         metrics_group!();
 
-        user_id.ensure_admin()?;
+        let user_id = admin.into_inner();
+        info!(user_id = %user_id, "管理员触发人脸计算");
 
         // 如果是全量计算的话
         // 备份并且清空表

@@ -17,7 +17,7 @@ use sea_orm::{EntityName, EntityTrait};
 use tokio::{spawn, task::spawn_blocking};
 use tracing::{info, instrument};
 use types::{
-    auth::user::UserId,
+    auth::user::{AdminId, UserId},
     cursor::TimeIdCursor,
     photo::{
         ImageToken, PersonView,
@@ -46,14 +46,15 @@ pub struct PersonService;
 
 // 创建
 impl PersonService {
-    pub async fn full_scan(state: Arc<PhotoState>, user_id: UserId) -> Result<()> {
-        spawn(async move { Self::inner_full_scan(state, user_id).await });
+    pub async fn full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
+        spawn(async move { Self::inner_full_scan(state, admin).await });
         Ok(())
     }
 
     #[instrument(skip_all)]
-    pub async fn inner_full_scan(state: Arc<PhotoState>, user_id: UserId) -> Result<()> {
-        user_id.ensure_admin()?;
+    pub async fn inner_full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
+        let user_id = admin.into_inner();
+        info!(user_id = %user_id, "管理员触发人物全量聚类");
 
         // 保存表(聚类会重建 person 并改写 photo_face.person_id, 两张表都备份)
         info!("开始保存 person/face 表");

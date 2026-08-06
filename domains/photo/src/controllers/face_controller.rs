@@ -42,14 +42,16 @@ impl FaceController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>> {
-        FaceService::compute(state, user_id, true).await.to_r_ok()
+        let admin = user_id.ensure_admin()?;
+        FaceService::compute(state, admin, true).await.to_r_ok()
     }
 
     async fn incremental_compute(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>> {
-        FaceService::compute(state, user_id, false).await.to_r_ok()
+        let admin = user_id.ensure_admin()?;
+        FaceService::compute(state, admin, false).await.to_r_ok()
     }
 }
 

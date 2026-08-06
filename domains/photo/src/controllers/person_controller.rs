@@ -55,7 +55,8 @@ impl PersonController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>> {
-        PersonService::full_scan(state, user_id).await.to_r_ok()
+        let admin = user_id.ensure_admin()?;
+        PersonService::full_scan(state, admin).await.to_r_ok()
     }
 }
 
