@@ -475,7 +475,7 @@ impl PersonService {
         state: &PhotoState,
         param: PersonCursorParam,
     ) -> Result<CursorPage<PersonView, PersonId>> {
-        let persons = PersonMapper::query(&state.db, param.cursor, param.size + 1).await?;
+        let persons = PersonMapper::query(&state.db, param.cursor, param.size).await?;
         let views = persons
             .into_iter()
             .map(|person| Self::to_view(state, person))
@@ -494,7 +494,7 @@ impl PersonService {
             cursor,
             size,
         } = param;
-        let persons = PersonMapper::query_search(&state.db, &keyword, cursor, size + 1).await?;
+        let persons = PersonMapper::query_search(&state.db, &keyword, cursor, size).await?;
         let views = persons
             .into_iter()
             .map(|person| Self::to_view(state, person))

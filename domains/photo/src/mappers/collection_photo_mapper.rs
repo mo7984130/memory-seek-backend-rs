@@ -62,6 +62,8 @@ impl CollectionPhotoMapper {
         Ok(affected)
     }
 
+    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+    /// 由 service 层用 CursorPage::from_oversize 截断消费。
     pub async fn query_photo_id_by_collection_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -74,7 +76,7 @@ impl CollectionPhotoMapper {
             .filter(Column::UserId.eq(user_id))
             .order_by_desc(Column::CreatedAt)
             .order_by_desc(Column::Id)
-            .limit(size);
+            .limit(size + 1);
 
         if let Some(c) = cursor {
             query = query.filter(c.before(Column::CreatedAt, Column::Id));

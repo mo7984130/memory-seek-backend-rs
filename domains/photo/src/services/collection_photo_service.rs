@@ -74,7 +74,7 @@ impl CollectionPhotoService {
             user_id,
             collection_id,
             param.cursor.as_ref(),
-            param.size + 1,
+            param.size,
         )
         .timed(metrics_name!("query_photo_ids"))
         .await?;
@@ -88,13 +88,17 @@ impl CollectionPhotoService {
         let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))
             .await?;
-        let next_cursor = photo_vos.last().map(|vo| {
-            TimeIdCursor {
-                created_at: vo.created_at,
-                id: vo.id,
-            }
-            .encode()
-        });
+        let next_cursor = if has_more {
+            photo_vos.last().map(|vo| {
+                TimeIdCursor {
+                    created_at: vo.created_at,
+                    id: vo.id,
+                }
+                .encode()
+            })
+        } else {
+            None
+        };
 
         metrics_success!();
         CursorPage {

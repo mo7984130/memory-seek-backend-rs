@@ -70,6 +70,8 @@ impl PhotoLikeMapper {
     /// 查询用户点赞的照片ID和点赞时间列表（带游标分页）
     ///
     /// 返回 `(PhotoId, DateTimeUtc)` 元组，其中 DateTimeUtc 为点赞时间。
+    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+    /// 由 service 层用 CursorPage::from_oversize 截断消费。
     pub async fn query_user_liked_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -89,7 +91,7 @@ impl PhotoLikeMapper {
         }
 
         query
-            .limit(size)
+            .limit(size + 1)
             .into_tuple::<(PhotoId, DateTimeUtc)>()
             .all(db)
             .await?

@@ -116,7 +116,9 @@ impl PhotoMapper {
                 .order_by_asc(Column::Id)
         };
 
-        query = query.limit(size);
+        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+        // 由 service 层用 CursorPage::from_oversize 截断消费
+        query = query.limit(size + 1);
 
         if let Some(c) = cursor {
             // 有游标时，按游标分页

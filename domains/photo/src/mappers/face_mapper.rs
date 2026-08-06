@@ -182,6 +182,8 @@ impl FaceMapper {
     /// 查询当前用户"包含未分配人脸"的照片 id(keyset 分页, 基于照片的 (created_at, id))
     ///
     /// 用 `EXISTS` 子查询过滤, 保证同一照片多张未分配人脸不产生重复行。
+    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+    /// 由 service 层用 CursorPage::from_oversize_fn 截断消费。
     pub async fn query_unassigned_face_photo_ids_cursor_page(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -203,7 +205,7 @@ impl FaceMapper {
             .filter(Expr::exists(subquery))
             .order_by(types::photo::photo::Column::CreatedAt, Order::Desc)
             .order_by(types::photo::photo::Column::Id, Order::Desc)
-            .limit(size);
+            .limit(size + 1);
 
         if let Some(cursor) = cursor {
             query = query.filter(cursor.before(
@@ -221,6 +223,10 @@ impl FaceMapper {
             .to_ok()
     }
 
+    /// 查询某人物的人脸照片 id(keyset 分页)
+    ///
+    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+    /// 由 service 层用 CursorPage::from_oversize_fn 截断消费。
     pub async fn query_photo_ids_cursor_page(
         db: &impl ConnectionTrait,
         person_id: PersonId,
@@ -233,7 +239,7 @@ impl FaceMapper {
             .filter(Column::PersonId.eq(person_id))
             .order_by(Column::CreatedAt, Order::Desc)
             .order_by(Column::Id, Order::Desc)
-            .limit(size);
+            .limit(size + 1);
 
         if let Some(cursor) = cursor {
             query = query.filter(cursor.before(Column::CreatedAt, Column::Id));

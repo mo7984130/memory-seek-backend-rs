@@ -68,12 +68,12 @@ impl PhotoLikeService {
     ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
-        // 查询用户点赞的照片ID列表和点赞时间（多查一个用于判断 has_more）
+        // 查询用户点赞的照片ID列表和点赞时间（mapper 内部多查 1 条用于判断 has_more）
         let photo_ids_with_like_time = PhotoLikeMapper::query_user_liked_photo_ids(
             &state.db,
             user_id,
             &param.cursor,
-            param.size + 1,
+            param.size,
         )
         .timed(metrics_name!("query_ids"))
         .await?;

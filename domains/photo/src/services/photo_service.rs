@@ -85,7 +85,7 @@ impl PhotoService {
         let photo_ids = PhotoMapper::query_cursor_page_ids(
             &state.db,
             param.cursor,
-            param.size + 1,
+            param.size,
             param.direction,
             param.anchor_time,
         )

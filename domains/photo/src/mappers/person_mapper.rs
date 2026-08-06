@@ -104,8 +104,10 @@ impl PersonMapper {
         if let Some(person_id) = cursor {
             query = query.filter(Column::Id.lt(person_id));
         }
+        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+        // 由 service 层用 CursorPage::from_oversize_fn 截断消费
         query
-            .limit(size)
+            .limit(size + 1)
             .all(db)
             .await?
             .into_iter()
@@ -148,8 +150,10 @@ impl PersonMapper {
         if let Some(person_id) = cursor {
             query = query.filter(Column::Id.lt(person_id));
         }
+        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+        // 由 service 层用 CursorPage::from_oversize_fn 截断消费
         query
-            .limit(size)
+            .limit(size + 1)
             .all(db)
             .await?
             .into_iter()
