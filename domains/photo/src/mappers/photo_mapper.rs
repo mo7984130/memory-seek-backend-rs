@@ -174,6 +174,21 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    pub async fn query_id_and_file_id_by_ids(
+        db: &impl ConnectionTrait,
+        ids: &[PhotoId],
+    ) -> Result<Vec<(PhotoId, String)>> {
+        Entity::find()
+            .filter(Column::Id.is_in(ids.iter().copied()))
+            .select_only()
+            .column(Column::Id)
+            .column(Column::FileId)
+            .into_tuple::<(PhotoId, String)>()
+            .all(db)
+            .await?
+            .to_ok()
+    }
+
     pub async fn query_by_user_id_and_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,

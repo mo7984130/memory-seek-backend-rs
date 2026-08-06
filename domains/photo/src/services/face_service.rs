@@ -403,12 +403,13 @@ impl FaceService {
 
         // 批量加载归属人物名称
         let person_ids: HashSet<PersonId> = faces.iter().filter_map(|f| f.person_id).collect();
-        let person_names: HashMap<PersonId, String> =
-            PersonMapper::query_by_ids(&state.db, &person_ids.iter().copied().collect::<Vec<_>>())
-                .await?
-                .into_iter()
-                .map(|p| (p.id, p.name))
-                .collect();
+        let person_names: HashMap<PersonId, String> = PersonMapper::query_id_and_name_by_ids(
+            &state.db,
+            &person_ids.iter().copied().collect::<Vec<_>>(),
+        )
+        .await?
+        .into_iter()
+        .collect();
 
         faces
             .into_iter()

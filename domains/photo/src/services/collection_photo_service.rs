@@ -50,10 +50,10 @@ impl CollectionPhotoService {
             return Ok(vec![]);
         }
 
-        let collections = CollectionMapper::query_by_ids(&state.db, &collection_ids)
+        let collections = CollectionMapper::query_id_and_name_by_ids(&state.db, &collection_ids)
             .await?
             .into_iter()
-            .map(CollectionBriefView::from)
+            .map(|(id, name)| CollectionBriefView { id, name })
             .collect();
 
         metrics_success!();

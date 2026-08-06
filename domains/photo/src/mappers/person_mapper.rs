@@ -140,6 +140,25 @@ impl PersonMapper {
             .map(PersonRecord::try_from)
             .collect::<std::result::Result<Vec<_>, _>>()
     }
+
+    /// 按 ID 批量查询人物 id 与 name
+    pub async fn query_id_and_name_by_ids(
+        db: &impl ConnectionTrait,
+        person_ids: &[PersonId],
+    ) -> Result<Vec<(PersonId, String)>> {
+        if person_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        Entity::find()
+            .filter(Column::Id.is_in(person_ids.iter().copied()))
+            .select_only()
+            .column(Column::Id)
+            .column(Column::Name)
+            .into_tuple::<(PersonId, String)>()
+            .all(db)
+            .await?
+            .to_ok()
+    }
 }
 
 // 删除

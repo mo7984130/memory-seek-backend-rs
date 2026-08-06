@@ -220,6 +220,26 @@ impl CollectionMapper {
             .to_ok()
     }
 
+    /// 按 ID 批量查询收藏夹 id 与 name
+    pub async fn query_id_and_name_by_ids(
+        db: &impl ConnectionTrait,
+        ids: &[CollectionId],
+    ) -> Result<Vec<(CollectionId, String)>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Entity::find()
+            .filter(Column::Id.is_in(ids.iter().copied()))
+            .select_only()
+            .column(Column::Id)
+            .column(Column::Name)
+            .into_tuple::<(CollectionId, String)>()
+            .all(db)
+            .await?
+            .to_ok()
+    }
+
     pub async fn query_by_user_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
