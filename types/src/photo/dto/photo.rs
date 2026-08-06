@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::cursor::TimeIdCursor;
+use crate::auth::user::UserId;
 use crate::photo::photo::PhotoId;
 #[cfg(feature = "orm")]
 use crate::photo::photo::PhotoRecord;
@@ -11,8 +12,8 @@ use crate::photo::ImageToken;
 use common::utils::TokenCipher;
 
 crate::out_dto!(PhotoView, "photo/", rename = "Photo"; {
-    pub id: String,
-    pub user_id: String,
+    pub id: PhotoId,
+    pub user_id: UserId,
     pub name: String,
     pub width: i32,
     pub height: i32,
@@ -35,8 +36,8 @@ crate::out_dto!(PhotoView, "photo/", rename = "Photo"; {
 impl From<PhotoRecord> for PhotoView {
     fn from(record: PhotoRecord) -> Self {
         Self {
-            id: record.id.to_string(),
-            user_id: record.user_id.to_string(),
+            id: record.id,
+            user_id: record.user_id,
             name: record.name,
             width: record.width,
             height: record.height,
@@ -68,7 +69,7 @@ impl PhotoView {
     #[cfg(feature = "orm")]
     pub fn with_thumbnail_token(mut self, file_id: &str, token_cipher: &TokenCipher) -> Self {
         self.thumbnail_token = token_cipher
-            .encrypt(&ImageToken::thumbnail(file_id), Some(&self.id))
+            .encrypt(&ImageToken::thumbnail(file_id), Some(&self.id.to_string()))
             .ok();
         self
     }
@@ -76,7 +77,7 @@ impl PhotoView {
     #[cfg(feature = "orm")]
     pub fn with_preview_token(mut self, file_id: &str, token_cipher: &TokenCipher) -> Self {
         self.preview_token = token_cipher
-            .encrypt(&ImageToken::preview(file_id), Some(&self.id))
+            .encrypt(&ImageToken::preview(file_id), Some(&self.id.to_string()))
             .ok();
         self
     }
@@ -84,7 +85,7 @@ impl PhotoView {
     #[cfg(feature = "orm")]
     pub fn with_original_token(mut self, file_id: &str, token_cipher: &TokenCipher) -> Self {
         self.original_token = token_cipher
-            .encrypt(&ImageToken::original(file_id), Some(&self.id))
+            .encrypt(&ImageToken::original(file_id), Some(&self.id.to_string()))
             .ok();
         self
     }

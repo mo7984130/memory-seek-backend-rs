@@ -103,12 +103,11 @@ impl PhotoLikeService {
         // 生成 next_cursor（使用点赞时间而非照片上传时间）
         let next_cursor = if has_more {
             photos.last().and_then(|p| {
-                let id = PhotoId::parse_from_str_or_none(&p.id)?;
-                let like_created_at = like_time_map.get(&id).copied()?;
+                let like_created_at = like_time_map.get(&p.id).copied()?;
                 Some(
                     TimeIdCursor {
                         created_at: like_created_at,
-                        id,
+                        id: p.id,
                     }
                     .encode(),
                 )

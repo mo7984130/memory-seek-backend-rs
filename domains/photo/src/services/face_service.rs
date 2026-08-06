@@ -173,11 +173,10 @@ impl FaceService {
             .filter(condition)
             .order_by(photo::Column::Id, sea_orm::Order::Asc)
             .limit(size)
-            .into_tuple()
+            .into_tuple::<(PhotoId, String)>()
             .all(&state.db)
             .await?
             .into_iter()
-            .map(|(photo_id, file_id)| (PhotoId(photo_id), file_id))
             .collect();
 
         debug!("查询成功");
@@ -270,7 +269,7 @@ impl FaceService {
                 if let Some(old_id) = old_person_id {
                     lock_ids.push(old_id);
                 }
-                lock_ids.sort_by_key(|id| id.0);
+                lock_ids.sort_by_key(|id| *id);
 
                 let mut persons: HashMap<PersonId, PersonRecord> =
                     HashMap::with_capacity(lock_ids.len());

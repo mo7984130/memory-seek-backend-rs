@@ -151,12 +151,9 @@ impl PhotoMapper {
         Self::build_cursor_query(cursor.as_ref(), size, direction, anchor_time)
             .select_only()
             .column(Column::Id)
-            .into_tuple::<i64>()
+            .into_tuple::<PhotoId>()
             .all(db)
             .await?
-            .into_iter()
-            .map(PhotoId::from)
-            .collect::<Vec<_>>()
             .to_ok()
     }
 

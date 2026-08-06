@@ -22,8 +22,8 @@ impl PhotoLikeMapper {
     ) -> Result<bool> {
         let now = chrono::Utc::now();
         let active_model = ActiveModel {
-            photo_id: Set(photo_id.0),
-            user_id: Set(user_id.0),
+            photo_id: Set(photo_id),
+            user_id: Set(user_id),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -59,11 +59,10 @@ impl PhotoLikeMapper {
             .column(Column::PhotoId)
             .filter(Column::UserId.eq(user_id))
             .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
-            .into_tuple::<i64>()
+            .into_tuple::<PhotoId>()
             .all(db)
             .await?
             .into_iter()
-            .map(PhotoId)
             .collect::<HashSet<PhotoId>>()
             .to_ok()
     }
@@ -91,12 +90,9 @@ impl PhotoLikeMapper {
 
         query
             .limit(size)
-            .into_tuple::<(i64, DateTimeUtc)>()
+            .into_tuple::<(PhotoId, DateTimeUtc)>()
             .all(db)
             .await?
-            .into_iter()
-            .map(|(photo_id, created_at)| (PhotoId(photo_id), created_at))
-            .collect::<Vec<(PhotoId, DateTimeUtc)>>()
             .to_ok()
     }
 }

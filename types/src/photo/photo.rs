@@ -4,13 +4,6 @@
 
 crate::id_type!(PhotoId, "photo/");
 
-impl PhotoId {
-    pub fn parse_from_str_or_none(s: &str) -> Option<Self> {
-        let id = s.parse::<i64>().ok()?;
-        Some(Self(id))
-    }
-}
-
 // ============================================================
 // SeaORM 实体（仅 orm feature）
 // ============================================================
@@ -27,8 +20,8 @@ mod entity {
     #[sea_orm(table_name = "photo_photo")]
     pub struct Model {
         #[sea_orm(primary_key)]
-        pub id: i64,
-        pub user_id: i64,
+        pub id: PhotoId,
+        pub user_id: UserId,
         pub name: String,
         pub size: i64,
         pub width: i32,
@@ -63,8 +56,8 @@ mod entity {
     impl From<Model> for PhotoRecord {
         fn from(model: Model) -> Self {
             Self {
-                id: PhotoId(model.id),
-                user_id: UserId(model.user_id),
+                id: model.id,
+                user_id: model.user_id,
                 name: model.name,
                 size: model.size,
                 width: model.width,

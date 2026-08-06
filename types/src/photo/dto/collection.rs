@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::cursor::TimeIdCursor;
+use crate::photo::collection::CollectionId;
 #[cfg(feature = "orm")]
 use crate::photo::collection::CollectionRecord;
 use crate::photo::models::PhotoIds;
@@ -11,14 +12,14 @@ use crate::photo::ImageToken;
 use common::utils::TokenCipher;
 
 crate::out_dto!(CollectionView, "photo/", rename = "Collection"; {
-    pub id: String,
+    pub id: CollectionId,
     pub name: String,
     pub description: Option<String>,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub photo_count: i64,
     pub cover_token: Option<String>,
     /// 封面照片 ID（字符串）
-    pub cover_photo_id: Option<String>,
+    pub cover_photo_id: Option<PhotoId>,
     pub created_at: DateTime<Utc>,
 });
 
@@ -26,12 +27,12 @@ crate::out_dto!(CollectionView, "photo/", rename = "Collection"; {
 impl From<CollectionRecord> for CollectionView {
     fn from(record: CollectionRecord) -> Self {
         CollectionView {
-            id: record.id.0.to_string(),
+            id: record.id,
             name: record.name,
             description: record.description,
             photo_count: record.photo_count,
             cover_token: record.cover_file_id,
-            cover_photo_id: record.cover_photo_id.map(|id| id.to_string()),
+            cover_photo_id: record.cover_photo_id,
             created_at: record.created_at,
         }
     }
@@ -50,7 +51,7 @@ impl CollectionView {
 }
 
 crate::out_dto!(CollectionBriefView, "photo/", rename = "CollectionBrief"; {
-    pub id: String,
+    pub id: CollectionId,
     pub name: String,
 });
 
@@ -58,7 +59,7 @@ crate::out_dto!(CollectionBriefView, "photo/", rename = "CollectionBrief"; {
 impl From<CollectionRecord> for CollectionBriefView {
     fn from(record: CollectionRecord) -> Self {
         CollectionBriefView {
-            id: record.id.0.to_string(),
+            id: record.id,
             name: record.name,
         }
     }

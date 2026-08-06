@@ -25,9 +25,9 @@ mod entity {
     #[sea_orm(table_name = "photo_face")]
     pub struct Model {
         #[sea_orm(primary_key)]
-        pub id: i64,
-        pub photo_id: i64,
-        pub person_id: Option<i64>,
+        pub id: FaceId,
+        pub photo_id: PhotoId,
+        pub person_id: Option<PersonId>,
 
         #[sea_orm(column_type = "Json")]
         pub bbox: Json,
@@ -72,9 +72,9 @@ mod entity {
             let embedding: FaceEmbedding = value.embedding.into();
 
             Ok(Self {
-                id: FaceId(value.id),
-                photo_id: PhotoId(value.photo_id),
-                person_id: value.person_id.map(PersonId),
+                id: value.id,
+                photo_id: value.photo_id,
+                person_id: value.person_id,
                 bbox,
                 landmarks,
                 score: value.score,
@@ -114,8 +114,8 @@ mod entity {
             use sea_orm::ActiveValue::{NotSet, Set};
             Self {
                 id: NotSet,
-                photo_id: Set(record.photo_id.0),
-                person_id: Set(record.person_id.map(|id| id.0)),
+                photo_id: Set(record.photo_id),
+                person_id: Set(record.person_id),
                 bbox: Set(serde_json::to_value(record.bbox).unwrap()),
                 landmarks: Set(serde_json::to_value(record.landmarks).unwrap()),
                 score: Set(record.score),

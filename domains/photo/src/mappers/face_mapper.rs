@@ -174,14 +174,7 @@ impl FaceMapper {
             query = query.filter(cursor.before(Column::CreatedAt, Column::Id));
         }
 
-        query
-            .into_tuple::<i64>()
-            .all(db)
-            .await?
-            .into_iter()
-            .map(PhotoId::from)
-            .collect::<Vec<_>>()
-            .to_ok()
+        query.into_tuple::<PhotoId>().all(db).await?.to_ok()
     }
 }
 

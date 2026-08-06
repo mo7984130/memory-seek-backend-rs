@@ -24,12 +24,12 @@ mod entity {
     #[sea_orm(table_name = "photo_person")]
     pub struct Model {
         #[sea_orm(primary_key)]
-        pub id: i64,
+        pub id: PersonId,
         pub name: String,
         pub name_initials: Option<String>,
-        pub cover_face_id: i64,
+        pub cover_face_id: FaceId,
         /// 封面人脸所属照片 ID(冗余自 photo_face.photo_id,避免 N+1)
-        pub cover_photo_id: i64,
+        pub cover_photo_id: PhotoId,
         /// 封面照片 file_id(冗余自 photo_photo.file_id,避免 N+1)
         pub cover_file_id: String,
         /// 封面人脸归一化 bbox(冗余自 photo_face.bbox,避免 N+1)
@@ -73,11 +73,11 @@ mod entity {
                 .trace_internal_err("db:photo:person:cover_bbox_from:err", "封面 bbox 转换错误")?;
 
             Ok(Self {
-                id: PersonId(value.id),
+                id: value.id,
                 name: value.name,
                 name_initials: value.name_initials,
-                cover_face_id: FaceId(value.cover_face_id),
-                cover_photo_id: PhotoId(value.cover_photo_id),
+                cover_face_id: value.cover_face_id,
+                cover_photo_id: value.cover_photo_id,
                 cover_file_id: value.cover_file_id,
                 cover_bbox,
                 centroid: embedding,
@@ -105,8 +105,8 @@ mod entity {
         fn from(value: NewPerson) -> Self {
             ActiveModel {
                 name: Set(value.name),
-                cover_face_id: Set(value.cover_face_id.0),
-                cover_photo_id: Set(value.cover_photo_id.0),
+                cover_face_id: Set(value.cover_face_id),
+                cover_photo_id: Set(value.cover_photo_id),
                 cover_file_id: Set(value.cover_file_id),
                 cover_bbox: Set(serde_json::to_value(value.cover_bbox).unwrap()),
                 face_count: Set(value.face_count as i64),

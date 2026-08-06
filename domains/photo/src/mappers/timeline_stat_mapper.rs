@@ -8,6 +8,7 @@ use sea_orm::{
     entity::prelude::DateTimeUtc,
     sea_query::{Alias, CaseStatement, Expr, Func, OnConflict, SimpleExpr},
 };
+use types::photo::timeline_stat::TimelineStatId;
 use types::photo::{dto::timeline_stat::MonthStat, timeline_stat::*};
 
 pub(crate) struct TimelineStatMapper;
@@ -18,7 +19,7 @@ impl TimelineStatMapper {
         let now = Utc::now();
 
         let insert = ActiveModel {
-            date_str: Set(date_str),
+            date_str: Set(TimelineStatId(date_str)),
             count: Set(1),
             anchor_time: Set(created_at),
             created_at: Set(now),
@@ -59,10 +60,10 @@ impl TimelineStatMapper {
 
         for (date_str, decr_count) in &date_count_map {
             case_expr = case_expr.case(
-                Expr::col(Column::DateStr).eq(date_str.clone()),
+                Expr::col(Column::DateStr).eq(TimelineStatId(date_str.clone())),
                 Expr::col(Column::Count).sub(*decr_count),
             );
-            date_strs.push(date_str.clone());
+            date_strs.push(TimelineStatId(date_str.clone()));
         }
         // ELSE count (不在列表中的行保持不变，实际上 filter 已经限制了)
         case_expr = case_expr.finally(Expr::col(Column::Count));

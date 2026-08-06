@@ -9,7 +9,7 @@ use types::user::UserBriefView;
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfoRow {
-    pub user_id: i64,
+    pub user_id: UserId,
     pub nickname: String,
     pub avatar_file_id: Option<String>,
 }
@@ -23,7 +23,7 @@ pub fn user_brief_view_from_dto(dto: UserInfoRow, token_cipher: &TokenCipher) ->
     });
 
     UserBriefView {
-        user_id: UserId(dto.user_id),
+        user_id: dto.user_id,
         nickname: dto.nickname,
         avatar_token,
     }
@@ -42,7 +42,7 @@ mod tests {
     fn test_from_dto_with_avatar() {
         let cipher = create_test_cipher();
         let dto = UserInfoRow {
-            user_id: 42,
+            user_id: UserId(42),
             nickname: "Alice".to_string(),
             avatar_file_id: Some("file123".to_string()),
         };
@@ -56,7 +56,7 @@ mod tests {
     fn test_from_dto_without_avatar() {
         let cipher = create_test_cipher();
         let dto = UserInfoRow {
-            user_id: 1,
+            user_id: UserId(1),
             nickname: "Bob".to_string(),
             avatar_file_id: None,
         };

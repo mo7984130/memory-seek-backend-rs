@@ -21,9 +21,9 @@ mod entity {
     #[sea_orm(table_name = "photo_comment_like")]
     pub struct Model {
         #[sea_orm(primary_key)]
-        pub id: i64,
-        pub comment_id: i64,
-        pub user_id: i64,
+        pub id: CommentLikeId,
+        pub comment_id: CommentId,
+        pub user_id: UserId,
         pub created_at: DateTimeUtc,
         pub updated_at: DateTimeUtc,
     }
@@ -41,9 +41,9 @@ mod entity {
     impl From<Model> for CommentLikeRecord {
         fn from(model: Model) -> Self {
             Self {
-                id: CommentLikeId(model.id),
-                comment_id: CommentId(model.comment_id),
-                user_id: UserId(model.user_id),
+                id: model.id,
+                comment_id: model.comment_id,
+                user_id: model.user_id,
                 created_at: model.created_at,
                 updated_at: model.updated_at,
             }

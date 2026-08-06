@@ -20,14 +20,14 @@ mod entity {
     #[sea_orm(table_name = "auth_user")]
     pub struct Model {
         #[sea_orm(primary_key)]
-        pub id: i64,
+        pub id: UserId,
         #[sea_orm(unique)]
         pub username: String,
         pub email: String,
         pub password: String,
         pub nickname: String,
         pub avatar_file_id: Option<String>,
-        pub inviter: i64,
+        pub inviter: UserId,
         pub refresh_token: Option<String>,
         pub refresh_token_expire_at: Option<DateTimeUtc>,
         pub updated_at: DateTimeUtc,
@@ -43,7 +43,7 @@ mod entity {
         pub password: String,
         pub nickname: String,
         pub avatar_file_id: Option<String>,
-        pub inviter: i64,
+        pub inviter: UserId,
         pub refresh_token: Option<String>,
         pub refresh_token_expire_at: Option<DateTimeUtc>,
         pub updated_at: DateTimeUtc,
@@ -53,7 +53,7 @@ mod entity {
     impl From<Model> for UserRecord {
         fn from(model: Model) -> Self {
             Self {
-                id: UserId(model.id),
+                id: model.id,
                 username: model.username,
                 email: model.email,
                 password: model.password,

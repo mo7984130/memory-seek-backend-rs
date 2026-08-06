@@ -27,7 +27,7 @@ impl CollectionMapper {
         collection_id: CollectionId,
         photo_ids: &[PhotoId],
     ) -> Result<u64> {
-        let ids: Vec<i64> = photo_ids.iter().map(|id| id.0).collect();
+        let ids: Vec<PhotoId> = photo_ids.to_vec();
 
         let collection_photo_table_name = collection_photo::Entity.table_name();
         let collection_table_name = collection::Entity.table_name();
@@ -55,7 +55,7 @@ impl CollectionMapper {
         let stmt = Statement::from_sql_and_values(
             DbBackend::Postgres,
             &sql,
-            [collection_id.0.into(), ids.into()],
+            [collection_id.into(), ids.into()],
         );
 
         let result = db.query_one(stmt).await?.ok_or_warn(
@@ -77,7 +77,7 @@ impl CollectionMapper {
     ) -> Result<CollectionRecord> {
         let now = Utc::now();
         ActiveModel {
-            user_id: Set(user_id.0),
+            user_id: Set(user_id),
             name: Set(name),
             description: Set(description),
             photo_count: Set(0),
@@ -102,10 +102,7 @@ impl CollectionMapper {
         cover_file_id: Option<String>,
     ) -> Result<()> {
         Entity::update_many()
-            .col_expr(
-                Column::CoverPhotoId,
-                Expr::value(cover_photo_id.map(|id| id.0)),
-            )
+            .col_expr(Column::CoverPhotoId, Expr::value(cover_photo_id))
             .col_expr(Column::CoverFileId, Expr::value(cover_file_id))
             .col_expr(Column::UpdatedAt, Expr::value(chrono::Utc::now()))
             .filter(Column::Id.eq(collection_id))
@@ -157,7 +154,7 @@ impl CollectionMapper {
     ) -> Result<()> {
         Entity::update_many()
             .col_expr(Column::PhotoCount, Expr::col(Column::PhotoCount).add(delta))
-            .filter(Column::Id.eq(collection_id.0))
+            .filter(Column::Id.eq(collection_id))
             .exec(db)
             .await?;
         Ok(())

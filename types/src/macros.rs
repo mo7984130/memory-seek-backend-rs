@@ -5,7 +5,9 @@
 //! - 反序列化:i64 版接受字符串/数字双向,String 版只接受字符串
 //! - 实现 `FromStr` / `Display` / `From` / `Into`
 //! - `ts` feature 下导出为 TS `string` 类型
-//! - `orm` feature 下实现 `From<XxxId> for sea_orm::Value`
+//! - `orm` feature 下 derive `sea_orm::DeriveValueType`,自动实现
+//!   `TryGetable` / `sea_query::ValueType` / `Nullable` / `From<XxxId> for sea_orm::Value`,
+//!   使 sea-orm 可直接查询/写入强类型 ID(`Option<XxxId>` 亦自动支持)
 //!
 //! 用法:
 //! ```ignore
@@ -34,6 +36,7 @@ macro_rules! id_type {
         #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
         #[cfg_attr(feature = "ts", ts(type = "string"))]
         #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir))]
+        #[cfg_attr(feature = "orm", derive(sea_orm::DeriveValueType))]
         pub struct $name(pub i64);
 
         /// 序列化为字符串（如 "42"），而非数字
@@ -85,11 +88,14 @@ macro_rules! id_type {
         }
 
         #[cfg(feature = "orm")]
-        impl From<$name> for sea_orm::Value {
-            fn from(val: $name) -> Self {
-                sea_orm::Value::BigInt(Some(val.0))
+        impl sea_orm::TryFromU64 for $name {
+            fn try_from_u64(n: u64) -> Result<Self, sea_orm::DbErr> {
+                <i64 as sea_orm::TryFromU64>::try_from_u64(n).map($name)
             }
         }
+
+        #[cfg(feature = "orm")]
+        impl sea_orm::sea_query::value::with_array::NotU8 for $name {}
     };
     // String 主键 ID:序列化为字符串,反序列化只接受字符串
     ($name:ident, String, $ts_dir:literal) => {
@@ -107,6 +113,7 @@ macro_rules! id_type {
         #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
         #[cfg_attr(feature = "ts", ts(type = "string"))]
         #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir))]
+        #[cfg_attr(feature = "orm", derive(sea_orm::DeriveValueType))]
         pub struct $name(pub String);
 
         /// 序列化为字符串
@@ -150,11 +157,14 @@ macro_rules! id_type {
         }
 
         #[cfg(feature = "orm")]
-        impl From<$name> for sea_orm::Value {
-            fn from(val: $name) -> Self {
-                sea_orm::Value::String(Some(Box::new(val.0)))
+        impl sea_orm::TryFromU64 for $name {
+            fn try_from_u64(_: u64) -> Result<Self, sea_orm::DbErr> {
+                Err(sea_orm::DbErr::ConvertFromU64(stringify!($name)))
             }
         }
+
+        #[cfg(feature = "orm")]
+        impl sea_orm::sea_query::value::with_array::NotU8 for $name {}
     };
 }
 

@@ -69,7 +69,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     // username 或者 email 等于 account都可以
     #[derive(Debug, FromQueryResult)]
     struct TempUser {
-        id: i64,
+        id: UserId,
         password: String,
         avatar_file_id: Option<String>,
     }
@@ -160,7 +160,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     state
         .redis
         .set_ex(
-            RedisKeys::auth::user_access_token(UserId(user.id)),
+            RedisKeys::auth::user_access_token(user.id),
             &new_access_token,
             ACCESS_TOKEN_EXPIRE_SECONDS as u64,
         )
@@ -178,7 +178,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     .inspect_err_async(|_| async {
         let _ = state
             .redis
-            .del(RedisKeys::auth::user_access_token(UserId(user.id)))
+            .del(RedisKeys::auth::user_access_token(user.id))
             .await
             .trace();
     })
@@ -256,7 +256,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
         email: Set(req.email),
         password: Set(hashed_pw),
         nickname: Set(req.nickname),
-        inviter: Set(inviter_id.into()),
+        inviter: Set(inviter_id),
         ..Default::default()
     }
     .insert(&state.db)
@@ -429,16 +429,13 @@ async fn verify_email_verify_code(redis: &Pool, email: &str, code: &str) -> Resu
 }
 
 // 校验邀请码（大小写不敏感），从 Redis 中查找邀请码对应的用户 ID
-async fn verify_inviter_code(redis: &Pool, inviter_code: &str) -> Result<u32> {
-    if inviter_code == "DriftC" {
-        return Ok(1);
-    }
-
+async fn verify_inviter_code(redis: &Pool, inviter_code: &str) -> Result<UserId> {
     // 统一转大写后查找 Redis key
     let code_upper = inviter_code.to_uppercase();
     redis
         .get_as(&RedisKeys::auth::inviter_code(&code_upper))
         .await?
+        .map(UserId)
         .ok_or_warn(
             "invalid_inviter_code",
             "邀请码无效",

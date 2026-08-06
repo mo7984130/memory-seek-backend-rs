@@ -19,8 +19,8 @@ impl CommentLikeMapper {
         let now = chrono::Utc::now();
 
         let active_model = ActiveModel {
-            comment_id: Set(comment_id.0),
-            user_id: Set(user_id.0),
+            comment_id: Set(comment_id),
+            user_id: Set(user_id),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -58,11 +58,10 @@ impl CommentLikeMapper {
             .column(Column::CommentId)
             .filter(Column::UserId.eq(user_id))
             .filter(Column::CommentId.is_in(comment_ids))
-            .into_tuple::<i64>()
+            .into_tuple::<CommentId>()
             .all(db)
             .await?
             .into_iter()
-            .map(CommentId)
             .collect::<HashSet<CommentId>>()
             .to_ok()
     }

@@ -220,7 +220,7 @@ pub async fn update_avatar(
                 .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
 
             user::ActiveModel {
-                id: Set(user_id.0),
+                id: Set(user_id),
                 avatar_file_id: Set(Some(new_key_inner)),
                 ..Default::default()
             }
@@ -339,7 +339,7 @@ pub async fn change_password(
 
     // 更新数据库
     user::ActiveModel {
-        id: Set(user_id.0),
+        id: Set(user_id),
         password: Set(new_password_hash),
         ..Default::default()
     }
@@ -380,7 +380,7 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<(), AppError> 
     let cache_key = RedisKeys::auth::user_info_cache(user_id);
     let (refresh_token_result, access_token_result, _) = tokio::join!(
         user::ActiveModel {
-            id: Set(user_id.0),
+            id: Set(user_id),
             refresh_token: Set(None),
             refresh_token_expire_at: Set(None),
             ..Default::default()
@@ -449,7 +449,7 @@ pub async fn get_user_info_batch(
                     Ok(users)
                 })
             },
-            |dto| UserId(dto.user_id),
+            |dto| dto.user_id,
         )
         .timed(metrics_name!("redis_cache"))
         .await?;

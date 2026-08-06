@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
 use std::sync::Arc;
 
 use common::ext::ToOk;
@@ -354,7 +353,7 @@ impl PersonService {
         let page = CursorPage::from_oversize_fn(photos, param.size, |photo| {
             TimeIdCursor {
                 created_at: photo.created_at,
-                id: PhotoId::from_str(&photo.id)?,
+                id: photo.id,
             }
             .to_ok()
         })?;

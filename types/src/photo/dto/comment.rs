@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 
+use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
 use crate::photo::comment::CommentId;
 #[cfg(feature = "orm")]
@@ -19,8 +20,8 @@ pub const HOT_COMMENT_MIN_LIKES: u64 = 5;
 pub const HOT_COMMENT_MAX_COUNT: u64 = 3;
 
 crate::out_dto!(CommentView, "photo/", rename = "Comment"; {
-    pub id: String,
-    pub user_id: String,
+    pub id: CommentId,
+    pub user_id: UserId,
     pub content: String,
     pub like_count: i32,
     pub is_liked: bool,
@@ -31,8 +32,8 @@ crate::out_dto!(CommentView, "photo/", rename = "Comment"; {
 impl From<CommentRecord> for CommentView {
     fn from(record: CommentRecord) -> Self {
         Self {
-            id: record.id.to_string(),
-            user_id: record.user_id.to_string(),
+            id: record.id,
+            user_id: record.user_id,
             content: record.content,
             like_count: record.like_count,
             is_liked: false,

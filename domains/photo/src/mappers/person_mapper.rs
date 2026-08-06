@@ -78,8 +78,8 @@ impl PersonMapper {
 
         if let Some(cover) = cover {
             update = update
-                .col_expr(Column::CoverFaceId, Expr::value(cover.cover_face_id.0))
-                .col_expr(Column::CoverPhotoId, Expr::value(cover.cover_photo_id.0))
+                .col_expr(Column::CoverFaceId, Expr::value(cover.cover_face_id))
+                .col_expr(Column::CoverPhotoId, Expr::value(cover.cover_photo_id))
                 .col_expr(Column::CoverFileId, Expr::value(cover.cover_file_id))
                 .col_expr(
                     Column::CoverBbox,
@@ -133,7 +133,7 @@ impl PersonMapper {
             return Ok(Vec::new());
         }
         Entity::find()
-            .filter(Column::Id.is_in(person_ids.iter().map(|id| id.0)))
+            .filter(Column::Id.is_in(person_ids.iter().copied()))
             .all(db)
             .await?
             .into_iter()

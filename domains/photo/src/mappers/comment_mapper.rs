@@ -25,8 +25,8 @@ impl CommentMapper {
         content: String,
     ) -> Result<CommentRecord> {
         ActiveModel {
-            photo_id: Set(photo_id.0),
-            user_id: Set(user_id.0),
+            photo_id: Set(photo_id),
+            user_id: Set(user_id),
             content: Set(content),
             ..Default::default()
         }
@@ -130,10 +130,9 @@ impl CommentMapper {
             .filter(Column::Id.eq(comment_id))
             .select_only()
             .column(Column::PhotoId)
-            .into_tuple::<i64>()
+            .into_tuple::<PhotoId>()
             .one(db)
             .await?
-            .map(PhotoId)
             .ok_or_warn_bad_request("comment_not_found", "评论不存在", "评论不存在")
     }
 }
@@ -166,12 +165,9 @@ impl CommentMapper {
             .select_only()
             .column(Column::Id)
             .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
-            .into_tuple::<i64>()
+            .into_tuple::<CommentId>()
             .all(db)
-            .await?
-            .into_iter()
-            .map(CommentId)
-            .collect();
+            .await?;
 
         if !comment_ids.is_empty() {
             Entity::delete_many()

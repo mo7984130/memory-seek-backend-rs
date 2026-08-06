@@ -88,14 +88,12 @@ impl CollectionPhotoService {
         let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))
             .await?;
-        let next_cursor = photo_vos.last().and_then(|vo| {
-            PhotoId::parse_from_str_or_none(&vo.id).map(|id| {
-                TimeIdCursor {
-                    created_at: vo.created_at,
-                    id,
-                }
-                .encode()
-            })
+        let next_cursor = photo_vos.last().map(|vo| {
+            TimeIdCursor {
+                created_at: vo.created_at,
+                id: vo.id,
+            }
+            .encode()
         });
 
         metrics_success!();
@@ -175,7 +173,7 @@ impl CollectionPhotoService {
                 // 先检查封面是否需要更新
                 let need_update_cover = collection
                     .cover_photo_id
-                    .map(|cover_pid| photo_ids.iter().any(|pid| pid.0 == cover_pid))
+                    .map(|cover_pid| photo_ids.iter().any(|pid| *pid == cover_pid))
                     .unwrap_or(false);
 
                 let rows = CollectionPhotoMapper::delete_by_collection_id_and_photo_ids(

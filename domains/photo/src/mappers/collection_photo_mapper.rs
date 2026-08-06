@@ -45,12 +45,12 @@ impl CollectionPhotoMapper {
             .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .select_only()
             .column(Column::CollectionId)
-            .into_tuple::<i64>()
+            .into_tuple::<CollectionId>()
             .all(db)
             .await?
             .into_iter()
             .fold(HashMap::new(), |mut map, collection_id| {
-                *map.entry(CollectionId(collection_id)).or_insert(0i64) -= 1;
+                *map.entry(collection_id).or_insert(0i64) -= 1;
                 map
             });
 
@@ -83,12 +83,9 @@ impl CollectionPhotoMapper {
         query
             .select_only()
             .column(Column::PhotoId)
-            .into_tuple::<i64>()
+            .into_tuple::<PhotoId>()
             .all(db)
             .await?
-            .into_iter()
-            .map(PhotoId)
-            .collect::<Vec<_>>()
             .to_ok()
     }
 
@@ -117,12 +114,9 @@ impl CollectionPhotoMapper {
             .filter(Column::UserId.eq(user_id))
             .select_only()
             .column(Column::CollectionId)
-            .into_tuple::<i64>()
+            .into_tuple::<CollectionId>()
             .all(db)
             .await?
-            .into_iter()
-            .map(CollectionId)
-            .collect::<Vec<_>>()
             .to_ok()
     }
 }

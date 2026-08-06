@@ -4,7 +4,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{BoolExt, CacheExtension, OkExt, OptionExt, ResultErrExt, ResultInspectErrAsync},
+    ext::{BoolExt, CacheExtension, OkExt, OptionExt, ResultInspectErrAsync},
     metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
@@ -108,19 +108,13 @@ impl PhotoService {
         // 获取next_cursor
         let next_cursor = if has_more {
             match photo_vos.last() {
-                Some(last_vo) => {
-                    let id = last_vo
-                        .id
-                        .parse::<i64>()
-                        .trace_internal_err("parse_photo_vo_id_err", "解析照片VOid错误")?;
-                    Some(
-                        TimeIdCursor {
-                            id: PhotoId(id),
-                            created_at: last_vo.created_at,
-                        }
-                        .encode(),
-                    )
-                }
+                Some(last_vo) => Some(
+                    TimeIdCursor {
+                        id: last_vo.id,
+                        created_at: last_vo.created_at,
+                    }
+                    .encode(),
+                ),
                 None => None,
             }
         } else {
@@ -187,7 +181,7 @@ impl PhotoService {
         // 更新数据库
         let now = Utc::now();
         let photo = ActiveModel {
-            user_id: Set(user_id.0),
+            user_id: Set(user_id),
             name: Set(metadata.name),
             size: Set(file_data.len() as i64),
             width: Set(metadata.width as i32),

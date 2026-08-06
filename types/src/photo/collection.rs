@@ -15,18 +15,19 @@ mod entity {
 
     use super::*;
     use crate::auth::user::UserId;
+    use crate::photo::photo::PhotoId;
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "photo_collection")]
     pub struct Model {
         #[sea_orm(primary_key)]
-        pub id: i64,
-        pub user_id: i64,
+        pub id: CollectionId,
+        pub user_id: UserId,
         pub name: String,
         pub description: Option<String>,
         pub photo_count: i64,
         pub cover_file_id: Option<String>,
-        pub cover_photo_id: Option<i64>,
+        pub cover_photo_id: Option<PhotoId>,
         pub created_at: DateTimeUtc,
         pub updated_at: DateTimeUtc,
     }
@@ -40,7 +41,7 @@ mod entity {
         pub description: Option<String>,
         pub photo_count: i64,
         pub cover_file_id: Option<String>,
-        pub cover_photo_id: Option<i64>,
+        pub cover_photo_id: Option<PhotoId>,
         pub created_at: DateTimeUtc,
         pub updated_at: DateTimeUtc,
     }
@@ -48,8 +49,8 @@ mod entity {
     impl From<Model> for CollectionRecord {
         fn from(model: Model) -> Self {
             Self {
-                id: CollectionId(model.id),
-                user_id: UserId(model.user_id),
+                id: model.id,
+                user_id: model.user_id,
                 name: model.name,
                 description: model.description,
                 photo_count: model.photo_count,
