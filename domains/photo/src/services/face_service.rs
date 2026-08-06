@@ -234,7 +234,7 @@ impl FaceService {
 
 // 修改
 impl FaceService {
-    /// 修改人脸归属: 将单张人脸移动到指定人物
+    /// 修改人脸归属: 将单张人脸移动到指定人物, `person_id` 为 `None` 时取消归属
     ///
     /// 在同一事务内维护全部不变量(见 `docs/change-face-belonging-plan.md`):
     /// - 新旧人物 `face_count` 增量维护, 旧人物无人脸后删除;
@@ -246,7 +246,7 @@ impl FaceService {
     pub async fn change_face_belonging(
         state: &PhotoState,
         face_id: FaceId,
-        person_id: PersonId,
+        person_id: Option<PersonId>,
     ) -> Result<()> {
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
@@ -257,64 +257,83 @@ impl FaceService {
                     AppError::not_found("人脸不存在"),
                 )?;
 
-                // 归属未变化, 直接返回
-                if face.person_id == Some(person_id) {
+                // 归属未变化(均为 None 或同一人物), 直接返回
+                let old_person_id = face.person_id;
+                if person_id == old_person_id {
                     return Ok(());
                 }
 
-                // 按 id 升序加锁涉及的两个人物行, 避免并发操作互相死锁(旧人物可能不存在)
-                let (new_person, old_person) = DbUtils::ensure_lock_two_optional_ordered(
-                    txn,
-                    person_id,
-                    face.person_id,
-                    PersonMapper::lock_by_id,
-                    |person| {
-                        person.ok_or_error(
+                match person_id {
+                    Some(new_person_id) => {
+                        // 按 id 升序加锁涉及的两个人物行, 避免并发操作互相死锁(旧人物可能不存在)
+                        let (new_person, old_person) = DbUtils::ensure_lock_two_optional_ordered(
+                            txn,
+                            new_person_id,
+                            old_person_id,
+                            PersonMapper::lock_by_id,
+                            |person| {
+                                person.ok_or_error(
+                                    "person_not_found",
+                                    "人物不存在",
+                                    AppError::not_found("人物不存在"),
+                                )
+                            },
+                        )
+                        .await?;
+
+                        // 移动人脸归属
+                        FaceMapper::update_face_person_id(txn, face_id, new_person_id)
+                            .await?
+                            .no_zero_or_warn(
+                                "face_belonging_change_fail",
+                                "修改人脸归属失败",
+                                AppError::bad_request("修改人脸归属失败"),
+                            )?;
+
+                        // 新人物: 数量/权重/质心增量, 封面按 score 规则可能替换
+                        let new_cover =
+                            Self::resolve_cover_after_add(txn, &new_person, &face).await?;
+                        PersonMapper::update_stats(
+                            txn,
+                            new_person_id,
+                            new_person.face_count + 1,
+                            new_person.weight + face.score as f64,
+                            new_person.centroid.add_scaled(&face.embedding, face.score),
+                            new_cover,
+                        )
+                        .await?;
+
+                        // 旧人物: 减量维护(无人脸则删除)
+                        if let Some(old_person) = old_person {
+                            Self::remove_face_from_person(txn, &old_person, &face).await?;
+                        }
+                    }
+                    // 取消归属: 仅需处理旧人物减量维护
+                    None => {
+                        let old_person = PersonMapper::lock_by_id(
+                            txn,
+                            old_person_id.ok_or_error(
+                                "face_belonging_change_fail",
+                                "取消人脸归属失败",
+                                AppError::InternalServerError,
+                            )?,
+                        )
+                        .await?
+                        .ok_or_error(
                             "person_not_found",
                             "人物不存在",
                             AppError::not_found("人物不存在"),
-                        )
-                    },
-                )
-                .await?;
+                        )?;
 
-                // 移动人脸归属
-                FaceMapper::update_face_person_id(txn, face_id, person_id)
-                    .await?
-                    .no_zero_or_warn(
-                        "face_belonging_change_fail",
-                        "修改人脸归属失败",
-                        AppError::bad_request("修改人脸归属失败"),
-                    )?;
+                        FaceMapper::clear_face_person_id(txn, face_id)
+                            .await?
+                            .no_zero_or_warn(
+                                "face_belonging_change_fail",
+                                "取消人脸归属失败",
+                                AppError::bad_request("取消人脸归属失败"),
+                            )?;
 
-                // 新人物: 数量/权重/质心增量, 封面按 score 规则可能替换
-                let new_cover = Self::resolve_cover_after_add(txn, &new_person, &face).await?;
-                PersonMapper::update_stats(
-                    txn,
-                    person_id,
-                    new_person.face_count + 1,
-                    new_person.weight + face.score as f64,
-                    new_person.centroid.add_scaled(&face.embedding, face.score),
-                    new_cover,
-                )
-                .await?;
-
-                // 旧人物: 无人脸则删除; 否则数量/权重/质心减量, 封面可能回退
-                if let Some(old_person) = old_person {
-                    if old_person.face_count == 1 {
-                        PersonMapper::delete_by_id(txn, old_person.id).await?;
-                    } else {
-                        let old_cover =
-                            Self::resolve_cover_after_remove(txn, &old_person, &face).await?;
-                        PersonMapper::update_stats(
-                            txn,
-                            old_person.id,
-                            old_person.face_count - 1,
-                            old_person.weight - face.score as f64,
-                            old_person.centroid.sub_scaled(&face.embedding, face.score),
-                            old_cover,
-                        )
-                        .await?;
+                        Self::remove_face_from_person(txn, &old_person, &face).await?;
                     }
                 }
 
@@ -323,6 +342,29 @@ impl FaceService {
         })
         .await?;
 
+        Ok(())
+    }
+
+    /// 旧人物减量维护: 无人脸则删除; 否则数量/权重/质心减量, 封面可能回退
+    async fn remove_face_from_person(
+        txn: &DatabaseTransaction,
+        person: &PersonRecord,
+        face: &FaceRecord,
+    ) -> Result<()> {
+        if person.face_count == 1 {
+            PersonMapper::delete_by_id(txn, person.id).await?;
+        } else {
+            let old_cover = Self::resolve_cover_after_remove(txn, person, face).await?;
+            PersonMapper::update_stats(
+                txn,
+                person.id,
+                person.face_count - 1,
+                person.weight - face.score as f64,
+                person.centroid.sub_scaled(&face.embedding, face.score),
+                old_cover,
+            )
+            .await?;
+        }
         Ok(())
     }
 
@@ -467,7 +509,41 @@ impl FaceService {
 }
 
 // 删除
-impl FaceService {}
+impl FaceService {
+    /// 删除单张人脸(仅限未归属人物的人脸, 避免破坏人物统计不变量)
+    #[tracing::instrument(skip_all)]
+    pub async fn delete_face(state: &PhotoState, face_id: FaceId) -> Result<()> {
+        DbUtils::write(&state.db, |txn| {
+            Box::pin(async move {
+                // 加行锁读取人脸(读-改-写流程, 防止并发转移归属后误删)
+                let face = FaceMapper::lock_by_id(txn, face_id).await?.ok_or_error(
+                    "face_not_found",
+                    "人脸不存在",
+                    AppError::not_found("人脸不存在"),
+                )?;
+
+                // 已归属人物的人脸禁止直接删除(需先取消归属), 防止人物统计悬空
+                if face.person_id.is_some() {
+                    return Err(AppError::bad_request(
+                        "人脸已归属人物, 请先取消归属后再删除",
+                    ));
+                }
+
+                FaceMapper::delete_by_id(txn, face_id)
+                    .await?
+                    .no_zero_or_warn(
+                        "face_delete_fail",
+                        "删除人脸失败",
+                        AppError::bad_request("删除人脸失败"),
+                    )?;
+                Ok(())
+            })
+        })
+        .await?;
+
+        Ok(())
+    }
+}
 
 // 照片删除步骤:人脸清理(占位)
 #[step_derive::declare_step(

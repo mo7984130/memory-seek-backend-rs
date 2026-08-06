@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     Extension, Router,
     extract::State,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use common::{
     Result,
@@ -39,6 +39,8 @@ impl ControllerRouter for FaceController {
                 "/feature/{feature_id}/belonging/{person_id}",
                 post(Self::change_belonging),
             )
+            .route("/feature/{feature_id}/belonging", post(Self::unassign_face))
+            .route("/feature/{feature_id}", delete(Self::delete_face))
     }
 
     fn public_routes() -> axum::Router<std::sync::Arc<Self::State>> {
@@ -67,12 +69,22 @@ impl FaceController {
 
 // 修改
 impl FaceController {
-    /// 修改人脸归属
+    /// 修改人脸归属: 将单张人脸移动到指定人物
     async fn change_belonging(
         State(state): State<Arc<PhotoState>>,
         ValidatedPath((face_id, person_id)): ValidatedPath<(FaceId, PersonId)>,
     ) -> Result<R<()>> {
-        FaceService::change_face_belonging(&state, face_id, person_id)
+        FaceService::change_face_belonging(&state, face_id, Some(person_id))
+            .await
+            .to_r_ok()
+    }
+
+    /// 取消人脸归属(路径不带 person_id 段)
+    async fn unassign_face(
+        State(state): State<Arc<PhotoState>>,
+        ValidatedPath(face_id): ValidatedPath<FaceId>,
+    ) -> Result<R<()>> {
+        FaceService::change_face_belonging(&state, face_id, None)
             .await
             .to_r_ok()
     }
@@ -102,4 +114,12 @@ impl FaceController {
 }
 
 // 删除
-impl FaceController {}
+impl FaceController {
+    /// 删除人脸(仅限未归属人物的人脸)
+    async fn delete_face(
+        State(state): State<Arc<PhotoState>>,
+        ValidatedPath(face_id): ValidatedPath<FaceId>,
+    ) -> Result<R<()>> {
+        FaceService::delete_face(&state, face_id).await.to_r_ok()
+    }
+}

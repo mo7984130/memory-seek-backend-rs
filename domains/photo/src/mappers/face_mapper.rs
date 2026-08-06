@@ -66,6 +66,17 @@ impl FaceMapper {
             .to_ok()
     }
 
+    /// 清空单张人脸归属(取消归属, person_id 置 NULL)
+    pub async fn clear_face_person_id(db: &impl ConnectionTrait, face_id: FaceId) -> Result<u64> {
+        Entity::update_many()
+            .filter(Column::Id.eq(face_id))
+            .col_expr(Column::PersonId, Expr::value(sea_orm::Value::BigInt(None)))
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
+
     /// 将某人物下的全部人脸归属转移到另一人物(合并)
     pub async fn move_person_faces(
         db: &impl ConnectionTrait,
@@ -233,4 +244,14 @@ impl FaceMapper {
 }
 
 // 删除
-impl FaceMapper {}
+impl FaceMapper {
+    /// 删除单张人脸(仅限未归属人脸, 归属校验在 service 层完成)
+    pub async fn delete_by_id(db: &impl ConnectionTrait, face_id: FaceId) -> Result<u64> {
+        Entity::delete_many()
+            .filter(Column::Id.eq(face_id))
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
+}
