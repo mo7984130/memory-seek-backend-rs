@@ -4,6 +4,7 @@ use crate::hasher::TableHasher;
 use crate::state::BackupState;
 use crate::storage::BackupType;
 use std::sync::Arc;
+use types::auth::user::AdminId;
 
 /// 备份执行器
 pub struct BackupRunner;
@@ -79,11 +80,18 @@ impl BackupRunner {
     }
 
     /// 手动备份：导出并保存到 manual 目录（永不清理）
-    pub async fn execute_manual(state: Arc<BackupState>) -> Result<BackupResult, BackupError> {
+    pub async fn execute_manual(
+        state: Arc<BackupState>,
+        admin: AdminId,
+    ) -> Result<BackupResult, BackupError> {
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
-        tracing::info!(run_id = %run_id, "Starting manual backup");
+        tracing::info!(
+            run_id = %run_id,
+            user_id = %admin,
+            "Starting manual backup"
+        );
 
         state.ensure_dirs()?;
 
