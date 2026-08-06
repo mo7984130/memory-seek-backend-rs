@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use validator::Validate;
 
 use crate::cursor::TimeIdCursor;
 use crate::photo::collection::CollectionId;
@@ -95,6 +96,7 @@ crate::in_dto!(CollectionPhotoCursorPageParam, "photo/", docs = "收藏夹照片
 });
 
 crate::in_dto!(CollectionPhotoAddBatchParam, "photo/"; {
+    #[validate(nested)]
     pub photo_ids: PhotoIds,
 });
 
@@ -104,6 +106,7 @@ crate::out_dto!(CollectionPhotoAddBatchResult, "photo/", Default; {
 });
 
 crate::in_dto!(CollectionPhotoRemoveBatchParam, "photo/"; {
+    #[validate(nested)]
     pub photo_ids: PhotoIds,
 });
 

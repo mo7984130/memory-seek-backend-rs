@@ -1,3 +1,5 @@
+use validator::Validate;
+
 use crate::cursor::TimeIdCursor;
 use crate::photo::models::PersonName;
 use crate::photo::person::PersonId;
@@ -59,6 +61,7 @@ crate::in_dto!(PersonPhotoCursorParam, "photo/", docs = "人物照片游标参�
 });
 
 crate::in_dto!(RenamePersonParam, "photo/", docs = "重命名人物参数"; {
+    #[validate(nested)]
     pub new_name: PersonName,
 });
 
@@ -74,8 +77,11 @@ crate::in_dto!(SecondaryClusterParam, "photo/", docs = "二次聚类参数(将�
 });
 
 /// 合并人物参数
-#[derive(Debug, serde::Deserialize, validator::Validate)]
-#[serde(rename_all = "camelCase", try_from = "MergePersonParamInner")]
+///
+/// 跨字段校验("不能合并到自身")放在 `Validate` 阶段,而非 `try_from`
+/// 反序列化校验,避免业务错误被 serde 误判为解析错误并混入位置信息。
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "ts", ts(export, export_to = "photo/"))]
 pub struct MergePersonParam {
@@ -83,25 +89,16 @@ pub struct MergePersonParam {
     pub target_person_id: PersonId,
 }
 
-/// 反序列化中间类型: 反序列化后经 `TryFrom` 校验跨字段关系
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct MergePersonParamInner {
-    source_person_id: PersonId,
-    target_person_id: PersonId,
-}
-
-impl TryFrom<MergePersonParamInner> for MergePersonParam {
-    type Error = String;
-
-    fn try_from(inner: MergePersonParamInner) -> Result<Self, Self::Error> {
-        if inner.source_person_id == inner.target_person_id {
-            return Err("不能将人物合并到自身".to_string());
+impl validator::Validate for MergePersonParam {
+    fn validate(&self) -> Result<(), validator::ValidationErrors> {
+        if self.source_person_id == self.target_person_id {
+            let mut err = validator::ValidationError::new("self_merge");
+            err.message = Some(std::borrow::Cow::Borrowed("不能将人物合并到自身"));
+            let mut errors = validator::ValidationErrors::new();
+            errors.add("source_person_id", err);
+            return Err(errors);
         }
-        Ok(Self {
-            source_person_id: inner.source_person_id,
-            target_person_id: inner.target_person_id,
-        })
+        Ok(())
     }
 }
 
@@ -122,7 +119,7 @@ mod tests {
     #[test]
     fn test_merge_person_param_deserialize_self_merge_rejected() {
         let json = r#"{"sourcePersonId": 1, "targetPersonId": 1}"#;
-        let result = serde_json::from_str::<MergePersonParam>(json);
-        assert!(result.is_err());
+        let param: MergePersonParam = serde_json::from_str(json).unwrap();
+        assert!(param.validate().is_err());
     }
 }

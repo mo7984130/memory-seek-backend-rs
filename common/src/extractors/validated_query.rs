@@ -1,8 +1,7 @@
 use crate::{
     error::AppError,
     ext::{ResultErrExt, log_warn},
-    // 建议把 format_validation_errors 提到公共模块后从这里 use 进来
-    // extractors::json::format_validation_errors,
+    extractors::validated_json::format_validation_errors,
 };
 use axum::extract::{FromRequestParts, Query};
 use serde::de::DeserializeOwned;
@@ -41,25 +40,6 @@ where
 
         Ok(ValidatedQuery(value))
     }
-}
-
-fn format_validation_errors(errors: &ValidationErrors) -> String {
-    errors
-        .field_errors()
-        .iter()
-        .map(|(field, errs)| {
-            let messages: Vec<String> = errs
-                .iter()
-                .filter_map(|e| e.message.as_ref().map(|m| m.to_string()))
-                .collect();
-            if messages.is_empty() {
-                format!("字段 '{}' 校验失败", field)
-            } else {
-                format!("{}: {}", field, messages.join(", "))
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("; ")
 }
 
 impl<T> Deref for ValidatedQuery<T> {

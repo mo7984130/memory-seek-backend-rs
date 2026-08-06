@@ -1,6 +1,7 @@
 //! 照片相关类型定义
 
 use chrono::{DateTime, Utc};
+use validator::Validate;
 
 use crate::cursor::TimeIdCursor;
 use crate::photo::photo::PhotoId;
@@ -65,6 +66,7 @@ crate::in_dto!(ExistsByMd5BatchParam, "photo/", serialize; {
 
 crate::in_dto!(DeletePhotosParam, "photo/", serialize; {
     /// 照片 ID 列表
+    #[validate(nested)]
     pub photo_ids: PhotoIds,
 });
 
@@ -116,9 +118,17 @@ mod tests {
     }
 
     #[test]
-    fn test_photo_ids_validate_is_noop() {
-        let ids = PhotoIds::new(vec![PhotoId(1)]).unwrap();
-        assert!(ids.validate().is_ok());
+    fn test_photo_ids_validate_empty() {
+        let ids = PhotoIds::new(vec![]).unwrap_err();
+        assert_eq!(ids, "照片ID列表不能为空");
+        let ids = PhotoIds(vec![]);
+        assert!(ids.validate().is_err());
+    }
+
+    #[test]
+    fn test_photo_ids_validate_too_many() {
+        let ids = PhotoIds((0..1025).map(PhotoId).collect());
+        assert!(ids.validate().is_err());
     }
 
     #[test]
@@ -203,6 +213,18 @@ mod tests {
         assert!(n.validate().is_ok());
     }
 
+    #[test]
+    fn test_person_name_validate_empty() {
+        let n = PersonName(String::new());
+        assert!(n.validate().is_err());
+    }
+
+    #[test]
+    fn test_person_name_validate_too_long() {
+        let n = PersonName("a".repeat(65));
+        assert!(n.validate().is_err());
+    }
+
     // ==================== UploadPhotoParam validation ====================
 
     #[test]
@@ -271,7 +293,27 @@ mod tests {
     #[test]
     fn test_delete_photos_param_deserialize_empty() {
         let json = r#"{"photoIds": []}"#;
-        let result = serde_json::from_str::<DeletePhotosParam>(json);
-        assert!(result.is_err());
+        let param: DeletePhotosParam = serde_json::from_str(json).unwrap();
+        assert!(param.validate().is_err());
+    }
+
+    #[test]
+    fn test_delete_photos_param_deserialize_too_many() {
+        let ids = (0..1025).map(|_| 1).collect::<Vec<_>>();
+        let json = format!(r#"{{"photoIds": {:?}}}"#, ids);
+        let param: DeletePhotosParam = serde_json::from_str(&json).unwrap();
+        assert!(param.validate().is_err());
+    }
+
+    #[test]
+    fn test_person_name_deserialize_then_validate() {
+        // 超长名称应能反序列化, 校验错误走 validator 通道, 不含位置信息
+        let json = format!(r#"{{"newName": "{}"}}"#, "a".repeat(65));
+        let param: crate::photo::dto::person::RenamePersonParam =
+            serde_json::from_str(&json).unwrap();
+        let err = param.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("人物名称长度不能超过64个字符"), "msg: {msg}");
+        assert!(!msg.contains("at line"), "msg: {msg}");
     }
 }

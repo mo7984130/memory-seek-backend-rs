@@ -171,8 +171,12 @@ macro_rules! id_type {
 /// 校验型 newtype:构造时保证非空且不超过上限
 ///
 /// 统一生成:derive(`Debug, Clone, Deref, Into`)、手动 `Serialize`/`Deserialize`
-/// (反序列化走构造校验,等价于 `#[serde(try_from)]`)、TS 导出、
-/// `new()` / `MAX_COUNT` / `into_inner()` / `TryFrom` / `Validate`(no-op)。
+/// (反序列化仅做类型转换,不校验)、TS 导出、
+/// `new()` / `MAX_COUNT` / `into_inner()` / `TryFrom` /
+/// `Validate`(真实校验,与构造校验保持一致)。
+///
+/// 校验放在 `Validate` 阶段而非反序列化阶段,避免业务校验错误被 serde
+/// 当作解析错误处理(会混入 `at line X column Y` 位置信息并被误判为 JSON 解析失败)。
 ///
 /// 用法:
 /// ```ignore
@@ -196,11 +200,10 @@ macro_rules! validated_newtype {
             }
         }
 
-        /// 反序列化内部值并走构造校验
+        /// 反序列化仅做类型转换,校验交给 `Validate` 实现
         impl<'de> serde::Deserialize<'de> for $name {
             fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-                let v = <$inner>::deserialize(d)?;
-                Self::new(v).map_err(serde::de::Error::custom)
+                <$inner>::deserialize(d).map(Self)
             }
         }
 
@@ -233,7 +236,13 @@ macro_rules! validated_newtype {
 
         impl validator::Validate for $name {
             fn validate(&self) -> Result<(), validator::ValidationErrors> {
-                // 构造时（反序列化时）已校验，此处为 no-op
+                if let Err(msg) = Self::new(self.0.clone()) {
+                    let mut err = validator::ValidationError::new("validated_newtype");
+                    err.message = Some(std::borrow::Cow::Borrowed(msg));
+                    let mut errors = validator::ValidationErrors::new();
+                    errors.add("value", err);
+                    return Err(errors);
+                }
                 Ok(())
             }
         }

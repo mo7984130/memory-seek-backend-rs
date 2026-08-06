@@ -1,6 +1,7 @@
 //! 用户相关类型定义
 
 use chrono::{DateTime, Utc};
+use validator::Validate;
 
 use super::validators::*;
 use crate::auth::user::UserId;
@@ -55,6 +56,7 @@ crate::in_dto!(ChangeNicknameParam, "user/", serialize; {
 });
 
 crate::in_dto!(GetUserInfoBatchParam, "user/", serialize; {
+    #[validate(nested)]
     pub user_ids: UserIds,
 });
 

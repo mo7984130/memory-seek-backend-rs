@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use validator::Validate;
 
 use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
@@ -50,6 +51,7 @@ impl CommentView {
 }
 
 crate::in_dto!(CommentPublishParam, "photo/"; {
+    #[validate(nested)]
     pub content: CommentContent,
 });
 
