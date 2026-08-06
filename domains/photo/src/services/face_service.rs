@@ -258,27 +258,21 @@ impl FaceService {
                     return Ok(());
                 }
 
-                let old_person_id = face.person_id;
-
-                // 按 id 升序加锁涉及的两个人物行, 避免并发操作互相死锁
-                let mut lock_ids = Vec::with_capacity(2);
-                lock_ids.push(person_id);
-                if let Some(old_id) = old_person_id {
-                    lock_ids.push(old_id);
-                }
-                lock_ids.sort_by_key(|id| *id);
-
-                let mut persons: HashMap<PersonId, PersonRecord> =
-                    HashMap::with_capacity(lock_ids.len());
-                for id in lock_ids {
-                    let person = PersonMapper::lock_by_id(txn, id).await?.ok_or_error(
-                        "person_not_found",
-                        "人物不存在",
-                        AppError::not_found("人物不存在"),
-                    )?;
-                    persons.insert(id, person);
-                }
-                let new_person = &persons[&person_id];
+                // 按 id 升序加锁涉及的两个人物行, 避免并发操作互相死锁(旧人物可能不存在)
+                let (new_person, old_person) = DbUtils::ensure_lock_two_optional_ordered(
+                    txn,
+                    person_id,
+                    face.person_id,
+                    PersonMapper::lock_by_id,
+                    |person| {
+                        person.ok_or_error(
+                            "person_not_found",
+                            "人物不存在",
+                            AppError::not_found("人物不存在"),
+                        )
+                    },
+                )
+                .await?;
 
                 // 移动人脸归属
                 FaceMapper::update_face_person_id(txn, face_id, person_id)
@@ -290,7 +284,7 @@ impl FaceService {
                     )?;
 
                 // 新人物: 数量/权重/质心增量, 封面按 score 规则可能替换
-                let new_cover = Self::resolve_cover_after_add(txn, new_person, &face).await?;
+                let new_cover = Self::resolve_cover_after_add(txn, &new_person, &face).await?;
                 PersonMapper::update_stats(
                     txn,
                     person_id,
@@ -302,16 +296,15 @@ impl FaceService {
                 .await?;
 
                 // 旧人物: 无人脸则删除; 否则数量/权重/质心减量, 封面可能回退
-                if let Some(old_id) = old_person_id {
-                    let old_person = &persons[&old_id];
+                if let Some(old_person) = old_person {
                     if old_person.face_count == 1 {
-                        PersonMapper::delete_by_id(txn, old_id).await?;
+                        PersonMapper::delete_by_id(txn, old_person.id).await?;
                     } else {
                         let old_cover =
-                            Self::resolve_cover_after_remove(txn, old_person, &face).await?;
+                            Self::resolve_cover_after_remove(txn, &old_person, &face).await?;
                         PersonMapper::update_stats(
                             txn,
-                            old_id,
+                            old_person.id,
                             old_person.face_count - 1,
                             old_person.weight - face.score as f64,
                             old_person.centroid.sub_scaled(&face.embedding, face.score),
