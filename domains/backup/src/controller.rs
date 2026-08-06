@@ -5,7 +5,7 @@ use common::{
     Result, ext::ResultErrExt, r::R, traits::controller::ControllerRouter,
 };
 use std::sync::Arc;
-use types::auth::user::UserId;
+use types::auth::user::{AdminId, UserId};
 
 pub struct BackupController;
 
@@ -28,7 +28,7 @@ impl BackupController {
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<serde_json::Value>> {
-        user_id.ensure_admin()?;
+        AdminId::new(user_id)?;
 
         let result = BackupRunner::execute_scheduled(state)
             .await
@@ -46,7 +46,7 @@ impl BackupController {
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<serde_json::Value>> {
-        user_id.ensure_admin()?;
+        AdminId::new(user_id)?;
 
         let result = BackupRunner::execute_manual(state)
             .await

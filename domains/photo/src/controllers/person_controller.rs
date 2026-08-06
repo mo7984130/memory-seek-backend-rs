@@ -14,7 +14,7 @@ use common::{
     traits::controller::ControllerRouter,
 };
 use types::{
-    auth::user::UserId,
+    auth::user::{AdminId, UserId},
     cursor::TimeIdCursor,
     photo::{
         PersonView,
@@ -55,7 +55,7 @@ impl PersonController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>> {
-        let admin = user_id.ensure_admin()?;
+        let admin = AdminId::new(user_id)?;
         PersonService::full_scan(state, admin).await.to_r_ok()
     }
 }

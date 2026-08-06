@@ -9,7 +9,7 @@ use common::{
     Result, ext::ResultRExt, extractors::ValidatedPath, r::R, traits::controller::ControllerRouter,
 };
 use types::{
-    auth::user::UserId,
+    auth::user::{AdminId, UserId},
     photo::{FaceView, face::FaceId, person::PersonId, photo::PhotoId},
 };
 
@@ -42,7 +42,7 @@ impl FaceController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>> {
-        let admin = user_id.ensure_admin()?;
+        let admin = AdminId::new(user_id)?;
         FaceService::compute(state, admin, true).await.to_r_ok()
     }
 
@@ -50,7 +50,7 @@ impl FaceController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<()>> {
-        let admin = user_id.ensure_admin()?;
+        let admin = AdminId::new(user_id)?;
         FaceService::compute(state, admin, false).await.to_r_ok()
     }
 }
