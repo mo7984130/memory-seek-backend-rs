@@ -1,8 +1,9 @@
 use common::{Result, ext::ToOk};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
-    sea_query::Expr,
+    sea_query::{Expr, Query},
 };
+use types::auth::user::UserId;
 use types::cursor::TimeIdCursor;
 use types::photo::{face::*, person::PersonId, photo::PhotoId};
 
@@ -165,6 +166,48 @@ impl FaceMapper {
             .into_iter()
             .map(FaceRecord::try_from)
             .collect()
+    }
+
+    /// 查询当前用户"包含未分配人脸"的照片 id(keyset 分页, 基于照片的 (created_at, id))
+    ///
+    /// 用 `EXISTS` 子查询过滤, 保证同一照片多张未分配人脸不产生重复行。
+    pub async fn query_unassigned_face_photo_ids_cursor_page(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        cursor: Option<TimeIdCursor<PhotoId>>,
+        size: u64,
+    ) -> Result<Vec<PhotoId>> {
+        let subquery = Query::select()
+            .expr(Expr::val(1))
+            .from(Entity)
+            .and_where(
+                Expr::col((Entity, Column::PhotoId))
+                    .equals((types::photo::photo::Entity, types::photo::photo::Column::Id)),
+            )
+            .and_where(Column::PersonId.is_null())
+            .to_owned();
+
+        let mut query = types::photo::photo::Entity::find()
+            .filter(types::photo::photo::Column::UserId.eq(user_id))
+            .filter(Expr::exists(subquery))
+            .order_by(types::photo::photo::Column::CreatedAt, Order::Desc)
+            .order_by(types::photo::photo::Column::Id, Order::Desc)
+            .limit(size);
+
+        if let Some(cursor) = cursor {
+            query = query.filter(cursor.before(
+                types::photo::photo::Column::CreatedAt,
+                types::photo::photo::Column::Id,
+            ));
+        }
+
+        query
+            .select_only()
+            .column(types::photo::photo::Column::Id)
+            .into_tuple::<PhotoId>()
+            .all(db)
+            .await?
+            .to_ok()
     }
 
     pub async fn query_photo_ids_cursor_page(

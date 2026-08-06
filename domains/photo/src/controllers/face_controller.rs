@@ -6,11 +6,20 @@ use axum::{
     routing::{get, post},
 };
 use common::{
-    Result, ext::ResultRExt, extractors::ValidatedPath, r::R, traits::controller::ControllerRouter,
+    Result,
+    ext::ResultRExt,
+    extractors::{ValidatedPath, ValidatedQuery},
+    models::CursorPage,
+    r::R,
+    traits::controller::ControllerRouter,
 };
 use types::{
     auth::user::{AdminId, UserId},
-    photo::{FaceView, face::FaceId, person::PersonId, photo::PhotoId},
+    cursor::TimeIdCursor,
+    photo::{
+        FaceView, dto::face::UnassignedFacePhotoCursorParam, dto::photo::PhotoView, face::FaceId,
+        person::PersonId, photo::PhotoId,
+    },
 };
 
 use crate::{PhotoState, services::face_service::FaceService};
@@ -25,6 +34,7 @@ impl ControllerRouter for FaceController {
             .route("/admin/full", get(Self::full_compute))
             .route("/admin/incremental", get(Self::incremental_compute))
             .route("/photo/{photo_id}", get(Self::get_faces_by_photo_id))
+            .route("/unassigned-photos", get(Self::get_unassigned_face_photos))
             .route(
                 "/feature/{feature_id}/belonging/{person_id}",
                 post(Self::change_belonging),
@@ -75,6 +85,17 @@ impl FaceController {
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
     ) -> Result<R<Vec<FaceView>>> {
         FaceService::get_faces_by_photo_id(&state, photo_id)
+            .await
+            .to_r_ok()
+    }
+
+    /// 获取当前用户"包含未分配人脸"的照片列表(游标分页)
+    async fn get_unassigned_face_photos(
+        State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        ValidatedQuery(param): ValidatedQuery<UnassignedFacePhotoCursorParam>,
+    ) -> Result<R<CursorPage<PhotoView, TimeIdCursor<PhotoId>>>> {
+        FaceService::get_unassigned_face_photos(&state, user_id, param)
             .await
             .to_r_ok()
     }

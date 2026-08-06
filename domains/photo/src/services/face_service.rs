@@ -7,6 +7,7 @@ use common::{
     error::AppError,
     ext::{OptionExt, ResultErrExt, ToOk, UintExt},
     metrics_group, metrics_name, metrics_success,
+    models::CursorPage,
     utils::{DbUtils, MetricsTimerExt},
 };
 use image::{ImageBuffer, Rgb};
@@ -19,10 +20,12 @@ use sea_orm::{
 use tokio::{spawn, task::spawn_blocking};
 use tracing::{debug, info, warn};
 use types::{
-    auth::user::AdminId,
+    auth::user::{AdminId, UserId},
+    cursor::TimeIdCursor,
     photo::{
         FaceView,
-        dto::face::bbox_from_insight,
+        dto::face::{UnassignedFacePhotoCursorParam, bbox_from_insight},
+        dto::photo::PhotoView,
         face::{self, FaceId, FaceRecord},
         person::{self, PersonId, PersonRecord},
         photo::{self, PhotoId},
@@ -36,6 +39,7 @@ use crate::{
         person_mapper::{PersonCoverUpdate, PersonMapper},
         photo_mapper::PhotoMapper,
     },
+    services::photo_service::PhotoService,
 };
 
 pub(crate) struct FaceService;
@@ -421,6 +425,44 @@ impl FaceService {
             })
             .collect::<Vec<FaceView>>()
             .to_ok()
+    }
+
+    /// 获取当前用户"包含未分配人脸"的照片列表(游标分页)
+    #[tracing::instrument(skip_all)]
+    pub async fn get_unassigned_face_photos(
+        state: &PhotoState,
+        user_id: UserId,
+        param: UnassignedFacePhotoCursorParam,
+    ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
+        metrics_group!();
+
+        let photo_ids = FaceMapper::query_unassigned_face_photo_ids_cursor_page(
+            &state.db,
+            user_id,
+            param.cursor,
+            param.size,
+        )
+        .timed(metrics_name!("query_unassigned_face_photo_ids"))
+        .await?;
+        if photo_ids.is_empty() {
+            metrics_success!();
+            return Ok(CursorPage::empty());
+        }
+
+        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids)
+            .timed(metrics_name!("load_photos_info"))
+            .await?;
+
+        let page = CursorPage::from_oversize_fn(photos, param.size, |photo| {
+            TimeIdCursor {
+                created_at: photo.created_at,
+                id: photo.id,
+            }
+            .to_ok()
+        })?;
+
+        metrics_success!();
+        Ok(page)
     }
 }
 

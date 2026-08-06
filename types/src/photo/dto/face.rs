@@ -1,5 +1,6 @@
 use crate::photo::face::{FaceId, FaceRecord};
 use crate::photo::person::PersonId;
+use crate::photo::photo::PhotoId;
 
 /// 人脸边界框（归一化坐标）——统一复用 `crate::photo::image_token::FaceBBox`
 use crate::photo::FaceBBox;
@@ -46,6 +47,19 @@ impl From<FaceRecord> for FaceView {
         }
     }
 }
+
+fn unassigned_face_photo_cursor_page_default_size() -> u64 {
+    32
+}
+
+crate::in_dto!(UnassignedFacePhotoCursorParam, "photo/", docs = "未分配人脸照片游标参数(cursor 为 TimeIdCursor<PhotoId> 的 Base64 编码)"; {
+    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+    pub cursor: Option<crate::cursor::TimeIdCursor<PhotoId>>,
+    #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
+    #[serde(default = "unassigned_face_photo_cursor_page_default_size")]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub size: u64,
+});
 
 #[cfg(test)]
 mod tests {
