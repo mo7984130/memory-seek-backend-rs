@@ -200,3 +200,20 @@ COMMENT ON COLUMN photo_comment_like.user_id IS '点赞用户ID';
 COMMENT ON COLUMN photo_comment_like.created_at IS '点赞时间';
 COMMENT ON COLUMN photo_comment_like.updated_at IS '更新时间';
 
+-- 用户行为审计记录表（只追加，不删除）
+CREATE TABLE IF NOT EXISTS photo_user_behavior (
+    id          BIGSERIAL PRIMARY KEY,
+    user_id     BIGINT      NOT NULL,
+    action      VARCHAR(40) NOT NULL,
+    target_type VARCHAR(16) NULL,
+    target_id   BIGINT      NULL,
+    detail      JSONB       NULL,
+    ip          VARCHAR(45) NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_behavior_user_created   ON photo_user_behavior (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_behavior_target_created ON photo_user_behavior (target_type, target_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_behavior_action_created ON photo_user_behavior (action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_behavior_created_at     ON photo_user_behavior (created_at DESC);
+

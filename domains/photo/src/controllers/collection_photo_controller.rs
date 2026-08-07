@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use crate::{services::collection_photo_service::CollectionPhotoService, state::PhotoState};
+use crate::{
+    services::{
+        behavior_service::{BehaviorRecordReq, BehaviorService},
+        collection_photo_service::CollectionPhotoService,
+    },
+    state::PhotoState,
+};
 use axum::{
     Extension, Router,
     extract::State,
@@ -9,7 +15,7 @@ use axum::{
 use common::{
     Result,
     ext::ResultRExt,
-    extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
+    extractors::{OptionalClientIp, ValidatedJson, ValidatedPath, ValidatedQuery},
     models::CursorPage,
     r::R,
     traits::controller::ControllerRouter,
@@ -17,6 +23,7 @@ use common::{
 use types::{
     auth::user::UserId,
     photo::{
+        behavior::UserBehaviorAction,
         collection::CollectionId,
         dto::collection::{
             CollectionBriefView, CollectionPhotoAddBatchParam, CollectionPhotoAddBatchResult,
@@ -69,12 +76,32 @@ impl CollectionPhotoController {
     async fn add_batch(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedJson(param): ValidatedJson<CollectionPhotoAddBatchParam>,
     ) -> Result<R<CollectionPhotoAddBatchResult>> {
-        CollectionPhotoService::add_photos(&state, user_id, collection_id, param.photo_ids)
-            .await
-            .to_r_ok()
+        let result = CollectionPhotoService::add_photos(
+            &state,
+            user_id,
+            collection_id,
+            param.photo_ids.clone(),
+        )
+        .await?;
+
+        // 行为审计：收藏照片（按批量传入的 photo_id 逐条记录）
+        let ip_str = ip.map(|ip| ip.to_string());
+        for pid in param.photo_ids.iter() {
+            BehaviorService::record(
+                &state,
+                BehaviorRecordReq::new(user_id, UserBehaviorAction::Collect)
+                    .with_photo(pid.0)
+                    .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
+                    .with_ip(ip_str.clone()),
+            )
+            .await;
+        }
+
+        Ok(result).to_r_ok()
     }
 }
 
@@ -100,6 +127,7 @@ impl CollectionPhotoController {
     async fn remove(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath((collection_id, photo_id)): ValidatedPath<(CollectionId, PhotoId)>,
     ) -> Result<R<()>> {
         CollectionPhotoService::remove_photos(
@@ -109,17 +137,48 @@ impl CollectionPhotoController {
             PhotoIds::new(vec![photo_id]).unwrap(),
         )
         .await?;
+
+        // 行为审计：取消收藏照片
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::Uncollect)
+                .with_photo(photo_id.0)
+                .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
         Ok(R::ok(()))
     }
 
     async fn remove_batch(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedJson(param): ValidatedJson<CollectionPhotoRemoveBatchParam>,
     ) -> Result<R<CollectionPhotoRemoveBatchResult>> {
-        CollectionPhotoService::remove_photos(&state, user_id, collection_id, param.photo_ids)
-            .await
-            .to_r_ok()
+        let result = CollectionPhotoService::remove_photos(
+            &state,
+            user_id,
+            collection_id,
+            param.photo_ids.clone(),
+        )
+        .await?;
+
+        // 行为审计：取消收藏照片（按批量传入的 photo_id 逐条记录）
+        let ip_str = ip.map(|ip| ip.to_string());
+        for pid in param.photo_ids.iter() {
+            BehaviorService::record(
+                &state,
+                BehaviorRecordReq::new(user_id, UserBehaviorAction::Uncollect)
+                    .with_photo(pid.0)
+                    .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
+                    .with_ip(ip_str.clone()),
+            )
+            .await;
+        }
+
+        Ok(result).to_r_ok()
     }
 }

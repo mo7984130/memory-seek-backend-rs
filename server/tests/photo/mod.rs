@@ -1,5 +1,6 @@
 mod common;
 
+mod behavior;
 mod collection;
 mod collection_photo;
 mod comment;

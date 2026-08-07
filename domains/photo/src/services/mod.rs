@@ -1,3 +1,4 @@
+pub(crate) mod behavior_service;
 pub(crate) mod collection_photo_service;
 pub(crate) mod collection_service;
 pub(crate) mod comment_like_service;

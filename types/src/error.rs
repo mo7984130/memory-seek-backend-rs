@@ -6,6 +6,11 @@ use common::error::AppError;
 #[cfg(feature = "orm")]
 use common::ext::log_warn_with_err;
 
+/// 枚举值解析错误（轻量，不依赖 AppError）
+#[derive(Error, Debug)]
+#[error("无效枚举值: {0}")]
+pub struct ParseEnumError(pub String);
+
 /// ID 解析错误（轻量，不依赖 AppError）
 ///
 /// 调用方可通过 `trace_warn_bad_request` 等方式转换为 `AppError`。

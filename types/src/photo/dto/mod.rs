@@ -4,6 +4,7 @@
 //! - 纯 DTO(无后端专属依赖)在 `lightweight` feature 下可用
 //! - 依赖 `sea-orm` / token 加密的方法按需 gate 在 `orm` feature 下
 
+pub mod behavior;
 pub mod collection;
 pub mod comment;
 #[cfg(feature = "face-engine")]
@@ -12,6 +13,7 @@ pub mod person;
 pub mod photo;
 pub mod timeline_stat;
 
+pub use behavior::*;
 pub use collection::*;
 pub use comment::*;
 #[cfg(feature = "face-engine")]

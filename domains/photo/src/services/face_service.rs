@@ -469,18 +469,17 @@ impl FaceService {
             .to_ok()
     }
 
-    /// 获取当前用户"包含未分配人脸"的照片列表(游标分页)
+    /// 获取"包含未分配人脸"的照片列表(游标分页, 不区分照片归属者)
     #[tracing::instrument(skip_all)]
     pub async fn get_unassigned_face_photos(
         state: &PhotoState,
-        user_id: UserId,
+        viewer_user_id: UserId,
         param: UnassignedFacePhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
         metrics_group!();
 
         let photo_ids = FaceMapper::query_unassigned_face_photo_ids_cursor_page(
             &state.db,
-            user_id,
             param.cursor,
             param.size,
         )
@@ -491,7 +490,7 @@ impl FaceService {
             return Ok(CursorPage::empty());
         }
 
-        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids)
+        let photos = PhotoService::load_photos_info(state, viewer_user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))
             .await?;
 

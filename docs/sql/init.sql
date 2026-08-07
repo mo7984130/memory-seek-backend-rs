@@ -221,6 +221,33 @@ CREATE INDEX IF NOT EXISTS idx_photo_like_photo_id ON photo_photo_like (photo_id
 CREATE INDEX IF NOT EXISTS idx_photo_like_user_id ON photo_photo_like (user_id);
 CREATE INDEX IF NOT EXISTS idx_photo_like_user_photo ON photo_photo_like (user_id, photo_id);
 
+-- 用户行为审计记录表（只追加，不删除）
+CREATE TABLE IF NOT EXISTS photo_user_behavior (
+    id          BIGSERIAL PRIMARY KEY,
+    user_id     BIGINT      NOT NULL,
+    action      VARCHAR(40) NOT NULL,
+    target_type VARCHAR(16) NULL,
+    target_id   BIGINT      NULL,
+    detail      JSONB       NULL,
+    ip          VARCHAR(45) NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_behavior_user_created   ON photo_user_behavior (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_behavior_target_created ON photo_user_behavior (target_type, target_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_behavior_action_created ON photo_user_behavior (action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_behavior_created_at     ON photo_user_behavior (created_at DESC);
+
+COMMENT ON TABLE photo_user_behavior IS '用户行为审计记录表(只追加,不删除)';
+COMMENT ON COLUMN photo_user_behavior.id IS '主键ID';
+COMMENT ON COLUMN photo_user_behavior.user_id IS '操作者用户ID';
+COMMENT ON COLUMN photo_user_behavior.action IS '行为动作(view/upload/like/unlike/comment_publish/comment_delete/collect/uncollect/delete_photos/face_*/person_*)';
+COMMENT ON COLUMN photo_user_behavior.target_type IS '目标类型(photo/face/person/comment/collection)';
+COMMENT ON COLUMN photo_user_behavior.target_id IS '目标ID';
+COMMENT ON COLUMN photo_user_behavior.detail IS '审计详情JSON(改名前后/合并关系/批量ID等)';
+COMMENT ON COLUMN photo_user_behavior.ip IS '客户端IP';
+COMMENT ON COLUMN photo_user_behavior.created_at IS '发生时间';
+
 -- 向量扩展（幂等）
 CREATE EXTENSION IF NOT EXISTS vector;
 

@@ -8,7 +8,7 @@ use axum::{
 use common::{
     Result,
     ext::ResultRExt,
-    extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
+    extractors::{OptionalClientIp, ValidatedJson, ValidatedPath, ValidatedQuery},
     models::CursorPage,
     r::R,
     traits::controller::ControllerRouter,
@@ -16,6 +16,7 @@ use common::{
 use types::{
     auth::user::UserId,
     photo::{
+        behavior::{BehaviorTargetType, UserBehaviorAction},
         comment::CommentId,
         dto::comment::{CommentCursorPageParam, CommentPublishParam, CommentView},
         photo::PhotoId,
@@ -23,7 +24,11 @@ use types::{
 };
 
 use crate::{
-    services::{comment_like_service::CommentLikeService, comment_service::CommentService},
+    services::{
+        behavior_service::{BehaviorRecordReq, BehaviorService},
+        comment_like_service::CommentLikeService,
+        comment_service::CommentService,
+    },
     state::PhotoState,
 };
 
@@ -55,12 +60,23 @@ impl CommentController {
     async fn publish(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
         ValidatedJson(param): ValidatedJson<CommentPublishParam>,
     ) -> Result<R<CommentView>> {
-        CommentService::publish(&state, photo_id, user_id, param)
-            .await
-            .to_r_ok()
+        let comment = CommentService::publish(&state, photo_id, user_id, param).await?;
+
+        // 行为审计：发布评论
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::CommentPublish)
+                .with_photo(photo_id.0)
+                .with_detail(serde_json::json!({ "commentId": comment.id.0 }))
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(comment).to_r_ok()
     }
 }
 
@@ -86,12 +102,22 @@ impl CommentController {
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath((photo_id, comment_id)): ValidatedPath<(PhotoId, CommentId)>,
     ) -> Result<R<()>> {
-        let _ = photo_id;
-        CommentService::delete(&state, user_id, comment_id)
-            .await
-            .to_r_ok()
+        CommentService::delete(&state, user_id, comment_id).await?;
+
+        // 行为审计：删除评论
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::CommentDelete)
+                .with_photo(photo_id.0)
+                .with_detail(serde_json::json!({ "commentId": comment_id.0 }))
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(()).to_r_ok()
     }
 }
 
@@ -100,22 +126,42 @@ impl CommentController {
     async fn like(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath((photo_id, comment_id)): ValidatedPath<(PhotoId, CommentId)>,
     ) -> Result<R<()>> {
-        let _ = photo_id;
-        CommentLikeService::like(&state, user_id, comment_id)
-            .await
-            .to_r_ok()
+        CommentLikeService::like(&state, user_id, comment_id).await?;
+
+        // 行为审计：点赞评论
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::CommentLike)
+                .with_target(BehaviorTargetType::Comment, comment_id.0)
+                .with_detail(serde_json::json!({ "photoId": photo_id.0 }))
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(()).to_r_ok()
     }
 
     async fn unlike(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath((photo_id, comment_id)): ValidatedPath<(PhotoId, CommentId)>,
     ) -> Result<R<()>> {
-        let _ = photo_id;
-        CommentLikeService::unlike(&state, user_id, comment_id)
-            .await
-            .to_r_ok()
+        CommentLikeService::unlike(&state, user_id, comment_id).await?;
+
+        // 行为审计：取消点赞评论
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::CommentUnlike)
+                .with_target(BehaviorTargetType::Comment, comment_id.0)
+                .with_detail(serde_json::json!({ "photoId": photo_id.0 }))
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(()).to_r_ok()
     }
 }

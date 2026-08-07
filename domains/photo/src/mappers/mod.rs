@@ -1,3 +1,4 @@
+pub(crate) mod behavior_mapper;
 pub(crate) mod collection_mapper;
 pub(crate) mod collection_photo_mapper;
 pub(crate) mod comment_like_mapper;

@@ -3,7 +3,6 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Expr, Query},
 };
-use types::auth::user::UserId;
 use types::cursor::TimeIdCursor;
 use types::photo::{face::*, person::PersonId, photo::PhotoId};
 
@@ -179,14 +178,14 @@ impl FaceMapper {
             .collect()
     }
 
-    /// 查询当前用户"包含未分配人脸"的照片 id(keyset 分页, 基于照片的 (created_at, id))
+    /// 查询"包含未分配人脸"的照片 id(keyset 分页, 基于照片的 (created_at, id))
     ///
+    /// 不区分照片归属者, 全局扫描未分配人脸。
     /// 用 `EXISTS` 子查询过滤, 保证同一照片多张未分配人脸不产生重复行。
     /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
     /// 由 service 层用 CursorPage::from_oversize_fn 截断消费。
     pub async fn query_unassigned_face_photo_ids_cursor_page(
         db: &impl ConnectionTrait,
-        user_id: UserId,
         cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
     ) -> Result<Vec<PhotoId>> {
@@ -201,7 +200,6 @@ impl FaceMapper {
             .to_owned();
 
         let mut query = types::photo::photo::Entity::find()
-            .filter(types::photo::photo::Column::UserId.eq(user_id))
             .filter(Expr::exists(subquery))
             .order_by(types::photo::photo::Column::CreatedAt, Order::Desc)
             .order_by(types::photo::photo::Column::Id, Order::Desc)

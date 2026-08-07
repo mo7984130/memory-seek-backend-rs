@@ -1,4 +1,5 @@
 #![allow(clippy::module_inception)]
+pub mod behavior;
 pub mod collection;
 pub mod collection_photo;
 pub mod comment;

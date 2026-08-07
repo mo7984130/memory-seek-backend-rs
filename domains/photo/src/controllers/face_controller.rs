@@ -8,7 +8,7 @@ use axum::{
 use common::{
     Result,
     ext::ResultRExt,
-    extractors::{ValidatedPath, ValidatedQuery},
+    extractors::{OptionalClientIp, ValidatedPath, ValidatedQuery},
     models::CursorPage,
     r::R,
     traits::controller::ControllerRouter,
@@ -17,12 +17,23 @@ use types::{
     auth::user::{AdminId, UserId},
     cursor::TimeIdCursor,
     photo::{
-        FaceView, dto::face::UnassignedFacePhotoCursorParam, dto::photo::PhotoView, face::FaceId,
-        person::PersonId, photo::PhotoId,
+        FaceView,
+        behavior::{BehaviorTargetType, UserBehaviorAction},
+        dto::face::UnassignedFacePhotoCursorParam,
+        dto::photo::PhotoView,
+        face::FaceId,
+        person::PersonId,
+        photo::PhotoId,
     },
 };
 
-use crate::{PhotoState, services::face_service::FaceService};
+use crate::{
+    PhotoState,
+    services::{
+        behavior_service::{BehaviorRecordReq, BehaviorService},
+        face_service::FaceService,
+    },
+};
 
 pub struct FaceController;
 
@@ -53,17 +64,41 @@ impl FaceController {
     async fn full_compute(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
     ) -> Result<R<()>> {
         let admin = AdminId::new(user_id)?;
-        FaceService::compute(state, admin, true).await.to_r_ok()
+        FaceService::compute(state.clone(), admin, true).await?;
+
+        // 行为审计：全量人脸计算
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceCompute)
+                .with_detail(serde_json::json!({ "full": true }))
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(()).to_r_ok()
     }
 
     async fn incremental_compute(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
     ) -> Result<R<()>> {
         let admin = AdminId::new(user_id)?;
-        FaceService::compute(state, admin, false).await.to_r_ok()
+        FaceService::compute(state.clone(), admin, false).await?;
+
+        // 行为审计：增量人脸计算
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceCompute)
+                .with_detail(serde_json::json!({ "full": false }))
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(()).to_r_ok()
     }
 }
 
@@ -72,21 +107,44 @@ impl FaceController {
     /// 修改人脸归属: 将单张人脸移动到指定人物
     async fn change_belonging(
         State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath((face_id, person_id)): ValidatedPath<(FaceId, PersonId)>,
     ) -> Result<R<()>> {
-        FaceService::change_face_belonging(&state, face_id, Some(person_id))
-            .await
-            .to_r_ok()
+        FaceService::change_face_belonging(&state, face_id, Some(person_id)).await?;
+
+        // 行为审计：修改人脸归属
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceChangeBelonging)
+                .with_target(BehaviorTargetType::Face, face_id.0)
+                .with_detail(serde_json::json!({ "toPersonId": person_id.0 }))
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(()).to_r_ok()
     }
 
     /// 取消人脸归属(路径不带 person_id 段)
     async fn unassign_face(
         State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(face_id): ValidatedPath<FaceId>,
     ) -> Result<R<()>> {
-        FaceService::change_face_belonging(&state, face_id, None)
-            .await
-            .to_r_ok()
+        FaceService::change_face_belonging(&state, face_id, None).await?;
+
+        // 行为审计：取消人脸归属
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceUnassign)
+                .with_target(BehaviorTargetType::Face, face_id.0)
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(()).to_r_ok()
     }
 }
 
@@ -101,7 +159,7 @@ impl FaceController {
             .to_r_ok()
     }
 
-    /// 获取当前用户"包含未分配人脸"的照片列表(游标分页)
+    /// 获取"包含未分配人脸"的照片列表(游标分页, 不区分照片归属者)
     async fn get_unassigned_face_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -118,8 +176,21 @@ impl FaceController {
     /// 删除人脸(仅限未归属人物的人脸)
     async fn delete_face(
         State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(face_id): ValidatedPath<FaceId>,
     ) -> Result<R<()>> {
-        FaceService::delete_face(&state, face_id).await.to_r_ok()
+        FaceService::delete_face(&state, face_id).await?;
+
+        // 行为审计：删除人脸（记录保留，人脸删除后仍可追溯）
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceDelete)
+                .with_target(BehaviorTargetType::Face, face_id.0)
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(()).to_r_ok()
     }
 }

@@ -116,6 +116,7 @@ impl CleanupGuard {
             "photo_collection_photo",
             "photo_collection",
             "photo_photo",
+            "photo_user_behavior",
         ];
 
         for table in tables_with_user_id {

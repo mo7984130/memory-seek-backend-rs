@@ -12,7 +12,7 @@ pub mod validated_path;
 #[cfg(feature = "validators")]
 pub mod validated_query;
 
-pub use client_ip::ClientIp;
+pub use client_ip::{ClientIp, OptionalClientIp};
 #[cfg(feature = "validators")]
 pub use validated_json::ValidatedJson;
 pub use validated_path::ValidatedPath;

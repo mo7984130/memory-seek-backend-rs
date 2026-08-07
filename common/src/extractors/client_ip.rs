@@ -9,6 +9,12 @@ use crate::{error::AppError, ext::ResultErrExt};
 #[derive(Clone)]
 pub struct ClientIp(pub IpAddr);
 
+/// 可选客户端 IP 提取器：始终成功，提取失败时返回 `None`
+///
+/// 供行为审计等"尽力而为"场景使用，避免因缺少代理头导致请求失败。
+#[derive(Clone)]
+pub struct OptionalClientIp(pub Option<IpAddr>);
+
 impl<S> FromRequestParts<S> for ClientIp
 where
     S: Send + Sync,
@@ -69,6 +75,25 @@ where
             "no_client_ip",
             "无法提取客户端 IP，无代理头且未配置 ConnectInfo",
         )
+}
+
+impl<S> FromRequestParts<S> for OptionalClientIp
+where
+    S: Send + Sync,
+{
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> std::result::Result<Self, Self::Rejection> {
+        Ok(OptionalClientIp(
+            ClientIp::from_request_parts(parts, state)
+                .await
+                .ok()
+                .map(|ip| ip.0),
+        ))
+    }
 }
 
 /// 判断是否为私有或回环地址

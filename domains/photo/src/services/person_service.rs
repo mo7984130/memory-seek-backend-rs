@@ -365,9 +365,13 @@ impl PersonService {
         Ok(())
     }
 
-    /// 合并人物: 将 source 的全部人脸归属转移到 target, 并删除 source
+    /// 合并人物（高危操作，仅管理员）: 将 source 的全部人脸归属转移到 target, 并删除 source
     #[tracing::instrument(skip_all)]
-    pub async fn merge_person(state: &PhotoState, param: MergePersonParam) -> Result<PersonView> {
+    pub async fn merge_person(
+        state: &PhotoState,
+        _admin: AdminId,
+        param: MergePersonParam,
+    ) -> Result<PersonView> {
         let MergePersonParam {
             source_person_id,
             target_person_id,
@@ -471,6 +475,13 @@ impl PersonService {
 
 // 查询
 impl PersonService {
+    /// 查询人物名称（审计记录改名前后用）
+    pub async fn query_name(state: &PhotoState, person_id: PersonId) -> Result<Option<String>> {
+        PersonMapper::query_by_id(&state.db, person_id)
+            .await
+            .map(|p| p.map(|r| r.name))
+    }
+
     pub async fn get_persons(
         state: &PhotoState,
         param: PersonCursorParam,
@@ -604,9 +615,13 @@ impl PersonService {
 
 // 删除
 impl PersonService {
-    /// 删除人物: 清空其所有人脸归属后删除人物
+    /// 删除人物（高危操作，仅管理员）: 清空其所有人脸归属后删除人物
     #[tracing::instrument(skip_all)]
-    pub async fn delete_person(state: &PhotoState, person_id: PersonId) -> Result<()> {
+    pub async fn delete_person(
+        state: &PhotoState,
+        _admin: AdminId,
+        person_id: PersonId,
+    ) -> Result<()> {
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 // 清空该人物所有人脸归属, 避免悬空引用
