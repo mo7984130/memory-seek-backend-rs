@@ -61,6 +61,7 @@ crate::in_dto!(CommentCursorPageParam, "photo/", docs = "评论游标参数（cu
     #[validate(range(min = 1, max = 128, message = "分页大小在 1 到 128 之间"))]
     #[serde(default = "comment_cursor_page_default_size")]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 

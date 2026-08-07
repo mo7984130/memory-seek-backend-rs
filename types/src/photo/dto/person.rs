@@ -8,6 +8,7 @@ use crate::photo::photo::PhotoId;
 crate::in_dto!(PersonCursorParam, "photo/", serde_default, docs = "人物列表参数(cursor 为 FaceCountIdCursor<PersonId> 的 Base64 编码, 按 face_count 倒序分页)"; {
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
     pub cursor: Option<FaceCountIdCursor<PersonId>>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 
@@ -25,6 +26,7 @@ crate::in_dto!(PersonSearchParam, "photo/", serde_default, docs = "人物搜索�
     #[validate(length(min = 1, max = 64, message = "搜索关键词长度在 1 到 64 之间"))]
     pub keyword: String,
     pub cursor: Option<PersonId>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 
@@ -58,6 +60,7 @@ crate::in_dto!(PersonPhotoCursorParam, "photo/", docs = "人物照片游标参�
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "person_photo_cursor_page_default_size")]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 

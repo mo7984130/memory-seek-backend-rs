@@ -83,6 +83,7 @@ crate::in_dto!(LikedPhotosQuery, "photo/"; {
     #[serde(default = "liked_photos_default_size")]
     #[validate(range(min = 1, max = 100, message = "size 在 1 到 100 之间"))]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 

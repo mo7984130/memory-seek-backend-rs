@@ -58,6 +58,7 @@ crate::in_dto!(UnassignedFacePhotoCursorParam, "photo/", docs = "未分配人脸
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "unassigned_face_photo_cursor_page_default_size")]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 

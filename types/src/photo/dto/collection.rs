@@ -92,6 +92,7 @@ crate::in_dto!(CollectionPhotoCursorPageParam, "photo/", docs = "收藏夹照片
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "collection_photo_cursor_page_default_size")]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 

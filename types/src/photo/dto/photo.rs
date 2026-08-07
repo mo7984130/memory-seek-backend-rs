@@ -96,6 +96,7 @@ crate::in_dto!(PhotoCursorParam, "photo/", serde_default, docs = "照片游标�
     pub cursor: Option<TimeIdCursor<PhotoId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
     pub direction: PageDirection,
     pub anchor_time: Option<DateTime<Utc>>,
