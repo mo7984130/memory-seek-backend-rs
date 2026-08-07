@@ -24,6 +24,7 @@ impl CollectionMapper {
     // 返回插入后的照片总数
     pub async fn add_photos_batch(
         db: &impl ConnectionTrait,
+        user_id: UserId,
         collection_id: CollectionId,
         photo_ids: &[PhotoId],
     ) -> Result<u64> {
@@ -34,14 +35,15 @@ impl CollectionMapper {
 
         let cp_collection_id = collection_photo::Column::CollectionId.to_string();
         let cp_photo_id = collection_photo::Column::PhotoId.to_string();
+        let cp_user_id = collection_photo::Column::UserId.to_string();
         let c_id = collection::Column::Id.to_string();
         let c_photo_count = collection::Column::PhotoCount.to_string();
 
         let sql = format!(
             r#"
                 WITH ins AS (
-                    INSERT INTO "{collection_photo_table_name}" ("{cp_collection_id}", "{cp_photo_id}")
-                    SELECT $1, unnest($2::bigint[])
+                    INSERT INTO "{collection_photo_table_name}" ("{cp_collection_id}", "{cp_photo_id}", "{cp_user_id}")
+                    SELECT $1, unnest($2::bigint[]), $3
                     ON CONFLICT ("{cp_collection_id}", "{cp_photo_id}") DO NOTHING
                     RETURNING 1
                 )
@@ -55,7 +57,7 @@ impl CollectionMapper {
         let stmt = Statement::from_sql_and_values(
             DbBackend::Postgres,
             &sql,
-            [collection_id.into(), ids.into()],
+            [collection_id.into(), ids.into(), user_id.into()],
         );
 
         let result = db.query_one(stmt).await?.ok_or_warn(

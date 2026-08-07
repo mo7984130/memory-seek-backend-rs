@@ -130,7 +130,8 @@ impl CollectionPhotoService {
         let photo_count = DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 let new_photo_count =
-                    CollectionMapper::add_photos_batch(txn, collection_id, &photo_ids).await?;
+                    CollectionMapper::add_photos_batch(txn, user_id, collection_id, &photo_ids)
+                        .await?;
 
                 // 将新添加的第一张照片设为封面
                 if let Some(photo_id) = photo_ids.first() {
