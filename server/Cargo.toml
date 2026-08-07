@@ -64,12 +64,3 @@ tracing-appender = "0.2.5"
 metrics-tracing-context = "0.18.1"
 insight-face-rs = { optional = true, workspace = true }
 tikv-jemallocator = "0.7.0"
-
-[dev-dependencies]
-serde_json = { workspace = true }
-serde = { workspace = true }
-sea-orm = { workspace = true }
-deadpool-redis = { workspace = true }
-backup = { path = "../domains/backup" }
-oss = { path = "../libs/oss" }
-tower = { version = "0.5", features = ["util"] }

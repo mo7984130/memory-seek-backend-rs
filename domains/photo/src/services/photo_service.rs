@@ -50,7 +50,7 @@ impl PhotoService {
         let (photos_result, liked_photo_ids_result) = tokio::join!(
             state.redis.get_or_load_batch(
                 photo_ids,
-                |id| RedisKeys::photo::photo::photo_info(*id),
+                |id| RedisKeys::photo::photo::photo_info(*id, user_id),
                 24 * 60 * 60,
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
                 |photo| photo.id,
@@ -65,9 +65,11 @@ impl PhotoService {
             .map(|p| {
                 let liked = liked_photo_ids.contains(&p.id);
                 let file_id = p.file_id.clone();
-                PhotoView::from(p)
-                    .with_liked(liked)
-                    .with_tokens(&file_id, &state.token_cipher)
+                PhotoView::from(p).with_liked(liked).with_tokens(
+                    &file_id,
+                    user_id,
+                    &state.token_cipher,
+                )
             })
             .collect::<Vec<_>>()
             .to_ok()
@@ -210,7 +212,7 @@ impl PhotoService {
 
         let file_id = photo.file_id.clone();
         PhotoView::from(PhotoRecord::from(photo))
-            .with_tokens(&file_id, &state.token_cipher)
+            .with_tokens(&file_id, user_id, &state.token_cipher)
             .to_ok()
     }
 

@@ -192,9 +192,10 @@ impl UserController {
     /// - `AppError`: ID 格式错误、超出批量查询限制或数据库查询失败时返回错误
     async fn get_user_info_batch(
         State(state): State<Arc<UserState>>,
+        Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<GetUserInfoBatchParam>,
     ) -> Result<R<Vec<Option<UserBriefView>>>, AppError> {
-        user_service::get_user_info_batch(&state, req)
+        user_service::get_user_info_batch(&state, user_id, req)
             .await
             .to_r_ok()
     }

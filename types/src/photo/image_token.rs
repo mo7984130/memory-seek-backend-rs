@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::auth::user::UserId;
 #[cfg(feature = "orm")]
 use common::error::AppError;
 #[cfg(feature = "orm")]
@@ -65,51 +66,59 @@ pub struct ImageToken {
     /// 人脸边界框（归一化坐标，仅 Crop 类型需要）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bbox: Option<FaceBBox>,
+    /// 浏览者用户 ID（图片访问审计主体）
+    pub viewer_id: UserId,
 }
 
 impl ImageToken {
     /// 创建缩略图 token
     ///
     /// # 参数
+    /// - `viewer_id`: 浏览者用户 ID
     /// - `file_id`: 图片文件 ID
     ///
     /// # 返回
     /// 返回类型为 `Thumbnail` 的 `ImageToken`
-    pub fn thumbnail(file_id: impl Into<String>) -> Self {
+    pub fn thumbnail(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
             token_type: ImageTokenType::Thumbnail,
             bbox: None,
+            viewer_id: viewer,
         }
     }
 
     /// 创建预览图 token
     ///
     /// # 参数
+    /// - `viewer_id`: 浏览者用户 ID
     /// - `file_id`: 图片文件 ID
     ///
     /// # 返回
     /// 返回类型为 `Preview` 的 `ImageToken`
-    pub fn preview(file_id: impl Into<String>) -> Self {
+    pub fn preview(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
             token_type: ImageTokenType::Preview,
             bbox: None,
+            viewer_id: viewer,
         }
     }
 
     /// 创建原图 token
     ///
     /// # 参数
+    /// - `viewer_id`: 浏览者用户 ID
     /// - `file_id`: 图片文件 ID
     ///
     /// # 返回
     /// 返回类型为 `Original` 的 `ImageToken`
-    pub fn original(file_id: impl Into<String>) -> Self {
+    pub fn original(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
             token_type: ImageTokenType::Original,
             bbox: None,
+            viewer_id: viewer,
         }
     }
 
@@ -118,14 +127,16 @@ impl ImageToken {
     /// # 参数
     /// - `file_id`: 图片文件 ID
     /// - `bbox`: 人脸边界框（归一化坐标），用于定位裁剪区域
+    /// - `viewer_id`: 浏览者用户 ID
     ///
     /// # 返回
     /// 返回类型为 `Crop` 且包含 `bbox` 的 `ImageToken`
-    pub fn crop(file_id: impl Into<String>, bbox: FaceBBox) -> Self {
+    pub fn crop(viewer: UserId, file_id: impl Into<String>, bbox: FaceBBox) -> Self {
         Self {
             file_id: file_id.into(),
             token_type: ImageTokenType::Crop,
             bbox: Some(bbox),
+            viewer_id: viewer,
         }
     }
 
@@ -134,6 +145,7 @@ impl ImageToken {
     /// # 参数
     /// - `cipher`: token 加密器
     /// - `avatar_file_id`: 头像文件 ID，为 `None` 时返回 `None`
+    /// - `viewer`: 浏览者用户 ID
     ///
     /// # 返回
     /// 加密后的头像 token，加密失败返回 `None`
@@ -141,10 +153,12 @@ impl ImageToken {
     pub fn encrypt_avatar_token(
         cipher: &TokenCipher,
         avatar_file_id: Option<&str>,
+        viewer: UserId,
     ) -> Option<String> {
         avatar_file_id.and_then(|key| {
+            let seed = format!("{}:{}", viewer, key);
             cipher
-                .encrypt(&Self::thumbnail(key), Some(key))
+                .encrypt(&Self::thumbnail(viewer, key), Some(&seed))
                 .trace_warn("encrypt_avatar_token_err", "加密头像失败", AppError::Ignore)
                 .ok()
         })
@@ -157,22 +171,23 @@ mod tests {
 
     #[test]
     fn test_thumbnail_constructor() {
-        let token = ImageToken::thumbnail("abc123");
+        let token = ImageToken::thumbnail(UserId(7), "abc123");
         assert_eq!(token.file_id, "abc123");
         assert_eq!(token.token_type, ImageTokenType::Thumbnail);
         assert!(token.bbox.is_none());
+        assert_eq!(token.viewer_id, UserId(7));
     }
 
     #[test]
     fn test_thumbnail_accepts_string() {
-        let token = ImageToken::thumbnail(String::from("file-001"));
+        let token = ImageToken::thumbnail(UserId(1), String::from("file-001"));
         assert_eq!(token.file_id, "file-001");
         assert_eq!(token.token_type, ImageTokenType::Thumbnail);
     }
 
     #[test]
     fn test_preview_constructor() {
-        let token = ImageToken::preview("preview-id");
+        let token = ImageToken::preview(UserId(2), "preview-id");
         assert_eq!(token.file_id, "preview-id");
         assert_eq!(token.token_type, ImageTokenType::Preview);
         assert!(token.bbox.is_none());
@@ -180,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_original_constructor() {
-        let token = ImageToken::original("original-id");
+        let token = ImageToken::original(UserId(3), "original-id");
         assert_eq!(token.file_id, "original-id");
         assert_eq!(token.token_type, ImageTokenType::Original);
         assert!(token.bbox.is_none());
@@ -194,7 +209,7 @@ mod tests {
             x2: 0.6,
             y2: 0.9,
         };
-        let token = ImageToken::crop("crop-id", bbox);
+        let token = ImageToken::crop(UserId(4), "crop-id", bbox);
         assert_eq!(token.file_id, "crop-id");
         assert_eq!(token.token_type, ImageTokenType::Crop);
         let b = token.bbox.unwrap();
@@ -252,12 +267,13 @@ mod tests {
 
     #[test]
     fn test_image_token_serialize_roundtrip() {
-        let token = ImageToken::thumbnail("file-abc");
+        let token = ImageToken::thumbnail(UserId(11), "file-abc");
         let json = serde_json::to_string(&token).unwrap();
         let deserialized: ImageToken = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.file_id, "file-abc");
         assert_eq!(deserialized.token_type, ImageTokenType::Thumbnail);
         assert!(deserialized.bbox.is_none());
+        assert_eq!(deserialized.viewer_id, UserId(11));
     }
 
     #[test]
@@ -268,11 +284,12 @@ mod tests {
             x2: 0.55,
             y2: 0.7,
         };
-        let token = ImageToken::crop("file-xyz", bbox);
+        let token = ImageToken::crop(UserId(12), "file-xyz", bbox);
         let json = serde_json::to_string(&token).unwrap();
         let deserialized: ImageToken = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.file_id, "file-xyz");
         assert_eq!(deserialized.token_type, ImageTokenType::Crop);
+        assert_eq!(deserialized.viewer_id, UserId(12));
         let b = deserialized.bbox.unwrap();
         assert_eq!(b.x1, 0.05);
         assert_eq!(b.y1, 0.1);
@@ -281,8 +298,15 @@ mod tests {
     }
 
     #[test]
+    fn test_image_token_missing_viewer_fails_deserialize() {
+        let json = r#"{"fileId":"file-abc","type":"preview"}"#;
+        let result: Result<ImageToken, _> = serde_json::from_str(json);
+        assert!(result.is_err(), "缺 viewerId 的旧 token 应反序列化失败");
+    }
+
+    #[test]
     fn test_image_token_json_uses_type_field() {
-        let token = ImageToken::preview("img-1");
+        let token = ImageToken::preview(UserId(5), "img-1");
         let json = serde_json::to_value(&token).unwrap();
         assert!(json.get("type").is_some());
         assert_eq!(json["type"], "preview");
@@ -290,7 +314,7 @@ mod tests {
 
     #[test]
     fn test_image_token_bbox_omitted_when_none() {
-        let token = ImageToken::original("img-2");
+        let token = ImageToken::original(UserId(6), "img-2");
         let json = serde_json::to_value(&token).unwrap();
         assert!(json.get("bbox").is_none());
     }
@@ -339,18 +363,19 @@ mod orm_tests {
     #[test]
     fn test_encrypt_avatar_token_some() {
         let cipher = test_cipher();
-        let token = ImageToken::encrypt_avatar_token(&cipher, Some("avatar-file-id"));
+        let token = ImageToken::encrypt_avatar_token(&cipher, Some("avatar-file-id"), UserId(9));
         assert!(token.is_some());
         // 验证能解密回来
         let decrypted: ImageToken = cipher.decrypt(&token.unwrap()).unwrap();
         assert_eq!(decrypted.file_id, "avatar-file-id");
         assert_eq!(decrypted.token_type, ImageTokenType::Thumbnail);
+        assert_eq!(decrypted.viewer_id, UserId(9));
     }
 
     #[test]
     fn test_encrypt_avatar_token_none() {
         let cipher = test_cipher();
-        let token = ImageToken::encrypt_avatar_token(&cipher, None);
+        let token = ImageToken::encrypt_avatar_token(&cipher, None, UserId(9));
         assert!(token.is_none());
     }
 }

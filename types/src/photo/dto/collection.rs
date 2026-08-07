@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use validator::Validate;
 
+use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
 use crate::photo::collection::CollectionId;
 #[cfg(feature = "orm")]
@@ -41,10 +42,11 @@ impl From<CollectionRecord> for CollectionView {
 
 #[cfg(feature = "orm")]
 impl CollectionView {
-    pub fn with_generate_cover_token(mut self, cipher: &TokenCipher) -> Self {
+    pub fn with_generate_cover_token(mut self, viewer: UserId, cipher: &TokenCipher) -> Self {
         self.cover_token = self.cover_token.as_ref().and_then(|fid| {
+            let seed = format!("{}:{}", viewer, fid);
             cipher
-                .encrypt(&ImageToken::thumbnail(fid.to_string()), None)
+                .encrypt(&ImageToken::thumbnail(viewer, fid.to_string()), Some(&seed))
                 .ok()
         });
         self

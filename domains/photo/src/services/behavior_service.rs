@@ -83,23 +83,27 @@ impl BehaviorService {
         }
     }
 
-    /// 异步记录照片浏览（图片访问热路径）：按 file_id 反查照片归属者后写入。
+    /// 异步记录照片浏览（图片访问热路径）：token 内嵌浏览者身份，按 file_id 反查照片 ID 后写入。
     ///
-    /// 图片访问不依赖登录态，浏览行为按照片归属者统计，不细分浏览用户。
-    pub fn record_view_async(state: &PhotoState, file_id: String, ip: Option<String>) {
+    /// 图片访问不依赖登录态，浏览者身份来自签发给图片访问者的 token。
+    pub fn record_view_async(
+        state: &PhotoState,
+        viewer_id: UserId,
+        file_id: String,
+        ip: Option<String>,
+    ) {
         let db = state.db.clone();
         tokio::spawn(async move {
-            let owner = match PhotoMapper::query_owner_by_file_id(&db, &file_id).await {
-                Ok(Some(owner)) => owner,
+            let photo_id = match PhotoMapper::query_photo_id_by_file_id(&db, &file_id).await {
+                Ok(Some(photo_id)) => photo_id,
                 Ok(None) => return,
                 Err(e) => {
-                    tracing::warn!(error = %e, file_id = %file_id, "query_photo_owner_for_view_failed");
+                    tracing::warn!(error = %e, file_id = %file_id, "query_photo_id_for_view_failed");
                     return;
                 }
             };
 
-            let (photo_id, user_id) = owner;
-            let req = BehaviorRecordReq::new(user_id, UserBehaviorAction::View)
+            let req = BehaviorRecordReq::new(viewer_id, UserBehaviorAction::View)
                 .with_photo(photo_id.0)
                 .with_ip(ip);
 

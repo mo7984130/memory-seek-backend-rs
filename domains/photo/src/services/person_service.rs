@@ -369,7 +369,7 @@ impl PersonService {
     #[tracing::instrument(skip_all)]
     pub async fn merge_person(
         state: &PhotoState,
-        _admin: AdminId,
+        admin: AdminId,
         param: MergePersonParam,
     ) -> Result<PersonView> {
         let MergePersonParam {
@@ -469,7 +469,7 @@ impl PersonService {
                 "目标人物不存在",
                 AppError::not_found("目标人物不存在"),
             )?;
-        Ok(Self::to_view(state, person))
+        Ok(Self::to_view(state, admin.into_inner(), person))
     }
 }
 
@@ -484,12 +484,13 @@ impl PersonService {
 
     pub async fn get_persons(
         state: &PhotoState,
+        user_id: UserId,
         param: PersonCursorParam,
     ) -> Result<CursorPage<PersonView, FaceCountIdCursor<PersonId>>> {
         let persons = PersonMapper::query(&state.db, param.cursor, param.size).await?;
         let views = persons
             .into_iter()
-            .map(|person| Self::to_view(state, person))
+            .map(|person| Self::to_view(state, user_id, person))
             .collect::<Vec<_>>();
         let page = CursorPage::from_oversize_fn(views, param.size, |person| {
             FaceCountIdCursor {
@@ -504,6 +505,7 @@ impl PersonService {
     /// 按关键词前缀搜索人物(匹配完整名字或姓名首字母)
     pub async fn search_persons(
         state: &PhotoState,
+        user_id: UserId,
         param: PersonSearchParam,
     ) -> Result<CursorPage<PersonView, PersonId>> {
         let PersonSearchParam {
@@ -514,7 +516,7 @@ impl PersonService {
         let persons = PersonMapper::query_search(&state.db, &keyword, cursor, size).await?;
         let views = persons
             .into_iter()
-            .map(|person| Self::to_view(state, person))
+            .map(|person| Self::to_view(state, user_id, person))
             .collect::<Vec<_>>();
         CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))
     }
@@ -562,15 +564,15 @@ impl PersonService {
 
     /// 构建人物视图: 使用封面冗余字段直接内存组装裁剪 token, 加密后返回
     /// (与 `CollectionView::with_generate_cover_token` / `PhotoView::with_tokens` 一致)
-    fn to_view(state: &PhotoState, person: PersonRecord) -> PersonView {
+    fn to_view(state: &PhotoState, viewer: UserId, person: PersonRecord) -> PersonView {
         PersonView {
             id: person.id,
             name: person.name,
             cover_token: state
                 .token_cipher
                 .encrypt(
-                    &ImageToken::crop(person.cover_file_id, person.cover_bbox),
-                    Some(&person.id.to_string()),
+                    &ImageToken::crop(viewer, person.cover_file_id, person.cover_bbox),
+                    Some(&format!("{}:{}", person.id, viewer)),
                 )
                 .ok(),
             face_count: person.face_count,

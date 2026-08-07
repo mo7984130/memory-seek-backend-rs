@@ -14,11 +14,16 @@ pub struct UserInfoRow {
     pub avatar_file_id: Option<String>,
 }
 
-/// 将数据库查询结果转换为 API 响应类型，对头像文件 ID 进行加密
-pub fn user_brief_view_from_dto(dto: UserInfoRow, token_cipher: &TokenCipher) -> UserBriefView {
+/// 将数据库查询结果转换为 API 响应类型，对头像文件 ID 进行加密（内嵌浏览者身份）
+pub fn user_brief_view_from_dto(
+    dto: UserInfoRow,
+    token_cipher: &TokenCipher,
+    viewer: UserId,
+) -> UserBriefView {
     let avatar_token = dto.avatar_file_id.as_ref().and_then(|key| {
+        let seed = format!("{}:{}", viewer, key);
         token_cipher
-            .encrypt(&ImageToken::thumbnail(key.clone()), Some(key))
+            .encrypt(&ImageToken::thumbnail(viewer, key.clone()), Some(&seed))
             .ok()
     });
 
@@ -46,7 +51,7 @@ mod tests {
             nickname: "Alice".to_string(),
             avatar_file_id: Some("file123".to_string()),
         };
-        let vo = user_brief_view_from_dto(dto, &cipher);
+        let vo = user_brief_view_from_dto(dto, &cipher, UserId(1));
         assert_eq!(vo.user_id, UserId(42));
         assert_eq!(vo.nickname, "Alice");
         assert!(vo.avatar_token.is_some());
@@ -60,7 +65,7 @@ mod tests {
             nickname: "Bob".to_string(),
             avatar_file_id: None,
         };
-        let vo = user_brief_view_from_dto(dto, &cipher);
+        let vo = user_brief_view_from_dto(dto, &cipher, UserId(2));
         assert_eq!(vo.user_id, UserId(1));
         assert_eq!(vo.nickname, "Bob");
         assert!(vo.avatar_token.is_none());

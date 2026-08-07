@@ -70,6 +70,7 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
     user_info.avatar_token = ImageToken::encrypt_avatar_token(
         &state.token_cipher,
         user_record.avatar_file_id.as_deref(),
+        user_id,
     );
     Ok(user_info)
 }
@@ -261,8 +262,8 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token = ImageToken::encrypt_avatar_token(&state.token_cipher, Some(&new_key))
-        .ok_or_warn(
+    let avatar_token =
+        ImageToken::encrypt_avatar_token(&state.token_cipher, Some(&new_key), user_id).ok_or_warn(
             "encrypt_avatar_token_err",
             "加密头像Token错误",
             AppError::InternalServerError,
@@ -419,6 +420,7 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<(), AppError> 
 )]
 pub async fn get_user_info_batch(
     state: &UserState,
+    viewer: UserId,
     param: GetUserInfoBatchParam,
 ) -> Result<Vec<Option<UserBriefView>>, AppError> {
     metrics_group!();
@@ -459,6 +461,6 @@ pub async fn get_user_info_batch(
 
     Ok(result
         .into_iter()
-        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, &state.token_cipher)))
+        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, &state.token_cipher, viewer)))
         .collect())
 }

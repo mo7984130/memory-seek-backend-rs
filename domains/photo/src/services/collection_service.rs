@@ -29,7 +29,9 @@ impl CollectionService {
         // 组装结果
         let result: Vec<CollectionView> = collections
             .into_iter()
-            .map(|c| CollectionView::from(c).with_generate_cover_token(&state.token_cipher))
+            .map(|c| {
+                CollectionView::from(c).with_generate_cover_token(user_id, &state.token_cipher)
+            })
             .collect();
 
         metrics_success!();

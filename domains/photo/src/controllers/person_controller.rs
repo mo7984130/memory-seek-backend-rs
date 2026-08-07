@@ -177,17 +177,23 @@ impl PersonController {
 impl PersonController {
     pub async fn get_persons(
         State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
         ValidatedQuery(query): ValidatedQuery<PersonCursorParam>,
     ) -> Result<R<CursorPage<PersonView, FaceCountIdCursor<PersonId>>>> {
-        PersonService::get_persons(&state, query).await.to_r_ok()
+        PersonService::get_persons(&state, user_id, query)
+            .await
+            .to_r_ok()
     }
 
     /// 按关键词前缀搜索人物(完整名字或姓名首字母)
     pub async fn search_persons(
         State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
         ValidatedQuery(query): ValidatedQuery<PersonSearchParam>,
     ) -> Result<R<CursorPage<PersonView, PersonId>>> {
-        PersonService::search_persons(&state, query).await.to_r_ok()
+        PersonService::search_persons(&state, user_id, query)
+            .await
+            .to_r_ok()
     }
 
     /// 获取人物的照片列表(游标分页)

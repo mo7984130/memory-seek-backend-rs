@@ -116,7 +116,11 @@ impl PhotoController {
         OptionalClientIp(ip): OptionalClientIp,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
-        let image_token: ImageToken = state.token_cipher.decrypt(&token)?;
+        let image_token: ImageToken = state.token_cipher.decrypt(&token).trace_warn_bad_request(
+            "invalid_image_token",
+            "无效的图片 token",
+            "无效的图片 token",
+        )?;
 
         // 浏览埋点：仅预览/原图访问计入，缩略图/裁剪不计入
         if matches!(
@@ -124,7 +128,12 @@ impl PhotoController {
             ImageTokenType::Preview | ImageTokenType::Original
         ) {
             let ip_str = ip.map(|ip| ip.to_string());
-            BehaviorService::record_view_async(&state, image_token.file_id.clone(), ip_str);
+            BehaviorService::record_view_async(
+                &state,
+                image_token.viewer_id,
+                image_token.file_id.clone(),
+                ip_str,
+            );
         }
 
         let data = PhotoService::download_image(&state, image_token).await?;

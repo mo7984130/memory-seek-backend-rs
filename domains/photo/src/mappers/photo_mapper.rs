@@ -238,17 +238,16 @@ impl PhotoMapper {
             .to_ok()
     }
 
-    /// 根据文件 ID 查询照片 ID 与归属者（浏览埋点用）
-    pub async fn query_owner_by_file_id(
+    /// 根据文件 ID 查询照片 ID（浏览埋点用）
+    pub async fn query_photo_id_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,
-    ) -> Result<Option<(PhotoId, UserId)>> {
+    ) -> Result<Option<PhotoId>> {
         Entity::find()
             .select_only()
             .column(Column::Id)
-            .column(Column::UserId)
             .filter(Column::FileId.eq(file_id))
-            .into_tuple::<(PhotoId, UserId)>()
+            .into_tuple::<PhotoId>()
             .one(db)
             .await?
             .to_ok()
