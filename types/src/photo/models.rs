@@ -71,7 +71,7 @@ crate::in_dto!(DeletePhotosParam, "photo/", serialize; {
 });
 
 fn liked_photos_default_size() -> u64 {
-    20
+    32
 }
 
 crate::in_dto!(LikedPhotosQuery, "photo/"; {
@@ -79,7 +79,7 @@ crate::in_dto!(LikedPhotosQuery, "photo/"; {
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
     pub cursor: Option<TimeIdCursor<PhotoId>>,
 
-    /// 每页大小（可选，默认 20，最大 100）
+    /// 每页大小（可选，默认 32，最大 100）
     #[serde(default = "liked_photos_default_size")]
     #[validate(range(min = 1, max = 100, message = "size 在 1 到 100 之间"))]
     #[cfg_attr(feature = "ts", ts(type = "number"))]

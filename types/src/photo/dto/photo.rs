@@ -106,7 +106,7 @@ impl Default for PhotoCursorParam {
     fn default() -> Self {
         Self {
             cursor: None,
-            size: 128,
+            size: 32,
             direction: PageDirection::Next,
             anchor_time: None,
         }

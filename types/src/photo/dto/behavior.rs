@@ -78,7 +78,7 @@ impl Default for BehaviorTopQuery {
         Self {
             action: UserBehaviorAction::View,
             target_type: BehaviorTargetType::Photo,
-            limit: 10,
+            limit: 3,
         }
     }
 }
@@ -105,7 +105,7 @@ impl Default for BehaviorAuditQuery {
             target_id: None,
             user_id: None,
             cursor: None,
-            size: 20,
+            size: 32,
         }
     }
 }
