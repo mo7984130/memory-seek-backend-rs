@@ -66,9 +66,12 @@ impl CollectionMapper {
             AppError::not_found("收藏夹不存在"),
         )?;
 
-        let new_count: u64 = result.try_get("", &c_photo_count)?;
+        let new_count: i64 = result.try_get("", &c_photo_count)?;
 
-        Ok(new_count)
+        u64::try_from(new_count).map_err(|_| {
+            tracing::error!(collection_id = %collection_id, count = new_count, "photo_count 异常为负值");
+            AppError::InternalServerError
+        })
     }
 
     pub async fn insert(
