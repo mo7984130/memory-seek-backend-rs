@@ -8,7 +8,8 @@
 : "${METRICS_PORT:=9090}"
 
 # ── 构建 ──────────────────────────────────────────────
-: "${FEATURES:=metrics,auth,user,photo,backup}"
+# 注意: 不含 backup(其 feature 与 photo 冲突, 且定时备份任务会干扰压测); 不含 face-engine(需模型文件)
+: "${FEATURES:=metrics,auth,user,photo}"
 : "${BIN_NAME:=memory-seek-server}"
 
 # ── 压测数据与轮次 ────────────────────────────────────

@@ -34,7 +34,7 @@ jobs:
     load:
         runs-on: ubuntu-latest
         env:
-            FEATURES: metrics,auth,user,photo,backup
+            FEATURES: metrics,auth,user,photo
             RUNS: ${{ inputs.runs || 3 }}
             MODE: ${{ github.event_name == 'schedule' && 'baseline' || inputs.mode || 'compare' }}
         steps:
@@ -54,14 +54,18 @@ jobs:
             - name: Install k6
               uses: grafana/setup-k6-action@v1
               with:
-                  k6-version: 0.49.0
+                  # 场景脚本使用可选链 ?., 需 >= 0.50(0.49 编译器不支持)
+                  k6-version: 0.57.0
 
             - name: 启动依赖容器 (PG / Redis)
               run: docker compose -f tests/load/docker-compose.load.yml up -d --wait
 
             - name: 启动被测服务
               run: |
-                  ./target/release/memory-seek-server --config tests/load/ci/server-config.yml > server.log 2>&1 &
+                  ./target/release/memory-seek-server \
+                      --config tests/load/ci/server-config.yml \
+                      --log-dir tests/load/ci/logs \
+                      > server.log 2>&1 &
                   echo $! > server.pid
                   for i in $(seq 1 60); do
                       if curl -sf http://127.0.0.1:7985/health >/dev/null; then

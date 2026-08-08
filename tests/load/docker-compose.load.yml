@@ -12,7 +12,8 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # 含 pgvector 扩展(init.sql 需 CREATE EXTENSION vector, 官方镜像不含)
+    image: pgvector/pgvector:pg16
     container_name: memory-seek-load-pg
     environment:
       POSTGRES_USER: memory_seek

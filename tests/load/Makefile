@@ -13,7 +13,7 @@ SERVER_PORT ?= 7985
 METRICS_PORT ?= 9090
 
 # 构建与运行
-FEATURES ?= metrics,auth,user,photo,backup
+FEATURES ?= metrics,auth,user,photo
 BIN_NAME  ?= memory-seek-server
 RUNS      ?= 3          # 每场景轮次, collect 取中位数
 INCLUDE_S3_PATHS ?= false
@@ -74,6 +74,7 @@ ci-up:                 ## 启动压测环境(容器依赖 + release server 进�
 	cd ../.. && cargo build --release --features "$(FEATURES)"
 	@echo "Starting server (features: $(FEATURES))..."
 	@cd ../.. && ./target/release/$(BIN_NAME) --config $(CI_DIR)/server-config.yml \
+		--log-dir $(CI_DIR)/logs \
 		> $(CI_DIR)/server.log 2>&1 & echo $$! > $(SERVER_PID)
 	@for i in $$(seq 1 60); do \
 		if curl -sf http://127.0.0.1:$(SERVER_PORT)/health > /dev/null; then \
@@ -114,8 +115,8 @@ photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景
 			scenarios/photo.js || echo "[warn] scenario $$s 失败"; \
 	done
 
-seed:                  ## 种子数据(当前为占位, 逻辑待实现)
-	@echo "[seed] 占位: 调用 seed/ 下的种子数据脚本(见 seed/README.md)"
+seed:                  ## 灌入种子数据(建表 + 压测账号/照片/时间线统计)
+	$(CI_DIR)/../seed/seed.sh
 
 # ── 采集层 ──────────────────────────────────────────
 collect:               ## 多轮结果归一化(逐指标取中位数) -> results/normalized/
