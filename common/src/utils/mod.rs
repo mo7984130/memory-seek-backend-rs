@@ -1,3 +1,5 @@
+mod db_utils;
+mod password_hash;
 /// 通用工具模块
 ///
 /// 提供项目中常用的工具类型和函数，包括：
@@ -10,8 +12,6 @@
 /// - `metrics_ext`: 性能监控工具（`metrics` feature 未启用时变 no-op）
 pub mod rand_utils;
 mod token_cipher;
-mod db_utils;
-mod password_hash;
 
 #[cfg(feature = "file_validator")]
 mod file_validator;

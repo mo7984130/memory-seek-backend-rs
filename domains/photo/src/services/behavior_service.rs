@@ -164,14 +164,10 @@ impl BehaviorService {
     ) -> Result<Vec<BehaviorTopItem>> {
         metrics_group!();
 
-        let rows = BehaviorMapper::query_top_targets(
-            &state.db,
-            req.action,
-            req.target_type,
-            req.limit,
-        )
-        .timed(metrics_name!("query_top"))
-        .await?;
+        let rows =
+            BehaviorMapper::query_top_targets(&state.db, req.action, req.target_type, req.limit)
+                .timed(metrics_name!("query_top"))
+                .await?;
 
         metrics_success!();
         Ok(rows

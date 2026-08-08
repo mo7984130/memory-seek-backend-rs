@@ -51,9 +51,7 @@ impl BehaviorController {
         ValidatedQuery(req): ValidatedQuery<BehaviorTopQuery>,
     ) -> Result<R<Vec<BehaviorTopItem>>> {
         let admin = AdminId::new(user_id)?;
-        BehaviorService::get_top(&state, admin, req)
-            .await
-            .to_r_ok()
+        BehaviorService::get_top(&state, admin, req).await.to_r_ok()
     }
 
     /// 审计流水（可按照片/人物/动作追溯，含 IP 与详情）

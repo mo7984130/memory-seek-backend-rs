@@ -105,7 +105,9 @@ pub fn validate_password(password: &str) -> Result<(), ValidationError> {
         Ok(true) => Ok(()),
         Ok(false) => Err(ValidationError::new("invalid_password")
             .with_message(PasswordValidConfig::PATTERN_MSG.into())),
-        Err(_) => Err(ValidationError::new("internal_error").with_message("服务器内部校验错误".into())),
+        Err(_) => {
+            Err(ValidationError::new("internal_error").with_message("服务器内部校验错误".into()))
+        }
     }
 }
 

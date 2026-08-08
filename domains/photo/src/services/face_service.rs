@@ -518,9 +518,7 @@ impl FaceService {
         metrics_group!();
 
         let photo_ids = FaceMapper::query_unassigned_face_photo_ids_cursor_page(
-            &state.db,
-            req.cursor,
-            req.size,
+            &state.db, req.cursor, req.size,
         )
         .timed(metrics_name!("query_unassigned_face_photo_ids"))
         .await?;
@@ -591,12 +589,9 @@ impl FaceService {
         state: &PhotoState,
         face_ids: &FaceIds,
     ) -> Result<FaceDeleteBatchResult> {
-        let deleted_face_count =
-            FaceMapper::delete_unassigned_by_ids(&state.db, face_ids).await?;
+        let deleted_face_count = FaceMapper::delete_unassigned_by_ids(&state.db, face_ids).await?;
 
-        Ok(FaceDeleteBatchResult {
-            deleted_face_count,
-        })
+        Ok(FaceDeleteBatchResult { deleted_face_count })
     }
 }
 

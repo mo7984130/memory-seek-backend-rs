@@ -19,9 +19,7 @@ use types::{
     photo::{
         FaceView,
         behavior::{BehaviorTargetType, UserBehaviorAction},
-        dto::face::{
-            FaceDeleteBatchParam, FaceDeleteBatchResult, UnassignedFacePhotoCursorParam,
-        },
+        dto::face::{FaceDeleteBatchParam, FaceDeleteBatchResult, UnassignedFacePhotoCursorParam},
         dto::photo::PhotoView,
         face::FaceId,
         person::PersonId,

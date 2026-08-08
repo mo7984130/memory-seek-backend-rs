@@ -73,14 +73,10 @@ impl PhotoLikeService {
         metrics_group!();
 
         // 查询用户点赞的照片ID列表和点赞时间（mapper 内部多查 1 条用于判断 has_more）
-        let photo_ids_with_like_time = PhotoLikeMapper::query_user_liked_photo_ids(
-            &state.db,
-            user_id,
-            &req.cursor,
-            req.size,
-        )
-        .timed(metrics_name!("query_ids"))
-        .await?;
+        let photo_ids_with_like_time =
+            PhotoLikeMapper::query_user_liked_photo_ids(&state.db, user_id, &req.cursor, req.size)
+                .timed(metrics_name!("query_ids"))
+                .await?;
 
         // 构建 CursorPage（只提取 photo_id 用于分页判断）
         let photo_ids: Vec<PhotoId> = photo_ids_with_like_time.iter().map(|(id, _)| *id).collect();

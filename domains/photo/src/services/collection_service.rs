@@ -74,20 +74,14 @@ impl CollectionService {
         metrics_group!();
 
         // 修改时鉴权
-        CollectionMapper::update_info(
-            &state.db,
-            collection_id,
-            user_id,
-            req.name,
-            req.description,
-        )
-        .timed(metrics_name!("db_update"))
-        .await?
-        .no_zero_or_warn(
-            "collection_update_info_fail",
-            "修改收藏夹信息失败",
-            AppError::bad_request("修改收藏夹信息失败"),
-        )?;
+        CollectionMapper::update_info(&state.db, collection_id, user_id, req.name, req.description)
+            .timed(metrics_name!("db_update"))
+            .await?
+            .no_zero_or_warn(
+                "collection_update_info_fail",
+                "修改收藏夹信息失败",
+                AppError::bad_request("修改收藏夹信息失败"),
+            )?;
 
         metrics_success!();
         Ok(())

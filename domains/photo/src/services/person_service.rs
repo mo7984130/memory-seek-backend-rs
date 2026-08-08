@@ -189,9 +189,7 @@ impl PersonService {
         admin: AdminId,
         req: SecondaryClusterParam,
     ) -> Result<()> {
-        spawn(async move {
-            Self::inner_assign_unassigned_faces(state, admin, req).await
-        });
+        spawn(async move { Self::inner_assign_unassigned_faces(state, admin, req).await });
         Ok(())
     }
 

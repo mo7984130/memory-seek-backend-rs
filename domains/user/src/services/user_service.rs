@@ -11,10 +11,10 @@ use tokio::task::spawn_blocking;
 
 use crate::UserState;
 use crate::models::{UserInfoRow, user_brief_view_from_dto};
-use common::{error::AppError, Result};
 use common::ext::{CacheExtension, OptionExt, RedisExt, ResultInspectErrAsync, TraceExt, log_err};
 use common::utils::{DbUtils, MetricsTimerExt};
 use common::utils::{FileValidator, rand_utils};
+use common::{Result, error::AppError};
 use types::auth::user::{self, UserId};
 use types::photo::ImageToken;
 use types::user::{
@@ -88,10 +88,7 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
     skip_all,
     fields(user_id = %user_id)
 )]
-pub async fn generate_inviter_code(
-    state: &UserState,
-    user_id: UserId,
-) -> Result<InviterCodeView> {
+pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result<InviterCodeView> {
     metrics_group!();
 
     // 循环生成邀请码, 防止冲突
