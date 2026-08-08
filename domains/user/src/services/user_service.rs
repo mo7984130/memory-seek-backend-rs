@@ -8,11 +8,10 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySele
 use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
-use tracing::info;
 
 use crate::UserState;
 use crate::models::{UserInfoRow, user_brief_view_from_dto};
-use common::error::AppError;
+use common::{error::AppError, Result};
 use common::ext::{CacheExtension, OptionExt, RedisExt, ResultInspectErrAsync, TraceExt, log_err};
 use common::utils::{DbUtils, MetricsTimerExt};
 use common::utils::{FileValidator, rand_utils};
@@ -52,7 +51,7 @@ static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
     skip_all,
     fields(user_id = %user_id)
 )]
-pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInfo, AppError> {
+pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInfo> {
     metrics_group!();
 
     // 获取用户
@@ -63,7 +62,6 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
         .await?
         .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
     metrics_success!();
-    info!(status = "success", user_id = %user_id, "获取用户信息成功");
 
     let user_record = user::UserRecord::from(user);
     let mut user_info = user::create_user_info(&user_record);
@@ -93,7 +91,7 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
 pub async fn generate_inviter_code(
     state: &UserState,
     user_id: UserId,
-) -> Result<InviterCodeView, AppError> {
+) -> Result<InviterCodeView> {
     metrics_group!();
 
     // 循环生成邀请码, 防止冲突
@@ -115,8 +113,6 @@ pub async fn generate_inviter_code(
 
         if success {
             metrics_success!();
-
-            info!(status = "success", "生成邀请码成功");
 
             return Ok(InviterCodeView {
                 inviter_code: code,
@@ -143,17 +139,17 @@ pub async fn generate_inviter_code(
 /// 返回更新后的昵称字符串
 #[tracing::instrument(
     skip_all,
-    fields(user_id = %user_id, new_nickname = %param.new_nickname)
+    fields(user_id = %user_id, new_nickname = %req.new_nickname)
 )]
 pub async fn change_nickname(
     state: &UserState,
     user_id: UserId,
-    param: ChangeNicknameParam,
-) -> Result<String, AppError> {
+    req: ChangeNicknameParam,
+) -> Result<String> {
     metrics_group!();
 
     // 更新昵称
-    let new_nickname = param.new_nickname;
+    let new_nickname = req.new_nickname;
     user::Entity::update_many()
         .col_expr(user::Column::Nickname, Expr::value(new_nickname.clone()))
         .filter(user::Column::Id.eq(user_id))
@@ -171,7 +167,6 @@ pub async fn change_nickname(
         .trace();
 
     metrics_success!();
-    info!(status = "success", user_id = %user_id, "修改昵称成功");
 
     Ok(new_nickname)
 }
@@ -185,13 +180,13 @@ pub async fn update_avatar(
     state: &UserState,
     user_id: UserId,
     file_data: Bytes,
-    param: UpdateAvatarParam,
-) -> Result<String, AppError> {
+    req: UpdateAvatarParam,
+) -> Result<String> {
     metrics_group!();
 
     // 校验图片
     let img_metadata = timed!("validate_image", {
-        FileValidator::validate_image(file_data.as_ref(), &param.file_name, &param.content_type)?
+        FileValidator::validate_image(file_data.as_ref(), &req.file_name, &req.content_type)?
     });
 
     // 上传图片
@@ -269,9 +264,7 @@ pub async fn update_avatar(
             AppError::InternalServerError,
         )?;
 
-    metrics_success!("update_avatar");
-
-    info!(status = "success", user_id = %user_id, "更新头像成功");
+    metrics_success!();
 
     Ok(avatar_token)
 }
@@ -296,7 +289,7 @@ pub async fn change_password(
     state: &UserState,
     user_id: UserId,
     req: ChangePasswordParam,
-) -> Result<(), AppError> {
+) -> Result<()> {
     metrics_group!();
 
     // 新旧密码不可相同
@@ -357,7 +350,6 @@ pub async fn change_password(
     logout(state, user_id).await?;
 
     metrics_success!();
-    info!(status = "success", user_id = %user_id, "修改密码成功");
 
     Ok(())
 }
@@ -377,7 +369,7 @@ pub async fn change_password(
     skip_all,
     fields(user_id = %user_id)
 )]
-pub async fn logout(state: &UserState, user_id: UserId) -> Result<(), AppError> {
+pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
     metrics_group!();
 
     // 清除refresh_token
@@ -406,7 +398,6 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<(), AppError> 
     access_token_result?;
 
     metrics_success!();
-    info!(status = "success", user_id = %user_id, "登出成功");
 
     Ok(())
 }
@@ -421,16 +412,16 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<(), AppError> 
 /// 返回用户信息列表，未找到的用户对应位置为 `None`
 #[tracing::instrument(
     skip_all,
-    fields(user_count = %param.user_ids.len())
+    fields(user_id = %user_id, count = %req.user_ids.len())
 )]
 pub async fn get_user_info_batch(
     state: &UserState,
-    viewer: UserId,
-    param: GetUserInfoBatchParam,
-) -> Result<Vec<Option<UserBriefView>>, AppError> {
+    user_id: UserId,
+    req: GetUserInfoBatchParam,
+) -> Result<Vec<Option<UserBriefView>>> {
     metrics_group!();
 
-    let user_ids = param.user_ids.into_inner();
+    let user_ids = req.user_ids.into_inner();
 
     // 带redis缓存的获取用户信息
     let result: Vec<Option<UserInfoRow>> = state
@@ -462,10 +453,9 @@ pub async fn get_user_info_batch(
         .await?;
 
     metrics_success!();
-    info!(status = "success", "批量获取用户信息成功");
 
     Ok(result
         .into_iter()
-        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, &state.token_cipher, viewer)))
+        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, &state.token_cipher, user_id)))
         .collect())
 }

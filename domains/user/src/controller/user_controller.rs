@@ -1,7 +1,7 @@
 use axum::extract::{Multipart, State};
 use axum::routing::{get, patch, post, put};
 use axum::{Extension, Router};
-use common::error::AppError;
+use common::Result;
 use common::ext::ResultErrExt;
 use common::ext::{OptionExt, ResultRExt};
 use common::extractors::ValidatedJson;
@@ -54,7 +54,7 @@ impl UserController {
     async fn get_user_info(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<UserInfo>, AppError> {
+    ) -> Result<R<UserInfo>> {
         user_service::get_user_info(&state, user_id).await.to_r_ok()
     }
 
@@ -72,7 +72,7 @@ impl UserController {
     async fn generate_inviter_code(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<InviterCodeView>, AppError> {
+    ) -> Result<R<InviterCodeView>> {
         user_service::generate_inviter_code(&state, user_id)
             .await
             .to_r_ok()
@@ -94,7 +94,7 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<ChangeNicknameParam>,
-    ) -> Result<R<String>, AppError> {
+    ) -> Result<R<String>> {
         user_service::change_nickname(&state, user_id, req)
             .await
             .to_r_ok()
@@ -116,7 +116,7 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
         mut multipart: Multipart,
-    ) -> Result<R<String>, AppError> {
+    ) -> Result<R<String>> {
         let field = multipart
             .next_field()
             .await
@@ -131,12 +131,13 @@ impl UserController {
             "读取文件失败",
         )?;
 
-        let param = UpdateAvatarParam {
+        let req = UpdateAvatarParam {
             file_name,
             content_type,
         };
-        let res = user_service::update_avatar(&state, user_id, file_data, param).await?;
-        Ok(R::ok(res))
+        user_service::update_avatar(&state, user_id, file_data, req)
+            .await
+            .to_r_ok()
     }
 
     /// 修改当前用户的登录密码
@@ -155,7 +156,7 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<ChangePasswordParam>,
-    ) -> Result<R<()>, AppError> {
+    ) -> Result<R<()>> {
         user_service::change_password(&state, user_id, req)
             .await
             .to_r_ok()
@@ -175,7 +176,7 @@ impl UserController {
     async fn logout(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<()>, AppError> {
+    ) -> Result<R<()>> {
         user_service::logout(&state, user_id).await.to_r_ok()
     }
 
@@ -194,7 +195,7 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<GetUserInfoBatchParam>,
-    ) -> Result<R<Vec<Option<UserBriefView>>>, AppError> {
+    ) -> Result<R<Vec<Option<UserBriefView>>>> {
         user_service::get_user_info_batch(&state, user_id, req)
             .await
             .to_r_ok()
