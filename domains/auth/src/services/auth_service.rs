@@ -20,7 +20,7 @@ use sea_orm::{
 use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 use types::auth::user::{self, UserId};
 use types::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
@@ -192,7 +192,6 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     );
 
     metrics_success!();
-    info!(status="success", user_id = %user.id, username = %updated_user.username, "用户登录成功");
 
     // 返回 LoginResult（包含用户信息和令牌）
     let user_record = user::UserRecord::from(updated_user);
@@ -225,9 +224,9 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
 #[tracing::instrument(
     skip_all,
     fields(
-        user.username = %req.username,
-        user.email = %req.email,
-        user.nickname = %req.nickname,
+        username = %req.username,
+        email = %req.email,
+        nickname = %req.nickname,
         inviter_code = %req.inviter_code,
         email_code_prefix = %&req.email_verify_code[..2]
     )
@@ -279,8 +278,6 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
         .await?;
 
     metrics_success!();
-
-    info!(status = "success", "用户注册成功");
 
     let user_record = user::UserRecord::from(user_model);
     Ok(user::create_user_info(&user_record))
@@ -369,8 +366,6 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
 
     metrics_success!();
 
-    info!(status = "success", email = %req.email, "验证码发送成功");
-
     Ok(())
 }
 
@@ -415,8 +410,6 @@ pub async fn refresh_access_token(
         .await?;
 
     metrics_success!();
-
-    info!(status = "success", "AccessToken刷新成功");
 
     Ok(RefreshAccessTokenResponse {
         access_token: new_access_token,

@@ -4,6 +4,7 @@ use axum::Router;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::routing::post;
+use common::Result;
 use common::error::AppError;
 use common::ext::{OptionExt, ResultErrExt, ResultRExt};
 use common::extractors::ValidatedJson;
@@ -50,7 +51,7 @@ impl AuthController {
     async fn login(
         State(state): State<Arc<AuthState>>,
         ValidatedJson(req): ValidatedJson<LoginRequest>,
-    ) -> Result<R<LoginResponse>, AppError> {
+    ) -> Result<R<LoginResponse>> {
         auth_service::login(&state, req).await.to_r_ok()
     }
 
@@ -58,7 +59,7 @@ impl AuthController {
     ///
     /// # 参数
     /// - `state`: 认证服务共享状态
-    /// - `payload`: 注册请求，包含用户名、邮箱、密码、昵称、邀请码和邮箱验证码
+    /// - `req`: 注册请求，包含用户名、邮箱、密码、昵称、邀请码和邮箱验证码
     ///
     /// # 返回
     /// 返回注册成功的用户信息（不含 token，需单独登录获取）
@@ -68,16 +69,16 @@ impl AuthController {
     /// - `AppError::InternalServerError`: 数据库操作失败
     async fn register(
         State(state): State<Arc<AuthState>>,
-        ValidatedJson(payload): ValidatedJson<RegisterRequest>,
-    ) -> Result<R<UserInfo>, AppError> {
-        auth_service::register(&state, payload).await.to_r_ok()
+        ValidatedJson(req): ValidatedJson<RegisterRequest>,
+    ) -> Result<R<UserInfo>> {
+        auth_service::register(&state, req).await.to_r_ok()
     }
 
     /// 发送邮箱验证码
     ///
     /// # 参数
     /// - `state`: 认证服务共享状态
-    /// - `payload`: 包含目标邮箱地址的请求
+    /// - `req`: 包含目标邮箱地址的请求
     ///
     /// # 返回
     /// 返回空成功响应
@@ -86,11 +87,9 @@ impl AuthController {
     /// - `AppError::InternalServerError`: Redis 操作或邮件发送失败
     async fn send_email_code(
         State(state): State<Arc<AuthState>>,
-        ValidatedJson(payload): ValidatedJson<SendEmailCodeRequest>,
-    ) -> Result<R<()>, AppError> {
-        auth_service::send_email_code(&state, payload)
-            .await
-            .to_r_ok()
+        ValidatedJson(req): ValidatedJson<SendEmailCodeRequest>,
+    ) -> Result<R<()>> {
+        auth_service::send_email_code(&state, req).await.to_r_ok()
     }
 
     /// 刷新 access_token
@@ -110,7 +109,7 @@ impl AuthController {
     async fn refresh_access_token(
         State(state): State<Arc<AuthState>>,
         headers: HeaderMap,
-    ) -> Result<R<RefreshAccessTokenResponse>, AppError> {
+    ) -> Result<R<RefreshAccessTokenResponse>> {
         let user_id = headers
             .get("x-user-id")
             .ok_or_warn(
