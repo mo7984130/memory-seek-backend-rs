@@ -12,10 +12,10 @@ on:
                     - compare
                     - baseline
             ref:
-                description: "被测分支/ref(默认当前)"
+                description: "被测分支/ref, 默认 develop(main 分支的 workflow 不含缓存/诊断逻辑)"
                 required: false
                 type: string
-                default: ""
+                default: "develop"
             runs:
                 description: "每场景压测轮次(取中位数)"
                 required: false
