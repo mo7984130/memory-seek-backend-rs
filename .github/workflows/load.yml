@@ -48,14 +48,19 @@ jobs:
 
             - uses: Swatinem/rust-cache@v2
 
-            # 显式缓存 release 二进制: 同一 commit 重复触发时直接复用, 跳过编译
+            # 显式缓存 release 二进制: 仅 Rust 源码/依赖变化时才失效
             # (Swatinem/rust-cache 缓存的是依赖 target, 与 ci.yml 的 debug 产物不互通)
+            # key 用源码内容 hash 而非 commit sha, 避免改压测脚本/workflow 也触发重编
+            - name: 计算源码缓存 key
+              id: src-hash
+              run: echo "hash=${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', 'common/**', 'types/**', 'domains/**', 'libs/**', 'server/**') }}" >> "$GITHUB_OUTPUT"
+
             - name: 恢复 release 二进制缓存
               id: release-bin
               uses: actions/cache/restore@v4
               with:
                   path: target/release/memory-seek-server
-                  key: load-bin-${{ github.sha }}
+                  key: load-bin-${{ steps.src-hash.outputs.hash }}
 
             - name: Build (release + metrics)
               if: steps.release-bin.outputs.cache-hit != 'true'
@@ -66,7 +71,7 @@ jobs:
               uses: actions/cache/save@v4
               with:
                   path: target/release/memory-seek-server
-                  key: load-bin-${{ github.sha }}
+                  key: load-bin-${{ steps.src-hash.outputs.hash }}
 
             - name: Install k6
               uses: grafana/setup-k6-action@v1
