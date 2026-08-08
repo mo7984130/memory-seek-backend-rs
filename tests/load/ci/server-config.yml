@@ -1,0 +1,42 @@
+# tests/load/ci/server-config.yml
+# 压测专用配置(CI / 本地一键环境), 与生产 config.yml 隔离。
+# 依赖 features: metrics,auth,user,photo
+# 说明:
+#   - database/redis 指向 docker-compose.load.yml 映射到宿主机的端口
+#   - smtp/s3 为占位假值: 压测默认不含发邮件与真实 OSS 上传
+#   - 环境变量可用 MEMORY_SEEK__ 前缀覆盖(见 server/src/config/mod.rs)
+
+server:
+  host: "0.0.0.0"
+  port: 7985
+
+database:
+  url: "postgres://memory_seek:memseek_loadtest@127.0.0.1:54329/memory_seek"
+  max_connections: 64
+
+redis:
+  url: "redis://127.0.0.1:63799"
+  max_connections: 16
+
+smtp:
+  server: "localhost"
+  port: 25
+  username: "loadtest"
+  password: "loadtest"
+  from_email: "loadtest@test.local"
+  from_name: "loadtest"
+
+s3:
+  endpoint: "http://127.0.0.1:9000"
+  access_key: "loadtest"
+  secret_key: "loadtest"
+  region: "loadtest"
+  bucket: "loadtest"
+
+token_cipher:
+  key: "memory-seek-loadtest-key"
+  salt: "memory-seek-loadtest-salt"
+
+metrics:
+  host: "0.0.0.0"
+  port: 9090

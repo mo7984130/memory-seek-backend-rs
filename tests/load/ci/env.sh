@@ -1,0 +1,43 @@
+# tests/load/ci/env.sh
+# 压测体系全局环境变量与路径约定
+# 用法: source "$(dirname "$0")/env.sh" 之后调用其它 ci/*.sh
+
+# ── 目标服务 ──────────────────────────────────────────
+: "${REMOTE_HOST:=127.0.0.1}"
+: "${SERVER_PORT:=7985}"
+: "${METRICS_PORT:=9090}"
+
+# ── 构建 ──────────────────────────────────────────────
+# 注意: 不含 backup(其 feature 与 photo 冲突, 且定时备份任务会干扰压测); 不含 face-engine(需模型文件)
+: "${FEATURES:=metrics,auth,user,photo}"
+: "${BIN_NAME:=memory-seek-server}"
+
+# ── 压测数据与轮次 ────────────────────────────────────
+: "${AUTH_USERS:=10000}"
+: "${PHOTO_USERS:=200}"
+# 每场景轮次, 归一化时取中位数抗共享环境波动
+: "${RUNS:=3}"
+
+# S3 路径开关: CI 暂不模拟 S3, 默认关闭; 本地连真实 OSS 时可置 true
+: "${INCLUDE_S3_PATHS:=false}"
+
+# photo 场景中不依赖 S3 的子场景(k6 --scenario 名)
+PHOTO_NOS3_SERVICES="${PHOTO_NOS3_SERVICES:-collection collection_photo comment comment_like}"
+
+# ── 目录约定 ──────────────────────────────────────────
+CI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOAD_DIR="$(dirname "$CI_DIR")"
+ROOT_DIR="$(dirname "$LOAD_DIR")"
+
+RESULTS_DIR="${LOAD_DIR}/results"
+RUNS_DIR="${RESULTS_DIR}/run"                    # run-<n> 单轮结果
+NORMALIZED_DIR="${RESULTS_DIR}/normalized"       # collect.sh 归一化输出
+METRICS_DIR="${RESULTS_DIR}/metrics"             # prometheus.sh 快照
+BASELINES_DIR="${LOAD_DIR}/baselines"            # 基线(normalized json 同构)
+
+SERVER_CONFIG="${CI_DIR}/server-config.yml"
+SERVER_LOG="${CI_DIR}/server.log"
+SERVER_PID="${CI_DIR}/server.pid"
+
+export REMOTE_HOST SERVER_PORT METRICS_PORT FEATURES BIN_NAME
+export AUTH_USERS PHOTO_USERS RUNS INCLUDE_S3_PATHS PHOTO_NOS3_SERVICES

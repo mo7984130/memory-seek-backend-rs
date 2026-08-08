@@ -29,7 +29,7 @@ export function initSession(account, password) {
     recordResult("login", result);
     if (!ok) return null;
     _session = {
-        uid: res.json("data.id"),
+        uid: res.json("data.user.id"),
         token: res.json("data.accessToken"),
         refreshToken: res.json("data.refreshToken"),
     };

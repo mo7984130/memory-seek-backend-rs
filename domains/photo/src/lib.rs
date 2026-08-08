@@ -3,8 +3,6 @@ pub mod controllers;
 #[cfg(feature = "controller")]
 pub(crate) mod mappers;
 #[cfg(feature = "controller")]
-pub(crate) mod models;
-#[cfg(feature = "controller")]
 pub(crate) mod services;
 mod state;
 

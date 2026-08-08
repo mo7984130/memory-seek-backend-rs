@@ -1,17 +1,17 @@
 use std::collections::HashSet;
 
 use common::Result;
-use common::ext::{ResultErrExt, ToErr, ToOk, log_err};
-use entities::photo::comment_like::*;
-use entities::{auth::user::UserId, photo::comment::CommentId};
+use common::ext::ToOk;
 use sea_orm::ActiveValue::Set;
-use sea_orm::{ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
+use types::photo::comment_like::*;
+use types::{auth::user::UserId, photo::comment::CommentId};
 
 pub struct CommentLikeMapper;
 
 // 创建
 impl CommentLikeMapper {
-    pub async fn insert_ignore(
+    pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
         comment_id: CommentId,
@@ -19,8 +19,8 @@ impl CommentLikeMapper {
         let now = chrono::Utc::now();
 
         let active_model = ActiveModel {
-            comment_id: Set(comment_id.0),
-            user_id: Set(user_id.0),
+            comment_id: Set(comment_id),
+            user_id: Set(user_id),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -32,20 +32,10 @@ impl CommentLikeMapper {
                     .do_nothing()
                     .to_owned(),
             )
-            .exec(db)
-            .await;
+            .exec_without_returning(db)
+            .await?;
 
-        match result {
-            Ok(_) => Ok(true),
-            Err(DbErr::RecordNotInserted) => Ok(false),
-            Err(e) => log_err(
-                "db_insert_err",
-                "插入照片评论喜欢时错误",
-                e,
-                common::error::AppError::InternalServerError,
-            )
-            .to_err(),
-        }
+        Ok(result > 0)
     }
 }
 
@@ -66,14 +56,12 @@ impl CommentLikeMapper {
         Entity::find()
             .select_only()
             .column(Column::CommentId)
-            .filter(Column::UserId.eq(user_id.0))
-            .filter(Column::CommentId.is_in(comment_ids.into_iter().map(|id| id.0)))
-            .into_tuple::<i64>()
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::CommentId.is_in(comment_ids))
+            .into_tuple::<CommentId>()
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询评论是否喜欢数据库错误")?
+            .await?
             .into_iter()
-            .map(CommentId)
             .collect::<HashSet<CommentId>>()
             .to_ok()
     }
@@ -87,11 +75,10 @@ impl CommentLikeMapper {
         comment_id: CommentId,
     ) -> Result<bool> {
         let res = Entity::delete_many()
-            .filter(Column::CommentId.eq(comment_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::CommentId.eq(comment_id))
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
-            .await
-            .trace_internal_err("db_delete_err", "尝试删除照片评论喜欢错误")?;
+            .await?;
 
         Ok(res.rows_affected != 0)
     }
@@ -101,10 +88,9 @@ impl CommentLikeMapper {
         comment_id: CommentId,
     ) -> Result<u64> {
         Entity::delete_many()
-            .filter(Column::CommentId.eq(comment_id.0))
+            .filter(Column::CommentId.eq(comment_id))
             .exec(db)
-            .await
-            .trace_internal_err("db_del_err", "根据评论id删除所有评论喜欢数据库错误")?
+            .await?
             .rows_affected
             .to_ok()
     }
@@ -118,10 +104,9 @@ impl CommentLikeMapper {
         }
 
         Entity::delete_many()
-            .filter(Column::CommentId.is_in(comment_ids.iter().map(|id| id.0)))
+            .filter(Column::CommentId.is_in(comment_ids.iter().copied()))
             .exec(db)
-            .await
-            .trace_internal_err("db_del_err", "批量删除评论点赞失败")?
+            .await?
             .rows_affected
             .to_ok()
     }

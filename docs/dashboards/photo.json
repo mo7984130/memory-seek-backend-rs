@@ -113,7 +113,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:upload_photo:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:upload_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -122,7 +122,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:upload_photo:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:upload_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -131,7 +131,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:upload_photo:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:upload_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -209,7 +209,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:md5_hash:duration_quantile_sum[5m]) / rate(photo:upload_photo:md5_hash:duration_quantile_count[5m])",
+          "expr": "rate(photo:upload_photo:md5_hash:duration_seconds_sum[5m]) / rate(photo:upload_photo:md5_hash:duration_seconds_count[5m]) * 1000",
           "legendFormat": "MD5计算",
           "refId": "A"
         },
@@ -218,7 +218,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:validate_photo:duration_quantile_sum[5m]) / rate(photo:upload_photo:validate_photo:duration_quantile_count[5m])",
+          "expr": "rate(photo:upload_photo:validate_photo:duration_seconds_sum[5m]) / rate(photo:upload_photo:validate_photo:duration_seconds_count[5m]) * 1000",
           "legendFormat": "文件校验",
           "refId": "B"
         },
@@ -227,7 +227,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:s3_upload:duration_quantile_sum[5m]) / rate(photo:upload_photo:s3_upload:duration_quantile_count[5m])",
+          "expr": "rate(photo:upload_photo:s3_upload_sum[5m]) / rate(photo:upload_photo:s3_upload_count[5m]) * 1000",
           "legendFormat": "S3上传",
           "refId": "C"
         },
@@ -236,7 +236,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:db_insert:duration_quantile_sum[5m]) / rate(photo:upload_photo:db_insert:duration_quantile_count[5m])",
+          "expr": "rate(photo:upload_photo:db_insert_sum[5m]) / rate(photo:upload_photo:db_insert_count[5m]) * 1000",
           "legendFormat": "DB写入",
           "refId": "D"
         }
@@ -467,7 +467,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_photo_cursor_page:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:get_photo_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -476,7 +476,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_photo_cursor_page:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:get_photo_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -485,7 +485,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_photo_cursor_page:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:get_photo_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -563,7 +563,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_photo_cursor_page:find_cursor_page_ids:duration_quantile_sum[5m]) / rate(photo:get_photo_cursor_page:find_cursor_page_ids:duration_quantile_count[5m])",
+          "expr": "rate(photo:get_photo_cursor_page:find_cursor_page_ids_sum[5m]) / rate(photo:get_photo_cursor_page:find_cursor_page_ids_count[5m]) * 1000",
           "legendFormat": "DB查询",
           "refId": "A"
         },
@@ -572,7 +572,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_photo_cursor_page:load_photos_info:duration_quantile_sum[5m]) / rate(photo:get_photo_cursor_page:load_photos_info:duration_quantile_count[5m])",
+          "expr": "rate(photo:get_photo_cursor_page:load_photos_info_sum[5m]) / rate(photo:get_photo_cursor_page:load_photos_info_count[5m]) * 1000",
           "legendFormat": "加载照片信息",
           "refId": "B"
         }
@@ -803,7 +803,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:delete_photos:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:delete_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -812,7 +812,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:delete_photos:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:delete_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -821,7 +821,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:delete_photos:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:delete_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -899,7 +899,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_photos:db_transaction:duration_quantile_sum[5m]) / rate(photo:delete_photos:db_transaction:duration_quantile_count[5m])",
+          "expr": "rate(photo:delete_photos:db_transaction_sum[5m]) / rate(photo:delete_photos:db_transaction_count[5m]) * 1000",
           "legendFormat": "DB事务",
           "refId": "A"
         },
@@ -908,18 +908,9 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_photos:s3_delete_batch:duration_quantile_sum[5m]) / rate(photo:delete_photos:s3_delete_batch:duration_quantile_count[5m])",
+          "expr": "rate(photo:delete_photos:s3_delete_batch_sum[5m]) / rate(photo:delete_photos:s3_delete_batch_count[5m]) * 1000",
           "legendFormat": "S3删除",
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(photo:delete_photos:timeline_decr_stat:duration_quantile_sum[5m]) / rate(photo:delete_photos:timeline_decr_stat:duration_quantile_count[5m])",
-          "legendFormat": "时间线更新",
-          "refId": "C"
         }
       ]
     },
@@ -1065,7 +1056,7 @@
       },
       "id": 13,
       "panels": [],
-      "title": "获取图片 (get_image)",
+      "title": "获取图片 (download_image)",
       "type": "row"
     },
     {
@@ -1148,7 +1139,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_image:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:download_image:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -1157,7 +1148,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_image:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:download_image:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -1166,7 +1157,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_image:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:download_image:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -1244,7 +1235,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_image:s3_download_process:duration_quantile_sum[5m]) / rate(photo:get_image:s3_download_process:duration_quantile_count[5m])",
+          "expr": "rate(photo:download_image:s3_download_process_sum[5m]) / rate(photo:download_image:s3_download_process_count[5m]) * 1000",
           "legendFormat": "S3下载+处理",
           "refId": "A"
         },
@@ -1253,7 +1244,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_image:s3_download_stream:duration_quantile_sum[5m]) / rate(photo:get_image:s3_download_stream:duration_quantile_count[5m])",
+          "expr": "rate(photo:download_image:s3_download_stream_sum[5m]) / rate(photo:download_image:s3_download_stream_count[5m]) * 1000",
           "legendFormat": "S3流式下载",
           "refId": "B"
         }
@@ -1376,7 +1367,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_image:attempts[5m])",
+          "expr": "rate(photo:download_image:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -1385,7 +1376,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_image:success[5m]) / rate(photo:get_image:attempts[5m]) * 100",
+          "expr": "rate(photo:download_image:success[5m]) / rate(photo:download_image:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -1497,7 +1488,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_collection_list:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:get_collection_list:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -1506,7 +1497,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_collection_list:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:get_collection_list:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -1515,7 +1506,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_collection_list:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:get_collection_list:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -1593,7 +1584,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_list:query_by_user_id:duration_quantile_sum[5m]) / rate(photo:get_collection_list:query_by_user_id:duration_quantile_count[5m])",
+          "expr": "rate(photo:get_collection_list:query_by_user_id_sum[5m]) / rate(photo:get_collection_list:query_by_user_id_count[5m]) * 1000",
           "legendFormat": "DB查询",
           "refId": "A"
         }
@@ -1824,7 +1815,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:create_collection:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:create_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -1833,7 +1824,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:create_collection:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:create_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -1842,7 +1833,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:create_collection:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:create_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -1920,7 +1911,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:create_collection:db_insert:duration_quantile_sum[5m]) / rate(photo:create_collection:db_insert:duration_quantile_count[5m])",
+          "expr": "rate(photo:create_collection:db_insert_sum[5m]) / rate(photo:create_collection:db_insert_count[5m]) * 1000",
           "legendFormat": "DB插入",
           "refId": "A"
         }
@@ -2151,7 +2142,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:update_collection_info:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:update_collection_info:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -2160,7 +2151,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:update_collection_info:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:update_collection_info:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -2169,7 +2160,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:update_collection_info:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:update_collection_info:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -2247,7 +2238,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:update_collection_info:db_update:duration_quantile_sum[5m]) / rate(photo:update_collection_info:db_update:duration_quantile_count[5m])",
+          "expr": "rate(photo:update_collection_info:db_update_sum[5m]) / rate(photo:update_collection_info:db_update_count[5m]) * 1000",
           "legendFormat": "DB更新",
           "refId": "A"
         }
@@ -2478,7 +2469,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:delete_collection:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:delete_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -2487,7 +2478,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:delete_collection:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:delete_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -2496,7 +2487,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:delete_collection:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:delete_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -2574,7 +2565,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_collection:db_transaction:duration_quantile_sum[5m]) / rate(photo:delete_collection:db_transaction:duration_quantile_count[5m])",
+          "expr": "rate(photo:delete_collection:db_transaction_sum[5m]) / rate(photo:delete_collection:db_transaction_count[5m]) * 1000",
           "legendFormat": "DB事务",
           "refId": "A"
         }
@@ -2805,7 +2796,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_collection_photos:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:get_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -2814,7 +2805,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_collection_photos:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:get_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -2823,7 +2814,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_collection_photos:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:get_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -2901,7 +2892,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_photos:query_photo_ids:duration_quantile_sum[5m]) / rate(photo:get_collection_photos:query_photo_ids:duration_quantile_count[5m])",
+          "expr": "rate(photo:get_collection_photos:query_photo_ids_sum[5m]) / rate(photo:get_collection_photos:query_photo_ids_count[5m]) * 1000",
           "legendFormat": "DB查询照片ID",
           "refId": "A"
         },
@@ -2910,7 +2901,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_photos:load_photos_info:duration_quantile_sum[5m]) / rate(photo:get_collection_photos:load_photos_info:duration_quantile_count[5m])",
+          "expr": "rate(photo:get_collection_photos:load_photos_info_sum[5m]) / rate(photo:get_collection_photos:load_photos_info_count[5m]) * 1000",
           "legendFormat": "加载照片信息",
           "refId": "B"
         }
@@ -3141,7 +3132,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:add_collection_photos:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:add_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -3150,7 +3141,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:add_collection_photos:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:add_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -3159,7 +3150,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:add_collection_photos:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:add_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -3237,7 +3228,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:add_collection_photos:auth_check:duration_quantile_sum[5m]) / rate(photo:add_collection_photos:auth_check:duration_quantile_count[5m])",
+          "expr": "rate(photo:add_collection_photos:auth_check_sum[5m]) / rate(photo:add_collection_photos:auth_check_count[5m]) * 1000",
           "legendFormat": "鉴权检查",
           "refId": "A"
         },
@@ -3246,7 +3237,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:add_collection_photos:db_transaction:duration_quantile_sum[5m]) / rate(photo:add_collection_photos:db_transaction:duration_quantile_count[5m])",
+          "expr": "rate(photo:add_collection_photos:db_transaction_sum[5m]) / rate(photo:add_collection_photos:db_transaction_count[5m]) * 1000",
           "legendFormat": "DB事务",
           "refId": "B"
         }
@@ -3477,7 +3468,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:remove_collection_photos:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:remove_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -3486,7 +3477,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:remove_collection_photos:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:remove_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -3495,7 +3486,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:remove_collection_photos:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:remove_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -3573,7 +3564,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:remove_collection_photos:db_transaction:duration_quantile_sum[5m]) / rate(photo:remove_collection_photos:db_transaction:duration_quantile_count[5m])",
+          "expr": "rate(photo:remove_collection_photos:db_transaction_sum[5m]) / rate(photo:remove_collection_photos:db_transaction_count[5m]) * 1000",
           "legendFormat": "DB事务",
           "refId": "A"
         }
@@ -3817,7 +3808,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:publish_comment:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:publish_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -3826,7 +3817,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:publish_comment:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:publish_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -3835,7 +3826,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:publish_comment:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:publish_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -3913,7 +3904,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:publish_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:publish_comment:db_transaction:duration_quantile_count[5m])",
+          "expr": "rate(photo:publish_comment:db_transaction:duration_seconds_sum[5m]) / rate(photo:publish_comment:db_transaction:duration_seconds_count[5m]) * 1000",
           "legendFormat": "DB事务",
           "refId": "A"
         }
@@ -4144,7 +4135,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_comment_cursor_page:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:get_comment_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -4153,7 +4144,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_comment_cursor_page:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:get_comment_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -4162,7 +4153,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:get_comment_cursor_page:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:get_comment_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -4240,7 +4231,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_comment_cursor_page:query_hot_comments:duration_quantile_sum[5m]) / rate(photo:get_comment_cursor_page:query_hot_comments:duration_quantile_count[5m])",
+          "expr": "rate(photo:get_comment_cursor_page:query_hot_comments_sum[5m]) / rate(photo:get_comment_cursor_page:query_hot_comments_count[5m]) * 1000",
           "legendFormat": "热门评论查询",
           "refId": "A"
         },
@@ -4249,7 +4240,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_comment_cursor_page:query_by_photo_id:duration_quantile_sum[5m]) / rate(photo:get_comment_cursor_page:query_by_photo_id:duration_quantile_count[5m])",
+          "expr": "rate(photo:get_comment_cursor_page:query_by_photo_id_sum[5m]) / rate(photo:get_comment_cursor_page:query_by_photo_id_count[5m]) * 1000",
           "legendFormat": "评论列表查询",
           "refId": "B"
         },
@@ -4258,7 +4249,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_comment_cursor_page:query_is_like:duration_quantile_sum[5m]) / rate(photo:get_comment_cursor_page:query_is_like:duration_quantile_count[5m])",
+          "expr": "rate(photo:get_comment_cursor_page:query_is_like_sum[5m]) / rate(photo:get_comment_cursor_page:query_is_like_count[5m]) * 1000",
           "legendFormat": "点赞状态查询",
           "refId": "C"
         }
@@ -4489,7 +4480,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:delete_comment:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:delete_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -4498,7 +4489,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:delete_comment:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:delete_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -4507,7 +4498,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:delete_comment:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:delete_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -4585,7 +4576,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:delete_comment:db_transaction:duration_quantile_count[5m])",
+          "expr": "rate(photo:delete_comment:db_transaction:duration_seconds_sum[5m]) / rate(photo:delete_comment:db_transaction:duration_seconds_count[5m]) * 1000",
           "legendFormat": "DB事务",
           "refId": "A"
         }
@@ -4816,7 +4807,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:like_comment:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:like_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -4825,7 +4816,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:like_comment:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:like_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -4834,7 +4825,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:like_comment:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:like_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -4912,16 +4903,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:like_comment:check_exists:duration_quantile_sum[5m]) / rate(photo:like_comment:check_exists:duration_quantile_count[5m])",
-          "legendFormat": "评论存在检查",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(photo:like_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:like_comment:db_transaction:duration_quantile_count[5m])",
+          "expr": "rate(photo:like_comment:db_transaction:duration_seconds_sum[5m]) / rate(photo:like_comment:db_transaction:duration_seconds_count[5m]) * 1000",
           "legendFormat": "DB事务",
           "refId": "B"
         }
@@ -5152,7 +5134,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:unlike_comment:duration_quantile{quantile=\"0.5\"}",
+          "expr": "histogram_quantile(0.5, sum(rate(photo:unlike_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -5161,7 +5143,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:unlike_comment:duration_quantile{quantile=\"0.95\"}",
+          "expr": "histogram_quantile(0.95, sum(rate(photo:unlike_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -5170,7 +5152,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "photo:unlike_comment:duration_quantile{quantile=\"0.99\"}",
+          "expr": "histogram_quantile(0.99, sum(rate(photo:unlike_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -5248,7 +5230,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:unlike_comment:db_transaction:duration_quantile_sum[5m]) / rate(photo:unlike_comment:db_transaction:duration_quantile_count[5m])",
+          "expr": "rate(photo:unlike_comment:db_transaction:duration_seconds_sum[5m]) / rate(photo:unlike_comment:db_transaction:duration_seconds_count[5m]) * 1000",
           "legendFormat": "DB事务",
           "refId": "A"
         }
@@ -5385,6 +5367,2234 @@
           "refId": "B"
         }
       ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 146
+      },
+      "id": 67,
+      "panels": [],
+      "title": "人脸计算 (face_compute)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 147
+      },
+      "id": 77,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "人脸计算耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(photo:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(photo:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(photo:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 147
+      },
+      "id": 78,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "人脸计算子步骤耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:face_compute:cleanup:duration_seconds_sum[5m]) / rate(photo:face_compute:cleanup:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "清理阶段"
+        },
+        {
+          "expr": "rate(photo:face_compute:cleanup:backup_sum[5m]) / rate(photo:face_compute:cleanup:backup_count[5m]) * 1000",
+          "legendFormat": "备份"
+        },
+        {
+          "expr": "rate(photo:face_compute:cleanup:truncate:duration_seconds_sum[5m]) / rate(photo:face_compute:cleanup:truncate:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "清表"
+        },
+        {
+          "expr": "rate(photo:face_compute:query_sum[5m]) / rate(photo:face_compute:query_count[5m]) * 1000",
+          "legendFormat": "批次查询"
+        },
+        {
+          "expr": "rate(photo:face_compute:download_batch:duration_seconds_sum[5m]) / rate(photo:face_compute:download_batch:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "批量下载"
+        },
+        {
+          "expr": "rate(photo:face_compute:photo_download:duration_seconds_sum[5m]) / rate(photo:face_compute:photo_download:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "单图下载"
+        },
+        {
+          "expr": "rate(photo:face_compute:photo_decode:duration_seconds_sum[5m]) / rate(photo:face_compute:photo_decode:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "解码"
+        },
+        {
+          "expr": "rate(photo:face_compute:detect_batch:duration_seconds_sum[5m]) / rate(photo:face_compute:detect_batch:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "批量检测"
+        },
+        {
+          "expr": "rate(photo:face_compute:photo_detect:duration_seconds_sum[5m]) / rate(photo:face_compute:photo_detect:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "单图检测"
+        },
+        {
+          "expr": "rate(photo:face_compute:insert:duration_seconds_sum[5m]) / rate(photo:face_compute:insert:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "写入DB"
+        },
+        {
+          "expr": "rate(photo:face_compute:insert_phase:duration_seconds_sum[5m]) / rate(photo:face_compute:insert_phase:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "写入阶段"
+        },
+        {
+          "expr": "rate(photo:face_compute:batch_loop_sum[5m]) / rate(photo:face_compute:batch_loop_count[5m]) * 1000",
+          "legendFormat": "批循环"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "成功率"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "成功率"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 95
+                    },
+                    {
+                      "color": "green",
+                      "value": 99
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 147
+      },
+      "id": 79,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "人脸计算调用量成功率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:face_compute:attempts[5m])",
+          "legendFormat": "QPS"
+        },
+        {
+          "expr": "rate(photo:face_compute:success[5m]) / rate(photo:face_compute:attempts[5m]) * 100",
+          "legendFormat": "成功率"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "空闲"
+                },
+                "1": {
+                  "color": "orange",
+                  "text": "计算中"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 155
+      },
+      "id": 68,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "photo:face_compute:running"
+        }
+      ],
+      "title": "运行状态",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "blue",
+                  "text": "增量"
+                },
+                "1": {
+                  "color": "purple",
+                  "text": "全量"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "purple",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 155
+      },
+      "id": 69,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "photo:face_compute:mode"
+        }
+      ],
+      "title": "计算模式",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 155
+      },
+      "id": 70,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "photo:face_compute:batch"
+        }
+      ],
+      "title": "当前批次",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 12,
+        "y": 155
+      },
+      "id": 71,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "photo:face_compute:total_photos"
+        }
+      ],
+      "title": "累计照片",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 15,
+        "y": 155
+      },
+      "id": 72,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "photo:face_compute:total_faces"
+        }
+      ],
+      "title": "累计人脸",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 18,
+        "y": 155
+      },
+      "id": 73,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "photo:face_compute:errors:download + photo:face_compute:errors:decode + photo:face_compute:errors:detect + photo:face_compute:errors:insert"
+        }
+      ],
+      "title": "累计错误",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 155
+      },
+      "id": 74,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "photo:face_compute:total_no_face"
+        }
+      ],
+      "title": "无人脸数",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 159
+      },
+      "id": 75,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "处理速率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:face_compute:photos_processed[1m]) * 60",
+          "legendFormat": "处理照片/分钟"
+        },
+        {
+          "expr": "rate(photo:face_compute:faces_detected[1m]) * 60",
+          "legendFormat": "检出人脸/分钟"
+        },
+        {
+          "expr": "rate(photo:face_compute:no_face_photos[1m]) * 60",
+          "legendFormat": "无人脸/分钟"
+        },
+        {
+          "expr": "sum(rate({__name__=~\"photo:face_compute:errors:.*\"}[1m])) * 60",
+          "legendFormat": "错误/分钟"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 159
+      },
+      "id": 76,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "累计趋势",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "photo:face_compute:total_photos",
+          "legendFormat": "累计照片"
+        },
+        {
+          "expr": "photo:face_compute:total_faces",
+          "legendFormat": "累计人脸"
+        },
+        {
+          "expr": "photo:face_compute:total_no_face",
+          "legendFormat": "累计无人脸"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 168
+      },
+      "id": 80,
+      "panels": [],
+      "title": "获取照片收藏夹 (get_collections_by_photo)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 169
+      },
+      "id": 81,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "获取照片收藏夹耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(photo:get_collections_by_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(photo:get_collections_by_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(photo:get_collections_by_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 169
+      },
+      "id": 82,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "获取照片收藏夹调用量成功率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:get_collections_by_photo:attempts[5m])",
+          "legendFormat": "QPS"
+        },
+        {
+          "expr": "rate(photo:get_collections_by_photo:success[5m]) / rate(photo:get_collections_by_photo:attempts[5m]) * 100",
+          "legendFormat": "成功率"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 177
+      },
+      "id": 83,
+      "panels": [],
+      "title": "查询点赞照片 (get_user_liked_photos)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 178
+      },
+      "id": 84,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "查询点赞照片耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(photo:get_user_liked_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(photo:get_user_liked_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(photo:get_user_liked_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 178
+      },
+      "id": 85,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "查询点赞照片子步骤耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:get_user_liked_photos:query_ids_sum[5m]) / rate(photo:get_user_liked_photos:query_ids_count[5m]) * 1000",
+          "legendFormat": "查询点赞ID"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 178
+      },
+      "id": 86,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "查询点赞照片调用量成功率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:get_user_liked_photos:attempts[5m])",
+          "legendFormat": "QPS"
+        },
+        {
+          "expr": "rate(photo:get_user_liked_photos:success[5m]) / rate(photo:get_user_liked_photos:attempts[5m]) * 100",
+          "legendFormat": "成功率"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 186
+      },
+      "id": 87,
+      "panels": [],
+      "title": "点赞照片 (like_photo)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 187
+      },
+      "id": 88,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "点赞照片耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(photo:like_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(photo:like_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(photo:like_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 187
+      },
+      "id": 89,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "点赞照片子步骤耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:like_photo:db_transaction:duration_seconds_sum[5m]) / rate(photo:like_photo:db_transaction:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "DB事务"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 187
+      },
+      "id": 90,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "点赞照片调用量成功率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:like_photo:attempts[5m])",
+          "legendFormat": "QPS"
+        },
+        {
+          "expr": "rate(photo:like_photo:success[5m]) / rate(photo:like_photo:attempts[5m]) * 100",
+          "legendFormat": "成功率"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 195
+      },
+      "id": 91,
+      "panels": [],
+      "title": "取消点赞照片 (unlike_photo)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 196
+      },
+      "id": 92,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "取消点赞照片耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(photo:unlike_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(photo:unlike_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(photo:unlike_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 196
+      },
+      "id": 93,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "取消点赞照片子步骤耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:unlike_photo:db_transaction:duration_seconds_sum[5m]) / rate(photo:unlike_photo:db_transaction:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "DB事务"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 196
+      },
+      "id": 94,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "取消点赞照片调用量成功率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:unlike_photo:attempts[5m])",
+          "legendFormat": "QPS"
+        },
+        {
+          "expr": "rate(photo:unlike_photo:success[5m]) / rate(photo:unlike_photo:attempts[5m]) * 100",
+          "legendFormat": "成功率"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 204
+      },
+      "id": 95,
+      "panels": [],
+      "title": "检查照片去重 (exists_by_md5_batch)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 205
+      },
+      "id": 96,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "检查照片去重耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(photo:exists_by_md5_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(photo:exists_by_md5_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(photo:exists_by_md5_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 205
+      },
+      "id": 97,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "检查照片去重调用量成功率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:exists_by_md5_batch:attempts[5m])",
+          "legendFormat": "QPS"
+        },
+        {
+          "expr": "rate(photo:exists_by_md5_batch:success[5m]) / rate(photo:exists_by_md5_batch:attempts[5m]) * 100",
+          "legendFormat": "成功率"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 213
+      },
+      "id": 98,
+      "panels": [],
+      "title": "时间线统计 (get_monthly_stats)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 214
+      },
+      "id": 99,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "时间线统计耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(photo:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(photo:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(photo:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 214
+      },
+      "id": 100,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "时间线统计子步骤耗时",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:get_monthly_stats:query_monthly_stats_sum[5m]) / rate(photo:get_monthly_stats:query_monthly_stats_count[5m]) * 1000",
+          "legendFormat": "查询月度统计"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 214
+      },
+      "id": 101,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "时间线统计调用量成功率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(photo:get_monthly_stats:attempts[5m])",
+          "legendFormat": "QPS"
+        },
+        {
+          "expr": "rate(photo:get_monthly_stats:success[5m]) / rate(photo:get_monthly_stats:attempts[5m]) * 100",
+          "legendFormat": "成功率"
+        }
+      ]
     }
   ],
   "refresh": "5s",
@@ -5404,5 +7614,5 @@
   "timezone": "",
   "title": "Photo 模块监控",
   "uid": "photo-monitoring",
-  "version": 3
+  "version": 4
 }

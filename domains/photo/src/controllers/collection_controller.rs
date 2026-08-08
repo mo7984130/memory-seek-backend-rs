@@ -2,19 +2,25 @@ use std::sync::Arc;
 
 use axum::{
     Extension, Router,
-    extract::{Path, State},
+    extract::State,
     routing::{get, patch},
 };
 use common::{
-    Result, ext::ResultRExt, extractors::ValidatedJson, r::R, traits::controller::ControllerRouter,
+    Result,
+    ext::ResultRExt,
+    extractors::{ValidatedJson, ValidatedPath},
+    r::R,
+    traits::controller::ControllerRouter,
 };
-use entities::{auth::user::UserId, photo::collection::CollectionId};
+use types::{
+    auth::user::UserId,
+    photo::{
+        collection::CollectionId,
+        dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView},
+    },
+};
 
-use crate::{
-    models::collection::{CollectionCreateParam, CollectionResult, CollectionUpdateParam},
-    services::collection_service::CollectionService,
-    state::PhotoState,
-};
+use crate::{services::collection_service::CollectionService, state::PhotoState};
 
 pub struct CollectionController;
 
@@ -37,9 +43,9 @@ impl CollectionController {
     async fn create(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedJson(data): ValidatedJson<CollectionCreateParam>,
-    ) -> Result<R<CollectionResult>> {
-        CollectionService::create_collection(&state, user_id, data.name, data.description)
+        ValidatedJson(req): ValidatedJson<CollectionCreateParam>,
+    ) -> Result<R<CollectionView>> {
+        CollectionService::create_collection(&state, user_id, req)
             .await
             .to_r_ok()
     }
@@ -50,7 +56,7 @@ impl CollectionController {
     async fn get_list(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<Vec<CollectionResult>>> {
+    ) -> Result<R<Vec<CollectionView>>> {
         CollectionService::get_collection_list(&state, user_id)
             .await
             .to_r_ok()
@@ -62,18 +68,12 @@ impl CollectionController {
     async fn update_info(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(collection_id): Path<CollectionId>,
-        ValidatedJson(param): ValidatedJson<CollectionUpdateParam>,
+        ValidatedPath(collection_id): ValidatedPath<CollectionId>,
+        ValidatedJson(req): ValidatedJson<CollectionUpdateParam>,
     ) -> Result<R<()>> {
-        CollectionService::update_collection_info(
-            &state,
-            user_id,
-            collection_id,
-            param.name,
-            param.description,
-        )
-        .await
-        .to_r_ok()
+        CollectionService::update_collection_info(&state, user_id, collection_id, req)
+            .await
+            .to_r_ok()
     }
 }
 
@@ -82,7 +82,7 @@ impl CollectionController {
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        Path(collection_id): Path<CollectionId>,
+        ValidatedPath(collection_id): ValidatedPath<CollectionId>,
     ) -> Result<R<()>> {
         CollectionService::delete_collection(&state, user_id, collection_id)
             .await

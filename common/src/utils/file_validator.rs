@@ -2,6 +2,8 @@ use const_format::formatcp;
 use std::io::Cursor;
 use thiserror::Error;
 
+use crate::{error::AppError, ext::log_warn};
+
 /// 图片文件解析后的元数据
 #[derive(Debug, Clone)]
 pub struct ImageMetaData {
@@ -28,6 +30,17 @@ pub enum FileValidationError {
     InvalidHeader,
     #[error("图片解析失败: {0}")]
     ParseError(String),
+}
+
+impl From<FileValidationError> for AppError {
+    #[track_caller]
+    fn from(value: FileValidationError) -> Self {
+        log_warn(
+            "file_validation_error",
+            "文件校验失败",
+            AppError::bad_request(value.to_string()),
+        )
+    }
 }
 
 /// 图片文件校验器，提供文件大小、类型、文件头等验证功能

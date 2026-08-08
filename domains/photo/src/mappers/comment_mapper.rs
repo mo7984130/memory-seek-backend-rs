@@ -1,14 +1,17 @@
+use common::error::AppError;
+use common::ext::OkExt;
 use common::{
     Result,
-    ext::{OptionExt, ResultErrExt},
-};
-use entities::{
-    auth::user::UserId,
-    photo::{comment::*, photo::PhotoId},
+    ext::{BoolExt, OptionExt, ResultErrExt},
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, entity::prelude::DateTimeUtc, sea_query::Expr,
+    QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
+};
+use types::{
+    auth::user::UserId,
+    cursor::TimeIdCursor,
+    photo::{comment::*, photo::PhotoId},
 };
 
 pub struct CommentMapper;
@@ -22,15 +25,15 @@ impl CommentMapper {
         content: String,
     ) -> Result<CommentRecord> {
         ActiveModel {
-            photo_id: Set(photo_id.0),
-            user_id: Set(user_id.0),
+            photo_id: Set(photo_id),
+            user_id: Set(user_id),
             content: Set(content),
             ..Default::default()
         }
         .insert(db)
         .await
-        .trace_internal_err("db_insert_err", "插入评论失败")
-        .map(CommentRecord::from)
+        .map(CommentRecord::from)?
+        .to_ok()
     }
 }
 
@@ -38,11 +41,19 @@ impl CommentMapper {
 impl CommentMapper {
     pub async fn exists(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<bool> {
         let count = Entity::find()
-            .filter(Column::Id.eq(comment_id.0))
+            .filter(Column::Id.eq(comment_id))
             .count(db)
             .await
             .trace_internal_err("db_query_err", "查询评论是否存在失败")?;
         Ok(count > 0)
+    }
+
+    pub async fn ensure_exist(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<()> {
+        Self::exists(db, comment_id).await?.true_or_warn(
+            "comment_not_exist",
+            "评论不存在",
+            AppError::not_found("评论不存在"),
+        )
     }
 
     pub async fn update_like_count_delta(
@@ -52,10 +63,9 @@ impl CommentMapper {
     ) -> Result<()> {
         Entity::update_many()
             .col_expr(Column::LikeCount, Expr::col(Column::LikeCount).add(delta))
-            .filter(Column::Id.eq(comment_id.0))
+            .filter(Column::Id.eq(comment_id))
             .exec(db)
-            .await
-            .trace_internal_err("db_update_err", "更新照片评论总点赞数数据库错误")?;
+            .await?;
 
         Ok(())
     }
@@ -70,41 +80,48 @@ impl CommentMapper {
         size: u64,
     ) -> Result<Vec<CommentRecord>> {
         Entity::find()
-            .filter(Column::PhotoId.eq(photo_id.0))
+            .filter(Column::PhotoId.eq(photo_id))
             .filter(Column::LikeCount.gt(min_likes))
             .order_by_desc(Column::LikeCount)
             .limit(size)
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询失败")
-            .map(|models| models.into_iter().map(CommentRecord::from).collect())
+            .await?
+            .into_iter()
+            .map(CommentRecord::from)
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     pub async fn query_by_photo_id(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
-        exclude_ids: Vec<CommentId>,
-        cursor: Option<DateTimeUtc>,
+        exclude_ids: &[CommentId],
+        cursor: Option<&TimeIdCursor<CommentId>>,
         size: u64,
     ) -> Result<Vec<CommentRecord>> {
+        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+        // 由 service 层用 CursorPage::from_oversize 截断消费
         let mut query = Entity::find()
-            .filter(Column::PhotoId.eq(photo_id.0))
+            .filter(Column::PhotoId.eq(photo_id))
             .order_by_desc(Column::CreatedAt)
-            .limit(size);
+            .order_by_desc(Column::Id)
+            .limit(size + 1);
 
         if !exclude_ids.is_empty() {
-            query = query.filter(Column::Id.is_not_in(exclude_ids.iter().map(|id| id.0)));
+            query = query.filter(Column::Id.is_not_in(exclude_ids.iter().copied()));
         }
 
         if let Some(c) = cursor {
-            query = query.filter(Column::CreatedAt.lt(c));
+            query = query.filter(c.before(Column::CreatedAt, Column::Id));
         }
 
         query
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询失败")
-            .map(|models| models.into_iter().map(CommentRecord::from).collect())
+            .await?
+            .into_iter()
+            .map(CommentRecord::from)
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     pub async fn query_photo_id_by_id(
@@ -112,14 +129,12 @@ impl CommentMapper {
         comment_id: CommentId,
     ) -> Result<PhotoId> {
         Entity::find()
-            .filter(Column::Id.eq(comment_id.0))
+            .filter(Column::Id.eq(comment_id))
             .select_only()
             .column(Column::PhotoId)
-            .into_tuple::<i64>()
+            .into_tuple::<PhotoId>()
             .one(db)
-            .await
-            .trace_internal_err("db_query_err", "通过评论id获取照片id数据库错误")?
-            .map(PhotoId)
+            .await?
             .ok_or_warn_bad_request("comment_not_found", "评论不存在", "评论不存在")
     }
 }
@@ -131,11 +146,10 @@ impl CommentMapper {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<bool> {
-        let ret = Entity::delete_by_id(comment_id.0)
-            .filter(Column::UserId.eq(user_id.0))
+        let ret = Entity::delete_by_id(comment_id)
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
-            .await
-            .trace_internal_err("db_del_err", "删除评论数据库错误")?;
+            .await?;
 
         Ok(ret.rows_affected == 1)
     }
@@ -152,21 +166,16 @@ impl CommentMapper {
         let comment_ids: Vec<CommentId> = Entity::find()
             .select_only()
             .column(Column::Id)
-            .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
-            .into_tuple::<i64>()
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
+            .into_tuple::<CommentId>()
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询照片评论失败")?
-            .into_iter()
-            .map(CommentId)
-            .collect();
+            .await?;
 
         if !comment_ids.is_empty() {
             Entity::delete_many()
-                .filter(Column::PhotoId.is_in(photo_ids.iter().map(|id| id.0)))
+                .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
                 .exec(db)
-                .await
-                .trace_internal_err("db_del_err", "批量删除评论失败")?;
+                .await?;
         }
 
         Ok(comment_ids)

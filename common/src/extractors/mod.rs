@@ -4,14 +4,17 @@ pub mod client_ip;
 /// 提供自定义的 axum 请求提取器：
 /// - `ValidatedJson`: 带 `validator` 校验的 JSON 请求体提取器
 /// - `ValidatedQuery`: 带 `validator` 校验的查询参数提取器
+/// - `ValidatedPath`: 带错误日志的路径参数提取器
 /// - `ClientIp`: 客户端 IP 地址提取器，支持 `X-Real-IP` 头和 TCP 连接回退
 #[cfg(feature = "validators")]
 pub mod validated_json;
+pub mod validated_path;
 #[cfg(feature = "validators")]
 pub mod validated_query;
 
-pub use client_ip::ClientIp;
+pub use client_ip::{ClientIp, OptionalClientIp};
 #[cfg(feature = "validators")]
 pub use validated_json::ValidatedJson;
+pub use validated_path::ValidatedPath;
 #[cfg(feature = "validators")]
 pub use validated_query::ValidatedQuery;

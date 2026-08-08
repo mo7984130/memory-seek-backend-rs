@@ -1,3 +1,4 @@
+use crate::error::BackupError;
 use crate::runner::BackupRunner;
 use crate::state::BackupState;
 use std::sync::Arc;
@@ -11,19 +12,17 @@ pub struct BackupScheduler {
 
 impl BackupScheduler {
     /// 创建新的调度器
-    pub async fn new(
-        state: Arc<BackupState>,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn new(state: Arc<BackupState>) -> Result<Self, BackupError> {
         let scheduler = JobScheduler::new().await?;
 
-        let schedule = state.config.schedule.clone();
+        let schedule = state.config.scheduled.schedule.clone();
         let state_clone = state.clone();
 
         let job = Job::new(schedule.as_str(), move |_, _| {
             let state = state_clone.clone();
             tokio::spawn(async move {
-                if let Err(e) = BackupRunner::execute(state).await {
-                    tracing::error!("Backup job failed: {}", e);
+                if let Err(e) = BackupRunner::execute_scheduled(state).await {
+                    tracing::error!("Scheduled backup job failed: {}", e);
                 }
             });
         })?;
@@ -36,14 +35,14 @@ impl BackupScheduler {
     }
 
     /// 启动调度器
-    pub async fn start(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn start(&self) -> Result<(), BackupError> {
         self.scheduler.lock().await.start().await?;
         tracing::info!("Backup scheduler started");
         Ok(())
     }
 
     /// 停止调度器
-    pub async fn stop(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn stop(&self) -> Result<(), BackupError> {
         self.scheduler.lock().await.shutdown().await?;
         tracing::info!("Backup scheduler stopped");
         Ok(())

@@ -13,12 +13,13 @@ pub struct AppConfig {
     #[serde(default)]
     pub redis: crate::setup::bases::redis::Config,
 
-    #[allow(dead_code)]
+    #[cfg(feature = "email")]
     pub smtp: crate::setup::libs::email::Config,
 
     #[cfg(feature = "s3")]
     pub s3: crate::setup::libs::s3::Config,
 
+    #[cfg(feature = "token_cipher")]
     pub token_cipher: crate::setup::libs::token_cipher::Config,
 
     #[cfg(feature = "metrics")]
@@ -61,18 +62,18 @@ impl AppConfig {
     /// 1. CLI 参数 `--config` / `-c`
     /// 2. 环境变量 `MEMORY_SEEK_CONFIG_PATH`
     /// 3. 默认值 `config.yaml`
-    pub fn load(cli_config_path: Option<String>) -> Result<Self, ConfigError> {
+    pub fn load(config_path: Option<String>) -> Result<Self, ConfigError> {
         info!("加载配置文件");
         let _ = dotenvy::dotenv();
 
-        let config_path = cli_config_path
+        let config_path = config_path
             .or_else(|| std::env::var("MEMORY_SEEK_CONFIG_PATH").ok())
             .unwrap_or_else(|| "config.yml".to_string());
         info!("配置文件路径: {}", config_path);
 
         let cfg = Config::builder()
             .add_source(File::with_name(&config_path))
-            .add_source(Environment::with_prefix("MEMORY_SEEK"))
+            .add_source(Environment::with_prefix("MEMORY_SEEK").separator("__"))
             .build()?;
 
         cfg.try_deserialize()

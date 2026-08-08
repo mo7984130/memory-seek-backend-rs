@@ -1,16 +1,17 @@
 use std::collections::HashSet;
 
 use common::Result;
-use common::ext::{OkExt, ResultErrExt};
+use common::error::AppError;
+use common::ext::{BoolExt, OkExt};
 use sea_orm::entity::prelude::DateTimeUtc;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
-use entities::photo::photo::*;
-
-use crate::models::photo::{PageDirection, PhotoCursor};
+use types::auth::user::UserId;
+use types::cursor::TimeIdCursor;
+use types::photo::{dto::photo::PageDirection, photo::*};
 
 pub(crate) struct PhotoMapper;
 
@@ -29,10 +30,9 @@ impl PhotoMapper {
                 Column::CommentCount,
                 Expr::col(Column::CommentCount).add(delta),
             )
-            .filter(Column::Id.eq(photo_id.0))
+            .filter(Column::Id.eq(photo_id))
             .exec(db)
-            .await
-            .trace_internal_err("db_update_err", "更新照片评论总数数数据库错误")?;
+            .await?;
 
         Ok(())
     }
@@ -45,10 +45,9 @@ impl PhotoMapper {
     ) -> Result<()> {
         Entity::update_many()
             .col_expr(Column::LikeCount, Expr::col(Column::LikeCount).add(delta))
-            .filter(Column::Id.eq(photo_id.0))
+            .filter(Column::Id.eq(photo_id))
             .exec(db)
-            .await
-            .trace_internal_err("db_update_err", "更新照片点赞数错误")?;
+            .await?;
 
         Ok(())
     }
@@ -58,11 +57,18 @@ impl PhotoMapper {
 impl PhotoMapper {
     pub async fn exists(db: &impl ConnectionTrait, photo_id: PhotoId) -> Result<bool> {
         let count = Entity::find()
-            .filter(Column::Id.eq(photo_id.0))
+            .filter(Column::Id.eq(photo_id))
             .count(db)
-            .await
-            .trace_internal_err("db_query_err", "查询照片是否存在失败")?;
+            .await?;
         Ok(count > 0)
+    }
+
+    pub async fn ensure_exist(db: &impl ConnectionTrait, photo_id: PhotoId) -> Result<()> {
+        Self::exists(db, photo_id).await?.true_or_warn(
+            "photo_not_exist",
+            "照片不存在",
+            AppError::not_found("照片不存在"),
+        )
     }
 
     pub async fn exists_by_md5_batch(
@@ -72,19 +78,25 @@ impl PhotoMapper {
         if md5s.is_empty() {
             return Ok(HashSet::new());
         }
-        let existing = Entity::find()
+        Entity::find()
             .filter(Column::Md5.is_in(md5s.iter().map(|s| s.as_ref())))
             .select_only()
             .column(Column::Md5)
             .into_tuple::<String>()
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "批量查询MD5失败")?;
-        Ok(existing.into_iter().collect())
+            .await?
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .to_ok()
+    }
+
+    pub async fn exists_by_md5(db: &impl ConnectionTrait, md5: impl AsRef<str>) -> Result<bool> {
+        let results = Self::exists_by_md5_batch(db, &[md5.as_ref()]).await?;
+        Ok(!results.is_empty())
     }
 
     fn build_cursor_query(
-        cursor: Option<&PhotoCursor>,
+        cursor: Option<&TimeIdCursor<PhotoId>>,
         size: u64,
         direction: PageDirection,
         anchor_time: Option<DateTimeUtc>,
@@ -104,32 +116,18 @@ impl PhotoMapper {
                 .order_by_asc(Column::Id)
         };
 
-        query = query.limit(size);
+        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+        // 由 service 层用 CursorPage::from_oversize 截断消费
+        query = query.limit(size + 1);
 
         if let Some(c) = cursor {
             // 有游标时，按游标分页
             if filter {
                 // Next: 倒序遍历，找比游标小的
-                query = query.filter(
-                    sea_orm::Condition::any()
-                        .add(Column::CreatedAt.lt(c.created_at))
-                        .add(
-                            sea_orm::Condition::all()
-                                .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.lt(c.id.0)),
-                        ),
-                );
+                query = query.filter(c.before(Column::CreatedAt, Column::Id));
             } else {
                 // Prev: 正序遍历，找比游标大的
-                query = query.filter(
-                    sea_orm::Condition::any()
-                        .add(Column::CreatedAt.gt(c.created_at))
-                        .add(
-                            sea_orm::Condition::all()
-                                .add(Column::CreatedAt.eq(c.created_at))
-                                .add(Column::Id.gt(c.id.0)),
-                        ),
-                );
+                query = query.filter(c.after(Column::CreatedAt, Column::Id));
             }
         } else if let Some(anchor) = anchor_time {
             // 无游标但有锚点时间时，用锚点时间作为虚拟游标
@@ -147,7 +145,7 @@ impl PhotoMapper {
 
     pub async fn query_cursor_page_ids(
         db: &impl ConnectionTrait,
-        cursor: Option<PhotoCursor>,
+        cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
         direction: PageDirection,
         anchor_time: Option<DateTimeUtc>,
@@ -155,13 +153,9 @@ impl PhotoMapper {
         Self::build_cursor_query(cursor.as_ref(), size, direction, anchor_time)
             .select_only()
             .column(Column::Id)
-            .into_tuple::<i64>()
+            .into_tuple::<PhotoId>()
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询 ID 列表失败")?
-            .into_iter()
-            .map(PhotoId::from)
-            .collect::<Vec<_>>()
+            .await?
             .to_ok()
     }
 
@@ -173,11 +167,90 @@ impl PhotoMapper {
             return Ok(vec![]);
         }
         Entity::find()
-            .filter(Column::Id.is_in(ids.iter().map(|id| id.0)))
+            .filter(Column::Id.is_in(ids.iter().copied()))
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询照片失败")
-            .map(|models| models.into_iter().map(PhotoRecord::from).collect())
+            .await?
+            .into_iter()
+            .map(PhotoRecord::from)
+            .collect::<Vec<_>>()
+            .to_ok()
+    }
+
+    pub async fn query_id_and_file_id_by_ids(
+        db: &impl ConnectionTrait,
+        ids: &[PhotoId],
+    ) -> Result<Vec<(PhotoId, String)>> {
+        Entity::find()
+            .filter(Column::Id.is_in(ids.iter().copied()))
+            .select_only()
+            .column(Column::Id)
+            .column(Column::FileId)
+            .into_tuple::<(PhotoId, String)>()
+            .all(db)
+            .await?
+            .to_ok()
+    }
+
+    pub async fn query_by_user_id_and_ids(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+        ids: &[PhotoId],
+    ) -> Result<Vec<PhotoRecord>> {
+        Entity::find()
+            .filter(Column::Id.is_in(ids.iter().copied()))
+            .filter(Column::UserId.eq(user_id))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(PhotoRecord::from)
+            .collect::<Vec<_>>()
+            .to_ok()
+    }
+
+    /// 根据文件 ID 查询图片宽高（裁剪 token 归一化坐标换算用）
+    // todo delete
+    pub async fn query_dimensions_by_file_id(
+        db: &impl ConnectionTrait,
+        file_id: &str,
+    ) -> Result<Option<(i32, i32)>> {
+        Entity::find()
+            .select_only()
+            .column(Column::Width)
+            .column(Column::Height)
+            .filter(Column::FileId.eq(file_id))
+            .into_tuple::<(i32, i32)>()
+            .one(db)
+            .await?
+            .to_ok()
+    }
+
+    pub async fn query_file_id_by_id(
+        db: &impl ConnectionTrait,
+        id: PhotoId,
+    ) -> Result<Option<String>> {
+        Entity::find()
+            .select_only()
+            .column(Column::FileId)
+            .filter(Column::Id.eq(id))
+            .into_tuple::<String>()
+            .one(db)
+            .await?
+            .to_ok()
+    }
+
+    /// 根据文件 ID 查询照片 ID（浏览埋点用）
+    pub async fn query_photo_id_by_file_id(
+        db: &impl ConnectionTrait,
+        file_id: &str,
+    ) -> Result<Option<PhotoId>> {
+        Entity::find()
+            .select_only()
+            .column(Column::Id)
+            .filter(Column::FileId.eq(file_id))
+            .into_tuple::<PhotoId>()
+            .one(db)
+            .await?
+            .to_ok()
     }
 }
 
@@ -188,10 +261,9 @@ impl PhotoMapper {
             return Ok(());
         }
         Entity::delete_many()
-            .filter(Column::Id.is_in(ids.iter().map(|id| id.0)))
+            .filter(Column::Id.is_in(ids.iter().copied()))
             .exec(db)
-            .await
-            .trace_internal_err("db_delete_err", "删除照片失败")?;
+            .await?;
         Ok(())
     }
 }

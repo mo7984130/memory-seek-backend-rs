@@ -3,54 +3,58 @@ use crate::{
         comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper,
         photo_mapper::PhotoMapper,
     },
-    models::comment::{
-        COMMENT_CURSOR_PAGE_MAX_SIZE, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES,
-        PhotoCommentResult,
-    },
     state::PhotoState,
 };
 use common::{
     Result,
     error::AppError,
-    ext::{ToErr, ToOk, log_warn},
-    metrics_group, metrics_success, metrics_timer_name,
+    ext::{BoolExt, ToOk},
+    metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
     utils::{DbUtils, MetricsTimerExt},
 };
-use entities::{
+use types::{
     auth::user::UserId,
-    photo::{comment::CommentId, photo::PhotoId},
+    cursor::TimeIdCursor,
+    photo::{
+        comment::CommentId,
+        dto::comment::{
+            CommentCursorPageParam, CommentPublishParam, CommentView, HOT_COMMENT_MAX_COUNT,
+            HOT_COMMENT_MIN_LIKES,
+        },
+        photo::PhotoId,
+    },
 };
-use sea_orm::entity::prelude::DateTimeUtc;
 
 pub(crate) struct CommentService;
 
 // 创建
 impl CommentService {
+    #[tracing::instrument(
+        name = "publish_comment",
+        skip_all,
+        fields(user_id = %user_id, photo_id = %photo_id)
+    )]
     pub async fn publish(
         state: &PhotoState,
-        photo_id: PhotoId,
         user_id: UserId,
-        content: String,
-    ) -> Result<PhotoCommentResult> {
-        metrics_group!("publish_comment");
+        photo_id: PhotoId,
+        req: CommentPublishParam,
+    ) -> Result<CommentView> {
+        metrics_group!();
 
-        let comment = timed!("publish_comment", "db_transaction", {
+        let CommentPublishParam { content } = req;
+
+        let comment = timed!("db_transaction", {
             DbUtils::write(&state.db, |txn| {
                 Box::pin(async move {
                     // 查询照片是否存在
-                    if !PhotoMapper::exists(txn, photo_id).await? {
-                        return log_warn(
-                            "comment_publish_photo_not_exists",
-                            "用户尝试评论不存在的照片",
-                            "",
-                            AppError::bad_request("无法评论不存在的照片"),
-                        )
-                        .to_err();
-                    }
+                    PhotoMapper::ensure_exist(txn, photo_id).await?;
+
                     // 插入评论
-                    let comment = CommentMapper::insert(txn, photo_id, user_id, content).await?;
+                    let comment =
+                        CommentMapper::insert(txn, photo_id, user_id, content.into_inner()).await?;
                     // 更新评论总数
                     PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
                     Ok(comment)
@@ -59,8 +63,8 @@ impl CommentService {
             .await
         })?;
 
-        metrics_success!("publish_comment");
-        PhotoCommentResult::from(comment).to_ok()
+        metrics_success!();
+        CommentView::from(comment).to_ok()
     }
 }
 
@@ -69,68 +73,62 @@ impl CommentService {}
 
 // 查询
 impl CommentService {
+    #[tracing::instrument(
+        name = "get_comment_cursor_page",
+        skip_all,
+        fields(user_id = %user_id, photo_id = %photo_id)
+    )]
     pub async fn get_cursor_page(
         state: &PhotoState,
-        photo_id: PhotoId,
         user_id: UserId,
-        cursor: Option<DateTimeUtc>,
-        size: Option<u64>,
-    ) -> Result<CursorPage<PhotoCommentResult, DateTimeUtc>> {
-        metrics_group!("get_comment_cursor_page");
-
-        // 校验 limit 参数
-        let size = size.unwrap_or(32);
-        if size > COMMENT_CURSOR_PAGE_MAX_SIZE {
-            return log_warn(
-                "comment_cursor_page_max_size",
-                "用户获取评论, 传入的size超过最大值",
-                "",
-                AppError::bad_request("size超过最大值"),
-            )
-            .to_err();
-        }
+        photo_id: PhotoId,
+        req: CommentCursorPageParam,
+    ) -> Result<CursorPage<CommentView, String>> {
+        metrics_group!();
 
         // 如果是第一次(不带Cursor)获取的话, 展示热门评论
-        let hot_comments = if cursor.is_none() {
+        let hot_comments = if req.cursor.is_none() {
             CommentMapper::query_hot_comments(
                 &state.db,
                 photo_id,
                 HOT_COMMENT_MIN_LIKES,
                 HOT_COMMENT_MAX_COUNT,
             )
-            .timed(metrics_timer_name!(
-                "get_comment_cursor_page",
-                "query_hot_comments"
-            ))
+            .timed(metrics_name!("query_hot_comments"))
             .await?
         } else {
             vec![]
         };
 
         // 获取评论
+        let exclude_ids: Vec<CommentId> = hot_comments.iter().map(|comment| comment.id).collect();
+
         let time_comments = CommentMapper::query_by_photo_id(
             &state.db,
             photo_id,
-            hot_comments.iter().map(|comment| comment.id).collect(),
-            cursor,
-            size + 1,
+            &exclude_ids,
+            req.cursor.as_ref(),
+            req.size,
         )
-        .timed(metrics_timer_name!(
-            "get_comment_cursor_page",
-            "query_by_photo_id"
-        ))
+        .timed(metrics_name!("query_by_photo_id"))
         .await?;
 
         let CursorPage {
             records: time_comments,
             has_more,
             ..
-        } = CursorPage::from_oversize(time_comments, size);
+        } = CursorPage::from_oversize(time_comments, req.size);
         let mut comments = hot_comments;
         comments.extend(time_comments);
 
         let next_cursor = if has_more {
-            comments.last().map(|comment| comment.created_at)
+            comments.last().map(|comment| {
+                TimeIdCursor {
+                    created_at: comment.created_at,
+                    id: comment.id,
+                }
+                .encode()
+            })
         } else {
             None
         };
@@ -141,21 +139,18 @@ impl CommentService {
             user_id,
             comments.iter().map(|c| c.id).collect(),
         )
-        .timed(metrics_timer_name!(
-            "get_comment_cursor_page",
-            "query_is_like"
-        ))
+        .timed(metrics_name!("query_is_like"))
         .await?;
 
         let records = comments
             .into_iter()
             .map(|c| {
                 let is_liked = is_like.contains(&c.id);
-                PhotoCommentResult::from(c).with_liked(is_liked)
+                CommentView::from(c).with_liked(is_liked)
             })
             .collect();
 
-        metrics_success!("get_comment_cursor_page");
+        metrics_success!();
         CursorPage {
             records,
             has_more,
@@ -167,25 +162,27 @@ impl CommentService {
 
 // 删除
 impl CommentService {
+    #[tracing::instrument(
+        name = "delete_comment",
+        skip_all,
+        fields(user_id = %user_id, comment_id = %comment_id)
+    )]
     pub async fn delete(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
-        metrics_group!("delete_comment");
+        metrics_group!();
 
-        timed!("delete_comment", "db_transaction", {
+        timed!("db_transaction", {
             DbUtils::write(&state.db, |txn| {
                 Box::pin(async move {
                     let photo_id = CommentMapper::query_photo_id_by_id(txn, comment_id).await?;
 
                     // 先删除评论, 在删除评论的同时, 校验权限
-                    let deleted = CommentMapper::delete(txn, user_id, comment_id).await?;
-                    if !deleted {
-                        return log_warn(
+                    CommentMapper::delete(txn, user_id, comment_id)
+                        .await?
+                        .true_or_warn(
                             "del_comment_not_deleted",
                             "用户尝试删除评论, 失败",
-                            "",
                             AppError::bad_request("删除评论失败"),
-                        )
-                        .to_err();
-                    }
+                        )?;
 
                     // 更新照片评论数
                     PhotoMapper::update_comment_count_delta(txn, photo_id, -1).await?;
@@ -200,7 +197,29 @@ impl CommentService {
             .await
         })?;
 
-        metrics_success!("delete_comment");
+        metrics_success!();
+        Ok(())
+    }
+}
+
+// 照片删除步骤:评论清理
+#[step_derive::declare_step(
+    ctx = crate::services::photo_service::PhotoDeleteContext,
+    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    name = "comment_cleanup",
+    owns = ["CommentMapper", "CommentLikeMapper"],
+)]
+impl CommentService {
+    async fn on_photo_delete(
+        &self,
+        txn: &sea_orm::DatabaseTransaction,
+        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+    ) -> common::Result<()> {
+        let photo_ids = ctx.photo_ids();
+        let comment_ids = CommentMapper::delete_by_photo_ids(txn, &photo_ids).await?;
+        if !comment_ids.is_empty() {
+            CommentLikeMapper::delete_by_comment_ids(txn, &comment_ids).await?;
+        }
         Ok(())
     }
 }

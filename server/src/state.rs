@@ -1,8 +1,20 @@
-use common::utils::TokenCipher;
 use deadpool_redis::Pool;
-use email::EmailClient;
 use sea_orm::DatabaseConnection;
+
+#[cfg(any(
+    feature = "token_cipher",
+    feature = "s3",
+    feature = "backup",
+    feature = "face-engine"
+))]
 use std::sync::Arc;
+
+#[cfg(feature = "token_cipher")]
+use common::utils::TokenCipher;
+
+#[cfg(feature = "email")]
+use email::EmailClient;
+
 #[cfg(feature = "face-engine")]
 use std::sync::Mutex;
 
@@ -20,7 +32,10 @@ pub struct AppBases {
 
 // ============ Libs ============
 pub struct AppLibs {
+    #[cfg(feature = "token_cipher")]
     pub token_cipher: Arc<TokenCipher>,
+
+    #[cfg(feature = "email")]
     pub email_client: EmailClient,
 
     #[cfg(feature = "s3")]
@@ -32,19 +47,20 @@ pub struct AppLibs {
 
 // ============ AppState ============
 pub struct AppState {
-    #[allow(dead_code)]
     pub db: DatabaseConnection,
     pub redis: Pool,
-    #[allow(dead_code)]
+
+    #[cfg(feature = "token_cipher")]
     pub token_cipher: Arc<TokenCipher>,
-    #[allow(dead_code)]
+
+    #[cfg(feature = "email")]
     pub email_client: EmailClient,
 
     #[cfg(feature = "s3")]
     pub s3_client: Arc<S3Client>,
 
     #[cfg(feature = "backup")]
-    pub backup_scheduler: Option<Arc<BackupScheduler>>,
+    pub backup_scheduler: Arc<BackupScheduler>,
 
     #[cfg(feature = "face-engine")]
     pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,

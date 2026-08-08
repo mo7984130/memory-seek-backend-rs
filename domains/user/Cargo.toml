@@ -1,6 +1,6 @@
 [package]
 name = "user"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [features]
@@ -9,10 +9,9 @@ metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum"]
 
 [dependencies]
-common = { path = "../../common", features = ["file_validator", "validators", "metrics"] }
+common = { path = "../../common", features = ["file_validator", "validators", "metrics", "tokio"] }
 constants = { path = "../constants" }
-entities = { path = "../../entities" }
-memory-seek-type = { workspace = true }
+types = { workspace = true, features = ["orm"] }
 oss = { path = "../../libs/oss" }
 serde = { workspace = true }
 validator = { workspace = true }
@@ -26,6 +25,7 @@ tokio = { workspace = true }
 axum = { workspace = true, optional = true }
 metrics = { workspace = true, optional = true }
 num_cpus = { workspace = true }
+bytes.workspace = true
 
 [dev-dependencies]
 tokio-test = { workspace = true }

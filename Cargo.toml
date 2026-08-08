@@ -2,10 +2,11 @@
 resolver = "3"
 members = [
     "common",
-    "entities",
+    "types",
     "libs/email",
     "libs/img_url_generator",
     "libs/oss",
+    "libs/step_derive",
     "domains/constants",
     "domains/auth",
     "domains/user",
@@ -15,9 +16,10 @@ members = [
 ]
 
 [workspace.dependencies]
-memory-seek-type = { git="https://github.com/mo7984130/memory-seek-type.git" }
+types = { path = "types" }
 axum = { version = "0.8.8", features = ["macros", "multipart"] }
 tokio = { version = "1.49.0", features = ["full"] }
+tokio-util = { version = "0.7" }
 
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -34,6 +36,8 @@ sqlx.version = "=0.8.6"
 pgvector = "=0.4.1"
 chrono = { version = "0.4.44", features = ["serde"] }
 thiserror = "2.0.18"
+derive_more = { version = "1", default-features = false, features = ["from", "into", "display", "deref"] }
+ts-rs = { version = "12", features = ["chrono-impl", "no-serde-warnings"] }
 bcrypt = "0.19.0"
 argon2 = { version = "0.5", features = ["std"] }
 password-hash = "0.5"
@@ -68,11 +72,14 @@ metrics = "0.24.3"
 
 # HTTP & S3
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
-s3 = { package = "rust-s3", version = "0.37", default-features = false, features = ["tokio-rustls-tls"] }
+s3 = { package = "rust-s3", version = "0.37", default-features = false, features = ["tokio-rustls-tls", "fail-on-err"] }
 bytes = "1.10"
 axum-client-ip = "1.3.1"
 
 moka = { version = "0.12.15", features = ["future"] }
+
+# 定义即注册(静态步骤注册)
+linkme = "0.3"
 
 # 性能测试
 criterion = { version = "0.5", features = ["async_tokio"] }
@@ -82,7 +89,7 @@ wiremock = "0.6"
 
 indexmap = "2.14.0"
 
-insight-face-rs = { version = "1.6.1" , features = ["pgvector"] }
+insight-face-rs = { version = "2.1.0" , features = ["pgvector"] }
 
 
 # Backup
@@ -91,3 +98,6 @@ tokio-cron-scheduler = "0.13"
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
+
+# 中文转拼音(人物姓名首字母)
+pinyin = "0.11.0"

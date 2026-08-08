@@ -1,22 +1,21 @@
 use axum::extract::{Multipart, State};
 use axum::routing::{get, patch, post, put};
 use axum::{Extension, Router};
-use common::error::AppError;
+use common::Result;
 use common::ext::ResultErrExt;
 use common::ext::{OptionExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use common::traits::controller::ControllerRouter;
-use entities::auth::user::UserId;
-use memory_seek_type::user::UserInfo;
 use std::sync::Arc;
+use types::auth::user::UserId;
 
 use crate::UserState;
-use crate::models::{
-    ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeResult,
-    UserInfoResult,
-};
 use crate::services as user_service;
+use types::user::{
+    ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
+    UpdateAvatarParam, UserBriefView, UserInfo,
+};
 
 /// 用户模块 HTTP 控制器，处理用户相关的 API 请求
 pub struct UserController;
@@ -55,10 +54,8 @@ impl UserController {
     async fn get_user_info(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<UserInfo>, AppError> {
-        user_service::get_user_info(&state, user_id.0)
-            .await
-            .to_r_ok()
+    ) -> Result<R<UserInfo>> {
+        user_service::get_user_info(&state, user_id).await.to_r_ok()
     }
 
     /// 为当前用户生成邀请码
@@ -75,8 +72,8 @@ impl UserController {
     async fn generate_inviter_code(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<InviterCodeResult>, AppError> {
-        user_service::generate_inviter_code(&state, user_id.0)
+    ) -> Result<R<InviterCodeView>> {
+        user_service::generate_inviter_code(&state, user_id)
             .await
             .to_r_ok()
     }
@@ -97,8 +94,8 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<ChangeNicknameParam>,
-    ) -> Result<R<String>, AppError> {
-        user_service::change_nickname(&state, user_id.0, req.new_nickname)
+    ) -> Result<R<String>> {
+        user_service::change_nickname(&state, user_id, req)
             .await
             .to_r_ok()
     }
@@ -119,7 +116,7 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
         mut multipart: Multipart,
-    ) -> Result<R<String>, AppError> {
+    ) -> Result<R<String>> {
         let field = multipart
             .next_field()
             .await
@@ -134,15 +131,13 @@ impl UserController {
             "读取文件失败",
         )?;
 
-        let res = user_service::update_avatar(
-            &state,
-            user_id.0,
+        let req = UpdateAvatarParam {
             file_name,
-            file_data.to_vec(),
             content_type,
-        )
-        .await?;
-        Ok(R::ok(res))
+        };
+        user_service::update_avatar(&state, user_id, file_data, req)
+            .await
+            .to_r_ok()
     }
 
     /// 修改当前用户的登录密码
@@ -161,8 +156,8 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<ChangePasswordParam>,
-    ) -> Result<R<()>, AppError> {
-        user_service::change_password(&state, user_id.0, req)
+    ) -> Result<R<()>> {
+        user_service::change_password(&state, user_id, req)
             .await
             .to_r_ok()
     }
@@ -181,8 +176,8 @@ impl UserController {
     async fn logout(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-    ) -> Result<R<()>, AppError> {
-        user_service::logout(&state, user_id.0).await.to_r_ok()
+    ) -> Result<R<()>> {
+        user_service::logout(&state, user_id).await.to_r_ok()
     }
 
     /// 批量获取多个用户的基本信息
@@ -198,16 +193,10 @@ impl UserController {
     /// - `AppError`: ID 格式错误、超出批量查询限制或数据库查询失败时返回错误
     async fn get_user_info_batch(
         State(state): State<Arc<UserState>>,
+        Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<GetUserInfoBatchParam>,
-    ) -> Result<R<Vec<Option<UserInfoResult>>>, AppError> {
-        let user_ids = req
-            .user_ids
-            .into_iter()
-            .map(|id| id.parse::<i64>())
-            .collect::<Result<Vec<i64>, _>>()
-            .trace_warn_bad_request("invalid_id_format", "id格式错误", "id格式错误")?;
-
-        user_service::get_user_info_batch(&state, user_ids)
+    ) -> Result<R<Vec<Option<UserBriefView>>>> {
+        user_service::get_user_info_batch(&state, user_id, req)
             .await
             .to_r_ok()
     }

@@ -1,54 +1,44 @@
 use std::collections::HashSet;
 
 use common::Result;
-use common::ext::{ResultErrExt, ToErr, ToOk, log_err};
-use entities::photo::photo_like::*;
-use entities::{auth::user::UserId, photo::photo::PhotoId};
+use common::ext::ToOk;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     entity::prelude::DateTimeUtc,
 };
+use types::cursor::TimeIdCursor;
+use types::photo::photo_like::*;
+use types::{auth::user::UserId, photo::photo::PhotoId};
 
 pub struct PhotoLikeMapper;
 
 // 创建
 impl PhotoLikeMapper {
-    pub async fn insert_ignore(
+    pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
         photo_id: PhotoId,
     ) -> Result<bool> {
         let now = chrono::Utc::now();
-
         let active_model = ActiveModel {
-            photo_id: Set(photo_id.0),
-            user_id: Set(user_id.0),
+            photo_id: Set(photo_id),
+            user_id: Set(user_id),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
         };
 
-        let result = Entity::insert(active_model)
+        let rows_affected = Entity::insert(active_model)
             .on_conflict(
                 sea_orm::sea_query::OnConflict::columns([Column::PhotoId, Column::UserId])
                     .do_nothing()
                     .to_owned(),
             )
-            .exec(db)
-            .await;
+            .exec_without_returning(db)
+            .await?;
 
-        match result {
-            Ok(_) => Ok(true),
-            Err(DbErr::RecordNotInserted) => Ok(false),
-            Err(e) => log_err(
-                "db_insert_err",
-                "插入照片点赞时错误",
-                e,
-                common::error::AppError::InternalServerError,
-            )
-            .to_err(),
-        }
+        Ok(rows_affected > 0)
     }
 }
 
@@ -58,7 +48,7 @@ impl PhotoLikeMapper {
     pub async fn query_is_like_by_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
-        photo_ids: Vec<PhotoId>,
+        photo_ids: &[PhotoId],
     ) -> Result<HashSet<PhotoId>> {
         if photo_ids.is_empty() {
             return HashSet::new().to_ok();
@@ -67,60 +57,44 @@ impl PhotoLikeMapper {
         Entity::find()
             .select_only()
             .column(Column::PhotoId)
-            .filter(Column::UserId.eq(user_id.0))
-            .filter(Column::PhotoId.is_in(photo_ids.into_iter().map(|id| id.0)))
-            .into_tuple::<i64>()
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
+            .into_tuple::<PhotoId>()
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询照片是否点赞数据库错误")?
+            .await?
             .into_iter()
-            .map(PhotoId)
             .collect::<HashSet<PhotoId>>()
             .to_ok()
     }
 
     /// 查询用户点赞的照片ID和点赞时间列表（带游标分页）
     ///
-    /// cursor 为 `(created_at, id)` 元组，用于复合游标分页，
-    /// 确保相同时间戳的记录不会被跳过。
-    ///
-    /// 返回 `(PhotoId, DateTimeUtc)` 元组，其中 DateTimeUtc 为点赞时间，
-    /// 用于生成正确的分页游标。
+    /// 返回 `(PhotoId, DateTimeUtc)` 元组，其中 DateTimeUtc 为点赞时间。
+    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
+    /// 由 service 层用 CursorPage::from_oversize 截断消费。
     pub async fn query_user_liked_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
-        cursor: Option<(DateTimeUtc, i64)>,
+        cursor: &Option<TimeIdCursor<PhotoId>>,
         size: u64,
     ) -> Result<Vec<(PhotoId, DateTimeUtc)>> {
         let mut query = Entity::find()
             .select_only()
             .column(Column::PhotoId)
             .column(Column::CreatedAt)
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::UserId.eq(user_id))
             .order_by_desc(Column::CreatedAt)
-            .order_by_desc(Column::Id);
+            .order_by_desc(Column::PhotoId);
 
-        if let Some((cursor_time, cursor_id)) = cursor {
-            query = query.filter(
-                sea_orm::Condition::any()
-                    .add(Column::CreatedAt.lt(cursor_time))
-                    .add(
-                        sea_orm::Condition::all()
-                            .add(Column::CreatedAt.eq(cursor_time))
-                            .add(Column::Id.lt(cursor_id)),
-                    ),
-            );
+        if let Some(c) = cursor {
+            query = query.filter(c.before(Column::CreatedAt, Column::PhotoId));
         }
 
         query
-            .limit(size)
-            .into_tuple::<(i64, DateTimeUtc)>()
+            .limit(size + 1)
+            .into_tuple::<(PhotoId, DateTimeUtc)>()
             .all(db)
-            .await
-            .trace_internal_err("db_query_err", "查询用户点赞照片列表数据库错误")?
-            .into_iter()
-            .map(|(photo_id, created_at)| (PhotoId(photo_id), created_at))
-            .collect::<Vec<(PhotoId, DateTimeUtc)>>()
+            .await?
             .to_ok()
     }
 }
@@ -133,24 +107,26 @@ impl PhotoLikeMapper {
         photo_id: PhotoId,
     ) -> Result<bool> {
         let res = Entity::delete_many()
-            .filter(Column::PhotoId.eq(photo_id.0))
-            .filter(Column::UserId.eq(user_id.0))
+            .filter(Column::PhotoId.eq(photo_id))
+            .filter(Column::UserId.eq(user_id))
             .exec(db)
-            .await
-            .trace_internal_err("db_delete_err", "尝试删除照片点赞错误")?;
+            .await?;
 
         Ok(res.rows_affected != 0)
     }
 
-    pub async fn delete_all_by_photo_id(
+    pub async fn delete_all_by_photo_ids(
         db: &impl ConnectionTrait,
-        photo_id: PhotoId,
+        photo_ids: &[PhotoId],
     ) -> Result<u64> {
+        if photo_ids.is_empty() {
+            return Ok(0);
+        }
+
         Entity::delete_many()
-            .filter(Column::PhotoId.eq(photo_id.0))
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .exec(db)
-            .await
-            .trace_internal_err("db_delete_err", "根据照片id删除所有点赞数据库错误")?
+            .await?
             .rows_affected
             .to_ok()
     }

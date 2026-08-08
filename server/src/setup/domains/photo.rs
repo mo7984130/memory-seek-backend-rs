@@ -1,3 +1,6 @@
+#[cfg(feature = "face-engine")]
+use std::path::PathBuf;
+
 use crate::config::AppConfig;
 use crate::state::AppState;
 use axum::Router;
@@ -13,7 +16,13 @@ pub fn register(
 ) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
     info!("注册 Photo 模块路由");
 
-    // 构建 PhotoState
+    #[cfg(feature = "face-engine")]
+    let backup_storage = backup::storage::BackupStorage::new(
+        PathBuf::from(&_cfg.backup.local_path),
+        state.s3_client.clone(),
+        _cfg.backup.s3_prefix.clone(),
+    );
+
     let photo_state = Arc::new(PhotoState::new(
         state.db.clone(),
         state.redis.clone(),
@@ -21,6 +30,8 @@ pub fn register(
         state.token_cipher.clone(),
         #[cfg(feature = "face-engine")]
         state.face_engine.clone(),
+        #[cfg(feature = "face-engine")]
+        backup_storage,
     ));
 
     // 获取路由

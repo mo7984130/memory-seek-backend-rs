@@ -9,5 +9,7 @@ serde = { workspace = true }
 bytes = { workspace = true }
 reqwest = { workspace = true }
 s3 = { workspace = true }
+tokio = { workspace = true }
 futures = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }

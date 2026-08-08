@@ -16,7 +16,7 @@ import { BASE_URL, logResult } from "../../common.js";
 export function register(username, email, password, verificationCode = "") {
     const res = http.post(
         `${BASE_URL}/auth/register`,
-        JSON.stringify({ username, email, password, verificationCode }),
+        JSON.stringify({ username, email, password, confirmPassword: password, verificationCode }),
         { headers: { "Content-Type": "application/json" } },
     );
     const ok = res.status === 200;

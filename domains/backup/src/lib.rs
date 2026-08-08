@@ -1,5 +1,6 @@
 pub mod config;
 pub mod controller;
+pub mod error;
 pub mod exporter;
 pub mod hasher;
 pub mod runner;
@@ -8,5 +9,6 @@ pub mod state;
 pub mod storage;
 
 pub use config::BackupConfig;
+pub use error::BackupError;
 pub use scheduler::BackupScheduler;
 pub use state::BackupState;

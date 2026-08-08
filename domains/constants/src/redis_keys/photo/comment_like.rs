@@ -1,8 +1,8 @@
-use entities::photo::comment::CommentId;
+use types::photo::comment::CommentId;
 
 pub fn likes_count(comment_id: CommentId) -> String {
     // photo:comment_like:likes_count:{comment_id}
-    format!("p:cl:lc:{}", comment_id.0)
+    format!("p:cl:lc:{}", comment_id)
 }
 
 pub fn dirty_comment() -> &'static str {

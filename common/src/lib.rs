@@ -15,9 +15,9 @@ pub mod r;
 pub mod traits;
 pub mod utils;
 
-pub mod macros;
-
 pub mod ext;
+pub mod macros;
+pub mod pipeline;
 
 #[cfg(feature = "metrics")]
 pub use metrics;

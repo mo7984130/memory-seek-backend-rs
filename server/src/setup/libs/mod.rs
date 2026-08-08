@@ -1,8 +1,10 @@
+#[cfg(feature = "email")]
 pub mod email;
 #[cfg(feature = "face-engine")]
 pub mod face_engine;
 #[cfg(feature = "s3")]
 pub mod s3;
+#[cfg(feature = "token_cipher")]
 pub mod token_cipher;
 
 use crate::config::AppConfig;
@@ -11,12 +13,15 @@ use crate::state::AppLibs;
 pub struct AppLibsInit;
 
 impl AppLibsInit {
+    #[allow(unused_variables)]
     pub async fn init(cfg: &AppConfig) -> Result<AppLibs, common::error::AppError> {
-        // 初始化 Email 客户端
-        let email_client = email::init(&cfg.smtp);
-
         // 初始化 TokenCipher
+        #[cfg(feature = "token_cipher")]
         let token_cipher = token_cipher::init(&cfg.token_cipher);
+
+        // 初始化 Email 客户端
+        #[cfg(feature = "email")]
+        let email_client = email::init(&cfg.smtp);
 
         // 初始化 S3（如果启用）
         #[cfg(feature = "s3")]
@@ -27,8 +32,10 @@ impl AppLibsInit {
         let face_engine = face_engine::init(&cfg.face_engine);
 
         Ok(AppLibs {
-            email_client,
+            #[cfg(feature = "token_cipher")]
             token_cipher,
+            #[cfg(feature = "email")]
+            email_client,
             #[cfg(feature = "s3")]
             s3_client,
             #[cfg(feature = "face-engine")]

@@ -1,8 +1,33 @@
+use crate::config::BackupScheduleConfig;
+use crate::error::BackupError;
+use crate::exporter::CsvExporter;
 use oss::S3Client;
+use sea_orm::DatabaseConnection;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// 备份类型
+#[derive(Clone)]
+pub enum BackupType {
+    ScheduledDaily,
+    ScheduledWeekly,
+    ScheduledMonthly,
+    Manual,
+}
+
+impl BackupType {
+    fn rel_dir(&self) -> &'static str {
+        match self {
+            Self::ScheduledDaily => "scheduled/daily",
+            Self::ScheduledWeekly => "scheduled/weekly",
+            Self::ScheduledMonthly => "scheduled/monthly",
+            Self::Manual => "manual",
+        }
+    }
+}
+
 /// 备份存储管理器
+#[derive(Clone)]
 pub struct BackupStorage {
     local_path: PathBuf,
     s3_client: Arc<S3Client>,
@@ -19,22 +44,34 @@ impl BackupStorage {
     }
 
     /// 保存备份文件到本地 + S3
+    ///
+    /// `run_id` 是该次备份运行的唯一标识（如 "20260719_060000"），会作为目录层级插入。
     pub async fn save(
         &self,
         table_name: &str,
-        date: &str,
         csv_path: &std::path::Path,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let file_name = format!("{}.csv", date);
+        backup_type: BackupType,
+        run_id: &str,
+    ) -> Result<(), BackupError> {
+        let file_name = format!("{}.csv", table_name);
 
-        // 1. 保存到本地
-        let local_dir = self.local_path.join(table_name);
+        let local_dir = self
+            .local_path
+            .join(backup_type.rel_dir())
+            .join(run_id)
+            .join(table_name);
         std::fs::create_dir_all(&local_dir)?;
         let local_file = local_dir.join(&file_name);
         std::fs::copy(csv_path, &local_file)?;
 
-        // 2. 上传到 S3
-        let s3_key = format!("{}{}/{}", self.s3_prefix, table_name, file_name);
+        let s3_key = format!(
+            "{}{}/{}/{}/{}",
+            self.s3_prefix,
+            backup_type.rel_dir(),
+            run_id,
+            table_name,
+            file_name
+        );
         let csv_content = std::fs::read(csv_path)?;
         self.s3_client
             .upload(&s3_key, csv_content, "text/csv")
@@ -42,7 +79,8 @@ impl BackupStorage {
 
         tracing::info!(
             table = %table_name,
-            date = %date,
+            backup_type = %backup_type.rel_dir(),
+            run_id = %run_id,
             local = %local_file.display(),
             s3 = %s3_key,
             "Backup saved"
@@ -51,140 +89,133 @@ impl BackupStorage {
         Ok(())
     }
 
-    /// 查找指定表的最新备份日期
-    pub async fn find_latest_backup(
+    /// 一次性保存到 daily / weekly / monthly 三个目录
+    pub async fn save_scheduled_all(
         &self,
         table_name: &str,
-    ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-        let local_dir = self.local_path.join(table_name);
-        if !local_dir.exists() {
-            return Ok(None);
-        }
-
-        let mut latest: Option<String> = None;
-
-        for entry in std::fs::read_dir(&local_dir)? {
-            let entry = entry?;
-            let file_name = entry.file_name();
-            let file_name = file_name.to_string_lossy();
-
-            if file_name.ends_with(".csv") {
-                let date = file_name.trim_end_matches(".csv").to_string();
-                if latest.as_ref().is_none_or(|l| &date > l) {
-                    latest = Some(date);
-                }
-            }
-        }
-
-        Ok(latest)
+        csv_path: &std::path::Path,
+        run_id: &str,
+    ) -> Result<(), BackupError> {
+        self.save(table_name, csv_path, BackupType::ScheduledDaily, run_id)
+            .await?;
+        self.save(table_name, csv_path, BackupType::ScheduledWeekly, run_id)
+            .await?;
+        self.save(table_name, csv_path, BackupType::ScheduledMonthly, run_id)
+            .await?;
+        Ok(())
     }
 
-    /// 重命名文件（当数据无变化时）
-    pub async fn rename(
+    /// 导出并备份指定表到 managed 存储（本地 + S3）
+    ///
+    /// 统一入口：内部处理临时目录创建、CSV 导出、保存到目标路径、清理。
+    pub async fn backup_tables(
         &self,
-        table_name: &str,
-        old_date: &str,
-        new_date: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let old_file = format!("{}.csv", old_date);
-        let new_file = format!("{}.csv", new_date);
+        db: &DatabaseConnection,
+        tables: &[&str],
+        backup_type: BackupType,
+    ) -> Result<(), BackupError> {
+        let temp_dir = std::env::temp_dir().join("memory-seek-table-backup");
+        std::fs::create_dir_all(&temp_dir)?;
+        let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
-        // 1. 重命名本地文件
-        let local_dir = self.local_path.join(table_name);
-        let old_local = local_dir.join(&old_file);
-        let new_local = local_dir.join(&new_file);
-
-        if old_local.exists() {
-            std::fs::rename(&old_local, &new_local)?;
-            tracing::info!(
-                table = %table_name,
-                from = %old_date,
-                to = %new_date,
-                "Local backup renamed"
-            );
-        }
-
-        // 2. 重命名 S3 文件（复制+删除）
-        let old_s3_key = format!("{}{}/{}", self.s3_prefix, table_name, old_file);
-        let new_s3_key = format!("{}{}/{}", self.s3_prefix, table_name, new_file);
-
-        // 下载旧文件
-        match self.s3_client.download(&old_s3_key).await {
-            Ok(content) => {
-                // 上传为新文件
-                self.s3_client
-                    .upload(&new_s3_key, content.to_vec(), "text/csv")
-                    .await?;
-                // 删除旧文件
-                self.s3_client.delete(&old_s3_key).await?;
-                tracing::info!(
-                    table = %table_name,
-                    from = %old_s3_key,
-                    to = %new_s3_key,
-                    "S3 backup renamed"
-                );
-            }
-            Err(e) => {
-                tracing::warn!(
-                    table = %table_name,
-                    key = %old_s3_key,
-                    err = ?e,
-                    "S3 old file not found, skip rename"
-                );
-            }
+        for table_name in tables {
+            let (path, hash) = CsvExporter::export(db, table_name, &temp_dir).await?;
+            tracing::info!(table = %table_name, hash = %hash, "表已导出");
+            self.save(table_name, &path, backup_type.clone(), &run_id)
+                .await?;
+            let _ = std::fs::remove_file(&path);
         }
 
         Ok(())
     }
 
-    /// 清理过期备份
-    pub async fn cleanup(
-        &self,
-        retention_days: u32,
-    ) -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
-        let cutoff = chrono::Local::now() - chrono::Duration::days(retention_days as i64);
-        let cutoff_str = cutoff.format("%Y-%m-%d").to_string();
+    /// GFS 分层清理：按保留数清理 daily / weekly / monthly 目录
+    pub async fn cleanup_gfs(&self, config: &BackupScheduleConfig) -> Result<u32, BackupError> {
+        let mut removed = 0;
 
-        let mut removed_count = 0;
+        if !self.local_path.exists() {
+            return Ok(0);
+        }
 
-        // 遍历本地备份目录
-        if self.local_path.exists() {
-            for entry in std::fs::read_dir(&self.local_path)? {
-                let entry = entry?;
-                if !entry.file_type()?.is_dir() {
-                    continue;
-                }
+        removed += self
+            .cleanup_subdir("scheduled/daily", config.daily_retention)
+            .await?;
+        removed += self
+            .cleanup_subdir("scheduled/weekly", config.weekly_retention)
+            .await?;
+        removed += self
+            .cleanup_subdir("scheduled/monthly", config.monthly_retention)
+            .await?;
+        // manual 目录不做清理
 
-                let table_name = entry.file_name().to_string_lossy().to_string();
-                let table_dir = entry.path();
+        Ok(removed)
+    }
 
-                for file_entry in std::fs::read_dir(&table_dir)? {
-                    let file_entry = file_entry?;
-                    let file_name = file_entry.file_name();
-                    let file_name = file_name.to_string_lossy();
+    /// 清理指定子目录下超出保留数的历史备份 run
+    ///
+    /// 每个子目录是一个备份运行（按 run_id 命名），删除整个目录 = 删除该次所有表。
+    async fn cleanup_subdir(&self, rel_dir: &str, keep_count: u32) -> Result<u32, BackupError> {
+        let dir = self.local_path.join(rel_dir);
+        if !dir.exists() {
+            return Ok(0);
+        }
 
-                    if file_name.ends_with(".csv") {
-                        let date = file_name.trim_end_matches(".csv");
-                        if date < cutoff_str.as_str() {
-                            // 删除本地文件
-                            std::fs::remove_file(file_entry.path())?;
+        let mut run_dirs: Vec<_> = std::fs::read_dir(&dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+            .collect();
 
-                            // 删除 S3 文件
-                            let s3_key = format!("{}{}/{}", self.s3_prefix, table_name, file_name);
-                            let _ = self.s3_client.delete(&s3_key).await;
+        run_dirs.sort_by(|a, b| {
+            let a_name = a.file_name().to_string_lossy().to_string();
+            let b_name = b.file_name().to_string_lossy().to_string();
+            b_name.cmp(&a_name)
+        });
 
-                            removed_count += 1;
-                            tracing::info!(
-                                table = %table_name,
-                                date = %date,
-                                "Removed expired backup"
-                            );
-                        }
-                    }
+        let mut removed = 0;
+
+        for entry in run_dirs.iter().skip(keep_count as usize) {
+            let run_id = entry.file_name().to_string_lossy().to_string();
+            let run_dir = entry.path();
+
+            let s3_keys = self.collect_s3_keys_for_run(&run_dir);
+
+            if let Err(e) = std::fs::remove_dir_all(&run_dir) {
+                tracing::error!(run = %run_id, dir = %rel_dir, err = %e, "Failed to remove local backup dir");
+                continue;
+            }
+
+            if !s3_keys.is_empty()
+                && let Err(e) = self.s3_client.delete_batch(s3_keys).await
+            {
+                tracing::warn!(run = %run_id, dir = %rel_dir, err = %e, "GFS cleanup partial S3 deletion");
+            }
+
+            removed += 1;
+            tracing::info!(run = %run_id, dir = %rel_dir, "GFS cleanup removed expired backup run");
+        }
+
+        Ok(removed)
+    }
+
+    /// 收集一个 run 目录下所有 CSV 文件对应的 S3 路径
+    fn collect_s3_keys_for_run(&self, run_dir: &std::path::Path) -> Vec<String> {
+        let mut keys = Vec::new();
+        self.collect_csv_keys(run_dir, &mut keys);
+        keys
+    }
+
+    fn collect_csv_keys(&self, dir: &std::path::Path, keys: &mut Vec<String>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    self.collect_csv_keys(&path, keys);
+                } else if path.extension().is_some_and(|e| e == "csv")
+                    && let Ok(relative) = path.strip_prefix(&self.local_path)
+                {
+                    keys.push(format!("{}{}", self.s3_prefix, relative.display()));
                 }
             }
         }
-
-        Ok(removed_count)
     }
 }

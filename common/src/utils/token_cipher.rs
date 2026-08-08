@@ -7,8 +7,8 @@ use hkdf::Hkdf;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 
+use crate::ext::ResultErrExt;
 use crate::{error::AppError, ext::log_err};
-use crate::{ext::ResultErrExt, models::ImageToken};
 
 const NONCE_LEN: usize = 12;
 const HKDF_KEY_INFO: &[u8] = b"image-file-id-token-v1";
@@ -104,7 +104,6 @@ impl TokenCipher {
             return Err(log_err(
                 "token_too_short",
                 "Token 长度不合法",
-                "",
                 AppError::InternalServerError,
             ));
         }
@@ -137,27 +136,22 @@ impl TokenCipher {
     }
 }
 
-impl TokenCipher {
-    pub fn encrypt_avatar_token(&self, avatar_file_id: Option<&str>) -> Option<String> {
-        avatar_file_id.and_then(|key| {
-            self.encrypt(&ImageToken::thumbnail(key), Some(key))
-                .trace_warn("encrypt_avatar_token_err", "加密头像失败", AppError::Ignore)
-                .ok()
-        })
-    }
-}
+impl TokenCipher {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{FaceBBoxPixels, ImageTokenType};
+
+    /// 结构化 payload 加密解密往返测试用（替代原 ImageToken 用例）
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct TestPayload {
+        file_id: String,
+        score: f32,
+        tags: Vec<String>,
+    }
 
     fn test_cipher() -> TokenCipher {
         TokenCipher::new("test-key-for-unit-tests", "test-salt")
-    }
-
-    fn test_image_token() -> ImageToken {
-        ImageToken::thumbnail("abc123")
     }
 
     // --- 加密解密往返 ---
@@ -172,37 +166,16 @@ mod tests {
     }
 
     #[test]
-    fn test_encrypt_decrypt_roundtrip_image_token() {
+    fn test_encrypt_decrypt_roundtrip_struct() {
         let cipher = test_cipher();
-        let payload = test_image_token();
+        let payload = TestPayload {
+            file_id: "file-xyz".to_string(),
+            score: 0.95,
+            tags: vec!["face".to_string(), "crop".to_string()],
+        };
         let token = cipher.encrypt(&payload, Some("seed")).unwrap();
-        let decrypted: ImageToken = cipher.decrypt(&token).unwrap();
-        assert_eq!(decrypted.file_id, payload.file_id);
-        assert_eq!(decrypted.token_type, payload.token_type);
-        assert!(decrypted.bbox.is_none());
-    }
-
-    #[test]
-    fn test_encrypt_decrypt_roundtrip_complex_payload() {
-        let cipher = test_cipher();
-        let payload = ImageToken::crop(
-            "file-xyz",
-            FaceBBoxPixels {
-                x: 10,
-                y: 20,
-                w: 100,
-                h: 150,
-            },
-        );
-        let token = cipher.encrypt(&payload, Some("crop-seed")).unwrap();
-        let decrypted: ImageToken = cipher.decrypt(&token).unwrap();
-        assert_eq!(decrypted.file_id, "file-xyz");
-        assert_eq!(decrypted.token_type, ImageTokenType::Crop);
-        let bbox = decrypted.bbox.unwrap();
-        assert_eq!(bbox.x, 10);
-        assert_eq!(bbox.y, 20);
-        assert_eq!(bbox.w, 100);
-        assert_eq!(bbox.h, 150);
+        let decrypted: TestPayload = cipher.decrypt(&token).unwrap();
+        assert_eq!(decrypted, payload);
     }
 
     // --- 确定性 nonce ---
@@ -300,25 +273,5 @@ mod tests {
         let token = cipher.encrypt(&payload, Some("seed")).unwrap();
         let decrypted: String = cipher.decrypt(&token).unwrap();
         assert_eq!(decrypted, payload);
-    }
-
-    // --- encrypt_avatar_token ---
-
-    #[test]
-    fn test_encrypt_avatar_token_some() {
-        let cipher = test_cipher();
-        let token = cipher.encrypt_avatar_token(Some("avatar-file-id"));
-        assert!(token.is_some());
-        // 验证能解密回来
-        let decrypted: ImageToken = cipher.decrypt(&token.unwrap()).unwrap();
-        assert_eq!(decrypted.file_id, "avatar-file-id");
-        assert_eq!(decrypted.token_type, ImageTokenType::Thumbnail);
-    }
-
-    #[test]
-    fn test_encrypt_avatar_token_none() {
-        let cipher = test_cipher();
-        let token = cipher.encrypt_avatar_token(None);
-        assert!(token.is_none());
     }
 }

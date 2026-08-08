@@ -1,3 +1,4 @@
+use crate::error::BackupError;
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use sha2::{Digest, Sha256};
 
@@ -9,7 +10,7 @@ impl TableHasher {
     pub async fn get_primary_key_columns(
         db: &DatabaseConnection,
         table_name: &str,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<String>, BackupError> {
         let sql = format!(
             r#"
             SELECT c.column_name
@@ -40,7 +41,7 @@ impl TableHasher {
     pub async fn get_column_names(
         db: &DatabaseConnection,
         table_name: &str,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<String>, BackupError> {
         let sql = format!(
             r#"
             SELECT column_name
@@ -65,10 +66,7 @@ impl TableHasher {
     /// 计算整个表的 SHA256 哈希
     ///
     /// 使用 SELECT col::text, ... ORDER BY pk 查询所有数据，逐行计算哈希
-    pub async fn compute(
-        db: &DatabaseConnection,
-        table_name: &str,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn compute(db: &DatabaseConnection, table_name: &str) -> Result<String, BackupError> {
         let table_cols = Self::get_column_names(db, table_name).await?;
         let pks = Self::get_primary_key_columns(db, table_name).await?;
         let select_cols = table_cols
@@ -106,9 +104,7 @@ impl TableHasher {
     }
 
     /// 获取所有用户表名
-    pub async fn get_all_tables(
-        db: &DatabaseConnection,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_all_tables(db: &DatabaseConnection) -> Result<Vec<String>, BackupError> {
         let sql = r#"
             SELECT table_name
             FROM information_schema.tables

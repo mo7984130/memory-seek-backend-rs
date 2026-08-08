@@ -58,7 +58,7 @@ export function changePassword(oldPassword, newPassword) {
     const headers = getSessionHeaders();
     const res = http.patch(
         `${BASE_URL}/user/password`,
-        JSON.stringify({ oldPassword, newPassword }),
+        JSON.stringify({ oldPassword, newPassword, confirmPassword: newPassword }),
         { headers },
     );
     const ok = res.status === 200;

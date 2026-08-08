@@ -1,0 +1,76 @@
+use crate::error::AppError;
+use std::fmt::Debug;
+use std::panic::Location;
+use tracing::Level;
+
+#[track_caller]
+pub fn log_and_map(
+    level: Level,
+    reason: &'static str,
+    context: &'static str,
+    err: Option<&dyn Debug>,
+    app_err: AppError,
+) -> AppError {
+    let loc = Location::caller();
+
+    macro_rules! emit {
+        ($lvl:ident) => {
+            match err {
+                Some(e) => tracing::$lvl!(
+                    reason,
+                    status = "failed",
+                    error = ?e,
+                    caller.file = loc.file(),
+                    caller.line = loc.line(),
+                    "{context} ({}:{})",    // <-- 加入 path:line
+                    loc.file(),
+                    loc.line()
+                ),
+                None => tracing::$lvl!(
+                    reason,
+                    status = "failed",
+                    caller.file = loc.file(),
+                    caller.line = loc.line(),
+                    "{context} ({}:{})",
+                    loc.file(),
+                    loc.line()
+                ),
+            }
+        };
+    }
+
+    match level {
+        Level::ERROR => emit!(error),
+        Level::WARN => emit!(warn),
+        Level::INFO => emit!(info),
+        Level::DEBUG => emit!(debug),
+        Level::TRACE => emit!(trace),
+    }
+
+    app_err
+}
+
+macro_rules! define_log_fns {
+    ($name:ident, $name_with_err:ident, $level:expr) => {
+        #[track_caller]
+        pub fn $name(reason: &'static str, context: &'static str, app_err: AppError) -> AppError {
+            log_and_map($level, reason, context, None, app_err)
+        }
+
+        #[track_caller]
+        pub fn $name_with_err(
+            reason: &'static str,
+            context: &'static str,
+            err: impl Debug,
+            app_err: AppError,
+        ) -> AppError {
+            log_and_map($level, reason, context, Some(&err as &dyn Debug), app_err)
+        }
+    };
+}
+
+define_log_fns!(log_err, log_err_with_err, Level::ERROR);
+define_log_fns!(log_warn, log_warn_with_err, Level::WARN);
+define_log_fns!(log_info, log_info_with_err, Level::INFO);
+define_log_fns!(log_debug, log_debug_with_err, Level::DEBUG);
+define_log_fns!(log_trace, log_trace_with_err, Level::TRACE);

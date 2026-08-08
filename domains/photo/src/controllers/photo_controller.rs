@@ -11,20 +11,24 @@ use axum::{
 use common::{
     Result,
     ext::{ResultErrExt, ResultRExt},
-    extractors::{ValidatedJson, ValidatedQuery},
-    metrics_group, metrics_success, metrics_timer_name,
-    models::{CursorPage, ImageToken, ImageTokenType},
+    extractors::{OptionalClientIp, ValidatedJson, ValidatedQuery},
+    models::CursorPage,
     traits::controller::ControllerRouter,
-    utils::MetricsTimerExt,
 };
 use common::{ext::OptionExt, r::R};
-use entities::auth::user::UserId;
-use futures::StreamExt;
-use tracing::debug;
+use types::auth::user::UserId;
+use types::photo::{
+    ImageToken, ImageTokenType,
+    behavior::UserBehaviorAction,
+    dto::photo::{PhotoCursorParam, PhotoView},
+    models::{DeletePhotosParam, ExistsByMd5BatchParam},
+};
 
 use crate::{
-    models::photo::{DeletePhotoParam, Md5sExistParam, PhotoCursorParam, PhotoResult},
-    services::photo_service::PhotoService,
+    services::{
+        behavior_service::{BehaviorRecordReq, BehaviorService},
+        photo_service::{ImageDownloadData, PhotoService},
+    },
     state::PhotoState,
 };
 
@@ -53,8 +57,9 @@ impl PhotoController {
     async fn upload(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
         mut multipart: Multipart,
-    ) -> Result<R<PhotoResult>> {
+    ) -> Result<R<PhotoView>> {
         let field = multipart
             .next_field()
             .await
@@ -68,130 +73,113 @@ impl PhotoController {
             .await
             .trace_internal_err("read_file_err", "读取文件失败")?;
 
-        PhotoService::upload_photo(&state, user_id, file_data, file_name, content_type, None)
-            .await
-            .to_r_ok()
+        let req = types::photo::models::UploadPhotoParam {
+            file_name,
+            content_type,
+            created_at: None,
+        };
+        let photo = PhotoService::upload_photo(&state, user_id, file_data, req).await?;
+
+        // 行为审计：上传
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::Upload)
+                .with_photo(photo.id.0)
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(photo).to_r_ok()
     }
 
     async fn get_photos_cursor(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(query): ValidatedQuery<PhotoCursorParam>,
-    ) -> Result<R<CursorPage<PhotoResult, String>>> {
-        PhotoService::get_photo_cursor_page(&state, user_id, query)
+        ValidatedQuery(req): ValidatedQuery<PhotoCursorParam>,
+    ) -> Result<R<CursorPage<PhotoView, String>>> {
+        PhotoService::get_photo_cursor_page(&state, user_id, req)
             .await
             .to_r_ok()
     }
 
     async fn md5s_exist(
         State(state): State<Arc<PhotoState>>,
-        ValidatedJson(data): ValidatedJson<Md5sExistParam>,
+        ValidatedJson(req): ValidatedJson<ExistsByMd5BatchParam>,
     ) -> Result<R<Vec<bool>>> {
-        PhotoService::exists_by_md5_batch(&state, &data.md5s)
+        PhotoService::exists_by_md5_batch(&state, req)
             .await
             .to_r_ok()
     }
 
     async fn get_image(
         State(state): State<Arc<PhotoState>>,
+        OptionalClientIp(ip): OptionalClientIp,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
-        metrics_group!("get_image");
-
         let image_token: ImageToken = state.token_cipher.decrypt(&token).trace_warn_bad_request(
             "invalid_image_token",
-            "无效的token",
-            "无效的token",
+            "无效的图片 token",
+            "无效的图片 token",
         )?;
 
-        let resp = Self::handle_image_download(state, image_token).await?;
+        // 浏览埋点：仅预览/原图访问计入，缩略图/裁剪不计入
+        if matches!(
+            image_token.token_type,
+            ImageTokenType::Preview | ImageTokenType::Original
+        ) {
+            let ip_str = ip.map(|ip| ip.to_string());
+            BehaviorService::record_view_async(
+                &state,
+                image_token.viewer_id,
+                image_token.file_id.clone(),
+                ip_str,
+            );
+        }
 
-        metrics_success!("get_image");
+        let data = PhotoService::download_image(&state, image_token).await?;
+
+        let resp = match data {
+            ImageDownloadData::Processed(bytes) => Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "image/webp")
+                .header(header::CACHE_CONTROL, "public, max-age=604800")
+                .body(Body::from(bytes))
+                .unwrap(),
+            ImageDownloadData::Original {
+                stream,
+                content_type,
+            } => Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, content_type)
+                .header(header::CACHE_CONTROL, "public, max-age=604800")
+                .body(Body::from_stream(stream))
+                .unwrap(),
+        };
+
         Ok(resp)
-    }
-
-    async fn handle_image_download(
-        state: Arc<PhotoState>,
-        token: ImageToken,
-    ) -> Result<Response<Body>> {
-        match token.token_type {
-            ImageTokenType::Thumbnail | ImageTokenType::Preview | ImageTokenType::Crop => {
-                debug!("token_type: t,p,c");
-                let process_param: String = match token.token_type {
-                    ImageTokenType::Thumbnail => "image/resize,w_300/format,webp".to_string(),
-                    ImageTokenType::Preview => "image/resize,w_1920/format,webp".to_string(),
-                    ImageTokenType::Crop => {
-                        let bbox = token.bbox.ok_or_warn_bad_request(
-                            "image_token_crop_info_not_found",
-                            "token里面没有包含裁剪信息",
-                            "token不包含裁剪信息",
-                        )?;
-                        let size = 200;
-                        format!(
-                            "image/crop,x_{},y_{},w_{},h_{}/resize,w_{}/format,webp",
-                            bbox.x, bbox.y, bbox.w, bbox.h, size
-                        )
-                    }
-                    _ => unreachable!(),
-                };
-                debug!("file_id: {}", &token.file_id);
-                let bytes = state
-                    .s3_client
-                    .download_with_process(&token.file_id, &process_param)
-                    .timed(metrics_timer_name!("get_image", "s3_download_process"))
-                    .await?;
-
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header(header::CONTENT_TYPE, "image/webp")
-                    .header(header::CACHE_CONTROL, "public, max-age=604800")
-                    .body(Body::from(bytes))
-                    .unwrap())
-            }
-            ImageTokenType::Original => {
-                debug!("token_type: o");
-                let stream_resp = state
-                    .s3_client
-                    .get_download_stream_response(&token.file_id)
-                    .timed(metrics_timer_name!("get_image", "s3_download_stream"))
-                    .await?;
-
-                let stream = stream_resp
-                    .bytes
-                    .map(|chunk| chunk.trace_internal_err("oss_stream_err", "OSS流读取失败"));
-
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .header(header::CONTENT_TYPE, Self::get_content_type(&token.file_id))
-                    .header(header::CACHE_CONTROL, "public, max-age=604800")
-                    .body(Body::from_stream(stream))
-                    .unwrap())
-            }
-        }
-    }
-
-    fn get_content_type(file_id: &str) -> &'static str {
-        let ext = file_id
-            .split('.')
-            .next_back()
-            .unwrap_or("jpg")
-            .to_lowercase();
-        match ext.as_str() {
-            "png" => "image/png",
-            "gif" => "image/gif",
-            "webp" => "image/webp",
-            "bmp" => "image/bmp",
-            _ => "image/jpeg",
-        }
     }
 
     async fn delete_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedJson(data): ValidatedJson<DeletePhotoParam>,
+        OptionalClientIp(ip): OptionalClientIp,
+        ValidatedJson(req): ValidatedJson<DeletePhotosParam>,
     ) -> Result<R<()>> {
-        PhotoService::delete_photos(&state, user_id, data.photo_ids)
+        let photo_ids: Vec<i64> = req.photo_ids.iter().map(|id| id.0).collect();
+
+        PhotoService::delete_photos(&state, user_id, req)
             .await
-            .to_r_ok()
+            .to_r_ok()?;
+
+        // 行为审计：批量删除照片（记录保留，照片删除后仍可追溯）
+        BehaviorService::record(
+            &state,
+            BehaviorRecordReq::new(user_id, UserBehaviorAction::DeletePhotos)
+                .with_detail(serde_json::json!({ "photoIds": photo_ids }))
+                .with_ip(ip.map(|ip| ip.to_string())),
+        )
+        .await;
+
+        Ok(()).to_r_ok()
     }
 }

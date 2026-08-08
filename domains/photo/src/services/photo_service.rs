@@ -1,32 +1,39 @@
+use std::pin::Pin;
+
 use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{CacheExtension, OkExt, ResultErrExt, ToErr, log_warn},
-    metrics_group, metrics_success, metrics_timer_name,
+    ext::{BoolExt, CacheExtension, OkExt, OptionExt, ResultInspectErrAsync},
+    metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
-    utils::{DbUtils, FileValidator, MetricsTimerExt},
+    utils::{FileValidator, MetricsTimerExt},
 };
 use constants::RedisKeys;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, entity::prelude::DateTimeUtc};
+use futures::Stream;
+use oss::OssError;
+use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
     mappers::{
-        collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
-        comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper,
         photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper,
         timeline_stat_mapper::TimelineStatMapper,
     },
-    models::photo::{PhotoCursor, PhotoCursorParam, PhotoResult},
     state::PhotoState,
 };
 use common::Result;
+use types::photo::{
+    ImageToken, ImageTokenType,
+    dto::photo::{PhotoCursorParam, PhotoView},
+    models::{DeletePhotosParam, ExistsByMd5BatchParam, UploadPhotoParam},
+};
 
-use entities::{
+use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::photo::{ActiveModel, PhotoId, PhotoRecord},
 };
 
@@ -34,20 +41,24 @@ pub(crate) struct PhotoService;
 
 // 查询
 impl PhotoService {
+    #[tracing::instrument(
+        skip_all,
+        fields(user_id = %user_id, count = %photo_ids.len())
+    )]
     pub async fn load_photos_info(
         state: &PhotoState,
         user_id: UserId,
         photo_ids: &[PhotoId],
-    ) -> Result<Vec<PhotoResult>> {
+    ) -> Result<Vec<PhotoView>> {
         let (photos_result, liked_photo_ids_result) = tokio::join!(
             state.redis.get_or_load_batch(
                 photo_ids,
-                |id| RedisKeys::photo::photo::photo_info(*id),
+                |id| RedisKeys::photo::photo::photo_info(*id, user_id),
                 24 * 60 * 60,
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
                 |photo| photo.id,
             ),
-            PhotoLikeMapper::query_is_like_by_photo_ids(&state.db, user_id, photo_ids.to_vec())
+            PhotoLikeMapper::query_is_like_by_photo_ids(&state.db, user_id, photo_ids)
         );
         let photos = photos_result?;
         let liked_photo_ids = liked_photo_ids_result?;
@@ -55,46 +66,35 @@ impl PhotoService {
             .into_iter()
             .flatten()
             .map(|p| {
-                PhotoResult::from(p.clone())
-                    .with_liked(liked_photo_ids.contains(&p.id))
-                    .with_tokens(&p.file_id, &state.token_cipher)
+                let liked = liked_photo_ids.contains(&p.id);
+                let file_id = p.file_id.clone();
+                PhotoView::from(p).with_liked(liked).with_tokens(
+                    &file_id,
+                    user_id,
+                    &state.token_cipher,
+                )
             })
             .collect::<Vec<_>>()
             .to_ok()
     }
 
+    #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_photo_cursor_page(
         state: &PhotoState,
         user_id: UserId,
-        query: PhotoCursorParam,
-    ) -> Result<CursorPage<PhotoResult, String>> {
-        metrics_group!("get_photo_cursor_page");
-
-        let size = query.size;
-        if size > Self::MD5_MAX_SIZE {
-            let err = log_warn(
-                "over_max_size",
-                "size超过最大值",
-                "",
-                AppError::bad_request("size超过最大值"),
-            );
-            return Err(err);
-        }
-
-        let decoded_cursor = query.cursor.map(PhotoCursor::decode).transpose()?;
+        req: PhotoCursorParam,
+    ) -> Result<CursorPage<PhotoView, String>> {
+        metrics_group!();
 
         // 获取photo_ids
         let photo_ids = PhotoMapper::query_cursor_page_ids(
             &state.db,
-            decoded_cursor,
-            size + 1,
-            query.direction,
-            query.anchor_time,
+            req.cursor,
+            req.size,
+            req.direction,
+            req.anchor_time,
         )
-        .timed(metrics_timer_name!(
-            "get_photo_cursor_page",
-            "find_cursor_page_ids"
-        ))
+        .timed(metrics_name!("find_cursor_page_ids"))
         .await?;
         if photo_ids.is_empty() {
             return Ok(CursorPage::empty());
@@ -104,39 +104,26 @@ impl PhotoService {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, size);
+        } = CursorPage::from_oversize(photo_ids, req.size);
 
         let photo_vos = Self::load_photos_info(state, user_id, &photo_ids)
-            .timed(metrics_timer_name!(
-                "get_photo_cursor_page",
-                "load_photos_info"
-            ))
+            .timed(metrics_name!("load_photos_info"))
             .await?;
 
         // 获取next_cursor
         let next_cursor = if has_more {
-            photo_vos.last().and_then(|vo| {
-                // 解析错误概率很小, 不返回错误, 而是返回空CursorPage
-                let id = vo
-                    .id
-                    .parse::<i64>()
-                    .trace_internal_err("parse_photo_vo_id_err", "解析照片VOid错误");
-                match id {
-                    Ok(id) => Some(
-                        PhotoCursor {
-                            id: PhotoId(id),
-                            created_at: vo.created_at,
-                        }
-                        .encode(),
-                    ),
-                    Err(_) => None,
+            photo_vos.last().map(|last_vo| {
+                TimeIdCursor {
+                    id: last_vo.id,
+                    created_at: last_vo.created_at,
                 }
+                .encode()
             })
         } else {
             None
         };
 
-        metrics_success!("get_photo_cursor_page");
+        metrics_success!();
 
         Ok(CursorPage {
             records: photo_vos,
@@ -147,38 +134,22 @@ impl PhotoService {
 }
 
 impl PhotoService {
-    #[instrument(name = "photo_upload", skip_all, fields(user_id, file_name))]
+    #[instrument(
+        skip_all,
+        fields(user_id = %user_id, file_name = %req.file_name)
+    )]
     pub async fn upload_photo(
         state: &PhotoState,
         user_id: UserId,
         file_data: Bytes,
-        file_name: String,
-        content_type: String,
-        created_at: Option<DateTimeUtc>,
-    ) -> Result<PhotoResult> {
-        metrics_group!("upload_photo");
+        req: UploadPhotoParam,
+    ) -> Result<PhotoView> {
+        metrics_group!();
 
         // 效验文件
         let metadata = {
-            let file_data_clone = file_data.clone();
-            timed!("upload_photo", "validate_photo", {
-                tokio::task::spawn_blocking(move || {
-                    FileValidator::validate_image(&file_data_clone, &file_name, &content_type)
-                })
-                .await
-                .trace_internal_err(
-                    "spawn_blocking_validate_photo_err",
-                    "tokio spawn_blocking join err",
-                )?
-                .map_err(|e| {
-                    let msg = e.to_string();
-                    log_warn(
-                        "upload_photo:invalid_photo",
-                        "用户上传图片时, 图片校验未通过",
-                        msg.clone(),
-                        AppError::bad_request(msg),
-                    )
-                })?
+            timed!("validate_photo", {
+                FileValidator::validate_image(&file_data, &req.file_name, &req.content_type)?
             })
         };
 
@@ -186,29 +157,21 @@ impl PhotoService {
         let md5_hash = {
             let file_data_clone = file_data.clone();
             timed!(
-                "upload_photo",
                 "md5_hash",
                 tokio::task::spawn_blocking(move || format!(
                     "{:x}",
                     md5::compute(&file_data_clone)
                 ))
-                .await
-                .trace_internal_err(
-                    "spawn_blocking_md5_compute_err",
-                    "tokio spawn_blocking join err"
-                )?
+                .await?
             )
         };
-        let existing_md5s = PhotoMapper::exists_by_md5_batch(&state.db, &[&md5_hash]).await?;
-        if existing_md5s.contains(&md5_hash) {
-            let err = log_warn(
+        PhotoMapper::exists_by_md5(&state.db, &md5_hash)
+            .await?
+            .false_or_warn(
                 "upload_photo:img_exist",
                 "图片已存在",
-                md5_hash,
                 AppError::bad_request("图片已存在"),
-            );
-            return Err(err);
-        }
+            )?;
 
         // 上传文件
         let date_path = chrono::Local::now().format("%Y/%m/%d");
@@ -217,14 +180,13 @@ impl PhotoService {
         state
             .s3_client
             .upload(&file_id, &file_data, &metadata.mime_type)
-            .timed(metrics_timer_name!("upload_photo", "s3_upload"))
-            .await
-            .trace_internal_err("photo::upload:s3_upload_err", "s3上传失败")?;
+            .timed(metrics_name!("s3_upload"))
+            .await?;
 
         // 更新数据库
         let now = Utc::now();
-        let insert_result = ActiveModel {
-            user_id: Set(user_id.0),
+        let photo = ActiveModel {
+            user_id: Set(user_id),
             name: Set(metadata.name),
             size: Set(file_data.len() as i64),
             width: Set(metadata.width as i32),
@@ -232,137 +194,234 @@ impl PhotoService {
             mime_type: Set(metadata.mime_type),
             md5: Set(md5_hash),
             file_id: Set(file_id.clone()),
-            created_at: Set(created_at.unwrap_or(now)),
+            created_at: Set(req.created_at.unwrap_or(now)),
             updated_at: Set(now),
             ..Default::default()
         }
         .insert(&state.db)
-        .timed(metrics_timer_name!("upload_photo", "db_insert"))
+        .timed(metrics_name!("db_insert"))
         .await
-        .trace_internal_err("photo::upload:db_insert_err", "保存照片失败");
-
-        //更新数据库失败的话 删除文件
-        let photo = match insert_result {
-            Ok(photo) => photo,
-            Err(e) => {
-                let _ = state
-                    .s3_client
-                    .delete(&file_id)
-                    .await
-                    .trace_internal_err("photo::upload:s3_delete_err", "删除文件失败");
-                return Err(e);
-            }
-        };
+        .inspect_err_async(|_| async {
+            let _ = state
+                .s3_client
+                .delete(&file_id)
+                .await
+                .map_err(AppError::from);
+        })
+        .await?;
 
         // 增加时间线统计
         // 错误不返回
         let _ = TimelineStatMapper::incr_stat(&state.db, photo.created_at).await;
 
-        metrics_success!("upload_photo");
+        metrics_success!();
 
         let file_id = photo.file_id.clone();
-        PhotoResult::from(PhotoRecord::from(photo))
-            .with_tokens(&file_id, &state.token_cipher)
+        PhotoView::from(PhotoRecord::from(photo))
+            .with_tokens(&file_id, user_id, &state.token_cipher)
             .to_ok()
     }
 
-    const MD5_MAX_SIZE: u64 = 1024;
+    #[tracing::instrument(skip_all, fields(count = %req.md5s.len()))]
+    pub async fn exists_by_md5_batch(
+        state: &PhotoState,
+        req: ExistsByMd5BatchParam,
+    ) -> Result<Vec<bool>> {
+        metrics_group!();
 
-    pub async fn exists_by_md5_batch(state: &PhotoState, md5s: &[String]) -> Result<Vec<bool>> {
-        metrics_group!("exists_by_md5_batch");
-
-        if md5s.len() > Self::MD5_MAX_SIZE as usize {
-            return log_warn(
-                "over_md5_size",
-                "md5的数量超过最大值",
-                "",
-                AppError::bad_request("md5的数量超过最大值"),
-            )
-            .to_err();
-        }
-
-        let existing = PhotoMapper::exists_by_md5_batch(&state.db, md5s).await?;
-        let res = md5s
+        let existing = PhotoMapper::exists_by_md5_batch(&state.db, &req.md5s).await?;
+        let res = req
+            .md5s
             .iter()
             .map(|md5| existing.contains(md5))
             .collect::<Vec<bool>>();
 
-        metrics_success!("exists_by_md5_batch");
+        metrics_success!();
         Ok(res)
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(user_id = %user_id, count = %req.photo_ids.len())
+    )]
     pub async fn delete_photos(
         state: &PhotoState,
         user_id: UserId,
-        photo_ids: Vec<PhotoId>,
+        req: DeletePhotosParam,
     ) -> Result<()> {
-        metrics_group!("delete_photos");
+        metrics_group!();
 
-        if photo_ids.is_empty() {
-            return Ok(());
-        }
+        // 查询照片信息并鉴权
+        let photos =
+            PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &req.photo_ids).await?;
 
-        // 数据库方面
-        let photos = DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                // 查询照片信息
-                let photos = PhotoMapper::query_by_ids(txn, &photo_ids).await?;
-
-                // 鉴权
-                if photos.iter().any(|p| p.user_id != user_id) {
-                    return log_warn(
-                        "del_photos_not_belong",
-                        "用户尝试删除不属于它的照片",
-                        "",
-                        AppError::bad_request("无法删除不属于自己的照片"),
-                    )
-                    .to_err();
-                }
-
-                // 删除收藏夹照片
-                let affected_collections =
-                    CollectionPhotoMapper::delete_by_photo_ids(txn, &photo_ids).await?;
-
-                // 更新收藏夹照片计数
-                CollectionMapper::decr_photo_count_batch(txn, &affected_collections).await?;
-
-                // 删除照片评论点赞
-                let comment_ids = CommentMapper::delete_by_photo_ids(txn, &photo_ids).await?;
-                CommentLikeMapper::delete_by_comment_ids(txn, &comment_ids).await?;
-
-                // 删除照片点赞
-                for photo_id in &photo_ids {
-                    PhotoLikeMapper::delete_all_by_photo_id(txn, *photo_id).await?;
-                }
-
-                // 删除数据库照片
-                PhotoMapper::delete_by_ids(txn, &photo_ids).await?;
-
-                Ok(photos)
-            })
-        })
-        .timed(metrics_timer_name!("delete_photos", "db_transaction"))
-        .await
-        .trace_internal_err("db_txn_err", "数据库事务错误")?;
+        // 在单个事务内执行删除步骤管道(主表删除恒在最后),任一步失败整体回滚
+        let mut ctx = PhotoDeleteContext { photos };
+        DELETE_PIPELINE
+            .run(&state.db, &mut ctx)
+            .timed(metrics_name!("db_transaction"))
+            .await?;
 
         // 删除照片文件
-        let file_ids = photos.iter().map(|p| p.file_id.clone()).collect::<Vec<_>>();
+        let file_ids = ctx.photos.iter().map(|p| &p.file_id).collect::<Vec<_>>();
         state
             .s3_client
             .delete_batch(file_ids)
-            .timed(metrics_timer_name!("delete_photos", "s3_delete_batch"))
+            .timed(metrics_name!("s3_delete_batch"))
             .await?;
 
-        // 更新照片时间线统计
-        TimelineStatMapper::decr_stat_by_created_ats(
-            &state.db,
-            &photos.iter().map(|p| p.created_at).collect::<Vec<_>>(),
-        )
-        .timed(metrics_timer_name!("delete_photos", "timeline_decr_stat"))
-        .await?;
-
-        metrics_success!("delete_photos");
+        metrics_success!();
 
         Ok(())
+    }
+}
+
+/// 照片删除步骤共享上下文(由 `PhotoService::delete_photos` 提前查询并鉴权后填充)
+pub(crate) struct PhotoDeleteContext {
+    pub photos: Vec<PhotoRecord>,
+}
+
+impl PhotoDeleteContext {
+    pub fn photo_ids(&self) -> Vec<PhotoId> {
+        self.photos.iter().map(|p| p.id).collect()
+    }
+}
+
+step_derive::declare_pipeline!(PhotoDeleteContext, PHOTO_DELETE_STEPS, DELETE_PIPELINE);
+
+/// 删除照片主表记录(受外键约束,`is_final` 使其恒在管道最后执行)
+#[step_derive::declare_step(
+    ctx = crate::services::photo_service::PhotoDeleteContext,
+    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    name = "photo_record_delete",
+    owns = ["PhotoMapper"],
+    is_final = true,
+)]
+impl PhotoService {
+    async fn on_photo_delete(
+        &self,
+        txn: &sea_orm::DatabaseTransaction,
+        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+    ) -> common::Result<()> {
+        PhotoMapper::delete_by_ids(txn, &ctx.photo_ids()).await?;
+        Ok(())
+    }
+}
+
+/// 图片下载结果，Controller 根据此类型构建 HTTP 响应
+pub(crate) enum ImageDownloadData {
+    /// 处理后的图片（缩略图/预览/裁剪），始终为 webp 格式
+    Processed(Bytes),
+    /// 原始图片，以流式返回，动态内容类型
+    Original {
+        /// 图片字节流
+        stream: Pin<Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>>,
+        /// 根据文件扩展名推断的 MIME 类型
+        content_type: &'static str,
+    },
+}
+
+// 图片下载
+impl PhotoService {
+    /// 根据 ImageToken 下载图片，返回处理后的数据或原始流
+    #[tracing::instrument(
+        skip_all,
+        fields(viewer_id = %token.viewer_id, file_id = %token.file_id)
+    )]
+    pub async fn download_image(
+        state: &PhotoState,
+        token: ImageToken,
+    ) -> Result<ImageDownloadData> {
+        metrics_group!();
+
+        match token.token_type {
+            ImageTokenType::Thumbnail | ImageTokenType::Preview | ImageTokenType::Crop => {
+                let process_param: String = match token.token_type {
+                    ImageTokenType::Thumbnail => "image/resize,w_300/format,webp".to_string(),
+                    ImageTokenType::Preview => "image/resize,w_1920/format,webp".to_string(),
+                    ImageTokenType::Crop => {
+                        let bbox = token.bbox.ok_or_warn_bad_request(
+                            "image_token_crop_info_not_found",
+                            "token里面没有包含裁剪信息",
+                            "token不包含裁剪信息",
+                        )?;
+                        let size = 200;
+                        let (width, height) =
+                            PhotoMapper::query_dimensions_by_file_id(&state.db, &token.file_id)
+                                .await?
+                                .ok_or_warn_bad_request(
+                                    "photo_not_found",
+                                    "裁剪图片不存在",
+                                    "照片不存在",
+                                )?;
+                        let (x, y, w, h) = bbox.to_pixel_rect(width as u32, height as u32);
+                        format!("image/crop,x_{x},y_{y},w_{w},h_{h}/resize,w_{size}/format,webp")
+                    }
+                    _ => unreachable!(),
+                };
+                let bytes = state
+                    .s3_client
+                    .download_with_process(&token.file_id, &process_param)
+                    .timed(metrics_name!("s3_download_process"))
+                    .await?;
+
+                metrics_success!();
+                Ok(ImageDownloadData::Processed(bytes))
+            }
+            ImageTokenType::Original => {
+                let stream_resp = state
+                    .s3_client
+                    .get_download_stream_response(&token.file_id)
+                    .timed(metrics_name!("s3_download_stream"))
+                    .await?;
+
+                let stream: Pin<
+                    Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>,
+                > = Box::pin(stream_resp);
+
+                let content_type = Self::get_image_content_type(&token.file_id);
+                metrics_success!();
+                Ok(ImageDownloadData::Original {
+                    stream,
+                    content_type,
+                })
+            }
+        }
+    }
+
+    /// 根据文件扩展名获取图片 MIME 类型
+    fn get_image_content_type(file_id: &str) -> &'static str {
+        let ext = file_id
+            .split('.')
+            .next_back()
+            .unwrap_or("jpg")
+            .to_lowercase();
+        match ext.as_str() {
+            "png" => "image/png",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
+            "bmp" => "image/bmp",
+            _ => "image/jpeg",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::pipeline::Step;
+
+    /// 验证 `linkme` 定义即注册:全部清理步骤均被收集,且存在唯一的 final 步骤(主表删除)
+    #[test]
+    fn step_registry_collects_all_steps() {
+        let steps: Vec<&'static dyn Step<PhotoDeleteContext>> = PHOTO_DELETE_STEPS.to_vec();
+
+        #[cfg(feature = "face")]
+        assert_eq!(steps.len(), 6);
+        #[cfg(not(feature = "face"))]
+        assert_eq!(steps.len(), 5);
+
+        let finals: Vec<_> = steps.iter().filter(|step| step.is_final()).collect();
+        assert_eq!(finals.len(), 1);
     }
 }

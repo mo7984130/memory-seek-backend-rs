@@ -16,6 +16,7 @@ pub struct AppSetup {
 }
 
 impl AppSetup {
+    #[allow(unused_variables)]
     pub async fn init(cfg: &AppConfig) -> Result<Self, AppError> {
         // 1. 初始化基础设施
         let bases = bases::AppBasesInit::init(cfg).await?;
@@ -32,7 +33,9 @@ impl AppSetup {
         let state = Arc::new(AppState {
             db: bases.db,
             redis: bases.redis,
+            #[cfg(feature = "token_cipher")]
             token_cipher: libs.token_cipher,
+            #[cfg(feature = "email")]
             email_client: libs.email_client,
             #[cfg(feature = "s3")]
             s3_client: libs.s3_client,

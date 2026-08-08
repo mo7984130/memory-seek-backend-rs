@@ -2,15 +2,14 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use common::{Result, ext::ResultErrExt};
-use entities::photo::timeline_stat::*;
 use sea_orm::{
     ActiveValue::Set,
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     entity::prelude::DateTimeUtc,
     sea_query::{Alias, CaseStatement, Expr, Func, OnConflict, SimpleExpr},
 };
-
-use crate::models::timeline_stat::MonthStat;
+use types::photo::timeline_stat::TimelineStatId;
+use types::photo::{dto::timeline_stat::MonthStat, timeline_stat::*};
 
 pub(crate) struct TimelineStatMapper;
 
@@ -20,7 +19,7 @@ impl TimelineStatMapper {
         let now = Utc::now();
 
         let insert = ActiveModel {
-            date_str: Set(date_str),
+            date_str: Set(TimelineStatId(date_str)),
             count: Set(1),
             anchor_time: Set(created_at),
             created_at: Set(now),
@@ -43,7 +42,7 @@ impl TimelineStatMapper {
 
     pub async fn decr_stat_by_created_ats(
         db: &impl ConnectionTrait,
-        created_ats: &[DateTimeUtc],
+        created_ats: &[&DateTimeUtc],
     ) -> Result<()> {
         let mut date_count_map: HashMap<String, i64> = HashMap::new();
         for created_at in created_ats {
@@ -61,10 +60,10 @@ impl TimelineStatMapper {
 
         for (date_str, decr_count) in &date_count_map {
             case_expr = case_expr.case(
-                Expr::col(Column::DateStr).eq(date_str.clone()),
+                Expr::col(Column::DateStr).eq(TimelineStatId(date_str.clone())),
                 Expr::col(Column::Count).sub(*decr_count),
             );
-            date_strs.push(date_str.clone());
+            date_strs.push(TimelineStatId(date_str.clone()));
         }
         // ELSE count (不在列表中的行保持不变，实际上 filter 已经限制了)
         case_expr = case_expr.finally(Expr::col(Column::Count));
@@ -81,8 +80,7 @@ impl TimelineStatMapper {
             .col_expr(Column::UpdatedAt, Expr::current_timestamp().into())
             .filter(Column::DateStr.is_in(date_strs))
             .exec(db)
-            .await
-            .trace_internal_err("db_update_err", "批量更新照片时间线统计错误")?;
+            .await?;
 
         Ok(())
     }
