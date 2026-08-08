@@ -110,10 +110,13 @@ export function recordResult(label, result) {
 
 /**
  * 实时输出单次操作结果
+ * 默认仅打印失败(压测日志量巨大); 设 LOG_LEVEL=debug 打印全部
  * @param {string} label - 操作标签
  * @param {{ success: boolean, duration: number, error?: { status: number, body: string } }} result
  */
 export function logResult(label, result) {
+    const debug = __ENV.LOG_LEVEL === "debug";
+    if (result.success && !debug) return;
     const status = result.success ? "\x1b[32mOK\x1b[0m" : "\x1b[31mFAIL\x1b[0m";
     console.log(`  [${status}] ${label} ${Math.round(result.duration)}ms`);
     if (!result.success && result.error) {

@@ -12,10 +12,10 @@ on:
                     - compare
                     - baseline
             ref:
-                description: "被测分支/ref(默认当前)"
+                description: "被测分支/ref, 默认 develop(main 分支的 workflow 不含缓存/诊断逻辑)"
                 required: false
                 type: string
-                default: ""
+                default: "develop"
             runs:
                 description: "每场景压测轮次(取中位数)"
                 required: false
@@ -26,17 +26,34 @@ on:
                 required: false
                 type: number
                 default: 0
+    pull_request:
+        branches: [main]
     schedule:
         # 每周一 02:00 自动刷新 develop 基线
         - cron: "0 2 * * 1"
+
+# PR 评论需要写权限; actions:write 供缓存保存
+permissions:
+    contents: read
+    actions: write
+    issues: write
+    pull-requests: write
+
+# 同一 PR 内新 push 自动取消旧 run, 避免重复压测堆积
+concurrency:
+    group: load-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
 
 jobs:
     load:
         runs-on: ubuntu-latest
         env:
             FEATURES: metrics,auth,user,photo
-            RUNS: ${{ inputs.runs || 3 }}
+            # PR 到 main 默认快速跑 1 轮; 手动/定时按 inputs 或默认 3
+            RUNS: ${{ github.event_name == 'pull_request' && '1' || inputs.runs || '3' }}
+            # schedule -> baseline, 其它(手动/PR) -> compare
             MODE: ${{ github.event_name == 'schedule' && 'baseline' || inputs.mode || 'compare' }}
+            PR_NUMBER: ${{ inputs.pr_number != 0 && inputs.pr_number || github.event.pull_request.number || '0' }}
         steps:
             - name: Checkout
               uses: actions/checkout@v7
@@ -46,7 +63,13 @@ jobs:
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
 
+            # 依赖/target 缓存(key 基于 Cargo.lock + 平台, 不随 commit 变;
+            # 默认不缓存最终可执行文件, 业务 crate 每次增量编译)
             - uses: Swatinem/rust-cache@v2
+              with:
+                  # 压测可能失败/取消: 失败也保存缓存, 否则 release 依赖从未落盘,
+                  # 每次都会全量编译
+                  cache-on-failure: true
 
             - name: Build (release + metrics)
               run: cargo build --release --features "$FEATURES"
@@ -78,8 +101,9 @@ jobs:
                   tail -100 server.log
                   exit 1
 
-            - name: 种子数据(占位)
-              run: make -C tests/load seed || true
+            - name: 种子数据 (建表 + 灌数据)
+              # 不再容错: seed 失败必须暴露(否则压测会在无表库上全量报错)
+              run: make -C tests/load seed
 
             - name: 全场景压测 (${{ env.RUNS }} 轮)
               run: make -C tests/load run-all RUNS=$RUNS
@@ -118,7 +142,8 @@ jobs:
                   path: tests/load/baselines
                   key: load-baseline-develop-${{ github.sha }}
 
-            - name: 上传结果 (artifact)
+            - name: 上传结果 (artifact, 无论成败)
+              if: always()
               uses: actions/upload-artifact@v4
               with:
                   name: load-results-${{ env.MODE }}-${{ github.sha }}
@@ -126,8 +151,16 @@ jobs:
                       tests/load/results
                       server.log
 
-            - name: 发布 PR 评论 (compare 模式 + 指定 pr_number)
-              if: env.MODE == 'compare' && inputs.pr_number != 0
+            - name: 失败诊断 (打印 server.log 与结果目录)
+              if: failure()
+              run: |
+                  echo "===== server.log (tail 200) ====="
+                  tail -200 server.log 2>/dev/null || echo "(server.log 不存在)"
+                  echo "===== results 目录 ====="
+                  ls -la tests/load/results/ 2>/dev/null || true
+
+            - name: 发布 PR 评论 (compare 模式且存在 PR 号)
+              if: env.MODE == 'compare' && env.PR_NUMBER != '0'
               uses: actions/github-script@v7
               with:
                   script: |
@@ -142,6 +175,6 @@ jobs:
                       await github.rest.issues.createComment({
                           owner: context.repo.owner,
                           repo: context.repo.repo,
-                          issue_number: ${{ inputs.pr_number }},
+                          issue_number: Number('${{ env.PR_NUMBER }}'),
                           body
                       });
