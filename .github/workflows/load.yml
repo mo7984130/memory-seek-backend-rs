@@ -26,7 +26,8 @@ on:
                 required: false
                 type: number
                 default: 0
-    pull_request:
+    # PR 合并到 main 后自动压测(push 事件由合并产生)
+    push:
         branches: [main]
     schedule:
         # 每周一 02:00 自动刷新 develop 基线
@@ -49,8 +50,8 @@ jobs:
         runs-on: ubuntu-latest
         env:
             FEATURES: metrics,auth,user,photo
-            # PR 到 main 默认快速跑 1 轮; 手动/定时按 inputs 或默认 3
-            RUNS: ${{ github.event_name == 'pull_request' && '1' || inputs.runs || '3' }}
+            # 合并到 main 默认完整跑 3 轮; 手动触发可覆盖 runs
+            RUNS: ${{ inputs.runs || 3 }}
             # schedule -> baseline, 其它(手动/PR) -> compare
             MODE: ${{ github.event_name == 'schedule' && 'baseline' || inputs.mode || 'compare' }}
             PR_NUMBER: ${{ inputs.pr_number != 0 && inputs.pr_number || github.event.pull_request.number || '0' }}
