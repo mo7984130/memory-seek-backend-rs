@@ -46,32 +46,12 @@ jobs:
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
 
+            # 依赖/target 缓存(key 基于 Cargo.lock + 平台, 不随 commit 变;
+            # 默认不缓存最终可执行文件, 业务 crate 每次增量编译)
             - uses: Swatinem/rust-cache@v2
 
-            # 显式缓存 release 二进制: 仅 Rust 源码/依赖变化时才失效
-            # (Swatinem/rust-cache 缓存的是依赖 target, 与 ci.yml 的 debug 产物不互通)
-            # key 用源码内容 hash 而非 commit sha, 避免改压测脚本/workflow 也触发重编
-            - name: 计算源码缓存 key
-              id: src-hash
-              run: echo "hash=${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', 'common/**', 'types/**', 'domains/**', 'libs/**', 'server/**') }}" >> "$GITHUB_OUTPUT"
-
-            - name: 恢复 release 二进制缓存
-              id: release-bin
-              uses: actions/cache/restore@v4
-              with:
-                  path: target/release/memory-seek-server
-                  key: load-bin-${{ steps.src-hash.outputs.hash }}
-
             - name: Build (release + metrics)
-              if: steps.release-bin.outputs.cache-hit != 'true'
               run: cargo build --release --features "$FEATURES"
-
-            - name: 保存 release 二进制缓存
-              if: steps.release-bin.outputs.cache-hit != 'true'
-              uses: actions/cache/save@v4
-              with:
-                  path: target/release/memory-seek-server
-                  key: load-bin-${{ steps.src-hash.outputs.hash }}
 
             - name: Install k6
               uses: grafana/setup-k6-action@v1
