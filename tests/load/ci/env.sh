@@ -26,8 +26,8 @@ PHOTO_NOS3_SERVICES="${PHOTO_NOS3_SERVICES:-collection collection_photo comment 
 
 # ── 目录约定 ──────────────────────────────────────────
 CI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOAD_DIR="$(dirname "$CI_DIR")"
-ROOT_DIR="$(dirname "$LOAD_DIR")"
+LOAD_DIR="$(dirname "$CI_DIR")"        # .../tests/load
+ROOT_DIR="$(dirname "$(dirname "$LOAD_DIR")")"  # .../tests/load -> 仓库根
 
 RESULTS_DIR="${LOAD_DIR}/results"
 RUNS_DIR="${RESULTS_DIR}/run"                    # run-<n> 单轮结果
