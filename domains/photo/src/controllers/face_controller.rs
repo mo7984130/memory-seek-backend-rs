@@ -166,9 +166,9 @@ impl FaceController {
     async fn get_unassigned_face_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(param): ValidatedQuery<UnassignedFacePhotoCursorParam>,
+        ValidatedQuery(req): ValidatedQuery<UnassignedFacePhotoCursorParam>,
     ) -> Result<R<CursorPage<PhotoView, TimeIdCursor<PhotoId>>>> {
-        FaceService::get_unassigned_face_photos(&state, user_id, param)
+        FaceService::get_unassigned_face_photos(&state, user_id, req)
             .await
             .to_r_ok()
     }
@@ -202,13 +202,13 @@ impl FaceController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         OptionalClientIp(ip): OptionalClientIp,
-        ValidatedJson(param): ValidatedJson<FaceDeleteBatchParam>,
+        ValidatedJson(req): ValidatedJson<FaceDeleteBatchParam>,
     ) -> Result<R<FaceDeleteBatchResult>> {
-        let result = FaceService::delete_faces_batch(&state, &param.face_ids).await?;
+        let result = FaceService::delete_faces_batch(&state, &req.face_ids).await?;
 
         // 行为审计：批量删除人脸（按批量传入的 face_id 逐条记录）
         let ip_str = ip.map(|ip| ip.to_string());
-        for face_id in param.face_ids.iter() {
+        for face_id in req.face_ids.iter() {
             BehaviorService::record(
                 &state,
                 BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceDelete)

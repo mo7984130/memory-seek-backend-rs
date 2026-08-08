@@ -62,9 +62,9 @@ impl CommentController {
         Extension(user_id): Extension<UserId>,
         OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
-        ValidatedJson(param): ValidatedJson<CommentPublishParam>,
+        ValidatedJson(req): ValidatedJson<CommentPublishParam>,
     ) -> Result<R<CommentView>> {
-        let comment = CommentService::publish(&state, photo_id, user_id, param).await?;
+        let comment = CommentService::publish(&state, user_id, photo_id, req).await?;
 
         // 行为审计：发布评论
         BehaviorService::record(
@@ -89,9 +89,9 @@ impl CommentController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
-        ValidatedQuery(param): ValidatedQuery<CommentCursorPageParam>,
+        ValidatedQuery(req): ValidatedQuery<CommentCursorPageParam>,
     ) -> Result<R<CursorPage<CommentView, String>>> {
-        CommentService::get_cursor_page(&state, photo_id, user_id, param)
+        CommentService::get_cursor_page(&state, user_id, photo_id, req)
             .await
             .to_r_ok()
     }

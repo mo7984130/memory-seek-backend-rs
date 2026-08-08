@@ -73,12 +73,12 @@ impl PhotoController {
             .await
             .trace_internal_err("read_file_err", "读取文件失败")?;
 
-        let param = types::photo::models::UploadPhotoParam {
+        let req = types::photo::models::UploadPhotoParam {
             file_name,
             content_type,
             created_at: None,
         };
-        let photo = PhotoService::upload_photo(&state, user_id, file_data, param).await?;
+        let photo = PhotoService::upload_photo(&state, user_id, file_data, req).await?;
 
         // 行为审计：上传
         BehaviorService::record(
@@ -95,18 +95,18 @@ impl PhotoController {
     async fn get_photos_cursor(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(query): ValidatedQuery<PhotoCursorParam>,
+        ValidatedQuery(req): ValidatedQuery<PhotoCursorParam>,
     ) -> Result<R<CursorPage<PhotoView, String>>> {
-        PhotoService::get_photo_cursor_page(&state, user_id, query)
+        PhotoService::get_photo_cursor_page(&state, user_id, req)
             .await
             .to_r_ok()
     }
 
     async fn md5s_exist(
         State(state): State<Arc<PhotoState>>,
-        ValidatedJson(data): ValidatedJson<ExistsByMd5BatchParam>,
+        ValidatedJson(req): ValidatedJson<ExistsByMd5BatchParam>,
     ) -> Result<R<Vec<bool>>> {
-        PhotoService::exists_by_md5_batch(&state, data)
+        PhotoService::exists_by_md5_batch(&state, req)
             .await
             .to_r_ok()
     }
@@ -163,11 +163,11 @@ impl PhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         OptionalClientIp(ip): OptionalClientIp,
-        ValidatedJson(data): ValidatedJson<DeletePhotosParam>,
+        ValidatedJson(req): ValidatedJson<DeletePhotosParam>,
     ) -> Result<R<()>> {
-        let photo_ids: Vec<i64> = data.photo_ids.iter().map(|id| id.0).collect();
+        let photo_ids: Vec<i64> = req.photo_ids.iter().map(|id| id.0).collect();
 
-        PhotoService::delete_photos(&state, user_id, data)
+        PhotoService::delete_photos(&state, user_id, req)
             .await
             .to_r_ok()?;
 

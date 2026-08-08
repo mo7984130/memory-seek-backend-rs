@@ -36,10 +36,10 @@ impl BehaviorController {
     async fn stats(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(param): ValidatedQuery<BehaviorStatsQuery>,
+        ValidatedQuery(req): ValidatedQuery<BehaviorStatsQuery>,
     ) -> Result<R<Vec<BehaviorStatsItem>>> {
         let admin = AdminId::new(user_id)?;
-        BehaviorService::get_stats(&state, admin, param)
+        BehaviorService::get_stats(&state, admin, req)
             .await
             .to_r_ok()
     }
@@ -48,10 +48,10 @@ impl BehaviorController {
     async fn top(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(param): ValidatedQuery<BehaviorTopQuery>,
+        ValidatedQuery(req): ValidatedQuery<BehaviorTopQuery>,
     ) -> Result<R<Vec<BehaviorTopItem>>> {
         let admin = AdminId::new(user_id)?;
-        BehaviorService::get_top(&state, admin, param)
+        BehaviorService::get_top(&state, admin, req)
             .await
             .to_r_ok()
     }
@@ -60,10 +60,10 @@ impl BehaviorController {
     async fn audit(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(param): ValidatedQuery<BehaviorAuditQuery>,
+        ValidatedQuery(req): ValidatedQuery<BehaviorAuditQuery>,
     ) -> Result<R<CursorPage<BehaviorAuditItem, String>>> {
         let admin = AdminId::new(user_id)?;
-        BehaviorService::get_audit(&state, admin, param)
+        BehaviorService::get_audit(&state, admin, req)
             .await
             .to_r_ok()
     }

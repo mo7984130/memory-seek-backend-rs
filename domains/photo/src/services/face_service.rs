@@ -243,7 +243,10 @@ impl FaceService {
     /// - 封面按「score 最高 = 封面」规则维护: 移入可能替换新人物封面,
     ///   移出若曾是旧人物封面则回退到剩余 score 最高人脸;
     /// - 涉及的行加锁且按 id 升序, 避免并发丢失更新与死锁。
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(
+        skip_all,
+        fields(face_id = %face_id, person_id = ?person_id)
+    )]
     pub async fn change_face_belonging(
         state: &PhotoState,
         face_id: FaceId,
@@ -472,10 +475,13 @@ impl FaceService {
 
 // 查询
 impl FaceService {
+    #[tracing::instrument(skip_all, fields(photo_id = %photo_id))]
     pub async fn get_faces_by_photo_id(
         state: &PhotoState,
         photo_id: PhotoId,
     ) -> Result<Vec<FaceView>> {
+        metrics_group!();
+
         let faces = FaceMapper::query_by_photo_id(&state.db, photo_id).await?;
 
         // 批量加载归属人物名称
@@ -488,7 +494,7 @@ impl FaceService {
         .into_iter()
         .collect();
 
-        faces
+        let views = faces
             .into_iter()
             .map(|face| FaceView {
                 id: face.id,
@@ -496,23 +502,25 @@ impl FaceService {
                 person_id: face.person_id,
                 person_name: face.person_id.and_then(|id| person_names.get(&id).cloned()),
             })
-            .collect::<Vec<FaceView>>()
-            .to_ok()
+            .collect::<Vec<FaceView>>();
+
+        metrics_success!();
+        views.to_ok()
     }
 
     /// 获取"包含未分配人脸"的照片列表(游标分页, 不区分照片归属者)
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_unassigned_face_photos(
         state: &PhotoState,
-        viewer_user_id: UserId,
-        param: UnassignedFacePhotoCursorParam,
+        user_id: UserId,
+        req: UnassignedFacePhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
         metrics_group!();
 
         let photo_ids = FaceMapper::query_unassigned_face_photo_ids_cursor_page(
             &state.db,
-            param.cursor,
-            param.size,
+            req.cursor,
+            req.size,
         )
         .timed(metrics_name!("query_unassigned_face_photo_ids"))
         .await?;
@@ -521,11 +529,11 @@ impl FaceService {
             return Ok(CursorPage::empty());
         }
 
-        let photos = PhotoService::load_photos_info(state, viewer_user_id, &photo_ids)
+        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))
             .await?;
 
-        let page = CursorPage::from_oversize_fn(photos, param.size, |photo| {
+        let page = CursorPage::from_oversize_fn(photos, req.size, |photo| {
             TimeIdCursor {
                 created_at: photo.created_at,
                 id: photo.id,
@@ -541,7 +549,7 @@ impl FaceService {
 // 删除
 impl FaceService {
     /// 删除单张人脸(仅限未归属人物的人脸, 避免破坏人物统计不变量)
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(face_id = %face_id))]
     pub async fn delete_face(state: &PhotoState, face_id: FaceId) -> Result<()> {
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
@@ -578,7 +586,7 @@ impl FaceService {
     ///
     /// 与单张删除一致, 已归属人脸会被跳过, 不参与删除;
     /// 通过 SQL 条件 `person_id IS NULL` 原子过滤, 无需逐张加锁。
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(count = %face_ids.len()))]
     pub async fn delete_faces_batch(
         state: &PhotoState,
         face_ids: &FaceIds,

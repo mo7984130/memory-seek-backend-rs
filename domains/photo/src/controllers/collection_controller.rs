@@ -43,9 +43,9 @@ impl CollectionController {
     async fn create(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedJson(data): ValidatedJson<CollectionCreateParam>,
+        ValidatedJson(req): ValidatedJson<CollectionCreateParam>,
     ) -> Result<R<CollectionView>> {
-        CollectionService::create_collection(&state, user_id, data)
+        CollectionService::create_collection(&state, user_id, req)
             .await
             .to_r_ok()
     }
@@ -69,9 +69,9 @@ impl CollectionController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
-        ValidatedJson(param): ValidatedJson<CollectionUpdateParam>,
+        ValidatedJson(req): ValidatedJson<CollectionUpdateParam>,
     ) -> Result<R<()>> {
-        CollectionService::update_collection_info(&state, user_id, collection_id, param)
+        CollectionService::update_collection_info(&state, user_id, collection_id, req)
             .await
             .to_r_ok()
     }

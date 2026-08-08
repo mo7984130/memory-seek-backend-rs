@@ -85,10 +85,10 @@ impl PersonController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         OptionalClientIp(ip): OptionalClientIp,
-        ValidatedJson(param): ValidatedJson<SecondaryClusterParam>,
+        ValidatedJson(req): ValidatedJson<SecondaryClusterParam>,
     ) -> Result<R<()>> {
         let admin = AdminId::new(user_id)?;
-        PersonService::assign_unassigned_faces(state.clone(), admin, param).await?;
+        PersonService::assign_unassigned_faces(state.clone(), admin, req).await?;
 
         // 行为审计：人物二次聚类
         BehaviorService::record(
@@ -110,14 +110,14 @@ impl PersonController {
         Extension(user_id): Extension<UserId>,
         OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(person_id): ValidatedPath<PersonId>,
-        ValidatedJson(param): ValidatedJson<RenamePersonParam>,
+        ValidatedJson(req): ValidatedJson<RenamePersonParam>,
     ) -> Result<R<()>> {
         let old_name = PersonService::query_name(&state, person_id)
             .await?
             .unwrap_or_default();
-        let new_name = param.new_name.to_string();
+        let new_name = req.new_name.to_string();
 
-        PersonService::rename_person(&state, person_id, param).await?;
+        PersonService::rename_person(&state, person_id, req).await?;
 
         // 行为审计：重命名人物（记录改名前后）
         BehaviorService::record(
@@ -137,14 +137,14 @@ impl PersonController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         OptionalClientIp(ip): OptionalClientIp,
-        ValidatedJson(param): ValidatedJson<MergePersonParam>,
+        ValidatedJson(req): ValidatedJson<MergePersonParam>,
     ) -> Result<R<PersonView>> {
         let admin = AdminId::new(user_id)?;
 
         let MergePersonParam {
             source_person_id,
             target_person_id,
-        } = param;
+        } = req;
 
         let result = PersonService::merge_person(
             &state,
@@ -178,9 +178,9 @@ impl PersonController {
     pub async fn get_persons(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(query): ValidatedQuery<PersonCursorParam>,
+        ValidatedQuery(req): ValidatedQuery<PersonCursorParam>,
     ) -> Result<R<CursorPage<PersonView, FaceCountIdCursor<PersonId>>>> {
-        PersonService::get_persons(&state, user_id, query)
+        PersonService::get_persons(&state, user_id, req)
             .await
             .to_r_ok()
     }
@@ -189,9 +189,9 @@ impl PersonController {
     pub async fn search_persons(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(query): ValidatedQuery<PersonSearchParam>,
+        ValidatedQuery(req): ValidatedQuery<PersonSearchParam>,
     ) -> Result<R<CursorPage<PersonView, PersonId>>> {
-        PersonService::search_persons(&state, user_id, query)
+        PersonService::search_persons(&state, user_id, req)
             .await
             .to_r_ok()
     }
@@ -201,9 +201,9 @@ impl PersonController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedPath(person_id): ValidatedPath<PersonId>,
-        ValidatedQuery(query): ValidatedQuery<PersonPhotoCursorParam>,
+        ValidatedQuery(req): ValidatedQuery<PersonPhotoCursorParam>,
     ) -> Result<R<CursorPage<PhotoView, TimeIdCursor<PhotoId>>>> {
-        PersonService::get_person_photos(&state, user_id, person_id, query)
+        PersonService::get_person_photos(&state, user_id, person_id, req)
             .await
             .to_r_ok()
     }

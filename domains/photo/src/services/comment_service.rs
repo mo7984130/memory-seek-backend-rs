@@ -31,16 +31,20 @@ pub(crate) struct CommentService;
 
 // 创建
 impl CommentService {
-    #[tracing::instrument(name = "publish_comment", skip_all)]
+    #[tracing::instrument(
+        name = "publish_comment",
+        skip_all,
+        fields(user_id = %user_id, photo_id = %photo_id)
+    )]
     pub async fn publish(
         state: &PhotoState,
-        photo_id: PhotoId,
         user_id: UserId,
-        param: CommentPublishParam,
+        photo_id: PhotoId,
+        req: CommentPublishParam,
     ) -> Result<CommentView> {
         metrics_group!();
 
-        let CommentPublishParam { content } = param;
+        let CommentPublishParam { content } = req;
 
         let comment = timed!("db_transaction", {
             DbUtils::write(&state.db, |txn| {
@@ -69,17 +73,21 @@ impl CommentService {}
 
 // 查询
 impl CommentService {
-    #[tracing::instrument(name = "get_comment_cursor_page", skip_all)]
+    #[tracing::instrument(
+        name = "get_comment_cursor_page",
+        skip_all,
+        fields(user_id = %user_id, photo_id = %photo_id)
+    )]
     pub async fn get_cursor_page(
         state: &PhotoState,
-        photo_id: PhotoId,
         user_id: UserId,
-        param: CommentCursorPageParam,
+        photo_id: PhotoId,
+        req: CommentCursorPageParam,
     ) -> Result<CursorPage<CommentView, String>> {
         metrics_group!();
 
         // 如果是第一次(不带Cursor)获取的话, 展示热门评论
-        let hot_comments = if param.cursor.is_none() {
+        let hot_comments = if req.cursor.is_none() {
             CommentMapper::query_hot_comments(
                 &state.db,
                 photo_id,
@@ -99,8 +107,8 @@ impl CommentService {
             &state.db,
             photo_id,
             &exclude_ids,
-            param.cursor.as_ref(),
-            param.size,
+            req.cursor.as_ref(),
+            req.size,
         )
         .timed(metrics_name!("query_by_photo_id"))
         .await?;
@@ -109,7 +117,7 @@ impl CommentService {
             records: time_comments,
             has_more,
             ..
-        } = CursorPage::from_oversize(time_comments, param.size);
+        } = CursorPage::from_oversize(time_comments, req.size);
         let mut comments = hot_comments;
         comments.extend(time_comments);
 
@@ -154,7 +162,11 @@ impl CommentService {
 
 // 删除
 impl CommentService {
-    #[tracing::instrument(name = "delete_comment", skip_all)]
+    #[tracing::instrument(
+        name = "delete_comment",
+        skip_all,
+        fields(user_id = %user_id, comment_id = %comment_id)
+    )]
     pub async fn delete(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
         metrics_group!();
 

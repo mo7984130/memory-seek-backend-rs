@@ -12,7 +12,11 @@ pub(crate) struct CommentLikeService;
 
 // 创建
 impl CommentLikeService {
-    #[tracing::instrument(name = "like_comment", skip_all)]
+    #[tracing::instrument(
+        name = "like_comment",
+        skip_all,
+        fields(user_id = %user_id, comment_id = %comment_id)
+    )]
     pub async fn like(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
         metrics_group!();
 
@@ -51,7 +55,11 @@ impl CommentLikeService {}
 
 // 删除
 impl CommentLikeService {
-    #[tracing::instrument(name = "unlike_comment", skip_all)]
+    #[tracing::instrument(
+        name = "unlike_comment",
+        skip_all,
+        fields(user_id = %user_id, comment_id = %comment_id)
+    )]
     pub async fn unlike(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
         metrics_group!();
 

@@ -14,7 +14,7 @@ pub(crate) struct CollectionService;
 
 // 查询
 impl CollectionService {
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_collection_list(
         state: &PhotoState,
         user_id: UserId,
@@ -41,15 +41,15 @@ impl CollectionService {
 
 // 添加
 impl CollectionService {
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn create_collection(
         state: &PhotoState,
         user_id: UserId,
-        param: CollectionCreateParam,
+        req: CollectionCreateParam,
     ) -> Result<CollectionView> {
         metrics_group!();
 
-        let CollectionCreateParam { name, description } = param;
+        let CollectionCreateParam { name, description } = req;
         let collection = CollectionMapper::insert(&state.db, user_id, name, description)
             .timed(metrics_name!("db_insert"))
             .await?;
@@ -61,12 +61,15 @@ impl CollectionService {
 
 // 修改
 impl CollectionService {
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(
+        skip_all,
+        fields(user_id = %user_id, collection_id = %collection_id)
+    )]
     pub async fn update_collection_info(
         state: &PhotoState,
         user_id: UserId,
         collection_id: CollectionId,
-        param: CollectionUpdateParam,
+        req: CollectionUpdateParam,
     ) -> Result<()> {
         metrics_group!();
 
@@ -75,8 +78,8 @@ impl CollectionService {
             &state.db,
             collection_id,
             user_id,
-            param.name,
-            param.description,
+            req.name,
+            req.description,
         )
         .timed(metrics_name!("db_update"))
         .await?
@@ -93,7 +96,10 @@ impl CollectionService {
 
 // 删除
 impl CollectionService {
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(
+        skip_all,
+        fields(user_id = %user_id, collection_id = %collection_id)
+    )]
     pub async fn delete_collection(
         state: &PhotoState,
         user_id: UserId,

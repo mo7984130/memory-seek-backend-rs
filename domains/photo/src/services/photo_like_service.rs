@@ -24,7 +24,11 @@ pub(crate) struct PhotoLikeService;
 
 // 创建
 impl PhotoLikeService {
-    #[tracing::instrument(name = "like_photo", skip_all)]
+    #[tracing::instrument(
+        name = "like_photo",
+        skip_all,
+        fields(user_id = %user_id, photo_id = %photo_id)
+    )]
     pub async fn like(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
         metrics_group!();
 
@@ -60,11 +64,11 @@ impl PhotoLikeService {
 // 查询
 impl PhotoLikeService {
     /// 查询用户点赞的照片列表（带分页和照片详情）
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_user_liked_photos(
         state: &PhotoState,
         user_id: UserId,
-        param: LikedPhotosQuery,
+        req: LikedPhotosQuery,
     ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
@@ -72,8 +76,8 @@ impl PhotoLikeService {
         let photo_ids_with_like_time = PhotoLikeMapper::query_user_liked_photo_ids(
             &state.db,
             user_id,
-            &param.cursor,
-            param.size,
+            &req.cursor,
+            req.size,
         )
         .timed(metrics_name!("query_ids"))
         .await?;
@@ -84,7 +88,7 @@ impl PhotoLikeService {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, param.size);
+        } = CursorPage::from_oversize(photo_ids, req.size);
 
         if photo_ids.is_empty() {
             metrics_success!();
@@ -127,7 +131,11 @@ impl PhotoLikeService {
 
 // 删除
 impl PhotoLikeService {
-    #[tracing::instrument(name = "unlike_photo", skip_all)]
+    #[tracing::instrument(
+        name = "unlike_photo",
+        skip_all,
+        fields(user_id = %user_id, photo_id = %photo_id)
+    )]
     pub async fn unlike(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
         metrics_group!();
 

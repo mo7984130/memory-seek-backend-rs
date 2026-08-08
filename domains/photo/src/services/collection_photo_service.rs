@@ -33,7 +33,10 @@ pub(crate) struct CollectionPhotoService;
 // 查询
 impl CollectionPhotoService {
     /// 获取包含指定照片的所有收藏夹
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(
+        skip_all,
+        fields(user_id = %user_id, photo_id = %photo_id)
+    )]
     pub async fn get_collections_by_photo(
         state: &PhotoState,
         user_id: UserId,
@@ -60,12 +63,16 @@ impl CollectionPhotoService {
         Ok(collections)
     }
 
-    #[tracing::instrument(name = "get_collection_photos", skip_all)]
+    #[tracing::instrument(
+        name = "get_collection_photos",
+        skip_all,
+        fields(user_id = %user_id, collection_id = %collection_id)
+    )]
     pub async fn get_photos(
         state: &PhotoState,
         user_id: UserId,
         collection_id: CollectionId,
-        param: CollectionPhotoCursorPageParam,
+        req: CollectionPhotoCursorPageParam,
     ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
@@ -73,8 +80,8 @@ impl CollectionPhotoService {
             &state.db,
             user_id,
             collection_id,
-            param.cursor.as_ref(),
-            param.size,
+            req.cursor.as_ref(),
+            req.size,
         )
         .timed(metrics_name!("query_photo_ids"))
         .await?;
@@ -83,7 +90,7 @@ impl CollectionPhotoService {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, param.size);
+        } = CursorPage::from_oversize(photo_ids, req.size);
 
         let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))
@@ -112,7 +119,11 @@ impl CollectionPhotoService {
 
 // 添加
 impl CollectionPhotoService {
-    #[tracing::instrument(name = "add_collection_photos", skip_all)]
+    #[tracing::instrument(
+        name = "add_collection_photos",
+        skip_all,
+        fields(user_id = %user_id, collection_id = %collection_id, count = %photo_ids.len())
+    )]
     pub async fn add_photos(
         state: &PhotoState,
         user_id: UserId,
@@ -160,7 +171,11 @@ impl CollectionPhotoService {
 
 // 删除
 impl CollectionPhotoService {
-    #[tracing::instrument(name = "remove_collection_photos", skip_all)]
+    #[tracing::instrument(
+        name = "remove_collection_photos",
+        skip_all,
+        fields(user_id = %user_id, collection_id = %collection_id, count = %photo_ids.len())
+    )]
     pub async fn remove_photos(
         state: &PhotoState,
         user_id: UserId,

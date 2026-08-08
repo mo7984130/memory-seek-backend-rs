@@ -78,19 +78,19 @@ impl CollectionPhotoController {
         Extension(user_id): Extension<UserId>,
         OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
-        ValidatedJson(param): ValidatedJson<CollectionPhotoAddBatchParam>,
+        ValidatedJson(req): ValidatedJson<CollectionPhotoAddBatchParam>,
     ) -> Result<R<CollectionPhotoAddBatchResult>> {
         let result = CollectionPhotoService::add_photos(
             &state,
             user_id,
             collection_id,
-            param.photo_ids.clone(),
+            req.photo_ids.clone(),
         )
         .await?;
 
         // 行为审计：收藏照片（按批量传入的 photo_id 逐条记录）
         let ip_str = ip.map(|ip| ip.to_string());
-        for pid in param.photo_ids.iter() {
+        for pid in req.photo_ids.iter() {
             BehaviorService::record(
                 &state,
                 BehaviorRecordReq::new(user_id, UserBehaviorAction::Collect)
@@ -111,9 +111,9 @@ impl CollectionPhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
-        ValidatedQuery(query): ValidatedQuery<CollectionPhotoCursorPageParam>,
+        ValidatedQuery(req): ValidatedQuery<CollectionPhotoCursorPageParam>,
     ) -> Result<R<CursorPage<PhotoView, String>>> {
-        CollectionPhotoService::get_photos(&state, user_id, collection_id, query)
+        CollectionPhotoService::get_photos(&state, user_id, collection_id, req)
             .await
             .to_r_ok()
     }
@@ -148,7 +148,7 @@ impl CollectionPhotoController {
         )
         .await;
 
-        Ok(R::ok(()))
+        Ok(()).to_r_ok()
     }
 
     async fn remove_batch(
@@ -156,19 +156,19 @@ impl CollectionPhotoController {
         Extension(user_id): Extension<UserId>,
         OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
-        ValidatedJson(param): ValidatedJson<CollectionPhotoRemoveBatchParam>,
+        ValidatedJson(req): ValidatedJson<CollectionPhotoRemoveBatchParam>,
     ) -> Result<R<CollectionPhotoRemoveBatchResult>> {
         let result = CollectionPhotoService::remove_photos(
             &state,
             user_id,
             collection_id,
-            param.photo_ids.clone(),
+            req.photo_ids.clone(),
         )
         .await?;
 
         // 行为审计：取消收藏照片（按批量传入的 photo_id 逐条记录）
         let ip_str = ip.map(|ip| ip.to_string());
-        for pid in param.photo_ids.iter() {
+        for pid in req.photo_ids.iter() {
             BehaviorService::record(
                 &state,
                 BehaviorRecordReq::new(user_id, UserBehaviorAction::Uncollect)

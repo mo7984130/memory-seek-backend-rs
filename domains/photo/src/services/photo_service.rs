@@ -41,7 +41,10 @@ pub(crate) struct PhotoService;
 
 // 查询
 impl PhotoService {
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(
+        skip_all,
+        fields(user_id = %user_id, count = %photo_ids.len())
+    )]
     pub async fn load_photos_info(
         state: &PhotoState,
         user_id: UserId,
@@ -75,21 +78,21 @@ impl PhotoService {
             .to_ok()
     }
 
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_photo_cursor_page(
         state: &PhotoState,
         user_id: UserId,
-        param: PhotoCursorParam,
+        req: PhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, String>> {
         metrics_group!();
 
         // 获取photo_ids
         let photo_ids = PhotoMapper::query_cursor_page_ids(
             &state.db,
-            param.cursor,
-            param.size,
-            param.direction,
-            param.anchor_time,
+            req.cursor,
+            req.size,
+            req.direction,
+            req.anchor_time,
         )
         .timed(metrics_name!("find_cursor_page_ids"))
         .await?;
@@ -101,7 +104,7 @@ impl PhotoService {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, param.size);
+        } = CursorPage::from_oversize(photo_ids, req.size);
 
         let photo_vos = Self::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))
@@ -131,19 +134,22 @@ impl PhotoService {
 }
 
 impl PhotoService {
-    #[instrument(skip_all, fields(user_id, file_name = %param.file_name))]
+    #[instrument(
+        skip_all,
+        fields(user_id = %user_id, file_name = %req.file_name)
+    )]
     pub async fn upload_photo(
         state: &PhotoState,
         user_id: UserId,
         file_data: Bytes,
-        param: UploadPhotoParam,
+        req: UploadPhotoParam,
     ) -> Result<PhotoView> {
         metrics_group!();
 
         // 效验文件
         let metadata = {
             timed!("validate_photo", {
-                FileValidator::validate_image(&file_data, &param.file_name, &param.content_type)?
+                FileValidator::validate_image(&file_data, &req.file_name, &req.content_type)?
             })
         };
 
@@ -188,7 +194,7 @@ impl PhotoService {
             mime_type: Set(metadata.mime_type),
             md5: Set(md5_hash),
             file_id: Set(file_id.clone()),
-            created_at: Set(param.created_at.unwrap_or(now)),
+            created_at: Set(req.created_at.unwrap_or(now)),
             updated_at: Set(now),
             ..Default::default()
         }
@@ -216,15 +222,15 @@ impl PhotoService {
             .to_ok()
     }
 
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(count = %req.md5s.len()))]
     pub async fn exists_by_md5_batch(
         state: &PhotoState,
-        param: ExistsByMd5BatchParam,
+        req: ExistsByMd5BatchParam,
     ) -> Result<Vec<bool>> {
         metrics_group!();
 
-        let existing = PhotoMapper::exists_by_md5_batch(&state.db, &param.md5s).await?;
-        let res = param
+        let existing = PhotoMapper::exists_by_md5_batch(&state.db, &req.md5s).await?;
+        let res = req
             .md5s
             .iter()
             .map(|md5| existing.contains(md5))
@@ -234,16 +240,20 @@ impl PhotoService {
         Ok(res)
     }
 
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(
+        skip_all,
+        fields(user_id = %user_id, count = %req.photo_ids.len())
+    )]
     pub async fn delete_photos(
         state: &PhotoState,
         user_id: UserId,
-        DeletePhotosParam { photo_ids }: DeletePhotosParam,
+        req: DeletePhotosParam,
     ) -> Result<()> {
         metrics_group!();
 
         // 查询照片信息并鉴权
-        let photos = PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &photo_ids).await?;
+        let photos =
+            PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &req.photo_ids).await?;
 
         // 在单个事务内执行删除步骤管道(主表删除恒在最后),任一步失败整体回滚
         let mut ctx = PhotoDeleteContext { photos };
@@ -314,7 +324,10 @@ pub(crate) enum ImageDownloadData {
 // 图片下载
 impl PhotoService {
     /// 根据 ImageToken 下载图片，返回处理后的数据或原始流
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(
+        skip_all,
+        fields(viewer_id = %token.viewer_id, file_id = %token.file_id)
+    )]
     pub async fn download_image(
         state: &PhotoState,
         token: ImageToken,

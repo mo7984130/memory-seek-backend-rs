@@ -66,7 +66,10 @@ impl BehaviorService {
     /// 同步写入行为审计记录。
     ///
     /// 审计写入失败不阻断业务，仅记录 warning；只追加不删除。
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(
+        skip_all,
+        fields(user_id = %req.user_id, action = %req.action.as_str())
+    )]
     pub async fn record(state: &PhotoState, req: BehaviorRecordReq) {
         if let Err(e) = BehaviorMapper::insert(
             &state.db,
@@ -86,6 +89,7 @@ impl BehaviorService {
     /// 异步记录照片浏览（图片访问热路径）：token 内嵌浏览者身份，按 file_id 反查照片 ID 后写入。
     ///
     /// 图片访问不依赖登录态，浏览者身份来自签发给图片访问者的 token。
+    #[tracing::instrument(skip_all, fields(viewer_id = %viewer_id, file_id = %file_id))]
     pub fn record_view_async(
         state: &PhotoState,
         viewer_id: UserId,
@@ -126,21 +130,21 @@ impl BehaviorService {
 
 // 管理端统计
 impl BehaviorService {
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn get_stats(
         state: &PhotoState,
-        _admin: AdminId,
-        param: BehaviorStatsQuery,
+        admin: AdminId,
+        req: BehaviorStatsQuery,
     ) -> Result<Vec<BehaviorStatsItem>> {
         metrics_group!();
 
         let rows = BehaviorMapper::query_stats(
             &state.db,
-            param.action,
-            param.target_type,
-            param.start,
-            param.end,
-            param.granularity.as_trunc(),
+            req.action,
+            req.target_type,
+            req.start,
+            req.end,
+            req.granularity.as_trunc(),
         )
         .timed(metrics_name!("query_stats"))
         .await?;
@@ -152,19 +156,19 @@ impl BehaviorService {
             .collect())
     }
 
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn get_top(
         state: &PhotoState,
-        _admin: AdminId,
-        param: BehaviorTopQuery,
+        admin: AdminId,
+        req: BehaviorTopQuery,
     ) -> Result<Vec<BehaviorTopItem>> {
         metrics_group!();
 
         let rows = BehaviorMapper::query_top_targets(
             &state.db,
-            param.action,
-            param.target_type,
-            param.limit,
+            req.action,
+            req.target_type,
+            req.limit,
         )
         .timed(metrics_name!("query_top"))
         .await?;
@@ -176,27 +180,27 @@ impl BehaviorService {
             .collect())
     }
 
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn get_audit(
         state: &PhotoState,
-        _admin: AdminId,
-        param: BehaviorAuditQuery,
+        admin: AdminId,
+        req: BehaviorAuditQuery,
     ) -> Result<CursorPage<BehaviorAuditItem, String>> {
         metrics_group!();
 
         let records = BehaviorMapper::query_audit_page(
             &state.db,
-            param.action,
-            param.target_type,
-            param.target_id,
-            param.user_id,
-            &param.cursor,
-            param.size,
+            req.action,
+            req.target_type,
+            req.target_id,
+            req.user_id,
+            &req.cursor,
+            req.size,
         )
         .timed(metrics_name!("query_audit"))
         .await?;
 
-        let size = param.size;
+        let size = req.size;
         let page = CursorPage::from_oversize_fn(records, size, |record: &BehaviorRecord| {
             Ok(TimeIdCursor::<UserBehaviorId> {
                 created_at: record.created_at,

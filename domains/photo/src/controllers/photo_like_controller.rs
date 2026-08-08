@@ -99,10 +99,10 @@ impl PhotoLikeController {
     async fn get_user_liked_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(query): ValidatedQuery<LikedPhotosQuery>,
+        ValidatedQuery(req): ValidatedQuery<LikedPhotosQuery>,
     ) -> Result<R<CursorPage<PhotoView, String>>> {
-        let result = PhotoLikeService::get_user_liked_photos(&state, user_id, query).await?;
-
-        Ok(result).to_r_ok()
+        PhotoLikeService::get_user_liked_photos(&state, user_id, req)
+            .await
+            .to_r_ok()
     }
 }
