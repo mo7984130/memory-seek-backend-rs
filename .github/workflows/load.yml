@@ -1,0 +1,143 @@
+name: Load Test
+
+on:
+    workflow_dispatch:
+        inputs:
+            mode:
+                description: "compare = 对比基线(默认); baseline = 刷新 develop 基线"
+                required: true
+                type: choice
+                default: compare
+                options:
+                    - compare
+                    - baseline
+            ref:
+                description: "被测分支/ref(默认当前)"
+                required: false
+                type: string
+                default: ""
+            runs:
+                description: "每场景压测轮次(取中位数)"
+                required: false
+                type: number
+                default: 3
+            pr_number:
+                description: "将报告发布为该 PR 评论(可选)"
+                required: false
+                type: number
+                default: 0
+    schedule:
+        # 每周一 02:00 自动刷新 develop 基线
+        - cron: "0 2 * * 1"
+
+jobs:
+    load:
+        runs-on: ubuntu-latest
+        env:
+            FEATURES: metrics,auth,user,photo,backup
+            RUNS: ${{ inputs.runs || 3 }}
+            MODE: ${{ github.event_name == 'schedule' && 'baseline' || inputs.mode || 'compare' }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  ref: ${{ inputs.ref || github.ref }}
+
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@stable
+
+            - uses: Swatinem/rust-cache@v2
+
+            - name: Build (release + metrics)
+              run: cargo build --release --features "$FEATURES"
+
+            - name: Install k6
+              uses: grafana/setup-k6-action@v1
+              with:
+                  k6-version: 0.49.0
+
+            - name: 启动依赖容器 (PG / Redis)
+              run: docker compose -f tests/load/docker-compose.load.yml up -d --wait
+
+            - name: 启动被测服务
+              run: |
+                  ./target/release/memory-seek-server --config tests/load/ci/server-config.yml > server.log 2>&1 &
+                  echo $! > server.pid
+                  for i in $(seq 1 60); do
+                      if curl -sf http://127.0.0.1:7985/health >/dev/null; then
+                          echo "server ready"
+                          exit 0
+                      fi
+                      sleep 1
+                  done
+                  echo "server failed to start"
+                  tail -100 server.log
+                  exit 1
+
+            - name: 种子数据(占位)
+              run: make -C tests/load seed || true
+
+            - name: 全场景压测 (${{ env.RUNS }} 轮)
+              run: make -C tests/load run-all RUNS=$RUNS
+
+            - name: 归一化(取中位数)
+              run: make -C tests/load collect
+
+            - name: 服务端指标快照
+              run: make -C tests/load prometheus || true
+
+            - name: 记录基线 (baseline 模式)
+              if: env.MODE == 'baseline'
+              run: make -C tests/load record-baseline
+
+            - name: 恢复基线缓存 (compare 模式)
+              if: env.MODE == 'compare'
+              uses: actions/cache/restore@v4
+              with:
+                  path: tests/load/baselines
+                  key: load-baseline-develop-
+                  restore-keys: load-baseline-develop-
+
+            - name: 判定 (compare 模式)
+              if: env.MODE == 'compare'
+              run: make -C tests/load judge
+
+            - name: 生成报告 (compare 模式)
+              if: env.MODE == 'compare'
+              run: make -C tests/load report
+
+            - name: 保存基线缓存 (baseline 模式)
+              if: env.MODE == 'baseline'
+              continue-on-error: true # 同 sha 重复保存时忽略冲突
+              uses: actions/cache/save@v4
+              with:
+                  path: tests/load/baselines
+                  key: load-baseline-develop-${{ github.sha }}
+
+            - name: 上传结果 (artifact)
+              uses: actions/upload-artifact@v4
+              with:
+                  name: load-results-${{ env.MODE }}-${{ github.sha }}
+                  path: |
+                      tests/load/results
+                      server.log
+
+            - name: 发布 PR 评论 (compare 模式 + 指定 pr_number)
+              if: env.MODE == 'compare' && inputs.pr_number != 0
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const fs = require('fs');
+                      const path = 'tests/load/results/report.md';
+                      if (!fs.existsSync(path)) {
+                          console.log('report.md 不存在, 跳过评论');
+                          return;
+                      }
+                      let body = fs.readFileSync(path, 'utf8');
+                      if (body.length > 60000) body = body.slice(0, 60000) + '\n...(已截断)';
+                      await github.rest.issues.createComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: ${{ inputs.pr_number }},
+                          body
+                      });

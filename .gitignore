@@ -22,3 +22,14 @@ docs
 
 Dockerfile
 build.sh
+
+# 压测产物(CI/本地生成, 不入库)
+tests/load/results/run-*/
+tests/load/results/normalized/
+tests/load/results/metrics/
+tests/load/results/verdict.json
+tests/load/results/report.md
+tests/load/baselines/*
+!tests/load/baselines/.gitkeep
+tests/load/ci/server.log
+tests/load/ci/server.pid

@@ -1,44 +1,143 @@
 # tests/load/Makefile
 # Load test entry point — run k6 scenarios against a running server
+#
+# 压测体系分层:
+#   编排层   : ci-up / ci-down / run-all / run-once / photo-nos3 / seed
+#   采集层   : collect / prometheus
+#   判定层   : judge / record-baseline
+#   报告层   : report
+#   原有层   : auth / user / photo / p95-report / baseline / compare
 
-REMOTE_HOST ?=
+REMOTE_HOST ?= 127.0.0.1
 SERVER_PORT ?= 7985
+METRICS_PORT ?= 9090
+
+# 构建与运行
+FEATURES ?= metrics,auth,user,photo,backup
+BIN_NAME  ?= memory-seek-server
+RUNS      ?= 3          # 每场景轮次, collect 取中位数
+INCLUDE_S3_PATHS ?= false
+
+# photo 场景中不依赖 S3 的子场景(k6 --scenario 名)
+PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like
 
 RESULTS_DIR  := results
 BASELINES    := baselines
+CI_DIR       := ci
+SERVER_BIN   := ../../target/release/$(BIN_NAME)
+SERVER_LOG   := $(CI_DIR)/server.log
+SERVER_PID   := $(CI_DIR)/server.pid
+COMPOSE      := docker compose -f docker-compose.load.yml
 BASE_URL     := http://$(REMOTE_HOST):$(SERVER_PORT)
 
-.PHONY: auth user photo all p95-report baseline compare clean help
+# 多轮输出目录: 指定 RUN 时写入 run-<n>, 否则沿用原路径
+ifeq ($(strip $(RUN)),)
+OUT_DIR := $(RESULTS_DIR)
+else
+OUT_DIR := $(RESULTS_DIR)/run-$(RUN)
+endif
 
-# ── 压测 ──────────────────────────────────────────
-$(RESULTS_DIR):
-	mkdir -p $(RESULTS_DIR)
+.PHONY: all p95-report baseline compare clean help \
+        ci-up ci-down run-all run-once photo-nos3 seed collect prometheus judge record-baseline report
 
-auth: $(RESULTS_DIR)       ## 认证模块压测
+# ── 压测(原有) ──────────────────────────────────────
+$(OUT_DIR):
+	mkdir -p $@
+
+auth: $(OUT_DIR)       ## 认证模块压测
 	k6 run \
 		-q \
 		-e BASE_URL=$(BASE_URL) \
-		-e SUMMARY_EXPORT=$(RESULTS_DIR)/auth_summary.json \
+		-e SUMMARY_EXPORT=$(OUT_DIR)/auth_summary.json \
 		scenarios/auth.js
 
-user: $(RESULTS_DIR)       ## 用户模块压测
+user: $(OUT_DIR)       ## 用户模块压测
 	k6 run \
 		-q \
 		-e BASE_URL=$(BASE_URL) \
-		-e SUMMARY_EXPORT=$(RESULTS_DIR)/user_summary.json \
+		-e SUMMARY_EXPORT=$(OUT_DIR)/user_summary.json \
 		scenarios/user.js
 
-photo: $(RESULTS_DIR)      ## 照片模块压测（可选 SERVICE=<name> 指定单个服务）
+photo: $(OUT_DIR)      ## 照片模块压测（可选 SERVICE=<name> 指定单个服务）
 	k6 run \
 		-q \
 		-e BASE_URL=$(BASE_URL) \
-		-e SUMMARY_EXPORT=$(RESULTS_DIR)/photo_summary.json \
+		-e SUMMARY_EXPORT=$(OUT_DIR)/photo_summary.json \
 		$(if $(SERVICE),--scenario $(SERVICE),) \
 		scenarios/photo.js
 
-all: auth user photo  ## 运行全部压测
+all: auth user photo  ## 运行全部压测(含 S3 场景)
 
-# ── 报告 ──────────────────────────────────────────
+# ── 环境编排 ────────────────────────────────────────
+ci-up:                 ## 启动压测环境(容器依赖 + release server 进程)
+	$(COMPOSE) up -d --wait
+	cd ../.. && cargo build --release --features "$(FEATURES)"
+	@echo "Starting server (features: $(FEATURES))..."
+	@cd ../.. && ./target/release/$(BIN_NAME) --config $(CI_DIR)/server-config.yml \
+		> $(CI_DIR)/server.log 2>&1 & echo $$! > $(SERVER_PID)
+	@for i in $$(seq 1 60); do \
+		if curl -sf http://127.0.0.1:$(SERVER_PORT)/health > /dev/null; then \
+			echo "Server ready at $(BASE_URL)"; exit 0; \
+		fi; \
+		sleep 1; \
+	done; \
+	echo "ERROR: server failed to start"; tail -50 $(SERVER_LOG); exit 1
+
+ci-down:               ## 停止压测环境(server 进程 + 容器)
+	@if [ -f $(SERVER_PID) ]; then \
+		kill $$(cat $(SERVER_PID)) 2>/dev/null || true; \
+		rm -f $(SERVER_PID); \
+	fi
+	$(COMPOSE) down
+
+# ── 压测(编排层) ────────────────────────────────────
+run-all:               ## 全场景压测(默认排除 S3 路径), 多轮取中位数
+	@for run in $$(seq 1 $(RUNS)); do \
+		echo "===== Run $$run / $(RUNS) ====="; \
+		$(MAKE) run-once RUN=$$run; \
+		sleep 5; \
+	done
+	@$(MAKE) collect
+
+run-once:              ## 单轮全场景压测(auth + user + photo 非 S3 子场景)
+	$(MAKE) auth RUN=$(RUN) || echo "[warn] auth 轮 $(RUN) 失败(见 results)"
+	$(MAKE) user RUN=$(RUN) || echo "[warn] user 轮 $(RUN) 失败(见 results)"
+	$(MAKE) photo-nos3 RUN=$(RUN) || echo "[warn] photo 轮 $(RUN) 失败(见 results)"
+
+photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景
+	@for s in $(PHOTO_NOS3_SERVICES); do \
+		echo "=== photo scenario: $$s ==="; \
+		k6 run -q \
+			-e BASE_URL=$(BASE_URL) \
+			-e SUMMARY_EXPORT=$(OUT_DIR)/photo_$${s}_summary.json \
+			--scenario $$s \
+			scenarios/photo.js || echo "[warn] scenario $$s 失败"; \
+	done
+
+seed:                  ## 种子数据(当前为占位, 逻辑待实现)
+	@echo "[seed] 占位: 调用 seed/ 下的种子数据脚本(见 seed/README.md)"
+
+# ── 采集层 ──────────────────────────────────────────
+collect:               ## 多轮结果归一化(逐指标取中位数) -> results/normalized/
+	$(CI_DIR)/collect.sh
+
+prometheus:            ## 抓取服务端 metrics(9090)快照 -> results/metrics/
+	$(CI_DIR)/prometheus.sh
+
+# ── 判定层 ──────────────────────────────────────────
+judge:                 ## 当前结果对比基线, 按 thresholds.yml 判定
+	$(CI_DIR)/judge.sh
+
+record-baseline:       ## 将当前 normalized 结果记录为基线
+	@mkdir -p $(BASELINES)
+	@cp -n $(RESULTS_DIR)/normalized/*.json $(BASELINES)/ 2>/dev/null || \
+		echo "[record-baseline] 未发现 normalized 结果, 请先 make collect"
+
+# ── 报告层 ──────────────────────────────────────────
+report:                ## 生成 Markdown 对比报告 -> results/report.md
+	$(CI_DIR)/report.sh
+
+# ── 报告(原有) ──────────────────────────────────────
 p95-report:                ## 生成 P95 性能报告
 	@echo "=== P95 Latency ==="
 	@for f in $(RESULTS_DIR)/*_summary.json; do \
@@ -69,7 +168,7 @@ compare:                   ## 对比当前结果与基线
 
 # ── 清理 ──────────────────────────────────────────
 clean:                     ## 清理本地结果文件
-	rm -rf $(RESULTS_DIR)/*.json $(BASELINES)/*.json
+	rm -rf $(RESULTS_DIR)/*.json $(RESULTS_DIR)/run-* $(BASELINES)/*.json
 
 help:                      ## 显示帮助
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \

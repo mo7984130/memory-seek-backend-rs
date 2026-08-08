@@ -1,0 +1,36 @@
+# tests/load/thresholds.yml
+# 压测判定阈值: 当前结果对比基线, 按相对变化百分比判定。
+#
+# 语义:
+#   regression_pct  恶化超过该百分比 => 该指标标记为"回归"
+#   improvement_pct 改善超过该百分比 => 该指标标记为"改进"
+#
+# 变化方向(change_pct = (current - baseline) / baseline * 100):
+#   延迟类(http_p50/http_p95/op_p95): 正值 = 恶化, 负值 = 改善
+#   qps:                             正值 = 提升, 负值 = 下降
+#   (脚本内部统一换算成"恶化百分比"进行判定)
+#
+# 整体判定(按场景):
+#   任一指标回归 或 错误率超限  => REGRESSION
+#   否则任一指标改进            => IMPROVED
+#   否则                        => UNCHANGED
+#   无基线文件                  => NO_BASELINE
+
+http_p50:
+  regression_pct: 15
+  improvement_pct: 10
+
+http_p95:
+  regression_pct: 15
+  improvement_pct: 10
+
+qps:
+  regression_pct: 15
+  improvement_pct: 10
+
+op_p95:
+  regression_pct: 20
+  improvement_pct: 15
+
+# 当前错误率超过该值, 该场景直接判定为回归
+max_error_rate: 0.05
