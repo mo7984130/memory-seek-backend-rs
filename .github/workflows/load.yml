@@ -33,9 +33,9 @@ on:
         # 每周一 02:00 自动刷新 develop 基线
         - cron: "0 2 * * 1"
 
-# PR 评论需要写权限; actions:write 供缓存保存
+# PR 评论/commit 评论需要写权限; actions:write 供缓存保存
 permissions:
-    contents: read
+    contents: write
     actions: write
     issues: write
     pull-requests: write
@@ -160,8 +160,8 @@ jobs:
                   echo "===== results 目录 ====="
                   ls -la tests/load/results/ 2>/dev/null || true
 
-            - name: 发布 PR 评论 (compare 模式且存在 PR 号)
-              if: env.MODE == 'compare' && env.PR_NUMBER != '0'
+            - name: 发布结果评论 (PR 评论或 commit 评论)
+              if: env.MODE == 'compare' && (env.PR_NUMBER != '0' || github.event_name == 'push')
               uses: actions/github-script@v7
               with:
                   script: |
@@ -173,9 +173,21 @@ jobs:
                       }
                       let body = fs.readFileSync(path, 'utf8');
                       if (body.length > 60000) body = body.slice(0, 60000) + '\n...(已截断)';
-                      await github.rest.issues.createComment({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          issue_number: Number('${{ env.PR_NUMBER }}'),
-                          body
-                      });
+                      const prNum = Number('${{ env.PR_NUMBER }}');
+                      if (prNum > 0) {
+                          // 手动触发指定 PR 号: 发 PR 评论
+                          await github.rest.issues.createComment({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              issue_number: prNum,
+                              body
+                          });
+                      } else {
+                          // 合并到 main(push): 发布为该合并 commit 的评论
+                          await github.rest.repos.createCommitComment({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              commit_sha: context.sha,
+                              body
+                          });
+                      }
