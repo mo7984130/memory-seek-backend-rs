@@ -304,6 +304,11 @@ pub async fn change_password(
         return Err(AppError::bad_request("新密码不能与旧密码相同"));
     }
 
+    // 确认密码必须与新密码一致
+    if req.new_password != req.confirm_password {
+        return Err(AppError::bad_request("两次输入的新密码不一致"));
+    }
+
     //  获取旧密码
     let old_password: String = user::Entity::find_by_id(user_id)
         .select_only()

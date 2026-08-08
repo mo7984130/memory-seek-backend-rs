@@ -43,8 +43,17 @@ crate::in_dto!(ChangePasswordParam, "user/", serialize; {
     #[validate(custom(function = "validate_password"))]
     pub old_password: String,
 
-    #[validate(custom(function = "validate_password"))]
+    #[validate(
+        custom(function = "validate_password"),
+        must_match(other = "new_password")
+    )]
     pub new_password: String,
+
+    #[validate(
+        custom(function = "validate_password"),
+        must_match(other = "new_password")
+    )]
+    pub confirm_password: String,
 });
 
 crate::in_dto!(ChangeNicknameParam, "user/", serialize; {
@@ -145,6 +154,7 @@ mod tests {
         let req = ChangePasswordParam {
             old_password: "oldPass123".to_string(),
             new_password: "newPass456".to_string(),
+            confirm_password: "newPass456".to_string(),
         };
         assert!(req.validate().is_ok());
     }
@@ -154,6 +164,17 @@ mod tests {
         let req = ChangePasswordParam {
             old_password: "oldPass123".to_string(),
             new_password: "a1".to_string(),
+            confirm_password: "a1".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn test_change_password_param_mismatch() {
+        let req = ChangePasswordParam {
+            old_password: "oldPass123".to_string(),
+            new_password: "newPass456".to_string(),
+            confirm_password: "newPass789".to_string(),
         };
         assert!(req.validate().is_err());
     }
