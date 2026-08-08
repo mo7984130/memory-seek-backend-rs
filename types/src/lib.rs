@@ -13,3 +13,4 @@ pub mod error;
 pub mod macros;
 pub mod photo;
 pub mod user;
+pub mod validators;
