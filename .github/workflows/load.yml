@@ -95,8 +95,9 @@ jobs:
                   tail -100 server.log
                   exit 1
 
-            - name: 种子数据(占位)
-              run: make -C tests/load seed || true
+            - name: 种子数据 (建表 + 灌数据)
+              # 不再容错: seed 失败必须暴露(否则压测会在无表库上全量报错)
+              run: make -C tests/load seed
 
             - name: 全场景压测 (${{ env.RUNS }} 轮)
               run: make -C tests/load run-all RUNS=$RUNS

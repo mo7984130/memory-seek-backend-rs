@@ -41,6 +41,12 @@ sed \
 echo "[seed] 建表 (init.sql)..."
 "${PSQL[@]}" < "$ROOT_DIR/docs/sql/init.sql"
 
+# 校验关键表已建立, 防止建表失败后继续压测导致大面积报错
+if ! "${PSQL[@]}" -tAc "SELECT to_regclass('public.auth_user');" | grep -q 'auth_user'; then
+    echo "[seed] ERROR: auth_user 表未创建, init.sql 执行失败" >&2
+    exit 1
+fi
+
 echo "[seed] schema 对齐 (schema_align.sql)..."
 "${PSQL[@]}" < "$(dirname "${BASH_SOURCE[0]}")/schema_align.sql"
 
