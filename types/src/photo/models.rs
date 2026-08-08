@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use validator::Validate;
 
 use crate::cursor::TimeIdCursor;
+use crate::photo::face::FaceId;
 use crate::photo::photo::PhotoId;
 
 // ============================================================
@@ -17,6 +18,19 @@ crate::validated_newtype!(
     "photo/",
     "照片ID列表不能为空",
     "照片数量不能超过1024"
+);
+
+// ============================================================
+// FaceIds — 校验型人脸 ID 批量列表
+// ============================================================
+
+crate::validated_newtype!(
+    FaceIds,
+    Vec<FaceId>,
+    1024,
+    "photo/",
+    "人脸ID列表不能为空",
+    "人脸数量不能超过1024"
 );
 
 // ============================================================
@@ -316,5 +330,43 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("人物名称长度不能超过64个字符"), "msg: {msg}");
         assert!(!msg.contains("at line"), "msg: {msg}");
+    }
+
+    // ==================== FaceIds construction ====================
+
+    #[test]
+    fn test_face_ids_new_valid() {
+        let ids = FaceIds::new(vec![FaceId(1), FaceId(2)]);
+        assert!(ids.is_ok());
+    }
+
+    #[test]
+    fn test_face_ids_new_empty() {
+        let ids = FaceIds::new(vec![]);
+        assert!(ids.is_err());
+    }
+
+    #[test]
+    fn test_face_ids_new_too_many() {
+        let ids = FaceIds::new((0..1025).map(FaceId).collect());
+        assert!(ids.is_err());
+    }
+
+    #[test]
+    fn test_face_ids_new_exact_max() {
+        let ids = FaceIds::new((0..1024).map(FaceId).collect());
+        assert!(ids.is_ok());
+    }
+
+    #[test]
+    fn test_face_ids_validate_empty() {
+        let ids = FaceIds(vec![]);
+        assert!(ids.validate().is_err());
+    }
+
+    #[test]
+    fn test_face_ids_validate_too_many() {
+        let ids = FaceIds((0..1025).map(FaceId).collect());
+        assert!(ids.validate().is_err());
     }
 }

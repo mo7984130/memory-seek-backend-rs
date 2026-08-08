@@ -277,4 +277,18 @@ impl FaceMapper {
             .rows_affected
             .to_ok()
     }
+
+    /// 批量删除未归属人脸(仅删除 `person_id IS NULL` 的人脸, 归属校验由 SQL 条件原子完成)
+    pub async fn delete_unassigned_by_ids(
+        db: &impl ConnectionTrait,
+        face_ids: &[FaceId],
+    ) -> Result<u64> {
+        Entity::delete_many()
+            .filter(Column::Id.is_in(face_ids.iter().copied()))
+            .filter(Column::PersonId.is_null())
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
 }

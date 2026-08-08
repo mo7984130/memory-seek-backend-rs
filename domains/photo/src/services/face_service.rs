@@ -24,9 +24,10 @@ use types::{
     cursor::TimeIdCursor,
     photo::{
         FaceView,
-        dto::face::{UnassignedFacePhotoCursorParam, bbox_from_insight},
+        dto::face::{FaceDeleteBatchResult, UnassignedFacePhotoCursorParam, bbox_from_insight},
         dto::photo::PhotoView,
         face::{self, FaceId, FaceRecord},
+        models::FaceIds,
         person::{self, PersonId, PersonRecord},
         photo::{self, PhotoId},
     },
@@ -541,6 +542,23 @@ impl FaceService {
         .await?;
 
         Ok(())
+    }
+
+    /// 批量删除未归属人脸(仅限未归属人物的人脸, 避免破坏人物统计不变量)
+    ///
+    /// 与单张删除一致, 已归属人脸会被跳过, 不参与删除;
+    /// 通过 SQL 条件 `person_id IS NULL` 原子过滤, 无需逐张加锁。
+    #[tracing::instrument(skip_all)]
+    pub async fn delete_faces_batch(
+        state: &PhotoState,
+        face_ids: &FaceIds,
+    ) -> Result<FaceDeleteBatchResult> {
+        let deleted_face_count =
+            FaceMapper::delete_unassigned_by_ids(&state.db, face_ids).await?;
+
+        Ok(FaceDeleteBatchResult {
+            deleted_face_count,
+        })
     }
 }
 

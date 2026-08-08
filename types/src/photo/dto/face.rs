@@ -1,6 +1,8 @@
 use crate::photo::face::{FaceId, FaceRecord};
+use crate::photo::models::FaceIds;
 use crate::photo::person::PersonId;
 use crate::photo::photo::PhotoId;
+use validator::Validate;
 
 /// 人脸边界框（归一化坐标）——统一复用 `crate::photo::image_token::FaceBBox`
 use crate::photo::FaceBBox;
@@ -62,9 +64,21 @@ crate::in_dto!(UnassignedFacePhotoCursorParam, "photo/", docs = "未分配人脸
     pub size: u64,
 });
 
+crate::in_dto!(FaceDeleteBatchParam, "photo/", docs = "批量删除人脸参数（仅限未归属人脸）"; {
+    #[validate(nested)]
+    pub face_ids: FaceIds,
+});
+
+crate::out_dto!(FaceDeleteBatchResult, "photo/", Default; {
+    /// 实际删除的人脸数量
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub deleted_face_count: u64,
+});
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use validator::Validate;
 
     fn approx(a: f32, b: f32) -> bool {
         (a - b).abs() < 1e-4
@@ -110,5 +124,31 @@ mod tests {
         assert!(approx(back.y1, 20.0));
         assert!(approx(back.x2, 100.0));
         assert!(approx(back.y2, 200.0));
+    }
+
+    // ==================== FaceDeleteBatchParam ====================
+
+    #[test]
+    fn face_delete_batch_param_deserialize_valid() {
+        let json = r#"{"faceIds": [1, 2]}"#;
+        let param: FaceDeleteBatchParam = serde_json::from_str(json).unwrap();
+        assert_eq!(param.face_ids.len(), 2);
+        assert!(param.validate().is_ok());
+    }
+
+    #[test]
+    fn face_delete_batch_param_deserialize_empty_then_validate() {
+        // 空列表应能反序列化, 校验错误走 validator 通道
+        let json = r#"{"faceIds": []}"#;
+        let param: FaceDeleteBatchParam = serde_json::from_str(json).unwrap();
+        assert!(param.validate().is_err());
+    }
+
+    #[test]
+    fn face_delete_batch_param_deserialize_too_many_then_validate() {
+        let ids = (0..1025).collect::<Vec<_>>();
+        let json = format!(r#"{{"faceIds": {:?}}}"#, ids);
+        let param: FaceDeleteBatchParam = serde_json::from_str(&json).unwrap();
+        assert!(param.validate().is_err());
     }
 }

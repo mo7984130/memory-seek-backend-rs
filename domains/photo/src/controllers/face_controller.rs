@@ -8,7 +8,7 @@ use axum::{
 use common::{
     Result,
     ext::ResultRExt,
-    extractors::{OptionalClientIp, ValidatedPath, ValidatedQuery},
+    extractors::{OptionalClientIp, ValidatedJson, ValidatedPath, ValidatedQuery},
     models::CursorPage,
     r::R,
     traits::controller::ControllerRouter,
@@ -19,7 +19,9 @@ use types::{
     photo::{
         FaceView,
         behavior::{BehaviorTargetType, UserBehaviorAction},
-        dto::face::UnassignedFacePhotoCursorParam,
+        dto::face::{
+            FaceDeleteBatchParam, FaceDeleteBatchResult, UnassignedFacePhotoCursorParam,
+        },
         dto::photo::PhotoView,
         face::FaceId,
         person::PersonId,
@@ -52,6 +54,7 @@ impl ControllerRouter for FaceController {
             )
             .route("/feature/{feature_id}/belonging", post(Self::unassign_face))
             .route("/feature/{feature_id}", delete(Self::delete_face))
+            .route("/feature", delete(Self::delete_faces_batch))
     }
 
     fn public_routes() -> axum::Router<std::sync::Arc<Self::State>> {
@@ -192,5 +195,29 @@ impl FaceController {
         .await;
 
         Ok(()).to_r_ok()
+    }
+
+    /// 批量删除人脸(仅限未归属人物的人脸, 已归属人脸会被跳过)
+    async fn delete_faces_batch(
+        State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        OptionalClientIp(ip): OptionalClientIp,
+        ValidatedJson(param): ValidatedJson<FaceDeleteBatchParam>,
+    ) -> Result<R<FaceDeleteBatchResult>> {
+        let result = FaceService::delete_faces_batch(&state, &param.face_ids).await?;
+
+        // 行为审计：批量删除人脸（按批量传入的 face_id 逐条记录）
+        let ip_str = ip.map(|ip| ip.to_string());
+        for face_id in param.face_ids.iter() {
+            BehaviorService::record(
+                &state,
+                BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceDelete)
+                    .with_target(BehaviorTargetType::Face, face_id.0)
+                    .with_ip(ip_str.clone()),
+            )
+            .await;
+        }
+
+        Ok(result).to_r_ok()
     }
 }
