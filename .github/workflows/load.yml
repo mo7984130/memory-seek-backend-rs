@@ -49,6 +49,10 @@ jobs:
             # 依赖/target 缓存(key 基于 Cargo.lock + 平台, 不随 commit 变;
             # 默认不缓存最终可执行文件, 业务 crate 每次增量编译)
             - uses: Swatinem/rust-cache@v2
+              with:
+                  # 压测可能失败/取消: 失败也保存缓存, 否则 release 依赖从未落盘,
+                  # 每次都会全量编译
+                  cache-on-failure: true
 
             - name: Build (release + metrics)
               run: cargo build --release --features "$FEATURES"
