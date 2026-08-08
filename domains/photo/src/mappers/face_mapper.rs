@@ -144,6 +144,25 @@ impl FaceMapper {
             .transpose()
     }
 
+    /// 按照片 id 加行锁批量查询人脸(`SELECT ... FOR UPDATE`,
+    /// 删除照片前锁定全部人脸行, 防止与并发转移归属互死锁/丢失更新)
+    pub async fn lock_by_photo_ids(
+        db: &impl ConnectionTrait,
+        photo_ids: &[PhotoId],
+    ) -> Result<Vec<FaceRecord>> {
+        if photo_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        Entity::find()
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
+            .lock_exclusive()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(FaceRecord::try_from)
+            .collect()
+    }
+
     /// 查询某人物下 score 最高的人脸(封面决策/封面回退用)
     pub async fn query_top_score_by_person_id(
         db: &impl ConnectionTrait,
@@ -272,6 +291,22 @@ impl FaceMapper {
     pub async fn delete_by_id(db: &impl ConnectionTrait, face_id: FaceId) -> Result<u64> {
         Entity::delete_many()
             .filter(Column::Id.eq(face_id))
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
+
+    /// 删除照片的全部人脸记录(删除照片时清理人脸, 归属人物统计由 service 层维护)
+    pub async fn delete_by_photo_ids(
+        db: &impl ConnectionTrait,
+        photo_ids: &[PhotoId],
+    ) -> Result<u64> {
+        if photo_ids.is_empty() {
+            return Ok(0);
+        }
+        Entity::delete_many()
+            .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .exec(db)
             .await?
             .rows_affected

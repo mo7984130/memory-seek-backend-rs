@@ -352,20 +352,50 @@ impl FaceService {
         person: &PersonRecord,
         face: &FaceRecord,
     ) -> Result<()> {
-        if person.face_count == 1 {
+        Self::remove_faces_from_person(txn, person, std::slice::from_ref(face)).await
+    }
+
+    /// 批量减量维护: 将一组人脸从人物中移除(删除照片场景, 语义与单张移除一致)
+    ///
+    /// - 剩余人脸为 0 则删除人物;
+    /// - 否则 `face_count` 减量 / `weight` 减 Σscore / `centroid` 减 Σ(score×embedding);
+    /// - 被移除人脸含封面人脸时, 封面回退到剩余 score 最高人脸
+    ///   (调用方需先删除该组人脸或转移其归属, 使回退查询到的即为剩余人脸)。
+    async fn remove_faces_from_person(
+        txn: &DatabaseTransaction,
+        person: &PersonRecord,
+        faces: &[FaceRecord],
+    ) -> Result<()> {
+        let removed = faces.len() as u64;
+        if person.face_count <= removed {
             PersonMapper::delete_by_id(txn, person.id).await?;
-        } else {
-            let old_cover = Self::resolve_cover_after_remove(txn, person, face).await?;
-            PersonMapper::update_stats(
-                txn,
-                person.id,
-                person.face_count - 1,
-                person.weight - face.score as f64,
-                person.centroid.sub_scaled(&face.embedding, face.score),
-                old_cover,
-            )
-            .await?;
+            return Ok(());
         }
+
+        let mut weight = person.weight;
+        let mut centroid = person.centroid;
+        for face in faces {
+            weight -= face.score as f64;
+            centroid = centroid.sub_scaled(&face.embedding, face.score);
+        }
+
+        // 封面回退: 仅当被移除人脸含封面人脸时才需重选
+        let cover = if let Some(cover_face) = faces.iter().find(|f| f.id == person.cover_face_id) {
+            Self::resolve_cover_after_remove(txn, person, cover_face).await?
+        } else {
+            None
+        };
+
+        PersonMapper::update_stats(
+            txn,
+            person.id,
+            person.face_count - removed,
+            weight,
+            centroid,
+            cover,
+        )
+        .await?;
+
         Ok(())
     }
 
@@ -562,7 +592,7 @@ impl FaceService {
     }
 }
 
-// 照片删除步骤:人脸清理(占位)
+// 照片删除步骤:人脸清理
 #[step_derive::declare_step(
     ctx = crate::services::photo_service::PhotoDeleteContext,
     slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
@@ -570,16 +600,51 @@ impl FaceService {
     owns = ["FaceMapper", "PersonMapper"],
 )]
 impl FaceService {
-    /// 需删除 `photo_face` 并维护 `photo_person` 的
-    /// `face_count / weight / centroid / cover` 统计,逻辑参照
-    /// `FaceService::change_face_belonging`(见 `docs/change-face-belonging-plan.md`)。
-    /// 本次仅注册占位,保持与现状一致的"人脸暂不清理"行为。
+    /// 删除照片的人脸记录, 并维护受影响 `photo_person` 的
+    /// `face_count / weight / centroid / cover` 统计(减量维护语义参照
+    /// `FaceService::change_face_belonging`, 见 `docs/change-face-belonging-plan.md`)。
+    ///
+    /// 并发安全: 先按 `photo_id` 加行锁锁定全部人脸, 再按人物 id 升序锁定
+    /// 受影响人物 —— 与转移归属的「先人脸后人物」加锁顺序一致, 避免互死锁与丢失更新。
     async fn on_photo_delete(
         &self,
-        _txn: &sea_orm::DatabaseTransaction,
-        _ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+        txn: &sea_orm::DatabaseTransaction,
+        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
     ) -> common::Result<()> {
-        // TODO: 删除照片的人脸记录并维护人物统计
+        let photo_ids = ctx.photo_ids();
+
+        // 加行锁读取待删照片的全部人脸, 阻止并发转移归属读到将删人脸
+        let faces = FaceMapper::lock_by_photo_ids(txn, &photo_ids).await?;
+        if faces.is_empty() {
+            return Ok(());
+        }
+
+        // 按归属人物分组(未归属人脸不涉及人物统计, 直接删除)
+        let mut by_person: HashMap<PersonId, Vec<FaceRecord>> = HashMap::new();
+        for face in faces {
+            if let Some(person_id) = face.person_id {
+                by_person.entry(person_id).or_default().push(face);
+            }
+        }
+
+        // 删除照片的全部人脸记录(先删后维护, 封面回退查询到的即为剩余人脸)
+        FaceMapper::delete_by_photo_ids(txn, &photo_ids).await?;
+
+        // 涉及人物按 id 升序加锁, 批量减量维护统计与封面
+        let mut person_ids: Vec<PersonId> = by_person.keys().copied().collect();
+        person_ids.sort();
+        for person_id in person_ids {
+            let person = PersonMapper::lock_by_id(txn, person_id)
+                .await?
+                .ok_or_error(
+                    "person_not_found",
+                    "人物不存在",
+                    AppError::not_found("人物不存在"),
+                )?;
+            let faces = &by_person[&person_id];
+            Self::remove_faces_from_person(txn, &person, faces).await?;
+        }
+
         Ok(())
     }
 }
