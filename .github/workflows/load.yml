@@ -135,13 +135,22 @@ jobs:
                   path: tests/load/baselines
                   key: load-baseline-develop-${{ github.sha }}
 
-            - name: 上传结果 (artifact)
+            - name: 上传结果 (artifact, 无论成败)
+              if: always()
               uses: actions/upload-artifact@v4
               with:
                   name: load-results-${{ env.MODE }}-${{ github.sha }}
                   path: |
                       tests/load/results
                       server.log
+
+            - name: 失败诊断 (打印 server.log 与结果目录)
+              if: failure()
+              run: |
+                  echo "===== server.log (tail 200) ====="
+                  tail -200 server.log 2>/dev/null || echo "(server.log 不存在)"
+                  echo "===== results 目录 ====="
+                  ls -la tests/load/results/ 2>/dev/null || true
 
             - name: 发布 PR 评论 (compare 模式 + 指定 pr_number)
               if: env.MODE == 'compare' && inputs.pr_number != 0
