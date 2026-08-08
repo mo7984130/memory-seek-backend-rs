@@ -36,8 +36,18 @@ crate::in_dto!(RegisterRequest, "auth/", serialize; {
     pub email: String,
 
     /// 密码
-    #[validate(custom(function = "validate_password"))]
+    #[validate(
+        custom(function = "validate_password"),
+        must_match(other = "confirm_password")
+    )]
     pub password: String,
+
+    /// 确认密码
+    #[validate(
+        custom(function = "validate_password"),
+        must_match(other = "password")
+    )]
+    pub confirm_password: String,
 
     /// 昵称
     #[validate(length(min = 1, max = 20, message = "昵称长度在 1 到 20 个字符"))]
@@ -100,6 +110,7 @@ mod tests {
             username: "testuser".to_string(),
             email: "test@example.com".to_string(),
             password: "Pass1234".to_string(),
+            confirm_password: "Pass1234".to_string(),
             nickname: "Test Nick".to_string(),
             inviter_code: "ABC123".to_string(),
             email_verify_code: "654321".to_string(),
@@ -109,6 +120,13 @@ mod tests {
     #[test]
     fn test_register_request_valid() {
         assert!(valid_register_request().validate().is_ok());
+    }
+
+    #[test]
+    fn test_register_request_password_mismatch() {
+        let mut request = valid_register_request();
+        request.confirm_password = "Pass5678".to_string();
+        assert!(request.validate().is_err());
     }
 
     #[test]

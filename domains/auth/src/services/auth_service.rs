@@ -235,6 +235,11 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
 pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInfo> {
     metrics_group!();
 
+    // 确认密码必须与密码一致
+    if req.password != req.confirm_password {
+        return Err(AppError::bad_request("两次输入的密码不一致"));
+    }
+
     // 校验邮箱验证码
     verify_email_verify_code(&state.redis, &req.email, &req.email_verify_code)
         .timed(metrics_name!("verify_email_code"))
