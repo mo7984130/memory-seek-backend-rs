@@ -193,30 +193,35 @@ export function buildLoadOptions({
 }
 
 /**
- * setup 预登录: 一次性登录 preAllocatedVUs 个账号, 返回会话数组
+ * setup 预登录: 一次性并发登录 preAllocatedVUs 个账号(batch), 返回会话数组
  * (索引 = VU 号 - 1), 使 login 完全位于压测计时窗口之外。
  * 登录失败项为 null, VU 侧可兜底现场登录。
  */
 export function setupPreLogin(credentialFn, vuCount) {
-    const sessions = [];
+    const reqs = [];
     for (let i = 1; i <= vuCount; i++) {
         const { account, password } = credentialFn(i);
-        const res = http.post(
-            `${BASE_URL}/auth/login`,
-            JSON.stringify({ account, password }),
-            { headers: { "Content-Type": "application/json" }, tags: { name: "prelogin" } },
-        );
-        sessions.push(
-            res.status === 200
-                ? {
-                      uid: res.json("data.user.id"),
-                      token: res.json("data.accessToken"),
-                      refreshToken: res.json("data.refreshToken"),
-                  }
-                : null,
-        );
+        reqs.push({
+            method: "POST",
+            url: `${BASE_URL}/auth/login`,
+            body: JSON.stringify({ account, password }),
+            params: {
+                headers: { "Content-Type": "application/json" },
+                tags: { name: "prelogin" },
+            },
+        });
     }
-    return sessions;
+    // http.batch 并发发送(默认并发受 --batch 限制, 默认 20), 远快于串行登录
+    const responses = http.batch(reqs);
+    return responses.map((res) =>
+        res.status === 200
+            ? {
+                  uid: res.json("data.user.id"),
+                  token: res.json("data.accessToken"),
+                  refreshToken: res.json("data.refreshToken"),
+              }
+            : null,
+    );
 }
 
 /**
