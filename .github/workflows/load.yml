@@ -160,7 +160,7 @@ jobs:
                   echo "===== results 目录 ====="
                   ls -la tests/load/results/ 2>/dev/null || true
 
-            - name: 发布结果评论 (PR 评论或 commit 评论)
+            - name: 发布结果评论 (commit 评论 + 关联 PR 评论)
               if: env.MODE == 'compare' && (env.PR_NUMBER != '0' || github.event_name == 'push')
               uses: actions/github-script@v7
               with:
@@ -168,8 +168,8 @@ jobs:
                       const fs = require('fs');
                       const path = 'tests/load/results/report.md';
                       if (!fs.existsSync(path)) {
-                          console.log('report.md 不存在, 跳过评论');
-                          return;
+                          // 报告缺失必须暴露, 避免"静默无评论"误以为发布成功
+                          throw new Error('report.md 不存在, 无法发布评论(请检查 judge/report 步骤)');
                       }
                       let body = fs.readFileSync(path, 'utf8');
                       if (body.length > 60000) body = body.slice(0, 60000) + '\n...(已截断)';
@@ -190,4 +190,22 @@ jobs:
                               commit_sha: context.sha,
                               body
                           });
+                          // 同时发布到该 commit 关联的 PR, 提升可见性
+                          try {
+                              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                                  owner: context.repo.owner,
+                                  repo: context.repo.repo,
+                                  commit_sha: context.sha
+                              });
+                              for (const pr of prs) {
+                                  await github.rest.issues.createComment({
+                                      owner: context.repo.owner,
+                                      repo: context.repo.repo,
+                                      issue_number: pr.number,
+                                      body
+                                  });
+                              }
+                          } catch (e) {
+                              console.log('查询/发布关联 PR 评论失败(不影响 commit 评论): ' + e.message);
+                          }
                       }

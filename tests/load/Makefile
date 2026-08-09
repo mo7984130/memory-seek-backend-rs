@@ -18,8 +18,8 @@ BIN_NAME  ?= memory-seek-server
 RUNS      ?= 3          # 每场景轮次, collect 取中位数
 INCLUDE_S3_PATHS ?= false
 
-# photo 场景中不依赖 S3 的子场景(k6 --scenario 名)
-PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like
+# photo 场景中不依赖 S3 的子场景(须与 photo.js scenarios 键一致)
+PHOTO_NOS3_SERVICES ?= collection_service collection_photo_service comment_service comment_like_service
 
 RESULTS_DIR  := results
 BASELINES    := baselines
