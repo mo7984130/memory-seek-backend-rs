@@ -83,6 +83,15 @@ const OP_NAMES = [
     "delete_comment",
     "like_comment",
     "unlike_comment",
+    // face
+    "get_faces_by_photo",
+    "get_unassigned_face_photos",
+    "change_face_belonging",
+    // person
+    "get_persons",
+    "search_persons",
+    "get_person_photos",
+    "rename_person",
 ];
 
 const opMetrics = {};
@@ -125,6 +134,61 @@ export function logResult(label, result) {
             : result.error.body;
         console.error(`    → HTTP ${result.error.status}: ${body}`);
     }
+}
+
+/**
+ * 构建 arrival-rate 负载模型 options(双模式)
+ *
+ * LOAD_MODE=target(默认): constant-arrival-rate 固定迭代率, 稳定可对比
+ * LOAD_MODE=max:          ramping-arrival-rate 逐步加压找系统上限
+ *
+ * 迭代率可用 __ENV.TARGET_RPS / __ENV.MAX_RPS 覆盖(单位: 迭代/秒)。
+ * 单 op 迭代脚本中迭代率即请求 QPS; 完整流程迭代脚本中 QPS ≈ 迭代率 × 每迭代请求数。
+ */
+export function buildLoadOptions({
+    targetRps,
+    maxRps,
+    preAllocatedVUs = 100,
+    maxVUs = 200,
+}) {
+    const mode = __ENV.LOAD_MODE || "target";
+    const target = parseInt(__ENV.TARGET_RPS || String(targetRps), 10);
+    const max = parseInt(__ENV.MAX_RPS || String(maxRps), 10);
+    const pre = parseInt(__ENV.PRE_ALLOCATED_VUS || String(preAllocatedVUs), 10);
+    const mv = parseInt(__ENV.MAX_VUS || String(maxVUs), 10);
+    const duration = __ENV.DURATION || "2m";
+
+    if (mode === "max") {
+        const ramp = Math.max(1, Math.floor(max * 0.1));
+        return {
+            scenarios: {
+                load: {
+                    executor: "ramping-arrival-rate",
+                    startRate: ramp,
+                    timeUnit: "1s",
+                    preAllocatedVUs: pre,
+                    maxVUs: mv,
+                    stages: [
+                        { duration: "1m", target: ramp },
+                        { duration: "2m", target: max },
+                        { duration: "1m", target: max },
+                    ],
+                },
+            },
+        };
+    }
+    return {
+        scenarios: {
+            load: {
+                executor: "constant-arrival-rate",
+                rate: target,
+                timeUnit: "1s",
+                duration,
+                preAllocatedVUs: pre,
+                maxVUs: mv,
+            },
+        },
+    };
 }
 
 /**

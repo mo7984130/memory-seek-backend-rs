@@ -26,6 +26,24 @@ PHOTO_COUNT ?= 4000    # photo_photo 总数(= PHOTO_USERS * PHOTOS_PER_USER)
 FACES        ?= 4000   # photo_face 总行数(= 每照片 1 张脸)
 PERSONS      ?= 200    # photo_person 总行数(= 每 photo 用户 1 个)
 
+# ── 负载模型 ─────────────────────────────────────────
+# LOAD_MODE=target(默认): constant-arrival-rate 固定迭代率, 稳定对比
+# LOAD_MODE=max:          ramping-arrival-rate 逐步加压找上限
+LOAD_MODE    ?= target
+# 各场景目标/上限迭代率(单 op 场景即 QPS; photo 为完整流程迭代率, QPS≈迭代率×请求数)
+AUTH_TARGET_RPS   ?= 1500
+AUTH_MAX_RPS      ?= 5000
+USER_TARGET_RPS   ?= 500
+USER_MAX_RPS      ?= 2000
+FACE_TARGET_RPS   ?= 500
+FACE_MAX_RPS      ?= 2000
+PERSON_TARGET_RPS ?= 500
+PERSON_MAX_RPS    ?= 2000
+PHOTO_TARGET_RPS  ?= 30
+PHOTO_MAX_RPS     ?= 150
+# 压测时长(target 模式, 如 2m/3m; max 模式 stages 固定 1m+2m+1m)
+DURATION ?= 2m
+
 RESULTS_DIR  := results
 BASELINES    := baselines
 CI_DIR       := ci
@@ -54,6 +72,10 @@ auth: $(OUT_DIR)       ## 认证模块压测
 	k6 run \
 		-q \
 		-e BASE_URL=$(BASE_URL) \
+		-e LOAD_MODE=$(LOAD_MODE) \
+		-e TARGET_RPS=$(AUTH_TARGET_RPS) \
+		-e MAX_RPS=$(AUTH_MAX_RPS) \
+		-e DURATION=$(DURATION) \
 		-e SUMMARY_EXPORT=$(OUT_DIR)/auth_summary.json \
 		scenarios/auth.js
 
@@ -61,6 +83,10 @@ user: $(OUT_DIR)       ## 用户模块压测
 	k6 run \
 		-q \
 		-e BASE_URL=$(BASE_URL) \
+		-e LOAD_MODE=$(LOAD_MODE) \
+		-e TARGET_RPS=$(USER_TARGET_RPS) \
+		-e MAX_RPS=$(USER_MAX_RPS) \
+		-e DURATION=$(DURATION) \
 		-e SUMMARY_EXPORT=$(OUT_DIR)/user_summary.json \
 		scenarios/user.js
 
@@ -75,6 +101,10 @@ face: $(OUT_DIR)       ## 人脸模块压测(face_controller)
 	k6 run \
 		-q \
 		-e BASE_URL=$(BASE_URL) \
+		-e LOAD_MODE=$(LOAD_MODE) \
+		-e TARGET_RPS=$(FACE_TARGET_RPS) \
+		-e MAX_RPS=$(FACE_MAX_RPS) \
+		-e DURATION=$(DURATION) \
 		-e PHOTO_COUNT=$(PHOTO_COUNT) \
 		-e FACES=$(FACES) \
 		-e PERSONS=$(PERSONS) \
@@ -85,6 +115,10 @@ person: $(OUT_DIR)     ## 人物模块压测(person_controller)
 	k6 run \
 		-q \
 		-e BASE_URL=$(BASE_URL) \
+		-e LOAD_MODE=$(LOAD_MODE) \
+		-e TARGET_RPS=$(PERSON_TARGET_RPS) \
+		-e MAX_RPS=$(PERSON_MAX_RPS) \
+		-e DURATION=$(DURATION) \
 		-e PERSONS=$(PERSONS) \
 		-e SUMMARY_EXPORT=$(OUT_DIR)/person_summary.json \
 		scenarios/photo/person.js
@@ -135,6 +169,10 @@ photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景(直接�
 		echo "=== photo scenario: $$s ==="; \
 		k6 run -q \
 			-e BASE_URL=$(BASE_URL) \
+			-e LOAD_MODE=$(LOAD_MODE) \
+			-e TARGET_RPS=$(PHOTO_TARGET_RPS) \
+			-e MAX_RPS=$(PHOTO_MAX_RPS) \
+			-e DURATION=$(DURATION) \
 			-e SUMMARY_EXPORT=$(OUT_DIR)/photo_$${s}_summary.json \
 			scenarios/photo/$$s.js || echo "[warn] scenario $$s 失败"; \
 	done

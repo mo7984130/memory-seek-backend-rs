@@ -5,7 +5,7 @@ import http from "k6/http";
 import { BASE_URL, authHeaders, logResult, recordResult } from "./common.js";
 
 let _session = null; // { uid, token, refreshToken }
-let _opCount = 0; // 操作计数，用于 token 刷新策略
+let _opCount = 0; // 操作计数，用于 token 刷新兜底
 
 /**
  * 登录并初始化会话
@@ -98,12 +98,18 @@ export function refreshSession() {
 }
 
 /**
- * 检查并自动刷新 token（每 25 个操作刷新一次）
+ * 检查并自动刷新 token（兜底: 每 500 个操作刷新一次）
+ *
+ * accessToken 有效期 2h(domains/auth ACCESS_TOKEN_EXPIRE_SECONDS), 压测场景通常
+ * 几分钟内不会过期, 故提高刷新阈值, 避免高压(高 QPS)下 refresh 请求干扰指标计量;
+ * 若刷新失败(如 refreshToken 失效), 清空会话, 由调用方在下一迭代重新登录。
  */
 export function maybeRefreshSession() {
     _opCount++;
-    if (_opCount >= 25) {
-        refreshSession();
+    if (_opCount >= 500) {
+        const ok = refreshSession();
+        _opCount = 0;
+        if (!ok) _session = null;
     }
 }
 
@@ -124,4 +130,13 @@ export function logout() {
     logResult("logout", result);
     recordResult("logout", result);
     _session = null;
+}
+
+/**
+ * 仅清除本地会话(不发请求)。
+ * 用于服务端已使 token 失效的操作(如 change_password 会登出), 由下一迭代重新登录。
+ */
+export function clearSession() {
+    _session = null;
+    _opCount = 0;
 }

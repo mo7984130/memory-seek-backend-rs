@@ -26,6 +26,14 @@ on:
                 required: false
                 type: number
                 default: 0
+            load_mode:
+                description: "target = 固定目标 QPS(默认); max = 逐步加压找上限"
+                required: true
+                type: choice
+                default: target
+                options:
+                    - target
+                    - max
     # PR 合并到 main 后自动压测(push 事件由合并产生)
     push:
         branches: [main]
@@ -52,6 +60,8 @@ jobs:
             FEATURES: metrics,auth,user,photo,face-engine
             # 合并到 main 默认完整跑 3 轮; 手动触发可覆盖 runs
             RUNS: ${{ inputs.runs || 3 }}
+            # 负载模型: target=固定目标 QPS, max=逐步加压找上限
+            LOAD_MODE: ${{ inputs.load_mode || 'target' }}
             # schedule -> baseline, 其它(手动/PR) -> compare
             MODE: ${{ github.event_name == 'schedule' && 'baseline' || inputs.mode || 'compare' }}
             PR_NUMBER: ${{ inputs.pr_number != 0 && inputs.pr_number || github.event.pull_request.number || '0' }}
@@ -107,7 +117,7 @@ jobs:
               run: make -C tests/load seed
 
             - name: 全场景压测 (${{ env.RUNS }} 轮)
-              run: make -C tests/load run-all RUNS=$RUNS
+              run: make -C tests/load run-all RUNS=$RUNS LOAD_MODE=$LOAD_MODE
 
             - name: 归一化(取中位数)
               run: make -C tests/load collect
