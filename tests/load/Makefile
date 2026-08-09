@@ -22,25 +22,26 @@ INCLUDE_S3_PATHS ?= false
 PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like
 
 # face/person 压测数据量(与 seed.sql 对齐)
-PHOTO_COUNT ?= 4000    # photo_photo 总数(= PHOTO_USERS * PHOTOS_PER_USER)
-FACES        ?= 4000   # photo_face 总行数(= 每照片 1 张脸)
-PERSONS      ?= 200    # photo_person 总行数(= 每 photo 用户 1 个)
+PHOTO_COUNT ?= 40000   # photo_photo 总数(= PHOTO_USERS * PHOTOS_PER_USER)
+FACES        ?= 40000  # photo_face 总行数(= 每照片 1 张脸)
+PERSONS      ?= 2000   # photo_person 总行数(= 每 photo 用户 1 个)
 
 # ── 负载模型 ─────────────────────────────────────────
 # LOAD_MODE=target(默认): constant-arrival-rate 固定迭代率, 稳定对比
-# LOAD_MODE=max:          ramping-arrival-rate 逐步加压找上限
+# LOAD_MODE=max:          ramping-arrival-rate 逐步加压, MAX_RPS 为极大软目标
+#                         (rate 实际由系统饱和/VU 上限决定, 即"无上限找上限")
 LOAD_MODE    ?= target
 # 各场景目标/上限迭代率(单 op 场景即 QPS; photo 为完整流程迭代率, QPS≈迭代率×请求数)
 AUTH_TARGET_RPS   ?= 1500
-AUTH_MAX_RPS      ?= 5000
+AUTH_MAX_RPS      ?= 100000
 USER_TARGET_RPS   ?= 500
-USER_MAX_RPS      ?= 2000
+USER_MAX_RPS      ?= 100000
 FACE_TARGET_RPS   ?= 500
-FACE_MAX_RPS      ?= 2000
+FACE_MAX_RPS      ?= 100000
 PERSON_TARGET_RPS ?= 500
-PERSON_MAX_RPS    ?= 2000
+PERSON_MAX_RPS    ?= 100000
 PHOTO_TARGET_RPS  ?= 30
-PHOTO_MAX_RPS     ?= 150
+PHOTO_MAX_RPS     ?= 100000
 # 压测时长(target 模式, 如 2m/3m; max 模式 stages 固定 1m+2m+1m)
 DURATION ?= 2m
 

@@ -14,7 +14,7 @@ if (!BASE_URL) {
 
 // 数据量配置（与 seed.sql 的 psql 变量对齐）
 const AUTH_USERS = parseInt(__ENV.AUTH_USERS || "10000");
-const PHOTO_USERS = parseInt(__ENV.PHOTO_USERS || "200");
+const PHOTO_USERS = parseInt(__ENV.PHOTO_USERS || "2000");
 
 /**
  * 生成 auth 测试用户凭据

@@ -28,7 +28,7 @@ export const options = buildLoadOptions({
     targetRps: 20,
     maxRps: 100,
     preAllocatedVUs: 50,
-    maxVUs: 200,
+    maxVUs: 2000,
 });
 
 // ── 核心逻辑 ──
