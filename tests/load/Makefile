@@ -18,8 +18,8 @@ BIN_NAME  ?= memory-seek-server
 RUNS      ?= 3          # 每场景轮次, collect 取中位数
 INCLUDE_S3_PATHS ?= false
 
-# photo 场景中不依赖 S3 的子场景(须与 photo.js scenarios 键一致)
-PHOTO_NOS3_SERVICES ?= collection_service collection_photo_service comment_service comment_like_service
+# photo 场景中不依赖 S3 的子场景(独立脚本文件名, 对应 scenarios/photo/<name>.js)
+PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like
 
 # face/person 压测数据量(与 seed.sql 对齐)
 PHOTO_COUNT ?= 4000    # photo_photo 总数(= PHOTO_USERS * PHOTOS_PER_USER)
@@ -64,12 +64,11 @@ user: $(OUT_DIR)       ## 用户模块压测
 		-e SUMMARY_EXPORT=$(OUT_DIR)/user_summary.json \
 		scenarios/user.js
 
-photo: $(OUT_DIR)      ## 照片模块压测（可选 SERVICE=<name> 指定单个服务）
+photo: $(OUT_DIR)      ## 照片模块压测(完整 photo.js, 含 S3 场景)
 	k6 run \
 		-q \
 		-e BASE_URL=$(BASE_URL) \
 		-e SUMMARY_EXPORT=$(OUT_DIR)/photo_summary.json \
-		$(if $(SERVICE),--scenario $(SERVICE),) \
 		scenarios/photo.js
 
 face: $(OUT_DIR)       ## 人脸模块压测(face_controller)
@@ -131,14 +130,13 @@ run-once:              ## 单轮全场景压测(auth + user + photo + face + per
 	$(MAKE) face RUN=$(RUN) || echo "[warn] face 轮 $(RUN) 失败(见 results)"
 	$(MAKE) person RUN=$(RUN) || echo "[warn] person 轮 $(RUN) 失败(见 results)"
 
-photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景
+photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景(直接运行独立脚本)
 	@for s in $(PHOTO_NOS3_SERVICES); do \
 		echo "=== photo scenario: $$s ==="; \
 		k6 run -q \
 			-e BASE_URL=$(BASE_URL) \
 			-e SUMMARY_EXPORT=$(OUT_DIR)/photo_$${s}_summary.json \
-			--scenario $$s \
-			scenarios/photo.js || echo "[warn] scenario $$s 失败"; \
+			scenarios/photo/$$s.js || echo "[warn] scenario $$s 失败"; \
 	done
 
 seed:                  ## 灌入种子数据(建表 + 压测账号/照片/时间线统计)

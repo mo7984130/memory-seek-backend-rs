@@ -22,8 +22,9 @@
 # S3 路径开关: CI 暂不模拟 S3, 默认关闭; 本地连真实 OSS 时可置 true
 : "${INCLUDE_S3_PATHS:=false}"
 
-# photo 场景中不依赖 S3 的子场景(k6 --scenario 名, 须与 photo.js scenarios 键一致)
-PHOTO_NOS3_SERVICES="${PHOTO_NOS3_SERVICES:-collection_service collection_photo_service comment_service comment_like_service}"
+# photo 场景中不依赖 S3 的子场景(独立脚本文件名, 对应 scenarios/photo/<name>.js)
+# 注: k6 0.52+ 移除 --scenario flag, 无法从 photo.js 按 scenario 挑选, 直接运行独立脚本
+PHOTO_NOS3_SERVICES="${PHOTO_NOS3_SERVICES:-collection collection_photo comment comment_like}"
 
 # ── 目录约定 ──────────────────────────────────────────
 CI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
