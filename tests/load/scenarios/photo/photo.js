@@ -84,8 +84,10 @@ function runPhotoFlow() {
     sleep(0.5);
 
     // 4. 再次查询照片列表（模拟用户浏览）
-    result = listPhotos(20);
-    recordResult("list_photos", result);
+    for (let i = 0; i < 20; i++) {
+        result = listPhotos(20);
+        recordResult("list_photos", result);
+    }
 
     sleep(0.5);
 
