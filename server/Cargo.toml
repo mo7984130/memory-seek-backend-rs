@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 
 [[bin]]
@@ -15,7 +15,7 @@ user = ["dep:user", "s3", "token_cipher"]
 photo = ["dep:photo", "s3", "token_cipher"]
 
 email = ["dep:email"]
-metrics = ["dep:metrics", "photo?/metrics", "user?/metrics", "auth?/metrics", "email?/metrics", "oss?/metrics", "backup?/metrics"]
+metrics = ["common/metrics", "dep:metrics", "photo?/metrics", "user?/metrics", "auth?/metrics", "email?/metrics", "oss?/metrics", "backup?/metrics"]
 s3 = ["dep:oss"]
 backup = ["dep:backup"]
 face-engine = ["dep:insight-face-rs", "photo/face", "backup"]

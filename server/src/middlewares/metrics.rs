@@ -30,7 +30,6 @@ pub async fn metrics_middleware(request: Request, next: Next) -> Response {
     response
 }
 
-#[cfg(feature = "metrics")]
 fn record(method: &str, route: &str, status_class: &str, elapsed: std::time::Duration) {
     metrics::counter!(
         "server.http.requests_total",
@@ -47,6 +46,3 @@ fn record(method: &str, route: &str, status_class: &str, elapsed: std::time::Dur
     )
     .record(elapsed.as_secs_f64());
 }
-
-#[cfg(not(feature = "metrics"))]
-fn record(_method: &str, _route: &str, _status_class: &str, _elapsed: std::time::Duration) {}

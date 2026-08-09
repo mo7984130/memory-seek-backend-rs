@@ -6,11 +6,21 @@ mod redis;
 mod system;
 
 #[cfg(feature = "metrics")]
+use std::sync::Arc;
+#[cfg(feature = "metrics")]
 use std::time::Duration;
 #[cfg(feature = "metrics")]
 use sysinfo::System;
 #[cfg(feature = "metrics")]
 use tokio_util::sync::CancellationToken;
+
+/// 渲染 Prometheus 文本格式快照，作为主服务 `GET /metrics` 的响应体。
+#[cfg(feature = "metrics")]
+pub async fn render_metrics(
+    axum::extract::State(state): axum::extract::State<Arc<crate::state::AppState>>,
+) -> String {
+    state.metrics_handle.render()
+}
 
 /// 启动后台指标采集任务
 ///

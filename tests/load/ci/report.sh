@@ -41,7 +41,7 @@ TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
     echo "| CPU 型号 | $CPUMODEL |"
     echo "| 内存 | $MEM |"
     echo "| 被测服务 | http://${REMOTE_HOST}:${SERVER_PORT} |"
-    echo "| metrics | http://${REMOTE_HOST}:${METRICS_PORT} |"
+    echo "| metrics | http://${REMOTE_HOST}:${SERVER_PORT}/metrics |"
     echo "| 基线目录 | $BASELINES_DIR |"
     echo ""
     echo "## 判定总览"

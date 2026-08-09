@@ -11,9 +11,8 @@ server:
   port: 3000
 
 metrics:
-  host: "0.0.0.0"
-  port: 9090
   # 基础设施指标采集周期（秒），默认 5
+  # 注意: metrics 端点由主服务暴露, 抓取地址为 http://<server_host>:<server_port>/metrics
   interval_seconds: 5
 
 database:

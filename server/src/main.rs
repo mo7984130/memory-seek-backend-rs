@@ -68,7 +68,16 @@ async fn main() -> Result<()> {
     // 合并路由并添加中间件
     let app = app_setup
         .public_router
-        .route("/health", axum::routing::get(|| async { "ok" }))
+        .route("/health", axum::routing::get(|| async { "ok" }));
+
+    // Prometheus metrics 由主服务暴露，不再单独监听端口
+    #[cfg(feature = "metrics")]
+    let app = app.route(
+        "/metrics",
+        axum::routing::get(crate::metrics::render_metrics),
+    );
+
+    let app = app
         .merge(
             app_setup
                 .protected_router
@@ -77,10 +86,14 @@ async fn main() -> Result<()> {
                     middlewares::auth::auth_middleware,
                 )),
         )
-        .layer(middlewares::cors::layer())
-        .layer(axum::middleware::from_fn(
-            middlewares::metrics::metrics_middleware,
-        ))
+        .layer(middlewares::cors::layer());
+
+    #[cfg(feature = "metrics")]
+    let app = app.layer(axum::middleware::from_fn(
+        middlewares::metrics::metrics_middleware,
+    ));
+
+    let app = app
         .layer(axum::middleware::from_fn(
             middlewares::trace_id::trace_id_middleware,
         ))

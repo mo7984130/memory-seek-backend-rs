@@ -16,10 +16,16 @@ use oss::S3Client;
 #[cfg(feature = "backup")]
 use backup::BackupScheduler;
 
+#[cfg(feature = "metrics")]
+use metrics_exporter_prometheus::PrometheusHandle;
+
 // ============ Bases ============
 pub struct AppBases {
     pub db: DatabaseConnection,
     pub redis: Pool,
+
+    #[cfg(feature = "metrics")]
+    pub metrics_handle: PrometheusHandle,
 }
 
 // ============ Libs ============
@@ -47,6 +53,9 @@ pub struct AppState {
 
     #[cfg(feature = "backup")]
     pub backup_scheduler: Arc<BackupScheduler>,
+
+    #[cfg(feature = "metrics")]
+    pub metrics_handle: PrometheusHandle,
 
     #[cfg(feature = "face-engine")]
     pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,

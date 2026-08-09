@@ -10,7 +10,6 @@
 
 REMOTE_HOST ?= 127.0.0.1
 SERVER_PORT ?= 7985
-METRICS_PORT ?= 9090
 
 # 构建与运行
 FEATURES ?= metrics,auth,user,photo,face-engine
@@ -187,7 +186,7 @@ seed:                  ## 灌入种子数据(建表 + 压测账号/照片/时间
 collect:               ## 多轮结果归一化(逐指标取中位数) -> results/normalized/
 	$(CI_DIR)/collect.sh
 
-prometheus:            ## 抓取服务端 metrics(9090)快照 -> results/metrics/
+prometheus:            ## 抓取服务端 metrics(/metrics)快照 -> results/metrics/
 	$(CI_DIR)/prometheus.sh
 
 # ── 判定层 ──────────────────────────────────────────

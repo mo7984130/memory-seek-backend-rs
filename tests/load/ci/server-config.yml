@@ -44,5 +44,5 @@ token_cipher:
   salt: "memory-seek-loadtest-salt"
 
 metrics:
-  host: "0.0.0.0"
-  port: 9090
+  # metrics 由主服务暴露: http://<host>:<server_port>/metrics, 不再单独监听端口
+  interval_seconds: 5

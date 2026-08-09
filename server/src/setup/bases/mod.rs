@@ -19,10 +19,15 @@ impl AppBasesInit {
         // 初始化 Redis
         let redis = redis::init(&cfg.redis)?;
 
-        // 初始化 Prometheus metrics exporter
+        // 初始化 Prometheus metrics recorder
         #[cfg(feature = "metrics")]
-        metrics::init(&cfg.metrics);
+        let metrics_handle = metrics::init(&cfg.metrics);
 
-        Ok(AppBases { db, redis })
+        Ok(AppBases {
+            db,
+            redis,
+            #[cfg(feature = "metrics")]
+            metrics_handle,
+        })
     }
 }

@@ -33,6 +33,8 @@ impl AppSetup {
         let state = Arc::new(AppState {
             db: bases.db,
             redis: bases.redis,
+            #[cfg(feature = "metrics")]
+            metrics_handle: bases.metrics_handle,
             #[cfg(feature = "email")]
             email_client: libs.email_client,
             #[cfg(feature = "s3")]
