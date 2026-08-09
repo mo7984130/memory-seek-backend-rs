@@ -4,7 +4,7 @@ use axum::{
 };
 use std::net::{IpAddr, SocketAddr};
 
-use crate::{error::AppError, ext::ResultErrExt};
+use crate::{error::AppError, ext::ResultErrExt, Result};
 
 #[derive(Clone)]
 pub struct ClientIp(pub IpAddr);
@@ -21,7 +21,7 @@ where
 {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, AppError> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self> {
         // 1. 检查 X-Forwarded-For（代理链，取第一个非代理 IP）
         if let Some(ip) = extract_forwarded_ip(parts) {
             return Ok(ClientIp(ip));
@@ -64,7 +64,7 @@ fn extract_real_ip(parts: &Parts) -> Option<IpAddr> {
 }
 
 /// 从连接信息提取 IP
-async fn extract_connect_info<S>(parts: &mut Parts, state: &S) -> Result<ClientIp, AppError>
+async fn extract_connect_info<S>(parts: &mut Parts, state: &S) -> Result<ClientIp>
 where
     S: Send + Sync,
 {

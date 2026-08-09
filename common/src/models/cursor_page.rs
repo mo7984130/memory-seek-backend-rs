@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::{error::AppError, ext::ToOk};
+use crate::{Result, ext::ToOk};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,9 +42,9 @@ impl<T, C> CursorPage<T, C> {
         mut records: Vec<T>,
         size: u64,
         get_cursor: F,
-    ) -> Result<Self, AppError>
+    ) -> Result<Self>
     where
-        F: FnOnce(&T) -> Result<C, AppError>,
+        F: FnOnce(&T) -> Result<C>,
     {
         if records.len() > size as usize {
             records.pop();

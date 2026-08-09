@@ -2,7 +2,7 @@ pub mod bases;
 pub mod domains;
 pub mod libs;
 
-use common::error::AppError;
+use common::Result;
 
 use crate::config::AppConfig;
 use crate::state::AppState;
@@ -17,7 +17,7 @@ pub struct AppSetup {
 
 impl AppSetup {
     #[allow(unused_variables)]
-    pub async fn init(cfg: &AppConfig) -> Result<Self, AppError> {
+    pub async fn init(cfg: &AppConfig) -> Result<Self> {
         // 1. 初始化基础设施
         let bases = bases::AppBasesInit::init(cfg).await?;
 

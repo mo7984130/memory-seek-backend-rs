@@ -4,13 +4,15 @@ pub mod log;
 pub mod metrics;
 pub mod redis;
 
+use common::Result;
+
 use crate::config::AppConfig;
 use crate::state::AppBases;
 
 pub struct AppBasesInit;
 
 impl AppBasesInit {
-    pub async fn init(cfg: &AppConfig) -> Result<AppBases, common::error::AppError> {
+    pub async fn init(cfg: &AppConfig) -> Result<AppBases> {
         // 初始化数据库
         let db = database::init(&cfg.database).await?;
 

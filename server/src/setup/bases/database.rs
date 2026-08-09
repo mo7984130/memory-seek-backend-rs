@@ -1,4 +1,4 @@
-use common::ext::ResultErrExt;
+use common::{Result, ext::ResultErrExt};
 use serde::Deserialize;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -14,7 +14,7 @@ const fn default_max_connections() -> u32 {
     64
 }
 
-pub async fn init(cfg: &Config) -> Result<DatabaseConnection, common::error::AppError> {
+pub async fn init(cfg: &Config) -> Result<DatabaseConnection> {
     info!("初始化数据库");
     let mut opt = ConnectOptions::new(&cfg.url);
     opt.max_connections(cfg.max_connections);
