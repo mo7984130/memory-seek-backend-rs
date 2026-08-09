@@ -17,6 +17,7 @@ FEATURES ?= metrics,auth,user,photo,face-engine
 BIN_NAME  ?= memory-seek-server
 RUNS      ?= 3          # 每场景轮次, collect 取中位数
 INCLUDE_S3_PATHS ?= false
+SERVER_CPUS ?= 2        # 被测 server 占用核数(taskset 绑定, 控制变量)
 
 # photo 场景中不依赖 S3 的子场景(独立脚本文件名, 对应 scenarios/photo/<name>.js)
 PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like
@@ -127,11 +128,12 @@ person: $(OUT_DIR)     ## 人物模块压测(person_controller)
 all: auth user photo face person  ## 运行全部压测(含 S3 场景与 face/person)
 
 # ── 环境编排 ────────────────────────────────────────
-ci-up:                 ## 启动压测环境(容器依赖 + release server 进程)
+ci-up:                 ## 启动压测环境(容器依赖 + release server 进程, taskset 限核)
 	$(COMPOSE) up -d --wait
 	cd ../.. && cargo build --release --features "$(FEATURES)"
-	@echo "Starting server (features: $(FEATURES))..."
-	@cd ../.. && ./target/release/$(BIN_NAME) --config $(CI_DIR)/server-config.yml \
+	@echo "Starting server (features: $(FEATURES), cpus: $(SERVER_CPUS))..."
+	@cd ../.. && taskset -c 0-$(shell expr $(SERVER_CPUS) - 1) \
+		./target/release/$(BIN_NAME) --config $(CI_DIR)/server-config.yml \
 		--log-dir $(CI_DIR)/logs \
 		> $(CI_DIR)/server.log 2>&1 & echo $$! > $(SERVER_PID)
 	@for i in $$(seq 1 60); do \

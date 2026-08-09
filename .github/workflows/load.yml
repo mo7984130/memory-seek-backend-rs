@@ -34,6 +34,11 @@ on:
                 options:
                     - target
                     - max
+            server_cpus:
+                description: "被测 server 占用核数(控制变量, 默认 2)"
+                required: false
+                type: number
+                default: 2
     # PR 合并到 main 后自动压测(push 事件由合并产生)
     push:
         branches: [main]
@@ -62,6 +67,8 @@ jobs:
             RUNS: ${{ inputs.runs || 3 }}
             # 负载模型: target=固定目标 QPS, max=逐步加压找上限
             LOAD_MODE: ${{ inputs.load_mode || 'target' }}
+            # 被测 server 占用核数(控制变量, 默认 2)
+            SERVER_CPUS: ${{ inputs.server_cpus || 2 }}
             # schedule -> baseline, 其它(手动/PR) -> compare
             MODE: ${{ github.event_name == 'schedule' && 'baseline' || inputs.mode || 'compare' }}
             PR_NUMBER: ${{ inputs.pr_number != 0 && inputs.pr_number || github.event.pull_request.number || '0' }}
@@ -94,16 +101,18 @@ jobs:
             - name: 启动依赖容器 (PG / Redis)
               run: docker compose -f tests/load/docker-compose.load.yml up -d --wait
 
-            - name: 启动被测服务
+            - name: 启动被测服务 (taskset 限核)
+              # 固定 server 占用核数(SERVER_CPUS), 控制变量: 压测对比不随 runner 核数漂移
               run: |
-                  ./target/release/memory-seek-server \
+                  taskset -c 0-$((SERVER_CPUS - 1)) \
+                      ./target/release/memory-seek-server \
                       --config tests/load/ci/server-config.yml \
                       --log-dir tests/load/ci/logs \
                       > server.log 2>&1 &
                   echo $! > server.pid
                   for i in $(seq 1 60); do
                       if curl -sf http://127.0.0.1:7985/health >/dev/null; then
-                          echo "server ready"
+                          echo "server ready (cpus=$SERVER_CPUS)"
                           exit 0
                       fi
                       sleep 1

@@ -6,6 +6,8 @@
 : "${REMOTE_HOST:=127.0.0.1}"
 : "${SERVER_PORT:=7985}"
 : "${METRICS_PORT:=9090}"
+# 被测 server 占用核数(控制变量; taskset 绑定, 压测对比不随宿主机核数漂移)
+: "${SERVER_CPUS:=2}"
 
 # ── 构建 ──────────────────────────────────────────────
 # 含 face-engine(仓库内置 ONNX 模型, 见 models/), 覆盖 face/person 压测
@@ -41,5 +43,5 @@ SERVER_CONFIG="${CI_DIR}/server-config.yml"
 SERVER_LOG="${CI_DIR}/server.log"
 SERVER_PID="${CI_DIR}/server.pid"
 
-export REMOTE_HOST SERVER_PORT METRICS_PORT FEATURES BIN_NAME
+export REMOTE_HOST SERVER_PORT METRICS_PORT SERVER_CPUS FEATURES BIN_NAME
 export AUTH_USERS PHOTO_USERS RUNS INCLUDE_S3_PATHS PHOTO_NOS3_SERVICES

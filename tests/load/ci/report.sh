@@ -18,6 +18,8 @@ REPORT="$RESULTS_DIR/report.md"
 HOSTNAME=$(hostname 2>/dev/null || echo n/a)
 UNAME=$(uname -srmo 2>/dev/null || echo n/a)
 NCPU=$(nproc 2>/dev/null || echo n/a)
+# 被测 server 绑定核数(控制变量, 见 SERVER_CPUS)
+SERVER_CPUS="${SERVER_CPUS:-n/a}"
 CPUMODEL=$(lscpu 2>/dev/null | awk -F: '/Model name/{print $2}' | xargs || echo n/a)
 MEM=$(free -h 2>/dev/null | awk '/Mem:/{print $2}' || echo n/a)
 TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
@@ -35,6 +37,7 @@ TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
     echo "| Host | $HOSTNAME |"
     echo "| OS | $UNAME |"
     echo "| CPU 核数 | $NCPU |"
+    echo "| 被测 CPU 核数 | $SERVER_CPUS |"
     echo "| CPU 型号 | $CPUMODEL |"
     echo "| 内存 | $MEM |"
     echo "| 被测服务 | http://${REMOTE_HOST}:${SERVER_PORT} |"
