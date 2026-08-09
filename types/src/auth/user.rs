@@ -4,16 +4,6 @@
 
 crate::id_type!(UserId, "user/");
 
-impl UserId {
-    /// 管理员用户 ID
-    pub const ADMIN_ID: i64 = 1;
-
-    /// 是否为管理员
-    pub fn is_admin(&self) -> bool {
-        self.0 == Self::ADMIN_ID
-    }
-}
-
 /// 已通过管理员校验的用户身份
 ///
 /// 由 [`AdminId::new`] 构造，只有管理员才能取得。
@@ -23,6 +13,12 @@ impl UserId {
 pub struct AdminId(UserId);
 
 impl AdminId {
+    pub const ADMIN_ID: AdminId = AdminId(UserId(1));
+
+    pub fn is_admin(&self) -> bool {
+        *self == Self::ADMIN_ID
+    }
+
     /// 展开为内部 [`UserId`]
     pub fn into_inner(self) -> UserId {
         self.0
@@ -30,9 +26,10 @@ impl AdminId {
 
     /// 校验管理员权限，非管理员返回 403
     #[cfg(feature = "orm")]
-    pub fn new(user_id: UserId) -> Result<Self, common::error::AppError> {
-        if user_id.is_admin() {
-            Ok(Self(user_id))
+    pub fn new(user_id: UserId) -> common::Result<Self> {
+        let this = Self(user_id);
+        if this.is_admin() {
+            Ok(this)
         } else {
             Err(common::error::AppError::forbidden("仅管理员可访问"))
         }
