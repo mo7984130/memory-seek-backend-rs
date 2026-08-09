@@ -58,18 +58,15 @@ SET count     = EXCLUDED.count,
     updated_at = now();
 
 -- 5. 人脸(每张 seed 照片 1 张, 初始未分配; embedding 为随机 512 维)
--- 幂等: 先清空 seed 关联数据(photo_face/photo_person 无外键约束)
-DELETE FROM photo_face
-WHERE photo_id IN (SELECT id FROM photo_photo WHERE file_id LIKE 'seed_file_%');
-
-DELETE FROM photo_person
-WHERE name LIKE 'Person\_%';
+-- 幂等: 表内仅 seed 数据, TRUNCATE RESTART IDENTITY 保证 id 从头开始
+-- (photo_face/photo_person 无外键约束, 可安全 TRUNCATE)
+TRUNCATE photo_face, photo_person RESTART IDENTITY;
 
 INSERT INTO photo_face (photo_id, person_id, bbox, landmarks, score, embedding)
 SELECT p.id,
        NULL,
-       '{"x1":0.1,"y1":0.1,"x2":0.6,"y2":0.9}',
-       '{}',
+       '[0.1,0.1,0.6,0.9]',
+       '[[0.1,0.1],[0.2,0.2],[0.3,0.3],[0.4,0.4],[0.5,0.5]]',
        0.95,
        ('[' || (SELECT string_agg((random() * 2 - 1)::numeric(5,4)::text, ',')
                  FROM generate_series(1, 512)) || ']')::vector
@@ -82,7 +79,7 @@ INSERT INTO photo_person (id, name, name_initials, cover_face_id, cover_photo_id
 SELECT u,
        'Person_' || u,
        'P_' || u,
-       NULL,
+       (u - 1) * :PHOTOS_PER_USER + 1,
        (u - 1) * :PHOTOS_PER_USER + 1,
        'seed_file_' || u || '_1',
        '{"x1":0.1,"y1":0.1,"x2":0.6,"y2":0.9}',

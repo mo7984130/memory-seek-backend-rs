@@ -6,3 +6,7 @@
 -- photo_collection: 代码 Collection 实体含 cover_photo_id, init.sql 缺失
 ALTER TABLE photo_collection
     ADD COLUMN IF NOT EXISTS cover_photo_id BIGINT;
+
+-- photo_face.score: 代码 Face 实体为 f32(FLOAT4), init.sql 定义为 DOUBLE PRECISION(FLOAT8),
+-- SQLx 无法将 FLOAT8 解码到 f32, 压测环境对齐为 REAL
+ALTER TABLE photo_face ALTER COLUMN score TYPE REAL;
