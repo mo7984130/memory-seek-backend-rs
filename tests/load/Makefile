@@ -2,7 +2,7 @@
 # Load test entry point — run k6 scenarios against a running server
 #
 # 压测体系分层:
-#   编排层   : ci-up / ci-down / run-all / run-once / photo-nos3 / seed
+#   编排层   : ci-up / ci-down / run-all / run-once / seed
 #   采集层   : collect / prometheus
 #   判定层   : judge / record-baseline
 #   报告层   : report
@@ -16,10 +16,6 @@ FEATURES ?= metrics,auth,user,photo,face-engine
 BIN_NAME  ?= memory-seek-server
 RUNS      ?= 3          # 每场景轮次, collect 取中位数
 INCLUDE_S3_PATHS ?= false
-SERVER_CPUS ?= 2        # 被测 server 占用核数(taskset 绑定, 控制变量)
-
-# photo 场景中不依赖 S3 的子场景(独立脚本文件名, 对应 scenarios/photo/<name>.js)
-PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like
 
 # face/person 压测数据量(与 seed.sql 对齐)
 PHOTO_COUNT ?= 40000   # photo_photo 总数(= PHOTO_USERS * PHOTOS_PER_USER)
@@ -45,12 +41,50 @@ PHOTO_MAX_RPS     ?= 100000
 # 压测时长(target 模式, 如 2m/3m; max 模式 stages 固定 1m+2m+1m)
 DURATION ?= 2m
 
+# ── 多 server 实例并行 ──────────────────────────────
+# 单机多 server 进程并行压测: 每实例绑定独立核心 + 独立端口 + 独立模块(组内串行),
+# 实例间通过 make -j 并行, 总时长 = max(各实例), 且各实例内部串行保证 QPS 准确。
+#
+# 实例表: <name>:<port>:<cpu_range>:<k6脚本>:<summary名>:<target_rps>:<max_rps>
+#   name       实例标识(pid/日志文件前缀)
+#   port       独立监听端口
+#   cpu_range  taskset 绑定核心区间
+#   k6脚本     scenarios/ 下的脚本路径
+#   summary名  summary 输出文件名
+#   target_rps target 模式目标迭代率(单 op 场景即 QPS)
+#   max_rps    max 模式软上限
+SERVER_INSTANCES ?= \
+	server-a:7985:0-1:auth.js:auth:400:100000 \
+	server-b:7986:2-3:user.js:user:300:100000 \
+	server-c:7987:4-5:photo/collection.js:photo_collection:30:100000 \
+	server-d:7988:6-7:photo/collection_photo.js:photo_collection_photo:30:100000 \
+	server-e:7989:8-9:photo/comment.js:photo_comment:30:100000 \
+	server-f:7990:10-11:photo/comment_like.js:photo_comment_like:30:100000 \
+	server-g:7991:12-13:photo/face.js:face:500:100000 \
+	server-h:7992:14-15:photo/person.js:person:500:100000
+
+# 每实例 DB/Redis 连接池(共享同一 PG/Redis, 连接池均分避免超限)
+# PG 容器已调 max_connections=256; Redis 无严格上限
+DB_MAX_CONNECTIONS  ?= 32
+REDIS_MAX_CONNECTIONS ?= 16
+
+# 并行实例数(组间并行度, 建议 ≤ 实例数)
+PARALLEL ?= 4
+
+# 解析实例表辅助: $(call inst_<字段>,<实例>)
+# 字段: 1=name 2=port 3=cpu 4=script 5=summary 6=target_rps 7=max_rps
+inst_name  = $(word 1,$(subst :, ,$(1)))
+inst_port  = $(word 2,$(subst :, ,$(1)))
+inst_cpu   = $(word 3,$(subst :, ,$(1)))
+inst_script= $(word 4,$(subst :, ,$(1)))
+inst_sum   = $(word 5,$(subst :, ,$(1)))
+inst_trps  = $(word 6,$(subst :, ,$(1)))
+inst_mrps  = $(word 7,$(subst :, ,$(1)))
+
 RESULTS_DIR  := results
 BASELINES    := baselines
 CI_DIR       := ci
 SERVER_BIN   := ../../target/release/$(BIN_NAME)
-SERVER_LOG   := $(CI_DIR)/server.log
-SERVER_PID   := $(CI_DIR)/server.pid
 COMPOSE      := docker compose -f docker-compose.load.yml
 BASE_URL     := http://$(REMOTE_HOST):$(SERVER_PORT)
 
@@ -63,8 +97,9 @@ OUT_DIR := $(RESULTS_DIR)/$(RUN_PREFIX)-$(RUN)
 endif
 
 .PHONY: all p95-report baseline compare clean help \
-        ci-up ci-down run-all run-max run-once photo-nos3 seed collect collect-max prometheus judge record-baseline report \
-        face person
+        ci-up ci-down run-all run-max run-once seed collect collect-max prometheus judge record-baseline report \
+        face person \
+        $(foreach inst,$(SERVER_INSTANCES),ci-up-$(call inst_name,$(inst)) ci-down-$(call inst_name,$(inst)) run-inst-$(call inst_name,$(inst)))
 
 # ── 压测(原有) ──────────────────────────────────────
 $(OUT_DIR):
@@ -128,26 +163,54 @@ person: $(OUT_DIR)     ## 人物模块压测(person_controller)
 all: auth user photo face person  ## 运行全部压测(含 S3 场景与 face/person)
 
 # ── 环境编排 ────────────────────────────────────────
-ci-up:                 ## 启动压测环境(容器依赖 + release server 进程, taskset 限核)
-	$(COMPOSE) up -d --wait
-	cd ../.. && cargo build --release --features "$(FEATURES)"
-	@echo "Starting server (features: $(FEATURES), cpus: $(SERVER_CPUS))..."
-	@cd ../.. && taskset -c 0-$(shell expr $(SERVER_CPUS) - 1) \
-		./target/release/$(BIN_NAME) --config $(CI_DIR)/server-config.yml \
-		> $(CI_DIR)/server.log 2>&1 & echo $$! > $(SERVER_PID)
+# 为每个实例生成独立的启停 target: ci-up-<name> / ci-down-<name> / run-inst-<name>
+define INSTANCE_CI_RULES
+ci-up-$(call inst_name,$(1)):
+	@echo "Starting instance $(call inst_name,$(1)) (port $(call inst_port,$(1)), cpus $(call inst_cpu,$(1)))..."
+	@cd ../.. && taskset -c $(call inst_cpu,$(1)) \
+		env MEMORY_SEEK_SERVER__PORT=$(call inst_port,$(1)) \
+			MEMORY_SEEK_DATABASE__MAX_CONNECTIONS=$(DB_MAX_CONNECTIONS) \
+			MEMORY_SEEK_REDIS__MAX_CONNECTIONS=$(REDIS_MAX_CONNECTIONS) \
+			./target/release/$(BIN_NAME) --config $(CI_DIR)/server-config.yml \
+			> $(CI_DIR)/$(call inst_name,$(1)).log 2>&1 & \
+			echo $$! > $(CI_DIR)/$(call inst_name,$(1)).pid
 	@for i in $$(seq 1 60); do \
-		if curl -sf http://127.0.0.1:$(SERVER_PORT)/health > /dev/null; then \
-			echo "Server ready at $(BASE_URL)"; exit 0; \
+		if curl -sf http://127.0.0.1:$(call inst_port,$(1))/health > /dev/null; then \
+			echo "Instance $(call inst_name,$(1)) ready at http://127.0.0.1:$(call inst_port,$(1))"; \
+			exit 0; \
 		fi; \
 		sleep 1; \
 	done; \
-	echo "ERROR: server failed to start"; tail -50 $(SERVER_LOG); exit 1
-
-ci-down:               ## 停止压测环境(server 进程 + 容器)
-	@if [ -f $(SERVER_PID) ]; then \
-		kill $$(cat $(SERVER_PID)) 2>/dev/null || true; \
-		rm -f $(SERVER_PID); \
+	echo "ERROR: instance $(call inst_name,$(1)) failed to start"; \
+	tail -50 $(CI_DIR)/$(call inst_name,$(1)).log; exit 1
+ci-down-$(call inst_name,$(1)):
+	@if [ -f $(CI_DIR)/$(call inst_name,$(1)).pid ]; then \
+		kill $$(cat $(CI_DIR)/$(call inst_name,$(1)).pid) 2>/dev/null || true; \
+		rm -f $(CI_DIR)/$(call inst_name,$(1)).pid; \
 	fi
+run-inst-$(call inst_name,$(1)): $(OUT_DIR)
+	@echo "=== instance $(call inst_name,$(1)): $(call inst_script,$(1)) (port $(call inst_port,$(1))) ==="; \
+	k6 run -q \
+		-e BASE_URL=http://127.0.0.1:$(call inst_port,$(1)) \
+		-e LOAD_MODE=$(LOAD_MODE) \
+		-e TARGET_RPS=$(call inst_trps,$(1)) \
+		-e MAX_RPS=$(call inst_mrps,$(1)) \
+		-e DURATION=$(DURATION) \
+		-e PHOTO_COUNT=$(PHOTO_COUNT) \
+		-e FACES=$(FACES) \
+		-e PERSONS=$(PERSONS) \
+		-e SUMMARY_EXPORT=$(OUT_DIR)/$(call inst_sum,$(1))_summary.json \
+		scenarios/$(call inst_script,$(1)) || echo "[warn] instance $(call inst_name,$(1)) 失败"
+endef
+$(foreach inst,$(SERVER_INSTANCES),$(eval $(call INSTANCE_CI_RULES,$(inst))))
+
+ci-up:                 ## 启动压测环境(容器 + 全部 server 实例, 各自绑核)
+	$(COMPOSE) up -d --wait
+	cd ../.. && cargo build --release --features "$(FEATURES)"
+	@$(foreach inst,$(SERVER_INSTANCES),$(MAKE) -s ci-up-$(call inst_name,$(inst));)
+
+ci-down:               ## 停止压测环境(全部 server 实例 + 容器)
+	@$(foreach inst,$(SERVER_INSTANCES),$(MAKE) -s ci-down-$(call inst_name,$(inst));)
 	$(COMPOSE) down
 
 # ── 压测(编排层) ────────────────────────────────────
@@ -167,25 +230,11 @@ run-max:               ## max 极限压测(LOAD_MODE=max), 输出 max-run-* 并�
 collect-max:           ## 归一化 max 结果 -> max-normalized/
 	COLLECT_RUNS_DIR=$(MAX_RUNS_DIR) COLLECT_OUT_DIR=$(MAX_NORMALIZED_DIR) $(CI_DIR)/collect.sh
 
-run-once:              ## 单轮全场景压测(auth + user + photo + face + person)
-	$(MAKE) auth RUN=$(RUN) || echo "[warn] auth 轮 $(RUN) 失败(见 results)"
-	$(MAKE) user RUN=$(RUN) || echo "[warn] user 轮 $(RUN) 失败(见 results)"
-	$(MAKE) photo-nos3 RUN=$(RUN) || echo "[warn] photo 轮 $(RUN) 失败(见 results)"
-	$(MAKE) face RUN=$(RUN) || echo "[warn] face 轮 $(RUN) 失败(见 results)"
-	$(MAKE) person RUN=$(RUN) || echo "[warn] person 轮 $(RUN) 失败(见 results)"
-
-photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景(直接运行独立脚本)
-	@for s in $(PHOTO_NOS3_SERVICES); do \
-		echo "=== photo scenario: $$s ==="; \
-		k6 run -q \
-			-e BASE_URL=$(BASE_URL) \
-			-e LOAD_MODE=$(LOAD_MODE) \
-			-e TARGET_RPS=$(PHOTO_TARGET_RPS) \
-			-e MAX_RPS=$(PHOTO_MAX_RPS) \
-			-e DURATION=$(DURATION) \
-			-e SUMMARY_EXPORT=$(OUT_DIR)/photo_$${s}_summary.json \
-			scenarios/photo/$$s.js || echo "[warn] scenario $$s 失败"; \
-	done
+run-once:              ## 单轮全场景压测(各 server 实例并行, 实例内单模块串行)
+	+@$(MAKE) -j$(PARALLEL) \
+		RUN=$(RUN) \
+		$(foreach inst,$(SERVER_INSTANCES),run-inst-$(call inst_name,$(inst))) \
+		|| echo "[warn] 部分实例压测失败(见 results)"
 
 seed:                  ## 灌入种子数据(建表 + 压测账号/照片/时间线统计)
 	$(CI_DIR)/../seed/seed.sh
