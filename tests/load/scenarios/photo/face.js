@@ -8,6 +8,7 @@ import {
     getPhotoUserCredentials,
     setupPreLogin,
     sessionFromData,
+    recordResult,
     printSummary,
 } from "../../helpers/common.js";
 import {
@@ -91,12 +92,12 @@ export default function (data) {
     const r = Math.random();
     if (r < 0.4) {
         const photoId = (Math.floor(Math.random() * PHOTO_COUNT) % PHOTO_COUNT) + 1;
-        getFacesByPhotoId(photoId);
+        recordResult("get_faces_by_photo", getFacesByPhotoId(photoId));
     } else if (r < 0.7) {
-        getUnassignedFacePhotos(32);
+        recordResult("get_unassigned_face_photos", getUnassignedFacePhotos(32));
     } else {
         const faceId = (Math.floor(Math.random() * FACES) % FACES) + 1;
         const personId = (Math.floor(Math.random() * PERSONS) % PERSONS) + 1;
-        changeFaceBelonging(faceId, personId);
+        recordResult("change_face_belonging", changeFaceBelonging(faceId, personId));
     }
 }

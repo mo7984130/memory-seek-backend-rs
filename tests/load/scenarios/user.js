@@ -9,6 +9,7 @@ import {
     getTestUserCredentials,
     setupPreLogin,
     sessionFromData,
+    recordResult,
     printSummary,
 } from "../helpers/common.js";
 import {
@@ -82,8 +83,8 @@ export default function (data) {
     maybeRefreshSession();
 
     if (Math.random() < 0.6) {
-        getMe();
+        recordResult("get_me", getMe());
     } else {
-        changeNickname(`U${__VU}_${String(Date.now()).slice(-6)}`);
+        recordResult("change_nickname", changeNickname(`U${__VU}_${String(Date.now()).slice(-6)}`));
     }
 }

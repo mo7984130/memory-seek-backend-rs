@@ -8,6 +8,7 @@ import {
     getPhotoUserCredentials,
     setupPreLogin,
     sessionFromData,
+    recordResult,
     printSummary,
 } from "../../helpers/common.js";
 import {
@@ -89,14 +90,14 @@ export default function (data) {
 
     const r = Math.random();
     if (r < 0.3) {
-        getPersons(32);
+        recordResult("get_persons", getPersons(32));
     } else if (r < 0.6) {
-        searchPersons("P_");
+        recordResult("search_persons", searchPersons("P_"));
     } else if (r < 0.85) {
         const personId = (Math.floor(Math.random() * PERSONS) % PERSONS) + 1;
-        getPersonPhotos(personId);
+        recordResult("get_person_photos", getPersonPhotos(personId));
     } else {
         const personId = (Math.floor(Math.random() * PERSONS) % PERSONS) + 1;
-        renamePerson(personId, `LoadTest_${__VU}_${Date.now()}`);
+        recordResult("rename_person", renamePerson(personId, `LoadTest_${__VU}_${Date.now()}`));
     }
 }
