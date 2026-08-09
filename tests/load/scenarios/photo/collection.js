@@ -1,17 +1,20 @@
 // tests/load/scenarios/photo/collection.js
-// 收藏夹服务压测场景 — arrival-rate 负载模型
+// 收藏夹服务压测场景 — arrival-rate 负载模型, setup 预登录
 //
-// 完整流程迭代(create/list/update/delete 自洽, 数据不累积), 会话跨迭代复用。
+// 完整流程迭代(create/list/update/delete 自洽, 数据不累积),
+// 会话由 setup 预登录(login 不计入压测窗口), 全程复用。
 
 import {
     getPhotoUserCredentials,
     recordResult,
     printSummary,
     buildLoadOptions,
+    setupPreLogin,
+    sessionFromData,
 } from "../../helpers/common.js";
 import {
+    setSession,
     initSession,
-    getSession,
     maybeRefreshSession,
 } from "../../helpers/session.js";
 import {
@@ -23,17 +26,27 @@ import {
 
 export { printSummary as handleSummary };
 
+const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
+
 export const options = buildLoadOptions({
     targetRps: 30,
     maxRps: 150,
-    preAllocatedVUs: 300,
+    preAllocatedVUs: PRE_ALLOCATED_VUS,
     maxVUs: 2000,
 });
 
+// setup 预登录: login 不计入压测窗口
+export function setup() {
+    return setupPreLogin(getPhotoUserCredentials, PRE_ALLOCATED_VUS);
+}
+
 // ── 核心逻辑 ──
 
-function runCollectionFlow() {
-    if (!getSession()) {
+function runCollectionFlow(data) {
+    const session = sessionFromData(data, __VU);
+    if (session) {
+        setSession(session);
+    } else {
         const { account, password } = getPhotoUserCredentials(__VU);
         initSession(account, password);
         return;
@@ -57,12 +70,12 @@ function runCollectionFlow() {
 
 // ── 独立运行入口 ──
 
-export default function () {
-    runCollectionFlow();
+export default function (data) {
+    runCollectionFlow(data);
 }
 
 // ── 被统一入口(photo.js)调用的 exec 函数 ──
 
-export function collectionExec() {
-    runCollectionFlow();
+export function collectionExec(data) {
+    runCollectionFlow(data);
 }

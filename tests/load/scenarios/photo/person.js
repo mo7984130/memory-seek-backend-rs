@@ -1,16 +1,18 @@
 // tests/load/scenarios/photo/person.js
-// 人物服务压测场景 — arrival-rate 负载模型
+// 人物服务压测场景 — arrival-rate 负载模型, setup 预登录
 //
-// 双模式(target/max), 会话跨迭代复用, 迭代 = 单个业务请求。
-// 覆盖: 人物列表 / 前缀搜索 / 人物照片 / 重命名(只读为主 + 轻写)。
+// 双模式(target/max), 会话由 setup 预登录(login 不计入压测窗口),
+// 迭代 = 单个业务请求(人物列表 / 前缀搜索 / 人物照片 / 重命名)。
 
 import {
     getPhotoUserCredentials,
+    setupPreLogin,
+    sessionFromData,
     printSummary,
 } from "../../helpers/common.js";
 import {
+    setSession,
     initSession,
-    getSession,
     maybeRefreshSession,
 } from "../../helpers/session.js";
 import {
@@ -25,7 +27,7 @@ export { printSummary as handleSummary };
 const LOAD_MODE = __ENV.LOAD_MODE || "target";
 const TARGET_RPS = parseInt(__ENV.TARGET_RPS || "500", 10);
 const MAX_RPS = parseInt(__ENV.MAX_RPS || "100000", 10);
-// photo 用户数限制并发上限(seed PHOTO_USERS=200)
+// photo 用户数限制并发上限(seed PHOTO_USERS=2000)
 const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
 const MAX_VUS = parseInt(__ENV.MAX_VUS || "2000", 10);
 const DURATION = __ENV.DURATION || "2m";
@@ -45,7 +47,7 @@ export const options = (() => {
                     maxVUs: MAX_VUS,
                     stages: [
                         { duration: "1m", target: ramp },
-                        { duration: DURATION, target: MAX_RPS },
+                        { duration: "2m", target: MAX_RPS },
                         { duration: "1m", target: MAX_RPS },
                     ],
                 },
@@ -58,7 +60,7 @@ export const options = (() => {
                 executor: "constant-arrival-rate",
                 rate: TARGET_RPS,
                 timeUnit: "1s",
-                duration: "2m",
+                duration: DURATION,
                 preAllocatedVUs: PRE_ALLOCATED_VUS,
                 maxVUs: MAX_VUS,
             },
@@ -66,8 +68,16 @@ export const options = (() => {
     };
 })();
 
-export default function () {
-    if (!getSession()) {
+// setup 预登录: login 不计入压测窗口
+export function setup() {
+    return setupPreLogin(getPhotoUserCredentials, PRE_ALLOCATED_VUS);
+}
+
+export default function (data) {
+    const session = sessionFromData(data, __VU);
+    if (session) {
+        setSession(session);
+    } else {
         const { account, password } = getPhotoUserCredentials(__VU);
         initSession(account, password);
         return;

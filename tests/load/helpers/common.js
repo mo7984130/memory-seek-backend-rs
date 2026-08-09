@@ -191,6 +191,40 @@ export function buildLoadOptions({
 }
 
 /**
+ * setup 预登录: 一次性登录 preAllocatedVUs 个账号, 返回会话数组
+ * (索引 = VU 号 - 1), 使 login 完全位于压测计时窗口之外。
+ * 登录失败项为 null, VU 侧可兜底现场登录。
+ */
+export function setupPreLogin(credentialFn, vuCount) {
+    const sessions = [];
+    for (let i = 1; i <= vuCount; i++) {
+        const { account, password } = credentialFn(i);
+        const res = http.post(
+            `${BASE_URL}/auth/login`,
+            JSON.stringify({ account, password }),
+            { headers: { "Content-Type": "application/json" }, tags: { name: "prelogin" } },
+        );
+        sessions.push(
+            res.status === 200
+                ? {
+                      uid: res.json("data.user.id"),
+                      token: res.json("data.accessToken"),
+                      refreshToken: res.json("data.refreshToken"),
+                  }
+                : null,
+        );
+    }
+    return sessions;
+}
+
+/**
+ * 从 setup 预登录数据中取出当前 VU 的会话; 缺失(登录失败或 VU 超出预分配)时返回 null。
+ */
+export function sessionFromData(data, vuId) {
+    return data?.[vuId - 1] ?? null;
+}
+
+/**
  * 自定义 summary 输出（替换 k6 默认的 metrics dump）
  * 在 scenario 中: export { handleSummary } from "../helpers/common.js";
  * @param {Object} data - k6 metrics data

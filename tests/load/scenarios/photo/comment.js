@@ -8,10 +8,12 @@ import {
     recordResult,
     printSummary,
     buildLoadOptions,
+    setupPreLogin,
+    sessionFromData,
 } from "../../helpers/common.js";
 import {
+    setSession,
     initSession,
-    getSession,
     maybeRefreshSession,
 } from "../../helpers/session.js";
 import { listPhotos } from "../../helpers/domains/photo/photo.js";
@@ -23,17 +25,27 @@ import {
 
 export { printSummary as handleSummary };
 
+const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
+
 export const options = buildLoadOptions({
     targetRps: 30,
     maxRps: 150,
-    preAllocatedVUs: 300,
+    preAllocatedVUs: PRE_ALLOCATED_VUS,
     maxVUs: 2000,
 });
 
+// setup 预登录: login 不计入压测窗口
+export function setup() {
+    return setupPreLogin(getPhotoUserCredentials, PRE_ALLOCATED_VUS);
+}
+
 // ── 核心逻辑 ──
 
-function runCommentFlow() {
-    if (!getSession()) {
+function runCommentFlow(data) {
+    const session = sessionFromData(data, __VU);
+    if (session) {
+        setSession(session);
+    } else {
         const { account, password } = getPhotoUserCredentials(__VU);
         initSession(account, password);
         return;
@@ -66,6 +78,6 @@ export default function () {
 
 // ── 被统一入口(photo.js)调用的 exec 函数 ──
 
-export function commentExec() {
-    runCommentFlow();
+export function commentExec(data) {
+    runCommentFlow(data);
 }

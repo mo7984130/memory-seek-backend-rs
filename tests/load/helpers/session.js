@@ -140,3 +140,12 @@ export function clearSession() {
     _session = null;
     _opCount = 0;
 }
+
+/**
+ * 直接注入已登录会话(setup 预登录使用, 避免 login 进入压测计时窗口)。
+ * @param {{ uid: number, token: string, refreshToken: string }} session
+ */
+export function setSession(session) {
+    _session = session;
+    _opCount = 0;
+}
