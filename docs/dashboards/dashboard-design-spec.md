@@ -57,11 +57,12 @@
 
 | 面板 | 类型 | 查询 |
 |------|------|------|
-| `HTTP QPS` | timeseries | `sum(rate(server_http_requests[5m])) by (route)` |
-| `HTTP 错误率` | timeseries | `sum(rate(server_http_requests{status_class="5xx"}[5m])) / sum(rate(server_http_requests[5m])) * 100` |
+| `HTTP QPS` | timeseries | `sum(rate(server_http_requests_total[5m])) by (route)` |
+| `HTTP 错误率` | timeseries | `sum(rate(server_http_requests_total{status_class="5xx"}[5m])) / sum(rate(server_http_requests_total[5m])) * 100` |
 | `HTTP 延迟 (P50/P95/P99)` | timeseries | `histogram_quantile(0.95, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000` |
 
-> counter 不带 `_total` 后缀（metrics-exporter-prometheus 不追加），点号转下划线。
+> 系统指标的点号转下划线；counter 以 `_total` 结尾（`server_http_requests_total`），
+> 满足 Prometheus 命名约定。业务冒号指标保留原名。
 
 #### 错误分布面板（埋了 `errors:{kind}` 的操作）
 

@@ -92,14 +92,16 @@ photo:face_compute:photo_download:duration_seconds_count
 
 | 指标名 | 类型 | Labels | 含义 |
 |--------|------|--------|------|
-| `server.http.requests` | counter | `method`、`route`、`status_class` | 请求量 |
+| `server.http.requests_total` | counter | `method`、`route`、`status_class` | 请求量 |
 | `server.http.duration_seconds` | histogram | `method`、`route` | 请求耗时（秒） |
 | `server.http.in_flight` | gauge | - | 当前在途请求数 |
 
 - `route` 取自 `axum::extract::MatchedPath`（路由 pattern，如 `/api/v1/photos/:id`），
   未匹配时回退为 `unmatched`。**禁止**将真实 ID 等动态值写入标签。
 - 低基数标签白名单：`method`、`route`（pattern）、`status_class`、`kind`、`op`、`mode`。
-- Prometheus 导出名：`server_http_requests`、`server_http_duration_seconds_bucket`（counter 不加 `_total` 后缀）。
+- Prometheus 导出名：`server_http_requests_total`、`server_http_duration_seconds_bucket`。
+  点号系统指标的 counter 统一以 `_total` 结尾，满足 Prometheus 命名约定（消除
+  Grafana PromQL 对 `rate()` 目标的 counter 类型警告）；业务冒号指标保留原名。
 
 ## 错误分类规范
 
@@ -237,7 +239,7 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 | `redis.connections.idle` | `redis_connections_idle` | gauge | Redis 连接池空闲连接 |
 | `redis.connections.waiting` | `redis_connections_waiting` | gauge | Redis 连接池等待连接 |
 | `server.build_info` | `server_build_info` | gauge=1 | labels：`version` / `commit`，用于版本追踪 |
-| `server.http.requests` | `server_http_requests` | counter | labels：`method` / `route` / `status_class`，HTTP 请求量 |
+| `server.http.requests_total` | `server_http_requests_total` | counter | labels：`method` / `route` / `status_class`，HTTP 请求量 |
 | `server.http.duration_seconds` | `server_http_duration_seconds` | histogram | labels：`method` / `route`，HTTP 请求耗时 |
 | `server.http.in_flight` | `server_http_in_flight` | gauge | 在途请求数 |
 

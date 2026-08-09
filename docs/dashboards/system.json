@@ -101,7 +101,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "sum(rate(server_http_requests[5m])) by (route)",
+          "expr": "sum(rate(server_http_requests_total[5m])) by (route)",
           "legendFormat": "{{route}}",
           "refId": "A"
         }
@@ -183,7 +183,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "sum(rate(server_http_requests{status_class=\"5xx\"}[5m])) / sum(rate(server_http_requests[5m])) * 100",
+          "expr": "sum(rate(server_http_requests_total{status_class=\"5xx\"}[5m])) / sum(rate(server_http_requests_total[5m])) * 100",
           "legendFormat": "错误率",
           "refId": "A"
         }
