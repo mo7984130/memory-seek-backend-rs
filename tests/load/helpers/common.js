@@ -129,10 +129,9 @@ export function logResult(label, result) {
     const status = result.success ? "\x1b[32mOK\x1b[0m" : "\x1b[31mFAIL\x1b[0m";
     console.log(`  [${status}] ${label} ${Math.round(result.duration)}ms`);
     if (!result.success && result.error) {
-        const body = result.error.body.length > 200
-            ? result.error.body.substring(0, 200) + "..."
-            : result.error.body;
-        console.error(`    → HTTP ${result.error.status}: ${body}`);
+        const body = String(result.error.body ?? "");
+        const shown = body.length > 200 ? body.substring(0, 200) + "..." : body;
+        console.error(`    → HTTP ${result.error.status ?? "?"}: ${shown}`);
     }
 }
 

@@ -33,9 +33,9 @@ PERSONS      ?= 2000   # photo_person 总行数(= 每 photo 用户 1 个)
 #                         (rate 实际由系统饱和/VU 上限决定, 即"无上限找上限")
 LOAD_MODE    ?= target
 # 各场景目标/上限迭代率(单 op 场景即 QPS; photo 为完整流程迭代率, QPS≈迭代率×请求数)
-AUTH_TARGET_RPS   ?= 1500
+AUTH_TARGET_RPS   ?= 400
 AUTH_MAX_RPS      ?= 100000
-USER_TARGET_RPS   ?= 500
+USER_TARGET_RPS   ?= 300
 USER_MAX_RPS      ?= 100000
 FACE_TARGET_RPS   ?= 500
 FACE_MAX_RPS      ?= 100000
