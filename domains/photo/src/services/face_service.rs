@@ -6,8 +6,9 @@ use common::{
     Result,
     error::AppError,
     ext::{OptionExt, ResultErrExt, ToOk, UintExt},
-    inc_counter, inc_error, metrics_group, metrics_name, metrics_success, set_gauge,
+    inc_counter, inc_error, metrics_group, metrics_name, metrics_success,
     models::CursorPage,
+    set_gauge,
     utils::{DbUtils, GaugeGuard, MetricsTimer, MetricsTimerExt},
 };
 use image::{ImageBuffer, Rgb};
@@ -76,8 +77,16 @@ impl FaceService {
         // mode 为 category gauge，以标签区分 full / incremental
         #[cfg(feature = "metrics")]
         {
-            metrics::gauge!("photo:face_compute:mode", "mode" => "full").set(if full { 1.0 } else { 0.0 });
-            metrics::gauge!("photo:face_compute:mode", "mode" => "incremental").set(if full { 0.0 } else { 1.0 });
+            metrics::gauge!("photo:face_compute:mode", "mode" => "full").set(if full {
+                1.0
+            } else {
+                0.0
+            });
+            metrics::gauge!("photo:face_compute:mode", "mode" => "incremental").set(if full {
+                0.0
+            } else {
+                1.0
+            });
         }
 
         // 如果是全量计算的话
@@ -121,9 +130,11 @@ impl FaceService {
                         .timed(metrics_name!("photo_detect"))
                         .await?;
                     let face_count = faces.len();
-                    new_faces.extend(faces.into_iter().map(|face| {
-                        face::NewFaceRecord::from_detected(photo_id, face)
-                    }));
+                    new_faces.extend(
+                        faces
+                            .into_iter()
+                            .map(|face| face::NewFaceRecord::from_detected(photo_id, face)),
+                    );
                     Ok::<usize, AppError>(face_count)
                 }
                 .await

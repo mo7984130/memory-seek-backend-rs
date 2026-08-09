@@ -1,9 +1,9 @@
 use crate::state::AppState;
 use axum::{extract::Request, middleware::Next, response::Response};
 use common::{
+    Result,
     error::AppError,
     ext::{OptionExt, RedisExt, ResultErrExt},
-    Result,
 };
 use std::{str::FromStr, sync::Arc};
 use types::auth::user::UserId;

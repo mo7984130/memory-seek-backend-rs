@@ -1,6 +1,6 @@
 use clap::Parser;
-use common::ext::ResultErrExt;
 use common::Result;
+use common::ext::ResultErrExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;

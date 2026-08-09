@@ -1,5 +1,5 @@
-use common::{error::AppError, Result};
 use common::ext::ResultErrExt;
+use common::{Result, error::AppError};
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
@@ -70,12 +70,7 @@ impl EmailClient {
     /// # 错误
     /// - `AppError::BadRequest`: 收件人邮箱格式无效
     /// - `AppError::InternalServerError`: 发件人地址格式错误、邮件构建失败或 SMTP 发送失败
-    pub async fn send_message(
-        &self,
-        to: &str,
-        subject: &str,
-        body: String,
-    ) -> Result<()> {
+    pub async fn send_message(&self, to: &str, subject: &str, body: String) -> Result<()> {
         #[cfg(feature = "metrics")]
         let start = std::time::Instant::now();
         #[cfg(feature = "metrics")]
@@ -116,7 +111,8 @@ impl EmailClient {
             if result.is_ok() {
                 metrics::counter!("email:send:success").increment(1);
             }
-            metrics::histogram!("email:send:duration_seconds").record(start.elapsed().as_secs_f64());
+            metrics::histogram!("email:send:duration_seconds")
+                .record(start.elapsed().as_secs_f64());
         }
 
         result

@@ -1,5 +1,5 @@
-use crate::{error::AppError, Result};
 use crate::ext::log_warn;
+use crate::{Result, error::AppError};
 
 pub trait UintExt: Sized {
     #[track_caller]

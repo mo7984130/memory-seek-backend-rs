@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use crate::{error::AppError, Result};
 use crate::ext::{ResultErrExt, log_err};
+use crate::{Result, error::AppError};
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use bcrypt;
 use password_hash::SaltString;
@@ -120,10 +120,7 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError`: 无法识别哈希算法或验证过程中发生错误
-    pub fn verify_and_detect(
-        password: &str,
-        hash: &str,
-    ) -> Result<(bool, HashAlgorithm)> {
+    pub fn verify_and_detect(password: &str, hash: &str) -> Result<(bool, HashAlgorithm)> {
         match HashAlgorithm::detect(hash) {
             Some(alg) => {
                 let result = alg.verify(password, hash)?;

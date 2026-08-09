@@ -4,7 +4,7 @@ use axum::{
 };
 use std::net::{IpAddr, SocketAddr};
 
-use crate::{error::AppError, ext::ResultErrExt, Result};
+use crate::{Result, error::AppError, ext::ResultErrExt};
 
 #[derive(Clone)]
 pub struct ClientIp(pub IpAddr);

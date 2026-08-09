@@ -38,11 +38,7 @@ impl<T> CursorPage<T, ()> {
 }
 
 impl<T, C> CursorPage<T, C> {
-    pub fn from_oversize_fn<F>(
-        mut records: Vec<T>,
-        size: u64,
-        get_cursor: F,
-    ) -> Result<Self>
+    pub fn from_oversize_fn<F>(mut records: Vec<T>, size: u64, get_cursor: F) -> Result<Self>
     where
         F: FnOnce(&T) -> Result<C>,
     {

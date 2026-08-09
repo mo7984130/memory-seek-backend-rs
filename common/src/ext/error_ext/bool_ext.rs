@@ -1,5 +1,5 @@
-use crate::{error::AppError, Result};
 use crate::ext::error_ext::log_warn;
+use crate::{Result, error::AppError};
 
 /// 为 `bool` 提供条件校验便捷方法
 pub trait BoolExt {
