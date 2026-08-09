@@ -45,41 +45,61 @@ DURATION ?= 2m
 # 单机多 server 进程并行压测: 每实例绑定独立核心 + 独立端口 + 独立模块(组内串行),
 # 实例间通过 make -j 并行, 总时长 = max(各实例), 且各实例内部串行保证 QPS 准确。
 #
-# 实例表: <name>:<port>:<cpu_range>:<k6脚本>:<summary名>:<target_rps>:<max_rps>
+# 实例表: <name>:<port>:<k6脚本>:<summary名>:<target_rps>:<max_rps>
 #   name       实例标识(pid/日志文件前缀)
 #   port       独立监听端口
-#   cpu_range  taskset 绑定核心区间
 #   k6脚本     scenarios/ 下的脚本路径
 #   summary名  summary 输出文件名
 #   target_rps target 模式目标迭代率(单 op 场景即 QPS)
 #   max_rps    max 模式软上限
+# 核心区间不在此表: 由 SERVER_CPUS(每实例核数)按实例序号自动分配, 便于 CI 控制
 SERVER_INSTANCES ?= \
-	server-a:7985:0-1:auth.js:auth:400:100000 \
-	server-b:7986:2-3:user.js:user:300:100000 \
-	server-c:7987:4-5:photo/collection.js:photo_collection:30:100000 \
-	server-d:7988:6-7:photo/collection_photo.js:photo_collection_photo:30:100000 \
-	server-e:7989:8-9:photo/comment.js:photo_comment:30:100000 \
-	server-f:7990:10-11:photo/comment_like.js:photo_comment_like:30:100000 \
-	server-g:7991:12-13:photo/face.js:face:500:100000 \
-	server-h:7992:14-15:photo/person.js:person:500:100000
+	server-a:7985:auth.js:auth:400:100000 \
+	server-b:7986:user.js:user:300:100000 \
+	server-c:7987:photo/collection.js:photo_collection:30:100000 \
+	server-d:7988:photo/collection_photo.js:photo_collection_photo:30:100000 \
+	server-e:7989:photo/comment.js:photo_comment:30:100000 \
+	server-f:7990:photo/comment_like.js:photo_comment_like:30:100000 \
+	server-g:7991:photo/face.js:face:500:100000 \
+	server-h:7992:photo/person.js:person:500:100000
+
+# 每实例占用核数(taskset 绑定, 控制变量: 压测对比不随宿主核数漂移)
+SERVER_CPUS ?= 2
+# 实例核心起始偏移(默认 0: 实例 1 绑 0-(n-1), 实例 2 绑 n-(2n-1), ...)
+CPU_BASE ?= 0
+# 宿主可用核数(自动检测; CI runner 可覆盖): 核心分配不超过该上限
+TOTAL_CPUS ?= $(shell nproc 2>/dev/null || echo 4)
 
 # 每实例 DB/Redis 连接池(共享同一 PG/Redis, 连接池均分避免超限)
 # PG 容器已调 max_connections=256; Redis 无严格上限
 DB_MAX_CONNECTIONS  ?= 32
 REDIS_MAX_CONNECTIONS ?= 16
 
-# 并行实例数(组间并行度, 建议 ≤ 实例数)
-PARALLEL ?= 4
+# 并行实例数(组间并行度): 默认按核数自适应 floor(TOTAL_CPUS / SERVER_CPUS), 至少 1
+PARALLEL ?= $(shell expr $(TOTAL_CPUS) / $(SERVER_CPUS))
 
 # 解析实例表辅助: $(call inst_<字段>,<实例>)
-# 字段: 1=name 2=port 3=cpu 4=script 5=summary 6=target_rps 7=max_rps
+# 字段: 1=name 2=port 3=script 4=summary 5=target_rps 6=max_rps
 inst_name  = $(word 1,$(subst :, ,$(1)))
 inst_port  = $(word 2,$(subst :, ,$(1)))
-inst_cpu   = $(word 3,$(subst :, ,$(1)))
-inst_script= $(word 4,$(subst :, ,$(1)))
-inst_sum   = $(word 5,$(subst :, ,$(1)))
-inst_trps  = $(word 6,$(subst :, ,$(1)))
-inst_mrps  = $(word 7,$(subst :, ,$(1)))
+inst_script= $(word 3,$(subst :, ,$(1)))
+inst_sum   = $(word 4,$(subst :, ,$(1)))
+inst_trps  = $(word 5,$(subst :, ,$(1)))
+inst_mrps  = $(word 6,$(subst :, ,$(1)))
+
+# 实例序号(1-based)与核心区间
+# 第 N 个实例绑核心 [CPU_BASE + (N-1)*SERVER_CPUS, CPU_BASE + N*SERVER_CPUS - 1],
+# 核心编号对 TOTAL_CPUS 取模, 超出可用核时回绕(适合实例数×核数 > 总核数场景)
+INST_NAMES := $(foreach inst,$(SERVER_INSTANCES),$(call inst_name,$(inst)))
+define COMPUTE_INST_CPU
+$(eval INST_CPU_$(call inst_name,$(1)) := $(shell n=$$(echo "$(INST_NAMES)" | tr ' ' '\n' | grep -n '^$(call inst_name,$(1))$$' | cut -d: -f1); \
+	lo=$$(( ( $(CPU_BASE) + (n-1) * $(SERVER_CPUS) ) % $(TOTAL_CPUS) )); \
+	hi=$$(( ( $(CPU_BASE) + n * $(SERVER_CPUS) - 1 ) % $(TOTAL_CPUS) )); \
+	if [ $$lo -le $$hi ]; then echo "$$lo-$$hi"; else echo "$$lo-$$(( $(TOTAL_CPUS) - 1 )) $$(( 0 ))-$$hi"; fi))
+endef
+$(foreach inst,$(SERVER_INSTANCES),$(eval $(call COMPUTE_INST_CPU,$(inst))))
+
+inst_cpu = $(INST_CPU_$(1))
 
 RESULTS_DIR  := results
 BASELINES    := baselines
@@ -166,8 +186,8 @@ all: auth user photo face person  ## 运行全部压测(含 S3 场景与 face/pe
 # 为每个实例生成独立的启停 target: ci-up-<name> / ci-down-<name> / run-inst-<name>
 define INSTANCE_CI_RULES
 ci-up-$(call inst_name,$(1)):
-	@echo "Starting instance $(call inst_name,$(1)) (port $(call inst_port,$(1)), cpus $(call inst_cpu,$(1)))..."
-	@cd ../.. && taskset -c $(call inst_cpu,$(1)) \
+	@echo "Starting instance $(call inst_name,$(1)) (port $(call inst_port,$(1)), cpus $(call inst_cpu,$(call inst_name,$(1))))..."
+	@cd ../.. && taskset -c $(call inst_cpu,$(call inst_name,$(1))) \
 		env MEMORY_SEEK_SERVER__PORT=$(call inst_port,$(1)) \
 			MEMORY_SEEK_DATABASE__MAX_CONNECTIONS=$(DB_MAX_CONNECTIONS) \
 			MEMORY_SEEK_REDIS__MAX_CONNECTIONS=$(REDIS_MAX_CONNECTIONS) \
@@ -206,7 +226,7 @@ $(foreach inst,$(SERVER_INSTANCES),$(eval $(call INSTANCE_CI_RULES,$(inst))))
 
 ci-up:                 ## 启动压测环境(容器 + 全部 server 实例, 各自绑核)
 	$(COMPOSE) up -d --wait
-	cd ../.. && cargo build --release --features "$(FEATURES)"
+	@if [ "$(SKIP_BUILD)" != "1" ]; then cd ../.. && cargo build --release --features "$(FEATURES)"; fi
 	@$(foreach inst,$(SERVER_INSTANCES),$(MAKE) -s ci-up-$(call inst_name,$(inst));)
 
 ci-down:               ## 停止压测环境(全部 server 实例 + 容器)

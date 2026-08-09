@@ -14,6 +14,7 @@ pub struct AppConfig {
     pub redis: crate::setup::bases::redis::Config,
 
     #[serde(default)]
+    #[allow(dead_code)] // 仅 user/photo domain feature 下消费
     pub cache: crate::setup::bases::cache::Config,
 
     #[cfg(feature = "email")]

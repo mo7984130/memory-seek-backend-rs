@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)] // 字段仅在启用 user/photo domain feature 时被消费
 pub struct Config {
     /// 是否启用缓存。`false` 时读写全部穿透数据库，便于压测对比
     #[serde(default = "default_enabled")]
