@@ -133,7 +133,6 @@ ci-up:                 ## 启动压测环境(容器依赖 + release server 进�
 	@echo "Starting server (features: $(FEATURES), cpus: $(SERVER_CPUS))..."
 	@cd ../.. && taskset -c 0-$(shell expr $(SERVER_CPUS) - 1) \
 		./target/release/$(BIN_NAME) --config $(CI_DIR)/server-config.yml \
-		--log-dir $(CI_DIR)/logs \
 		> $(CI_DIR)/server.log 2>&1 & echo $$! > $(SERVER_PID)
 	@for i in $$(seq 1 60); do \
 		if curl -sf http://127.0.0.1:$(SERVER_PORT)/health > /dev/null; then \

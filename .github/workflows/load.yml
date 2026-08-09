@@ -109,7 +109,6 @@ jobs:
                   taskset -c 0-$((SERVER_CPUS - 1)) \
                       ./target/release/memory-seek-server \
                       --config tests/load/ci/server-config.yml \
-                      --log-dir tests/load/ci/logs \
                       > server.log 2>&1 &
                   echo $! > server.pid
                   for i in $(seq 1 60); do

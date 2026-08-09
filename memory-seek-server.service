@@ -1,0 +1,59 @@
+# ── Memory Seek 后端服务 systemd 单元示例 ──
+#
+# 使用方式：
+#   1. 编译并安装二进制（见 build.sh），如放置到 /usr/local/bin/memory-seek-server
+#   2. 创建配置与环境文件：
+#        /etc/memory-seek/config.yaml            （参照仓库 example.config.yaml）
+#        /etc/memory-seek/memory-seek-server.env （存放敏感环境变量，权限 600）
+#   3. 创建专用用户（可选）：
+#        useradd --system --shell /usr/sbin/nologin memory-seek
+#   4. 安装本文件并启动：
+#        cp memory-seek-server.service /etc/systemd/system/
+#        systemctl daemon-reload
+#        systemctl enable --now memory-seek-server
+#
+# 日志说明：
+#   服务不自行维护日志文件，stdout/stderr 由 journald 统一捕获管理：
+#     journalctl -u memory-seek-server -f                 # 实时查看
+#     journalctl -u memory-seek-server --since "1 hour ago"
+#     journalctl -u memory-seek-server -p err -b          # 只看错误
+#   stdout 输出 warn 及以下级别，stderr 输出 error 及以上级别。
+
+[Unit]
+Description=Memory Seek Backend Server
+After=network-online.target postgresql.service redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=memory-seek
+Group=memory-seek
+WorkingDirectory=/opt/memory-seek
+
+# 日志级别与运行配置（可通过 EnvironmentFile 覆盖）
+Environment=RUST_LOG=info
+EnvironmentFile=/etc/memory-seek/memory-seek-server.env
+
+ExecStart=/usr/local/bin/memory-seek-server -c /etc/memory-seek/config.yaml
+
+# 崩溃自动重启
+Restart=on-failure
+RestartSec=5
+
+# 优雅关闭：主程序响应 SIGTERM 后执行收尾，超时后由 systemd 强制结束
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# 日志交给 journald 管理（显式声明，与默认一致）
+StandardOutput=journal
+StandardError=journal
+
+# 资源与安全加固
+LimitNOFILE=65535
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/backups/memory-seek
+
+[Install]
+WantedBy=multi-user.target

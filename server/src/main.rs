@@ -26,14 +26,6 @@ struct Cli {
     /// 配置文件路径
     #[arg(short = 'c', long = "config")]
     config: Option<String>,
-
-    /// 日志目录
-    #[arg(long = "log-dir")]
-    log_dir: Option<String>,
-
-    /// 日志文件名
-    #[arg(long = "log-file")]
-    log_file: Option<String>,
 }
 
 #[tokio::main]
@@ -41,8 +33,8 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // 提前初始化日志系统，确保配置加载等早期阶段也能记录错误详情
-    // 文件写入器生命周期由 _log_guard 持有，进程运行期间持续生效
-    let _log_guard = setup::bases::log::init(cli.log_dir, cli.log_file);
+    // 日志统一输出到 stdout/stderr，由 systemd journald 捕获管理
+    setup::bases::log::init();
 
     // 加载配置
     let cfg = AppConfig::load(cli.config).trace_internal_err("config_load_err", "加载配置失败")?;
@@ -134,7 +126,6 @@ async fn main() -> Result<()> {
 /// 3. 停止备份调度器（带超时）
 /// 4. 关闭数据库连接池
 /// 5. 关闭 Redis 连接池
-/// 6. _log_guard 在此函数返回后被 drop，自动 flush 日志文件
 async fn shutdown_signal(state: Arc<crate::state::AppState>, cancel_token: CancellationToken) {
     // ---- 1. 等待 OS 信号 ----
     let sigint = async {
@@ -198,7 +189,5 @@ async fn shutdown_signal(state: Arc<crate::state::AppState>, cancel_token: Cance
     tracing::info!("Redis 连接池已关闭");
 
     // ---- 6. 完成 ----
-    // _log_guard 在 main 中持有，此函数返回时不会被 drop。
-    // 日志 flush 在 _log_guard 被 drop（main 退出）时自动完成。
     tracing::info!("优雅关闭完成，服务即将退出");
 }
