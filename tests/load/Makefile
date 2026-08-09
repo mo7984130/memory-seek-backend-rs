@@ -54,15 +54,16 @@ SERVER_PID   := $(CI_DIR)/server.pid
 COMPOSE      := docker compose -f docker-compose.load.yml
 BASE_URL     := http://$(REMOTE_HOST):$(SERVER_PORT)
 
-# 多轮输出目录: 指定 RUN 时写入 run-<n>, 否则沿用原路径
+# 多轮输出目录: 指定 RUN 时写入 run-<n>(target) 或 max-run-<n>(max), 否则沿用原路径
+RUN_PREFIX := $(if $(filter max,$(LOAD_MODE)),max-run,run)
 ifeq ($(strip $(RUN)),)
 OUT_DIR := $(RESULTS_DIR)
 else
-OUT_DIR := $(RESULTS_DIR)/run-$(RUN)
+OUT_DIR := $(RESULTS_DIR)/$(RUN_PREFIX)-$(RUN)
 endif
 
 .PHONY: all p95-report baseline compare clean help \
-        ci-up ci-down run-all run-once photo-nos3 seed collect prometheus judge record-baseline report \
+        ci-up ci-down run-all run-max run-once photo-nos3 seed collect collect-max prometheus judge record-baseline report \
         face person
 
 # ── 压测(原有) ──────────────────────────────────────
@@ -150,13 +151,21 @@ ci-down:               ## 停止压测环境(server 进程 + 容器)
 	$(COMPOSE) down
 
 # ── 压测(编排层) ────────────────────────────────────
-run-all:               ## 全场景压测(默认排除 S3 路径), 多轮取中位数
+run-all:               ## 全场景压测(LOAD_MODE=target|max), 多轮取中位数
 	@for run in $$(seq 1 $(RUNS)); do \
 		echo "===== Run $$run / $(RUNS) ====="; \
 		$(MAKE) run-once RUN=$$run; \
 		sleep 5; \
 	done
-	@$(MAKE) collect
+	@$(MAKE) $(if $(filter max,$(LOAD_MODE)),collect-max,collect)
+
+# max 极限压测: 与 run-all 同, 但结果输出到 max-run-<n> / max-normalized
+run-max:               ## max 极限压测(LOAD_MODE=max), 输出 max-run-* 并归一化
+	@$(MAKE) run-all LOAD_MODE=max RUNS=$(RUNS)
+	@$(MAKE) collect-max
+
+collect-max:           ## 归一化 max 结果 -> max-normalized/
+	COLLECT_RUNS_DIR=$(MAX_RUNS_DIR) COLLECT_OUT_DIR=$(MAX_NORMALIZED_DIR) $(CI_DIR)/collect.sh
 
 run-once:              ## 单轮全场景压测(auth + user + photo + face + person)
 	$(MAKE) auth RUN=$(RUN) || echo "[warn] auth 轮 $(RUN) 失败(见 results)"

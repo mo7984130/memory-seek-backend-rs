@@ -27,11 +27,12 @@ on:
                 type: number
                 default: 0
             load_mode:
-                description: "target = 固定目标 QPS(默认); max = 逐步加压找上限"
+                description: "both = target + max 一起跑(默认); target = 仅目标 QPS; max = 仅极限加压"
                 required: true
                 type: choice
-                default: target
+                default: both
                 options:
+                    - both
                     - target
                     - max
             server_cpus:
@@ -65,8 +66,8 @@ jobs:
             FEATURES: metrics,auth,user,photo,face-engine
             # 合并到 main 默认完整跑 3 轮; 手动触发可覆盖 runs
             RUNS: ${{ inputs.runs || 3 }}
-            # 负载模型: target=固定目标 QPS, max=逐步加压找上限
-            LOAD_MODE: ${{ inputs.load_mode || 'target' }}
+            # 负载模型: both(默认) = target + max 一起; target / max = 仅单一
+            LOAD_MODE: ${{ inputs.load_mode || 'both' }}
             # 被测 server 占用核数(控制变量, 默认 2)
             SERVER_CPUS: ${{ inputs.server_cpus || 2 }}
             # schedule -> baseline, 其它(手动/PR) -> compare
@@ -126,37 +127,49 @@ jobs:
               # 不再容错: seed 失败必须暴露(否则压测会在无表库上全量报错)
               run: make -C tests/load seed
 
-            - name: 全场景压测 (${{ env.RUNS }} 轮)
-              run: make -C tests/load run-all RUNS=$RUNS LOAD_MODE=$LOAD_MODE
+            - name: 全场景压测 target (${{ env.RUNS }} 轮)
+              # both/target 模式跑 target 负载(对比用, 结果进基线)
+              if: contains(fromJSON('["both","target"]'), env.LOAD_MODE)
+              run: make -C tests/load run-all RUNS=$RUNS LOAD_MODE=target
 
-            - name: 归一化(取中位数)
+            - name: 全场景压测 max (${{ env.RUNS }} 轮)
+              # both/max 模式跑 max 极限负载(找上限, 结果进 max-normalized)
+              if: contains(fromJSON('["both","max"]'), env.LOAD_MODE)
+              run: make -C tests/load run-max RUNS=$RUNS LOAD_MODE=max
+
+            - name: 归一化 target (取中位数)
+              if: contains(fromJSON('["both","target"]'), env.LOAD_MODE)
               run: make -C tests/load collect
+
+            - name: 归一化 max (取中位数)
+              if: contains(fromJSON('["both","max"]'), env.LOAD_MODE)
+              run: make -C tests/load collect-max
 
             - name: 服务端指标快照
               run: make -C tests/load prometheus || true
 
-            - name: 记录基线 (baseline 模式)
-              if: env.MODE == 'baseline'
+            - name: 记录基线 (baseline 模式, target 负载)
+              if: env.MODE == 'baseline' && contains(fromJSON('["both","target"]'), env.LOAD_MODE)
               run: make -C tests/load record-baseline
 
             - name: 恢复基线缓存 (compare 模式)
-              if: env.MODE == 'compare'
+              if: env.MODE == 'compare' && contains(fromJSON('["both","target"]'), env.LOAD_MODE)
               uses: actions/cache/restore@v4
               with:
                   path: tests/load/baselines
                   key: load-baseline-develop-
                   restore-keys: load-baseline-develop-
 
-            - name: 判定 (compare 模式)
-              if: env.MODE == 'compare'
+            - name: 判定 (compare 模式, target 负载)
+              if: env.MODE == 'compare' && contains(fromJSON('["both","target"]'), env.LOAD_MODE)
               run: make -C tests/load judge
 
             - name: 生成报告 (compare 模式)
-              if: env.MODE == 'compare'
+              if: env.MODE == 'compare' && contains(fromJSON('["both","target"]'), env.LOAD_MODE)
               run: make -C tests/load report
 
-            - name: 保存基线缓存 (baseline 模式)
-              if: env.MODE == 'baseline'
+            - name: 保存基线缓存 (baseline 模式, target 负载)
+              if: env.MODE == 'baseline' && contains(fromJSON('["both","target"]'), env.LOAD_MODE)
               continue-on-error: true # 同 sha 重复保存时忽略冲突
               uses: actions/cache/save@v4
               with:

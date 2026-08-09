@@ -36,6 +36,8 @@ ROOT_DIR="$(dirname "$(dirname "$LOAD_DIR")")"  # .../tests/load -> 仓库根
 RESULTS_DIR="${LOAD_DIR}/results"
 RUNS_DIR="${RESULTS_DIR}/run"                    # run-<n> 单轮结果
 NORMALIZED_DIR="${RESULTS_DIR}/normalized"       # collect.sh 归一化输出
+MAX_RUNS_DIR="${RESULTS_DIR}/max-run"            # max 极限压测单轮结果(max-run-<n>)
+MAX_NORMALIZED_DIR="${RESULTS_DIR}/max-normalized"  # max 归一化输出
 METRICS_DIR="${RESULTS_DIR}/metrics"             # prometheus.sh 快照
 BASELINES_DIR="${LOAD_DIR}/baselines"            # 基线(normalized json 同构)
 
@@ -45,3 +47,4 @@ SERVER_PID="${CI_DIR}/server.pid"
 
 export REMOTE_HOST SERVER_PORT SERVER_CPUS FEATURES BIN_NAME
 export AUTH_USERS PHOTO_USERS RUNS INCLUDE_S3_PATHS PHOTO_NOS3_SERVICES
+export MAX_RUNS_DIR MAX_NORMALIZED_DIR

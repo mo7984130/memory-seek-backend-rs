@@ -81,6 +81,21 @@ TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
         fi
         echo ""
     done
+    echo "## 极限压测汇总 (max, 打满上限)"
+    echo ""
+    if [ -d "$MAX_NORMALIZED_DIR" ] && ls "$MAX_NORMALIZED_DIR"/*.json >/dev/null 2>&1; then
+        echo "| 场景 | 上限 QPS | p50(ms) | p95(ms) | 错误率 |"
+        echo "|---|---|---|---|---|"
+        for f in "$MAX_NORMALIZED_DIR"/*.json; do
+            name=$(basename "$f" .json)
+            echo "| $name | $(jq -r '.qps' "$f") | $(jq -r '.http_p50' "$f") | $(jq -r '.http_p95' "$f") | $(jq -r '.error_rate' "$f") |"
+        done
+        echo ""
+        echo "> 上限 = ramping-arrival-rate 加压至系统饱和/连接数上限时的实际 QPS(非目标值)。"
+    else
+        echo "- (未运行 max 极限压测)"
+    fi
+    echo ""
     echo "## 服务端指标快照"
     echo ""
     if ls "$METRICS_DIR"/prom-*.txt >/dev/null 2>&1; then
@@ -91,8 +106,9 @@ TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
     echo ""
     echo "## 附录"
     echo ""
-    echo "- 归一化结果: \`results/normalized/\`"
-    echo "- 原始轮次结果: \`results/run-<n>/\`"
+    echo "- 归一化结果: \`results/normalized/\` (target)"
+    echo "- 极限归一化结果: \`results/max-normalized/\` (max)"
+    echo "- 原始轮次结果: \`results/run-<n>/\` / \`results/max-run-<n>/\`"
     echo "- 判定明细: \`results/verdict.json\`"
 } > "$REPORT"
 
