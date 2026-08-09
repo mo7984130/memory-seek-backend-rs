@@ -33,6 +33,7 @@ export const options = (() => {
     if (LOAD_MODE === "max") {
         const ramp = Math.max(1, Math.floor(MAX_RPS * 0.1));
         return {
+            setupTimeout: "180s",
             scenarios: {
                 load: {
                     executor: "ramping-arrival-rate",
@@ -50,6 +51,7 @@ export const options = (() => {
         };
     }
     return {
+        setupTimeout: "180s",
         scenarios: {
             load: {
                 executor: "constant-arrival-rate",

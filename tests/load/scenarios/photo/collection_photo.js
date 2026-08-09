@@ -26,12 +26,19 @@ import {
 
 export { printSummary as handleSummary };
 
+const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
+
 export const options = buildLoadOptions({
     targetRps: 20,
     maxRps: 100,
-    preAllocatedVUs: 300,
+    preAllocatedVUs: PRE_ALLOCATED_VUS,
     maxVUs: 2000,
 });
+
+// setup 预登录: login 不计入压测窗口
+export function setup() {
+    return setupPreLogin(getPhotoUserCredentials, PRE_ALLOCATED_VUS);
+}
 
 // ── 核心逻辑 ──
 

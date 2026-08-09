@@ -160,6 +160,7 @@ export function buildLoadOptions({
     if (mode === "max") {
         const ramp = Math.max(1, Math.floor(max * 0.1));
         return {
+            setupTimeout: "180s",
             scenarios: {
                 load: {
                     executor: "ramping-arrival-rate",
@@ -177,6 +178,7 @@ export function buildLoadOptions({
         };
     }
     return {
+        setupTimeout: "180s",
         scenarios: {
             load: {
                 executor: "constant-arrival-rate",
