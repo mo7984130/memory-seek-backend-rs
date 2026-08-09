@@ -256,12 +256,12 @@
         {
           "expr": "histogram_quantile(0.95, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
           "legendFormat": "{{route}} P95",
-          "refId": "A"
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
           "legendFormat": "{{route}} P99",
-          "refId": "A"
+          "refId": "C"
         }
       ]
     },
@@ -2517,7 +2517,7 @@
           },
           "expr": "rate(user:get_user_info_batch:redis_cache_sum[5m]) / rate(user:get_user_info_batch:redis_cache_count[5m]) * 1000",
           "legendFormat": "Redis 缓存",
-          "refId": "B"
+          "refId": "A"
         }
       ]
     },

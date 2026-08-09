@@ -63,6 +63,9 @@
 
 > 系统指标的点号转下划线；counter 以 `_total` 结尾（`server_http_requests_total`），
 > 满足 Prometheus 命名约定。业务冒号指标保留原名。
+>
+> 多 target 面板的 `refId` 必须唯一：HTTP 延迟面板的 P50/P95/P99 三个查询依次使用
+> `A` / `B` / `C`，否则 Grafana 报 "multiple queries using the same RefId"。
 
 #### 错误分布面板（埋了 `errors:{kind}` 的操作）
 

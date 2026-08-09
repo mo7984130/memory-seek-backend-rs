@@ -256,12 +256,12 @@
         {
           "expr": "histogram_quantile(0.95, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
           "legendFormat": "{{route}} P95",
-          "refId": "A"
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
           "legendFormat": "{{route}} P99",
-          "refId": "A"
+          "refId": "C"
         }
       ]
     },
@@ -5150,7 +5150,7 @@
           },
           "expr": "rate(photo:like_comment:db_transaction:duration_seconds_sum[5m]) / rate(photo:like_comment:db_transaction:duration_seconds_count[5m]) * 1000",
           "legendFormat": "DB事务",
-          "refId": "B"
+          "refId": "A"
         }
       ]
     },
@@ -5695,15 +5695,18 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.5, sum(rate(photo:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P50"
+          "legendFormat": "P50",
+          "refId": "A"
         },
         {
           "expr": "histogram_quantile(0.95, sum(rate(photo:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P95"
+          "legendFormat": "P95",
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(photo:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P99"
+          "legendFormat": "P99",
+          "refId": "C"
         }
       ]
     },
@@ -5776,51 +5779,63 @@
       "targets": [
         {
           "expr": "rate(photo:face_compute:cleanup:duration_seconds_sum[5m]) / rate(photo:face_compute:cleanup:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "清理阶段"
+          "legendFormat": "清理阶段",
+          "refId": "A"
         },
         {
           "expr": "rate(photo:face_compute:cleanup:backup_sum[5m]) / rate(photo:face_compute:cleanup:backup_count[5m]) * 1000",
-          "legendFormat": "备份"
+          "legendFormat": "备份",
+          "refId": "B"
         },
         {
           "expr": "rate(photo:face_compute:cleanup:truncate:duration_seconds_sum[5m]) / rate(photo:face_compute:cleanup:truncate:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "清表"
+          "legendFormat": "清表",
+          "refId": "C"
         },
         {
           "expr": "rate(photo:face_compute:query_sum[5m]) / rate(photo:face_compute:query_count[5m]) * 1000",
-          "legendFormat": "批次查询"
+          "legendFormat": "批次查询",
+          "refId": "D"
         },
         {
           "expr": "rate(photo:face_compute:download_batch:duration_seconds_sum[5m]) / rate(photo:face_compute:download_batch:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "批量下载"
+          "legendFormat": "批量下载",
+          "refId": "E"
         },
         {
           "expr": "rate(photo:face_compute:photo_download:duration_seconds_sum[5m]) / rate(photo:face_compute:photo_download:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "单图下载"
+          "legendFormat": "单图下载",
+          "refId": "F"
         },
         {
           "expr": "rate(photo:face_compute:photo_decode:duration_seconds_sum[5m]) / rate(photo:face_compute:photo_decode:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "解码"
+          "legendFormat": "解码",
+          "refId": "G"
         },
         {
           "expr": "rate(photo:face_compute:detect_batch:duration_seconds_sum[5m]) / rate(photo:face_compute:detect_batch:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "批量检测"
+          "legendFormat": "批量检测",
+          "refId": "H"
         },
         {
           "expr": "rate(photo:face_compute:photo_detect:duration_seconds_sum[5m]) / rate(photo:face_compute:photo_detect:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "单图检测"
+          "legendFormat": "单图检测",
+          "refId": "I"
         },
         {
           "expr": "rate(photo:face_compute:insert:duration_seconds_sum[5m]) / rate(photo:face_compute:insert:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "写入DB"
+          "legendFormat": "写入DB",
+          "refId": "J"
         },
         {
           "expr": "rate(photo:face_compute:insert_phase:duration_seconds_sum[5m]) / rate(photo:face_compute:insert_phase:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "写入阶段"
+          "legendFormat": "写入阶段",
+          "refId": "K"
         },
         {
           "expr": "rate(photo:face_compute:batch_loop_sum[5m]) / rate(photo:face_compute:batch_loop_count[5m]) * 1000",
-          "legendFormat": "批循环"
+          "legendFormat": "批循环",
+          "refId": "L"
         }
       ]
     },
@@ -5938,11 +5953,13 @@
       "targets": [
         {
           "expr": "rate(photo:face_compute:attempts[5m])",
-          "legendFormat": "QPS"
+          "legendFormat": "QPS",
+          "refId": "A"
         },
         {
           "expr": "rate(photo:face_compute:success[5m]) / rate(photo:face_compute:attempts[5m]) * 100",
-          "legendFormat": "成功率"
+          "legendFormat": "成功率",
+          "refId": "B"
         }
       ]
     },
@@ -6011,7 +6028,8 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "photo:face_compute:running"
+          "expr": "photo:face_compute:running",
+          "refId": "A"
         }
       ],
       "title": "运行状态",
@@ -6082,7 +6100,8 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "photo:face_compute:mode"
+          "expr": "photo:face_compute:mode",
+          "refId": "A"
         }
       ],
       "title": "计算模式",
@@ -6135,7 +6154,8 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "photo:face_compute:batch"
+          "expr": "photo:face_compute:batch",
+          "refId": "A"
         }
       ],
       "title": "当前批次",
@@ -6189,7 +6209,8 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "photo:face_compute:total_photos"
+          "expr": "photo:face_compute:total_photos",
+          "refId": "A"
         }
       ],
       "title": "累计照片",
@@ -6243,7 +6264,8 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "photo:face_compute:total_faces"
+          "expr": "photo:face_compute:total_faces",
+          "refId": "A"
         }
       ],
       "title": "累计人脸",
@@ -6297,7 +6319,8 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "photo:face_compute:errors:download + photo:face_compute:errors:decode + photo:face_compute:errors:detect + photo:face_compute:errors:insert"
+          "expr": "photo:face_compute:errors:download + photo:face_compute:errors:decode + photo:face_compute:errors:detect + photo:face_compute:errors:insert",
+          "refId": "A"
         }
       ],
       "title": "累计错误",
@@ -6351,7 +6374,8 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "photo:face_compute:total_no_face"
+          "expr": "photo:face_compute:total_no_face",
+          "refId": "A"
         }
       ],
       "title": "无人脸数",
@@ -6426,19 +6450,23 @@
       "targets": [
         {
           "expr": "rate(photo:face_compute:photos_processed[1m]) * 60",
-          "legendFormat": "处理照片/分钟"
+          "legendFormat": "处理照片/分钟",
+          "refId": "A"
         },
         {
           "expr": "rate(photo:face_compute:faces_detected[1m]) * 60",
-          "legendFormat": "检出人脸/分钟"
+          "legendFormat": "检出人脸/分钟",
+          "refId": "B"
         },
         {
           "expr": "rate(photo:face_compute:no_face_photos[1m]) * 60",
-          "legendFormat": "无人脸/分钟"
+          "legendFormat": "无人脸/分钟",
+          "refId": "C"
         },
         {
           "expr": "sum(rate({__name__=~\"photo:face_compute:errors:.*\"}[1m])) * 60",
-          "legendFormat": "错误/分钟"
+          "legendFormat": "错误/分钟",
+          "refId": "D"
         }
       ]
     },
@@ -6511,15 +6539,18 @@
       "targets": [
         {
           "expr": "photo:face_compute:total_photos",
-          "legendFormat": "累计照片"
+          "legendFormat": "累计照片",
+          "refId": "A"
         },
         {
           "expr": "photo:face_compute:total_faces",
-          "legendFormat": "累计人脸"
+          "legendFormat": "累计人脸",
+          "refId": "B"
         },
         {
           "expr": "photo:face_compute:total_no_face",
-          "legendFormat": "累计无人脸"
+          "legendFormat": "累计无人脸",
+          "refId": "C"
         }
       ]
     },
@@ -6605,15 +6636,18 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.5, sum(rate(photo:get_collections_by_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P50"
+          "legendFormat": "P50",
+          "refId": "A"
         },
         {
           "expr": "histogram_quantile(0.95, sum(rate(photo:get_collections_by_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P95"
+          "legendFormat": "P95",
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(photo:get_collections_by_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P99"
+          "legendFormat": "P99",
+          "refId": "C"
         }
       ]
     },
@@ -6686,11 +6720,13 @@
       "targets": [
         {
           "expr": "rate(photo:get_collections_by_photo:attempts[5m])",
-          "legendFormat": "QPS"
+          "legendFormat": "QPS",
+          "refId": "A"
         },
         {
           "expr": "rate(photo:get_collections_by_photo:success[5m]) / rate(photo:get_collections_by_photo:attempts[5m]) * 100",
-          "legendFormat": "成功率"
+          "legendFormat": "成功率",
+          "refId": "B"
         }
       ]
     },
@@ -6776,15 +6812,18 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.5, sum(rate(photo:get_user_liked_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P50"
+          "legendFormat": "P50",
+          "refId": "A"
         },
         {
           "expr": "histogram_quantile(0.95, sum(rate(photo:get_user_liked_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P95"
+          "legendFormat": "P95",
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(photo:get_user_liked_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P99"
+          "legendFormat": "P99",
+          "refId": "C"
         }
       ]
     },
@@ -6857,7 +6896,8 @@
       "targets": [
         {
           "expr": "rate(photo:get_user_liked_photos:query_ids_sum[5m]) / rate(photo:get_user_liked_photos:query_ids_count[5m]) * 1000",
-          "legendFormat": "查询点赞ID"
+          "legendFormat": "查询点赞ID",
+          "refId": "A"
         }
       ]
     },
@@ -6930,11 +6970,13 @@
       "targets": [
         {
           "expr": "rate(photo:get_user_liked_photos:attempts[5m])",
-          "legendFormat": "QPS"
+          "legendFormat": "QPS",
+          "refId": "A"
         },
         {
           "expr": "rate(photo:get_user_liked_photos:success[5m]) / rate(photo:get_user_liked_photos:attempts[5m]) * 100",
-          "legendFormat": "成功率"
+          "legendFormat": "成功率",
+          "refId": "B"
         }
       ]
     },
@@ -7020,15 +7062,18 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.5, sum(rate(photo:like_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P50"
+          "legendFormat": "P50",
+          "refId": "A"
         },
         {
           "expr": "histogram_quantile(0.95, sum(rate(photo:like_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P95"
+          "legendFormat": "P95",
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(photo:like_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P99"
+          "legendFormat": "P99",
+          "refId": "C"
         }
       ]
     },
@@ -7101,7 +7146,8 @@
       "targets": [
         {
           "expr": "rate(photo:like_photo:db_transaction:duration_seconds_sum[5m]) / rate(photo:like_photo:db_transaction:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "DB事务"
+          "legendFormat": "DB事务",
+          "refId": "A"
         }
       ]
     },
@@ -7174,11 +7220,13 @@
       "targets": [
         {
           "expr": "rate(photo:like_photo:attempts[5m])",
-          "legendFormat": "QPS"
+          "legendFormat": "QPS",
+          "refId": "A"
         },
         {
           "expr": "rate(photo:like_photo:success[5m]) / rate(photo:like_photo:attempts[5m]) * 100",
-          "legendFormat": "成功率"
+          "legendFormat": "成功率",
+          "refId": "B"
         }
       ]
     },
@@ -7264,15 +7312,18 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.5, sum(rate(photo:unlike_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P50"
+          "legendFormat": "P50",
+          "refId": "A"
         },
         {
           "expr": "histogram_quantile(0.95, sum(rate(photo:unlike_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P95"
+          "legendFormat": "P95",
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(photo:unlike_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P99"
+          "legendFormat": "P99",
+          "refId": "C"
         }
       ]
     },
@@ -7345,7 +7396,8 @@
       "targets": [
         {
           "expr": "rate(photo:unlike_photo:db_transaction:duration_seconds_sum[5m]) / rate(photo:unlike_photo:db_transaction:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "DB事务"
+          "legendFormat": "DB事务",
+          "refId": "A"
         }
       ]
     },
@@ -7418,11 +7470,13 @@
       "targets": [
         {
           "expr": "rate(photo:unlike_photo:attempts[5m])",
-          "legendFormat": "QPS"
+          "legendFormat": "QPS",
+          "refId": "A"
         },
         {
           "expr": "rate(photo:unlike_photo:success[5m]) / rate(photo:unlike_photo:attempts[5m]) * 100",
-          "legendFormat": "成功率"
+          "legendFormat": "成功率",
+          "refId": "B"
         }
       ]
     },
@@ -7508,15 +7562,18 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.5, sum(rate(photo:exists_by_md5_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P50"
+          "legendFormat": "P50",
+          "refId": "A"
         },
         {
           "expr": "histogram_quantile(0.95, sum(rate(photo:exists_by_md5_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P95"
+          "legendFormat": "P95",
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(photo:exists_by_md5_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P99"
+          "legendFormat": "P99",
+          "refId": "C"
         }
       ]
     },
@@ -7589,11 +7646,13 @@
       "targets": [
         {
           "expr": "rate(photo:exists_by_md5_batch:attempts[5m])",
-          "legendFormat": "QPS"
+          "legendFormat": "QPS",
+          "refId": "A"
         },
         {
           "expr": "rate(photo:exists_by_md5_batch:success[5m]) / rate(photo:exists_by_md5_batch:attempts[5m]) * 100",
-          "legendFormat": "成功率"
+          "legendFormat": "成功率",
+          "refId": "B"
         }
       ]
     },
@@ -7679,15 +7738,18 @@
       "targets": [
         {
           "expr": "histogram_quantile(0.5, sum(rate(photo:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P50"
+          "legendFormat": "P50",
+          "refId": "A"
         },
         {
           "expr": "histogram_quantile(0.95, sum(rate(photo:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P95"
+          "legendFormat": "P95",
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(photo:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "P99"
+          "legendFormat": "P99",
+          "refId": "C"
         }
       ]
     },
@@ -7760,7 +7822,8 @@
       "targets": [
         {
           "expr": "rate(photo:get_monthly_stats:query_monthly_stats_sum[5m]) / rate(photo:get_monthly_stats:query_monthly_stats_count[5m]) * 1000",
-          "legendFormat": "查询月度统计"
+          "legendFormat": "查询月度统计",
+          "refId": "A"
         }
       ]
     },
@@ -7833,11 +7896,13 @@
       "targets": [
         {
           "expr": "rate(photo:get_monthly_stats:attempts[5m])",
-          "legendFormat": "QPS"
+          "legendFormat": "QPS",
+          "refId": "A"
         },
         {
           "expr": "rate(photo:get_monthly_stats:success[5m]) / rate(photo:get_monthly_stats:attempts[5m]) * 100",
-          "legendFormat": "成功率"
+          "legendFormat": "成功率",
+          "refId": "B"
         }
       ]
     }

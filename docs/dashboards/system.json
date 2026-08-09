@@ -264,12 +264,12 @@
         {
           "expr": "histogram_quantile(0.95, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
           "legendFormat": "{{route}} P95",
-          "refId": "A"
+          "refId": "B"
         },
         {
           "expr": "histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
           "legendFormat": "{{route}} P99",
-          "refId": "A"
+          "refId": "C"
         }
       ]
     },
