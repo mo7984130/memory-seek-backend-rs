@@ -4,11 +4,11 @@ use chrono::{DateTime, Duration, Utc};
 use common::Result;
 use common::error::AppError;
 use common::ext::{
-    BoolExt, OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, TraceExt, log_err_with_err,
+    OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, TraceExt, log_err_with_err,
     log_warn, log_warn_with_err,
 };
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
-use common::{metrics_group, metrics_name, metrics_success};
+use common::{inc_error, metrics_group, metrics_name, metrics_success};
 use constants::RedisKeys;
 use constants::redis_keys;
 use deadpool_redis::Pool;
@@ -92,6 +92,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     let user = match user_result {
         Some(u) => u,
         None => {
+            inc_error!("auth");
             let _ = task::spawn_blocking(HashAlgorithm::dummy_verify).await;
             return Err(log_warn(
                 "account_not_found",
@@ -121,11 +122,14 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         let verify_result =
             result.trace_internal_err("verify_password_error", "密码验证内部错误")?;
 
-        verify_result.0.true_or_warn(
-            "invalid_password",
-            "用户登录时密码错误",
-            AppError::bad_request("账号或者密码错误"),
-        )?;
+        if !verify_result.0 {
+            inc_error!("auth");
+            return Err(log_warn(
+                "invalid_password",
+                "用户登录时密码错误",
+                AppError::bad_request("账号或者密码错误"),
+            ));
+        }
 
         verify_result.1
     };
@@ -236,18 +240,21 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
 
     // 确认密码必须与密码一致
     if req.password != req.confirm_password {
+        inc_error!("validation");
         return Err(AppError::bad_request("两次输入的密码不一致"));
     }
 
     // 校验邮箱验证码
     verify_email_verify_code(&state.redis, &req.email, &req.email_verify_code)
         .timed(metrics_name!("verify_email_code"))
-        .await?;
+        .await
+        .inspect_err(|_| inc_error!("validation"))?;
 
     // 校验邀请码
     let inviter_id = verify_inviter_code(&state.redis, &req.inviter_code)
         .timed(metrics_name!("verify_inviter_code"))
-        .await?;
+        .await
+        .inspect_err(|_| inc_error!("validation"))?;
 
     // 加密密码
     let password_clone = req.password.clone();

@@ -370,6 +370,7 @@ impl PersonService {
         person_id: PersonId,
         req: RenamePersonParam,
     ) -> Result<()> {
+        metrics_group!();
         let new_name = req.new_name.into_inner();
         let name_initials = Self::compute_name_initials(&new_name);
         // 校验人物存在
@@ -381,6 +382,7 @@ impl PersonService {
                 AppError::bad_request("重命名人物失败"),
             )?;
 
+        metrics_success!();
         Ok(())
     }
 
@@ -391,6 +393,7 @@ impl PersonService {
         admin: AdminId,
         req: MergePersonParam,
     ) -> Result<PersonView> {
+        metrics_group!();
         let MergePersonParam {
             source_person_id,
             target_person_id,
@@ -488,6 +491,8 @@ impl PersonService {
                 "目标人物不存在",
                 AppError::not_found("目标人物不存在"),
             )?;
+
+        metrics_success!();
         Ok(Self::to_view(state, admin.into_inner(), person))
     }
 }
@@ -508,6 +513,7 @@ impl PersonService {
         user_id: UserId,
         req: PersonCursorParam,
     ) -> Result<CursorPage<PersonView, FaceCountIdCursor<PersonId>>> {
+        metrics_group!();
         let persons = PersonMapper::query(&state.db, req.cursor, req.size).await?;
         let views = persons
             .into_iter()
@@ -520,6 +526,7 @@ impl PersonService {
             }
             .to_ok()
         })?;
+        metrics_success!();
         Ok(page)
     }
 
@@ -530,6 +537,7 @@ impl PersonService {
         user_id: UserId,
         req: PersonSearchParam,
     ) -> Result<CursorPage<PersonView, PersonId>> {
+        metrics_group!();
         let PersonSearchParam {
             keyword,
             cursor,
@@ -540,7 +548,9 @@ impl PersonService {
             .into_iter()
             .map(|person| Self::to_view(state, user_id, person))
             .collect::<Vec<_>>();
-        CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))
+        let page = CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))?;
+        metrics_success!();
+        Ok(page)
     }
 
     /// 计算姓名首字母(大写, 如 张三 -> ZS, Alice Wang -> AW)

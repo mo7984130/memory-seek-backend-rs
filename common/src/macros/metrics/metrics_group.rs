@@ -22,7 +22,10 @@ macro_rules! metrics_group {
         let _metrics_guard = {
             $crate::metrics::counter!($crate::metrics_name!($func_name, "attempts")).increment(1);
 
-            $crate::metrics_timer!($func_name, "")
+            $crate::utils::MetricsTimer::start($crate::metrics_name!(
+                $func_name,
+                "duration_seconds"
+            ))
         };
     };
 }

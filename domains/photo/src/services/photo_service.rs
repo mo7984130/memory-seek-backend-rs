@@ -4,8 +4,8 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{BoolExt, CacheExtension, OkExt, OptionExt, ResultInspectErrAsync},
-    metrics_group, metrics_name, metrics_success,
+    ext::{CacheExtension, OkExt, OptionExt, ResultInspectErrAsync, log_warn},
+    inc_error, metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
     utils::{FileValidator, MetricsTimerExt},
@@ -149,7 +149,8 @@ impl PhotoService {
         // 效验文件
         let metadata = {
             timed!("validate_photo", {
-                FileValidator::validate_image(&file_data, &req.file_name, &req.content_type)?
+                FileValidator::validate_image(&file_data, &req.file_name, &req.content_type)
+                    .inspect_err(|_| inc_error!("validation"))?
             })
         };
 
@@ -165,13 +166,14 @@ impl PhotoService {
                 .await?
             )
         };
-        PhotoMapper::exists_by_md5(&state.db, &md5_hash)
-            .await?
-            .false_or_warn(
+        if PhotoMapper::exists_by_md5(&state.db, &md5_hash).await? {
+            inc_error!("conflict");
+            return Err(log_warn(
                 "upload_photo:img_exist",
                 "图片已存在",
                 AppError::bad_request("图片已存在"),
-            )?;
+            ));
+        }
 
         // 上传文件
         let date_path = chrono::Local::now().format("%Y/%m/%d");
@@ -181,7 +183,8 @@ impl PhotoService {
             .s3_client
             .upload(&file_id, &file_data, &metadata.mime_type)
             .timed(metrics_name!("s3_upload"))
-            .await?;
+            .await
+            .inspect_err(|_| inc_error!("s3"))?;
 
         // 更新数据库
         let now = Utc::now();
@@ -208,7 +211,8 @@ impl PhotoService {
                 .await
                 .map_err(AppError::from);
         })
-        .await?;
+        .await
+        .inspect_err(|_| inc_error!("db"))?;
 
         // 增加时间线统计
         // 错误不返回

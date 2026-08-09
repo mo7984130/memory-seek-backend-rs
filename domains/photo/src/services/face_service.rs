@@ -6,9 +6,9 @@ use common::{
     Result,
     error::AppError,
     ext::{OptionExt, ResultErrExt, ToOk, UintExt},
-    metrics_group, metrics_name, metrics_success,
+    inc_counter, inc_error, metrics_group, metrics_name, metrics_success, set_gauge,
     models::CursorPage,
-    utils::{DbUtils, MetricsTimerExt},
+    utils::{DbUtils, GaugeGuard, MetricsTimer, MetricsTimerExt},
 };
 use image::{ImageBuffer, Rgb};
 use insight_face_rs::Face;
@@ -60,11 +60,25 @@ impl FaceService {
         Ok(())
     }
 
+    #[tracing::instrument(
+        name = "face_compute",
+        skip_all,
+        fields(user_id = %admin, full = %full)
+    )]
     async fn compute_inner(state: Arc<PhotoState>, admin: AdminId, full: bool) -> Result<()> {
         metrics_group!();
 
         let user_id = admin.into_inner();
         info!(user_id = %user_id, "管理员触发人脸计算");
+
+        // 并发度守卫：进入 +1，退出时 -1
+        let _running_guard = GaugeGuard::start(metrics_name!("running"));
+        // mode 为 category gauge，以标签区分 full / incremental
+        #[cfg(feature = "metrics")]
+        {
+            metrics::gauge!("photo:face_compute:mode", "mode" => "full").set(if full { 1.0 } else { 0.0 });
+            metrics::gauge!("photo:face_compute:mode", "mode" => "incremental").set(if full { 0.0 } else { 1.0 });
+        }
 
         // 如果是全量计算的话
         // 备份并且清空表
@@ -75,10 +89,16 @@ impl FaceService {
         let batch_size = 128;
         let mut previous_id = PhotoId(0);
         let mut batch_idx = 0i64;
+        let mut total_photos = 0u64;
+        let mut total_faces = 0u64;
+        let mut total_no_face = 0u64;
         loop {
             batch_idx += 1;
+            set_gauge!("batch", batch_idx as f64);
 
-            let photos = Self::query_photos(&state, full, batch_size, previous_id).await?;
+            let photos = Self::query_photos(&state, full, batch_size, previous_id)
+                .timed(metrics_name!("query"))
+                .await?;
             if photos.is_empty() {
                 info!("第{}批DB查询结果为空, 计算结束", batch_idx);
                 break;
@@ -90,25 +110,44 @@ impl FaceService {
             let photo_count = photos.len();
 
             let mut new_faces: Vec<face::NewFaceRecord> = Vec::with_capacity(photo_count * 4);
+            let _download_batch_timer = MetricsTimer::start(metrics_name!("download_batch"));
             for (photo_id, file_id) in photos {
                 debug!("照片流程开始: photo_id: {photo_id}");
                 let _ = async {
-                    let img = Self::download_photo(&state, &file_id).await?;
-                    let faces = Self::detect_photo(&state, img).await?;
-
-                    for face in faces {
-                        let new_face = face::NewFaceRecord::from_detected(photo_id, face);
-                        new_faces.push(new_face);
-                    }
-
-                    Ok::<(), AppError>(())
+                    let img = Self::download_photo(&state, &file_id)
+                        .timed(metrics_name!("photo_download"))
+                        .await?;
+                    let faces = Self::detect_photo(&state, img)
+                        .timed(metrics_name!("photo_detect"))
+                        .await?;
+                    let face_count = faces.len();
+                    new_faces.extend(faces.into_iter().map(|face| {
+                        face::NewFaceRecord::from_detected(photo_id, face)
+                    }));
+                    Ok::<usize, AppError>(face_count)
                 }
                 .await
+                .inspect(|&face_count| {
+                    inc_counter!("photos_processed", 1);
+                    inc_counter!("faces_detected", face_count as u64);
+                    total_photos += 1;
+                    total_faces += face_count as u64;
+                    if face_count == 0 {
+                        inc_counter!("no_face_photos", 1);
+                        total_no_face += 1;
+                    }
+                })
                 .inspect_err(|_| {
                     warn!(photo_id = %photo_id, %file_id, "照片流程错误, 跳过");
                 });
             }
-            Self::insert_faces(&state, new_faces).await?;
+            drop(_download_batch_timer);
+
+            let _insert_phase_timer = MetricsTimer::start(metrics_name!("insert_phase"));
+            Self::insert_faces(&state, new_faces)
+                .timed(metrics_name!("insert"))
+                .await?;
+            drop(_insert_phase_timer);
 
             info!(
                 "第{}批插入完成, 现共{}",
@@ -116,6 +155,10 @@ impl FaceService {
                 batch_size * batch_idx as u64
             );
         }
+
+        set_gauge!("total_photos", total_photos as f64);
+        set_gauge!("total_faces", total_faces as f64);
+        set_gauge!("total_no_face", total_no_face as f64);
 
         metrics_success!();
         Ok(())
@@ -190,17 +233,26 @@ impl FaceService {
         let bytes = state
             .s3_client
             .download_with_process(file_id, "image/resize,m_lfit,w_1920,h_1920")
-            .await?;
+            .await
+            .inspect_err(|_| inc_error!("download"))?;
 
-        let img = tokio::task::spawn_blocking(move || {
-            image::load_from_memory(&bytes)
-                .map(|img| img.into_rgb8())
-                .trace_internal_err("decode_image_error", "解码图片失败")
-        })
-        .await?;
+        let img = {
+            let _decode_timer = MetricsTimer::start(metrics_name!("photo_decode"));
+            tokio::task::spawn_blocking(move || {
+                image::load_from_memory(&bytes)
+                    .map(|img| img.into_rgb8())
+                    .trace_internal_err("decode_image_error", "解码图片失败")
+            })
+            .await
+            .map_err(|e| {
+                inc_error!("decode");
+                AppError::from(e)
+            })?
+            .inspect_err(|_| inc_error!("decode"))?
+        };
 
         debug!("下载完成");
-        img
+        Ok(img)
     }
 
     async fn detect_photo(state: &PhotoState, img: Img) -> Result<Vec<Face>> {
@@ -212,11 +264,16 @@ impl FaceService {
             debug!("获取成功");
             let faces = eng
                 .run(&img)
-                .trace_internal_err("face-engine_run_error", "人脸检测模型运行失败")?;
+                .trace_internal_err("face-engine_run_error", "人脸检测模型运行失败")
+                .inspect_err(|_| inc_error!("detect"))?;
             debug!("转换成功");
             Ok(faces)
         })
-        .await?
+        .await
+        .map_err(|e| {
+            inc_error!("detect");
+            AppError::from(e)
+        })?
     }
 
     async fn insert_faces(state: &PhotoState, faces: Vec<face::NewFaceRecord>) -> Result<()> {
@@ -226,7 +283,8 @@ impl FaceService {
         } else {
             face::Entity::insert_many(faces.into_iter().map(face::ActiveModel::from))
                 .exec_without_returning(&state.db)
-                .await?;
+                .await
+                .inspect_err(|_| inc_error!("insert"))?;
         }
         debug!("插入完成");
         Ok(())
@@ -252,6 +310,7 @@ impl FaceService {
         face_id: FaceId,
         person_id: Option<PersonId>,
     ) -> Result<()> {
+        metrics_group!();
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 // 加行锁读取人脸(读-改-写流程, 避免并发转移丢更新)
@@ -346,6 +405,7 @@ impl FaceService {
         })
         .await?;
 
+        metrics_success!();
         Ok(())
     }
 
@@ -549,6 +609,7 @@ impl FaceService {
     /// 删除单张人脸(仅限未归属人物的人脸, 避免破坏人物统计不变量)
     #[tracing::instrument(skip_all, fields(face_id = %face_id))]
     pub async fn delete_face(state: &PhotoState, face_id: FaceId) -> Result<()> {
+        metrics_group!();
         DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 // 加行锁读取人脸(读-改-写流程, 防止并发转移归属后误删)
@@ -560,6 +621,7 @@ impl FaceService {
 
                 // 已归属人物的人脸禁止直接删除(需先取消归属), 防止人物统计悬空
                 if face.person_id.is_some() {
+                    inc_error!("conflict");
                     return Err(AppError::bad_request(
                         "人脸已归属人物, 请先取消归属后再删除",
                     ));
@@ -577,6 +639,7 @@ impl FaceService {
         })
         .await?;
 
+        metrics_success!();
         Ok(())
     }
 
@@ -589,8 +652,10 @@ impl FaceService {
         state: &PhotoState,
         face_ids: &FaceIds,
     ) -> Result<FaceDeleteBatchResult> {
+        metrics_group!();
         let deleted_face_count = FaceMapper::delete_unassigned_by_ids(&state.db, face_ids).await?;
 
+        metrics_success!();
         Ok(FaceDeleteBatchResult { deleted_face_count })
     }
 }

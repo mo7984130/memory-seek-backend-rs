@@ -3,6 +3,7 @@ use crate::exporter::CsvExporter;
 use crate::hasher::TableHasher;
 use crate::state::BackupState;
 use crate::storage::BackupType;
+use common::{inc_counter, inc_error, metrics_group, metrics_success};
 use std::sync::Arc;
 use types::auth::user::AdminId;
 
@@ -20,6 +21,7 @@ impl BackupRunner {
 
     /// 定时调度备份：导出并保存到 daily / weekly / monthly，然后 GFS 清理
     pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult, BackupError> {
+        metrics_group!("scheduled");
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
@@ -44,6 +46,7 @@ impl BackupRunner {
                         }
                         Err(e) => {
                             result.failed += 1;
+                            inc_error!("scheduled", "save");
                             tracing::error!(run_id = %run_id, table = %table_name, "Save failed: {}", e);
                         }
                     }
@@ -51,6 +54,7 @@ impl BackupRunner {
                 }
                 Err(e) => {
                     result.failed += 1;
+                    inc_error!("scheduled", "export");
                     tracing::error!(run_id = %run_id, table = %table_name, "Export failed: {}", e);
                 }
             }
@@ -63,11 +67,15 @@ impl BackupRunner {
                 tracing::info!("GFS cleanup: removed {} expired backups", count);
             }
             Err(e) => {
+                inc_error!("scheduled", "cleanup");
                 tracing::error!("GFS cleanup failed: {}", e);
             }
         }
 
         result.duration = start.elapsed();
+        inc_counter!("scheduled", "tables_exported", result.exported as u64);
+        inc_counter!("scheduled", "tables_failed", result.failed as u64);
+        inc_counter!("scheduled", "cleaned", result.cleaned as u64);
         tracing::info!(
             "Scheduled backup completed in {:?}: {} exported, {} failed, {} cleaned",
             result.duration,
@@ -76,6 +84,7 @@ impl BackupRunner {
             result.cleaned
         );
 
+        metrics_success!("scheduled");
         Ok(result)
     }
 
@@ -84,6 +93,7 @@ impl BackupRunner {
         state: Arc<BackupState>,
         admin: AdminId,
     ) -> Result<BackupResult, BackupError> {
+        metrics_group!("manual");
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
@@ -112,6 +122,7 @@ impl BackupRunner {
                         }
                         Err(e) => {
                             result.failed += 1;
+                            inc_error!("manual", "save");
                             tracing::error!(run_id = %run_id, table = %table_name, "Manual save failed: {}", e);
                         }
                     }
@@ -119,12 +130,15 @@ impl BackupRunner {
                 }
                 Err(e) => {
                     result.failed += 1;
+                    inc_error!("manual", "export");
                     tracing::error!(run_id = %run_id, table = %table_name, "Export failed: {}", e);
                 }
             }
         }
 
         result.duration = start.elapsed();
+        inc_counter!("manual", "tables_exported", result.exported as u64);
+        inc_counter!("manual", "tables_failed", result.failed as u64);
         tracing::info!(
             "Manual backup completed in {:?}: {} exported, {} failed",
             result.duration,
@@ -132,6 +146,7 @@ impl BackupRunner {
             result.failed
         );
 
+        metrics_success!("manual");
         Ok(result)
     }
 

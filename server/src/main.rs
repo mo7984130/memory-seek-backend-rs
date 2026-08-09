@@ -1,5 +1,6 @@
 use clap::Parser;
 use common::ext::ResultErrExt;
+use common::Result;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -36,7 +37,7 @@ struct Cli {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), common::error::AppError> {
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // 提前初始化日志系统，确保配置加载等早期阶段也能记录错误详情
@@ -57,6 +58,7 @@ async fn main() -> Result<(), common::error::AppError> {
     metrics::start_collector(
         app_setup.state.db.clone(),
         app_setup.state.redis.clone(),
+        Duration::from_secs(cfg.metrics.interval_seconds),
         cancel_token.child_token(),
     );
 
@@ -76,6 +78,9 @@ async fn main() -> Result<(), common::error::AppError> {
                 )),
         )
         .layer(middlewares::cors::layer())
+        .layer(axum::middleware::from_fn(
+            middlewares::metrics::metrics_middleware,
+        ))
         .layer(axum::middleware::from_fn(
             middlewares::trace_id::trace_id_middleware,
         ))

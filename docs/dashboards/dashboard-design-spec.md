@@ -51,6 +51,30 @@
 
 三个面板共享同一个 `y` 值，`h` 均为 8。下一个操作的 row 位于 `y + 9`。
 
+#### HTTP 请求汇总 row（每个 Dashboard 顶部）
+
+所有业务 dashboard 顶部统一放置 `HTTP 请求 (http)` row，三面板等宽（8w + 8w + 8w）：
+
+| 面板 | 类型 | 查询 |
+|------|------|------|
+| `HTTP QPS` | timeseries | `sum(rate(server_http_requests[5m])) by (route)` |
+| `HTTP 错误率` | timeseries | `sum(rate(server_http_requests{status_class="5xx"}[5m])) / sum(rate(server_http_requests[5m])) * 100` |
+| `HTTP 延迟 (P50/P95/P99)` | timeseries | `histogram_quantile(0.95, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000` |
+
+> counter 不带 `_total` 后缀（metrics-exporter-prometheus 不追加），点号转下划线。
+
+#### 错误分布面板（埋了 `errors:{kind}` 的操作）
+
+操作若存在 `{crate}:{func}:errors:*` 指标，追加第四个面板（可选，与前三面板同行下方或并排）：
+
+```json
+{
+  "targets": [
+    { "expr": "sum(rate(<metric>:errors:*[5m])) by (kind)", "legendFormat": "{{kind}}" }
+  ]
+}
+```
+
 ---
 
 ## Panel 配置
@@ -261,3 +285,7 @@ Auth 模块监控
 - 2026-06-19: 明确单行布局（6+6+12 同一 y 值），Panel 标题去掉"与"，成功率阈值移至 override
 - 2026-08-01: 指标命名改为 `{crate}:{func}:{step}`，耗时改用原生 histogram
   （`histogram_quantile` + `_bucket` / 平均耗时 `_sum / _count`），耗时单位换算 `* 1000`
+- 2026-08-09: 新增 `HTTP 请求 (http)` 汇总 row（QPS / 错误率 / 延迟）置于各 dashboard 顶部；
+  新增错误分布面板规范；system.json 重构为 HTTP / CPU / 内存 / 磁盘 / 数据库 / Redis / 版本
+  布局并增补 `system_cpu_cores` / `system_disk_*` / `database_connections_max` / `server_build_info`
+  面板。

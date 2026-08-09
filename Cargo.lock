@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "auth"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "chrono",
@@ -533,13 +533,14 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "chrono",
  "common",
  "csv",
  "hex",
+ "metrics",
  "oss",
  "sea-orm",
  "serde",
@@ -946,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1475,10 +1476,11 @@ dependencies = [
 
 [[package]]
 name = "email"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "common",
  "lettre",
+ "metrics",
 ]
 
 [[package]]
@@ -3283,11 +3285,12 @@ dependencies = [
 
 [[package]]
 name = "oss"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "common",
  "futures",
+ "metrics",
  "reqwest",
  "rust-s3",
  "serde",
@@ -3483,7 +3486,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "axum",
@@ -4775,7 +4778,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "auth",
  "axum",
@@ -5949,7 +5952,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "bytes",

@@ -1,11 +1,11 @@
 [package]
 name = "auth"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics"]
+metrics = ["common/metrics", "dep:metrics", "email/metrics"]
 controller = ["dep:axum", "dep:serde_json"]
 
 [dependencies]
