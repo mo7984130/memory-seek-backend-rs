@@ -26,7 +26,7 @@ const LOAD_MODE = __ENV.LOAD_MODE || "target";
 const TARGET_RPS = parseInt(__ENV.TARGET_RPS || "500", 10);
 const MAX_RPS = parseInt(__ENV.MAX_RPS || "100000", 10);
 // photo 用户数限制并发上限(seed PHOTO_USERS=200)
-const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "100", 10);
+const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
 const MAX_VUS = parseInt(__ENV.MAX_VUS || "2000", 10);
 const DURATION = __ENV.DURATION || "2m";
 

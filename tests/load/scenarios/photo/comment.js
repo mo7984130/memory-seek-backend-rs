@@ -26,7 +26,7 @@ export { printSummary as handleSummary };
 export const options = buildLoadOptions({
     targetRps: 30,
     maxRps: 150,
-    preAllocatedVUs: 50,
+    preAllocatedVUs: 300,
     maxVUs: 2000,
 });
 
