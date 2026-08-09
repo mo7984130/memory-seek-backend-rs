@@ -7,7 +7,8 @@
 --   :AUTH_USERS      auth 压测用户数(loadtest_{1..N}@test.com)
 --   :PHOTO_USERS     photo 压测用户数(loadtest_photo_{1..N}@test.com)
 --   :PHOTOS_PER_USER 每个 photo 用户预置照片数
---   :PHOTO_COUNT     时间线统计中的照片总数(PHOTO_USERS * PHOTOS_PER_USER)
+--   :FACES_PER_PERSON 每个用户归属到人物的人脸数(photo_person.face_count)
+--   :PHOTO_COUNT     照片总数(PHOTO_USERS * PHOTOS_PER_USER)
 --
 -- id 规划(避开 init.sql 中的 admin id=1):
 --   auth 压测用户  id = g + 1                  (g = 1..AUTH_USERS)
@@ -55,3 +56,47 @@ VALUES (to_char(now(), 'YYYY-MM'), :PHOTO_COUNT, now())
 ON CONFLICT (date_str) DO UPDATE
 SET count     = EXCLUDED.count,
     updated_at = now();
+
+-- 5. 人脸(每张 seed 照片 1 张, 初始未分配; embedding 为随机 512 维)
+-- 幂等: 先清空 seed 关联数据(photo_face/photo_person 无外键约束)
+DELETE FROM photo_face
+WHERE photo_id IN (SELECT id FROM photo_photo WHERE file_id LIKE 'seed_file_%');
+
+DELETE FROM photo_person
+WHERE name LIKE 'Person\_%';
+
+INSERT INTO photo_face (photo_id, person_id, bbox, landmarks, score, embedding)
+SELECT p.id,
+       NULL,
+       '{"x1":0.1,"y1":0.1,"x2":0.6,"y2":0.9}',
+       '{}',
+       0.95,
+       ('[' || (SELECT string_agg((random() * 2 - 1)::numeric(5,4)::text, ',')
+                 FROM generate_series(1, 512)) || ']')::vector
+FROM photo_photo p
+WHERE p.file_id LIKE 'seed_file_%';
+
+-- 6. 人物(每 photo 用户 1 个, cover 用其第一张照片; centroid 随机 512 维)
+INSERT INTO photo_person (id, name, name_initials, cover_face_id, cover_photo_id,
+                          cover_file_id, cover_bbox, centroid, face_count, weight)
+SELECT u,
+       'Person_' || u,
+       'P_' || u,
+       NULL,
+       (u - 1) * :PHOTOS_PER_USER + 1,
+       'seed_file_' || u || '_1',
+       '{"x1":0.1,"y1":0.1,"x2":0.6,"y2":0.9}',
+       ('[' || (SELECT string_agg((random() * 2 - 1)::numeric(5,4)::text, ',')
+                 FROM generate_series(1, 512)) || ']')::vector,
+       :FACES_PER_PERSON,
+       :FACES_PER_PERSON * 0.95
+FROM generate_series(1, :PHOTO_USERS) AS u
+ON CONFLICT (id) DO NOTHING;
+
+-- 7. 每个用户前 FACES_PER_PERSON 张照片的人脸归属到对应人物
+--    (person u 的照片 id 范围 [(u-1)*PHOTOS_PER_USER+1, u*PHOTOS_PER_USER])
+UPDATE photo_face f
+SET person_id  = ((f.photo_id - 1) / :PHOTOS_PER_USER) + 1,
+    updated_at = now()
+WHERE f.photo_id BETWEEN 1 AND :PHOTO_COUNT
+  AND ((f.photo_id - 1) % :PHOTOS_PER_USER) + 1 <= :FACES_PER_PERSON;

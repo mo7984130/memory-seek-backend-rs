@@ -49,7 +49,7 @@ jobs:
     load:
         runs-on: ubuntu-latest
         env:
-            FEATURES: metrics,auth,user,photo
+            FEATURES: metrics,auth,user,photo,face-engine
             # 合并到 main 默认完整跑 3 轮; 手动触发可覆盖 runs
             RUNS: ${{ inputs.runs || 3 }}
             # schedule -> baseline, 其它(手动/PR) -> compare

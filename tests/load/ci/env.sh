@@ -8,8 +8,9 @@
 : "${METRICS_PORT:=9090}"
 
 # ── 构建 ──────────────────────────────────────────────
-# 注意: 不含 backup(其 feature 与 photo 冲突, 且定时备份任务会干扰压测); 不含 face-engine(需模型文件)
-: "${FEATURES:=metrics,auth,user,photo}"
+# 含 face-engine(仓库内置 ONNX 模型, 见 models/), 覆盖 face/person 压测
+# 注意: 不含 backup(其 feature 与 photo 冲突, 且定时备份任务会干扰压测)
+: "${FEATURES:=metrics,auth,user,photo,face-engine}"
 : "${BIN_NAME:=memory-seek-server}"
 
 # ── 压测数据与轮次 ────────────────────────────────────

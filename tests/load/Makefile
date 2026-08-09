@@ -13,13 +13,18 @@ SERVER_PORT ?= 7985
 METRICS_PORT ?= 9090
 
 # 构建与运行
-FEATURES ?= metrics,auth,user,photo
+FEATURES ?= metrics,auth,user,photo,face-engine
 BIN_NAME  ?= memory-seek-server
 RUNS      ?= 3          # 每场景轮次, collect 取中位数
 INCLUDE_S3_PATHS ?= false
 
 # photo 场景中不依赖 S3 的子场景(须与 photo.js scenarios 键一致)
 PHOTO_NOS3_SERVICES ?= collection_service collection_photo_service comment_service comment_like_service
+
+# face/person 压测数据量(与 seed.sql 对齐)
+PHOTO_COUNT ?= 4000    # photo_photo 总数(= PHOTO_USERS * PHOTOS_PER_USER)
+FACES        ?= 4000   # photo_face 总行数(= 每照片 1 张脸)
+PERSONS      ?= 200    # photo_person 总行数(= 每 photo 用户 1 个)
 
 RESULTS_DIR  := results
 BASELINES    := baselines
@@ -38,7 +43,8 @@ OUT_DIR := $(RESULTS_DIR)/run-$(RUN)
 endif
 
 .PHONY: all p95-report baseline compare clean help \
-        ci-up ci-down run-all run-once photo-nos3 seed collect prometheus judge record-baseline report
+        ci-up ci-down run-all run-once photo-nos3 seed collect prometheus judge record-baseline report \
+        face person
 
 # ── 压测(原有) ──────────────────────────────────────
 $(OUT_DIR):
@@ -66,7 +72,25 @@ photo: $(OUT_DIR)      ## 照片模块压测（可选 SERVICE=<name> 指定单�
 		$(if $(SERVICE),--scenario $(SERVICE),) \
 		scenarios/photo.js
 
-all: auth user photo  ## 运行全部压测(含 S3 场景)
+face: $(OUT_DIR)       ## 人脸模块压测(face_controller)
+	k6 run \
+		-q \
+		-e BASE_URL=$(BASE_URL) \
+		-e PHOTO_COUNT=$(PHOTO_COUNT) \
+		-e FACES=$(FACES) \
+		-e PERSONS=$(PERSONS) \
+		-e SUMMARY_EXPORT=$(OUT_DIR)/face_summary.json \
+		scenarios/photo/face.js
+
+person: $(OUT_DIR)     ## 人物模块压测(person_controller)
+	k6 run \
+		-q \
+		-e BASE_URL=$(BASE_URL) \
+		-e PERSONS=$(PERSONS) \
+		-e SUMMARY_EXPORT=$(OUT_DIR)/person_summary.json \
+		scenarios/photo/person.js
+
+all: auth user photo face person  ## 运行全部压测(含 S3 场景与 face/person)
 
 # ── 环境编排 ────────────────────────────────────────
 ci-up:                 ## 启动压测环境(容器依赖 + release server 进程)
@@ -100,10 +124,12 @@ run-all:               ## 全场景压测(默认排除 S3 路径), 多轮取中�
 	done
 	@$(MAKE) collect
 
-run-once:              ## 单轮全场景压测(auth + user + photo 非 S3 子场景)
+run-once:              ## 单轮全场景压测(auth + user + photo + face + person)
 	$(MAKE) auth RUN=$(RUN) || echo "[warn] auth 轮 $(RUN) 失败(见 results)"
 	$(MAKE) user RUN=$(RUN) || echo "[warn] user 轮 $(RUN) 失败(见 results)"
 	$(MAKE) photo-nos3 RUN=$(RUN) || echo "[warn] photo 轮 $(RUN) 失败(见 results)"
+	$(MAKE) face RUN=$(RUN) || echo "[warn] face 轮 $(RUN) 失败(见 results)"
+	$(MAKE) person RUN=$(RUN) || echo "[warn] person 轮 $(RUN) 失败(见 results)"
 
 photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景
 	@for s in $(PHOTO_NOS3_SERVICES); do \

@@ -1,6 +1,5 @@
 /target
 **/target
-/models
 /bindings
 **/.DS_Store
 **/logs
