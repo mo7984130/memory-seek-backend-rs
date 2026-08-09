@@ -17,7 +17,7 @@ export function addPhotosToCollection(collectionId, photoIds) {
     const res = http.post(
         `${BASE_URL}/photo/collections/${collectionId}/photos`,
         JSON.stringify({ photoIds }),
-        { headers },
+        { headers, tags: { name: "add_photos_to_collection" } },
     );
     const ok = res.status === 200;
     const result = {
@@ -40,7 +40,7 @@ export function listCollectionPhotos(collectionId, pageSize = 10) {
     const headers = getSessionHeaders();
     const res = http.get(
         `${BASE_URL}/photo/collections/${collectionId}/photos?size=${pageSize}`,
-        { headers },
+        { headers, tags: { name: "list_collection_photos" } },
     );
     const ok = res.status === 200;
     const result = {
@@ -65,7 +65,7 @@ export function removePhotoFromCollection(collectionId, photoId) {
     const res = http.del(
         `${BASE_URL}/photo/collections/${collectionId}/photos/${photoId}`,
         null,
-        { headers },
+        { headers, tags: { name: "remove_photo_from_collection" } },
     );
     const ok = res.status === 200;
     const result = {

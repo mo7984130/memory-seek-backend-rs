@@ -17,7 +17,7 @@ export function createComment(photoId, content) {
     const res = http.post(
         `${BASE_URL}/photo/comment/${photoId}`,
         JSON.stringify({ content }),
-        { headers },
+        { headers, tags: { name: "create_comment" } },
     );
     const ok = res.status === 200;
     const result = {
@@ -41,7 +41,7 @@ export function listComments(photoId, pageSize = 10) {
     const headers = getSessionHeaders();
     const res = http.get(
         `${BASE_URL}/photo/comment/${photoId}?size=${pageSize}`,
-        { headers },
+        { headers, tags: { name: "list_comments" } },
     );
     const ok = res.status === 200;
     const result = {
@@ -66,7 +66,7 @@ export function deleteComment(photoId, commentId) {
     const res = http.del(
         `${BASE_URL}/photo/comment/${photoId}/${commentId}`,
         null,
-        { headers },
+        { headers, tags: { name: "delete_comment" } },
     );
     const ok = res.status === 200;
     const result = {

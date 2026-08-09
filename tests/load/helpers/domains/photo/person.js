@@ -13,7 +13,7 @@ import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 export function getPersons(size = 32) {
     maybeRefreshSession();
     const headers = getSessionHeaders();
-    const res = http.get(`${BASE_URL}/photo/person?size=${size}`, { headers });
+    const res = http.get(`${BASE_URL}/photo/person?size=${size}`, { headers, tags: { name: "get_persons" } });
     const ok = res.status === 200;
     const result = {
         success: ok,
@@ -35,7 +35,7 @@ export function searchPersons(keyword) {
     const headers = getSessionHeaders();
     const res = http.get(
         `${BASE_URL}/photo/person/search?keyword=${encodeURIComponent(keyword)}`,
-        { headers },
+        { headers, tags: { name: "search_persons" } },
     );
     const ok = res.status === 200;
     const result = {
@@ -58,6 +58,7 @@ export function getPersonPhotos(personId) {
     const headers = getSessionHeaders();
     const res = http.get(`${BASE_URL}/photo/person/${personId}/photos`, {
         headers,
+        tags: { name: "get_person_photos" },
     });
     const ok = res.status === 200;
     const result = {
@@ -82,7 +83,7 @@ export function renamePerson(personId, newName) {
     const res = http.post(
         `${BASE_URL}/photo/person/${personId}/name`,
         JSON.stringify({ newName }),
-        { headers },
+        { headers, tags: { name: "rename_person" } },
     );
     const ok = res.status === 200;
     const result = {

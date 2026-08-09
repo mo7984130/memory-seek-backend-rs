@@ -13,7 +13,7 @@ import { getSessionHeaders, maybeRefreshSession } from "../../session.js";
 export function getFacesByPhotoId(photoId) {
     maybeRefreshSession();
     const headers = getSessionHeaders();
-    const res = http.get(`${BASE_URL}/photo/face/photo/${photoId}`, { headers });
+    const res = http.get(`${BASE_URL}/photo/face/photo/${photoId}`, { headers, tags: { name: "get_faces_by_photo" } });
     const ok = res.status === 200;
     const result = {
         success: ok,
@@ -35,6 +35,7 @@ export function getUnassignedFacePhotos(size = 32) {
     const headers = getSessionHeaders();
     const res = http.get(`${BASE_URL}/photo/face/unassigned-photos?size=${size}`, {
         headers,
+        tags: { name: "get_unassigned_face_photos" },
     });
     const ok = res.status === 200;
     const result = {
@@ -59,7 +60,7 @@ export function changeFaceBelonging(faceId, personId) {
     const res = http.post(
         `${BASE_URL}/photo/face/feature/${faceId}/belonging/${personId}`,
         null,
-        { headers },
+        { headers, tags: { name: "change_face_belonging" } },
     );
     const ok = res.status === 200;
     const result = {

@@ -17,7 +17,7 @@ export function createCollection(name, description = "") {
     const res = http.post(
         `${BASE_URL}/photo/collections`,
         JSON.stringify({ name, description }),
-        { headers },
+        { headers, tags: { name: "create_collection" } },
     );
     const ok = res.status === 200;
     const result = {
@@ -39,6 +39,7 @@ export function listCollections() {
     const headers = getSessionHeaders();
     const res = http.get(`${BASE_URL}/photo/collections`, {
         headers,
+        tags: { name: "list_collections" },
     });
     const ok = res.status === 200;
     const result = {
@@ -64,7 +65,7 @@ export function updateCollection(collectionId, name, description = "") {
     const res = http.patch(
         `${BASE_URL}/photo/collections/${collectionId}`,
         JSON.stringify({ name, description }),
-        { headers },
+        { headers, tags: { name: "update_collection" } },
     );
     const ok = res.status === 200;
     const result = {
@@ -87,7 +88,7 @@ export function deleteCollection(collectionId) {
     const res = http.del(
         `${BASE_URL}/photo/collections/${collectionId}`,
         null,
-        { headers },
+        { headers, tags: { name: "delete_collection" } },
     );
     const ok = res.status === 200;
     const result = {
