@@ -123,6 +123,25 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 
 ## 依赖级指标
 
+### 多级缓存（common，feature: `metrics`）
+
+统一缓存组件 `MultiLevelCache` 分为三级：L1 本地 moka → L2 Redis → L3 数据库（loader）。
+每个缓存实例按 `cache:{name}:{layer}:{op}` 命名，`{name}` 为实例名（如 `user_info` / `photo_info`）。
+
+| 指标名 | 类型 | 含义 |
+|--------|------|------|
+| `cache:{name}:l1:hits` | counter | L1 命中次数 |
+| `cache:{name}:l1:misses` | counter | L1 未命中次数 |
+| `cache:{name}:l2:hits` | counter | L2 命中次数 |
+| `cache:{name}:l2:misses` | counter | L2 未命中次数 |
+| `cache:{name}:db:loads` | counter | 穿透 L2 直达数据库的加载次数 |
+| `cache:{name}:l1:get:duration_seconds` | histogram | L1 查询耗时（命中时记录） |
+| `cache:{name}:l2:get:duration_seconds` | histogram | L2 查询耗时（MGET） |
+| `cache:{name}:db:load:duration_seconds` | histogram | loader（数据库）加载耗时 |
+| `cache:{name}:l1:entries` | gauge | L1 当前条目数 |
+
+命中率计算：`rate(cache:{name}:l1:hits[5m]) / (rate(cache:{name}:l1:hits[5m]) + rate(cache:{name}:l1:misses[5m])) * 100`。
+
 ### oss（libs/oss，feature: `metrics`）
 
 每个操作埋 `requests` / `errors` / `duration_seconds` 三种指标，op 取值
@@ -176,11 +195,11 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 |------|------|
 | get_user_info | `user:get_user_info:attempts` `user:get_user_info:success` `user:get_user_info:duration_seconds`<br>`user:get_user_info:db_query` |
 | generate_inviter_code | `user:generate_inviter_code:attempts` `user:generate_inviter_code:success` `user:generate_inviter_code:duration_seconds`<br>`user:generate_inviter_code:redis_set` |
-| change_nickname | `user:change_nickname:attempts` `user:change_nickname:success` `user:change_nickname:duration_seconds`<br>`user:change_nickname:db_update` `user:change_nickname:redis_delete` |
-| update_avatar | `user:update_avatar:attempts` `user:update_avatar:success` `user:update_avatar:duration_seconds`<br>`user:update_avatar:validate_image:duration_seconds` `user:update_avatar:s3_upload` `user:update_avatar:db_transaction` `user:update_avatar:redis_delete` `user:update_avatar:s3_delete` |
+| change_nickname | `user:change_nickname:attempts` `user:change_nickname:success` `user:change_nickname:duration_seconds`<br>`user:change_nickname:db_update` `user:change_nickname:cache_invalidate` |
+| update_avatar | `user:update_avatar:attempts` `user:update_avatar:success` `user:update_avatar:duration_seconds`<br>`user:update_avatar:validate_image:duration_seconds` `user:update_avatar:s3_upload` `user:update_avatar:db_transaction` `user:update_avatar:cache_invalidate` `user:update_avatar:s3_delete` |
 | change_password | `user:change_password:attempts` `user:change_password:success` `user:change_password:duration_seconds`<br>`user:change_password:db_query` `user:change_password:acquire_permit` `user:change_password:verify_password` `user:change_password:hash_password` `user:change_password:db_update` |
-| logout | `user:logout:attempts` `user:logout:success` `user:logout:duration_seconds`<br>`user:logout:db_update` `user:logout:redis_delete` `user:logout:redis_delete_cache` |
-| get_user_info_batch | `user:get_user_info_batch:attempts` `user:get_user_info_batch:success` `user:get_user_info_batch:duration_seconds`<br>`user:get_user_info_batch:redis_cache` |
+| logout | `user:logout:attempts` `user:logout:success` `user:logout:duration_seconds`<br>`user:logout:db_update` `user:logout:redis_delete` `user:logout:cache_invalidate` |
+| get_user_info_batch | `user:get_user_info_batch:attempts` `user:get_user_info_batch:success` `user:get_user_info_batch:duration_seconds`<br>`user:get_user_info_batch:cache_get_or_load_batch` |
 
 ### photo 模块
 
@@ -189,7 +208,7 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 | get_photo_cursor_page | `photo:get_photo_cursor_page:attempts` `photo:get_photo_cursor_page:success` `photo:get_photo_cursor_page:duration_seconds`<br>`photo:get_photo_cursor_page:find_cursor_page_ids` `photo:get_photo_cursor_page:load_photos_info` |
 | upload_photo | `photo:upload_photo:attempts` `photo:upload_photo:success` `photo:upload_photo:duration_seconds`<br>`photo:upload_photo:validate_photo:duration_seconds` `photo:upload_photo:md5_hash:duration_seconds` `photo:upload_photo:s3_upload` `photo:upload_photo:db_insert` |
 | exists_by_md5_batch | `photo:exists_by_md5_batch:attempts` `photo:exists_by_md5_batch:success` `photo:exists_by_md5_batch:duration_seconds` |
-| delete_photos | `photo:delete_photos:attempts` `photo:delete_photos:success` `photo:delete_photos:duration_seconds`<br>`photo:delete_photos:db_transaction` `photo:delete_photos:s3_delete_batch` |
+| delete_photos | `photo:delete_photos:attempts` `photo:delete_photos:success` `photo:delete_photos:duration_seconds`<br>`photo:delete_photos:db_transaction` `photo:delete_photos:s3_delete_batch` `photo:delete_photos:cache_invalidate` |
 | download_image | `photo:download_image:attempts` `photo:download_image:success` `photo:download_image:duration_seconds`<br>`photo:download_image:s3_download_process` `photo:download_image:s3_download_stream` |
 | get_collection_list | `photo:get_collection_list:attempts` `photo:get_collection_list:success` `photo:get_collection_list:duration_seconds`<br>`photo:get_collection_list:query_by_user_id` |
 | create_collection | `photo:create_collection:attempts` `photo:create_collection:success` `photo:create_collection:duration_seconds`<br>`photo:create_collection:db_insert` |
@@ -280,3 +299,8 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
   - 补齐行为审计、人物管理、人脸归属/删除共 9 个操作埋点；为 auth 登录/注册、
     photo 上传补充 `errors:{kind}` 分类；修复 `metrics_group!` 显式函数名形式
     产生 `{crate}:{func}::duration_seconds` 双冒号的缺陷。
+- 2026-08-09: 引入统一多级缓存组件 `MultiLevelCache`（L1 moka → L2 Redis → L3 数据库），
+  新增依赖级指标 `cache:{name}:{layer}:{op}`（命中率 / 耗时 / L1 容量 / 穿透加载数）；
+  user 与 photo 模块的缓存读写迁移至新组件，原 `redis_delete` / `redis_delete_cache` /
+  `redis_cache` 步骤分别更名为 `cache_invalidate` / `cache_get_or_load_batch`，
+  photo 删除补充 `cache_invalidate` 步骤。

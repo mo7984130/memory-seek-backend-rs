@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -965,6 +965,7 @@ dependencies = [
  "image",
  "indexmap",
  "metrics",
+ "moka",
  "password-hash",
  "rand 0.10.2",
  "redis",
@@ -3486,7 +3487,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "async-trait",
  "axum",
@@ -4778,7 +4779,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "auth",
  "axum",
@@ -5932,7 +5933,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "axum",
  "bytes",

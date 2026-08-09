@@ -13,6 +13,9 @@ pub struct AppConfig {
     #[serde(default)]
     pub redis: crate::setup::bases::redis::Config,
 
+    #[serde(default)]
+    pub cache: crate::setup::bases::cache::Config,
+
     #[cfg(feature = "email")]
     pub smtp: crate::setup::libs::email::Config,
 

@@ -4,7 +4,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{CacheExtension, OkExt, OptionExt, ResultInspectErrAsync, log_warn},
+    ext::{OkExt, OptionExt, ResultInspectErrAsync, log_warn},
     inc_error, metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
@@ -51,7 +51,7 @@ impl PhotoService {
         photo_ids: &[PhotoId],
     ) -> Result<Vec<PhotoView>> {
         let (photos_result, liked_photo_ids_result) = tokio::join!(
-            state.redis.get_or_load_batch(
+            state.cache_photo_info.get_or_load_batch(
                 photo_ids,
                 |id| RedisKeys::photo::photo::photo_info(*id, user_id),
                 24 * 60 * 60,
@@ -271,6 +271,19 @@ impl PhotoService {
             .delete_batch(file_ids)
             .timed(metrics_name!("s3_delete_batch"))
             .await?;
+
+        // 失效照片信息缓存（L1 + L2）
+        // 其他浏览者的缓存键无法穷举，仅失效拥有者的键，其余靠 L1 短 TTL 最终一致
+        let cache_keys = ctx
+            .photos
+            .iter()
+            .map(|p| RedisKeys::photo::photo::photo_info(p.id, user_id))
+            .collect::<Vec<_>>();
+        let _ = state
+            .cache_photo_info
+            .invalidate_batch(&cache_keys)
+            .timed(metrics_name!("cache_invalidate"))
+            .await;
 
         metrics_success!();
 

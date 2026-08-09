@@ -1,3 +1,4 @@
+pub mod cache;
 pub mod database;
 pub mod log;
 #[cfg(feature = "metrics")]

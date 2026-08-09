@@ -23,6 +23,13 @@ redis:
   url: "redis://localhost:6379"
   max_connections: 10
 
+cache:
+  # 三级缓存配置（本地 moka → Redis → 数据库）
+  # L1 本地缓存最大条目数，默认 10000
+  local_capacity: 10000
+  # L1 本地缓存 TTL（秒）。短 TTL 保证多实例下最终一致，默认 60
+  local_ttl_secs: 60
+
 smtp:
   server: "smtp.example.com"
   port: 587

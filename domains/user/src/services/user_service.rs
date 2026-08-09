@@ -12,9 +12,7 @@ use tokio::task::spawn_blocking;
 use crate::UserState;
 use crate::mapper::UserMapper;
 use crate::models::{UserInfoRow, user_brief_view_from_dto};
-use common::ext::{
-    CacheExtension, OptionExt, RedisExt, ResultInspectErrAsync, ToOk, TraceExt, log_err,
-};
+use common::ext::{OptionExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
 use common::utils::{DbUtils, MetricsTimerExt};
 use common::utils::{FileValidator, rand_utils, token_cipher};
 use common::{Result, error::AppError};
@@ -147,14 +145,13 @@ pub async fn change_nickname(
         .timed(metrics_name!("db_update"))
         .await?;
 
-    // 删除用户缓存
+    // 失效用户信息缓存（L1 + L2），下次读取时自动重建
     // 错误不返回
     let _ = state
-        .redis
-        .del(&RedisKeys::auth::user_info_cache(user_id))
-        .timed(metrics_name!("redis_delete"))
-        .await
-        .trace();
+        .cache_user_info
+        .invalidate(&RedisKeys::auth::user_info_cache(user_id))
+        .timed(metrics_name!("cache_invalidate"))
+        .await;
 
     metrics_success!();
 
@@ -228,11 +225,11 @@ pub async fn update_avatar(
     })
     .await?;
 
-    // 删除用户信息缓存
+    // 失效用户信息缓存
     state
-        .redis
-        .del(&RedisKeys::auth::user_info_cache(user_id))
-        .timed(metrics_name!("redis_delete"))
+        .cache_user_info
+        .invalidate(&RedisKeys::auth::user_info_cache(user_id))
+        .timed(metrics_name!("cache_invalidate"))
         .await?;
 
     // 删除旧头像
@@ -380,9 +377,9 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
             .del(RedisKeys::auth::user_access_token(user_id))
             .timed(metrics_name!("redis_delete")),
         state
-            .redis
-            .del(&cache_key)
-            .timed(metrics_name!("redis_delete_cache"))
+            .cache_user_info
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate"))
     );
     refresh_token_result?;
     access_token_result?;
@@ -413,9 +410,9 @@ pub async fn get_user_info_batch(
 
     let user_ids = req.user_ids.into_inner();
 
-    // 带redis缓存的获取用户信息
+    // 带三级缓存的获取用户信息
     let result: Vec<Option<UserInfoRow>> = state
-        .redis
+        .cache_user_info
         .get_or_load_batch(
             &user_ids,
             |id| RedisKeys::auth::user_info_cache(*id),
@@ -439,7 +436,7 @@ pub async fn get_user_info_batch(
             },
             |dto| dto.user_id,
         )
-        .timed(metrics_name!("redis_cache"))
+        .timed(metrics_name!("cache_get_or_load_batch"))
         .await?;
 
     metrics_success!();
