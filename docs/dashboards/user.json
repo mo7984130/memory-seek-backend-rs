@@ -28,6 +28,251 @@
         "x": 0,
         "y": 0
       },
+      "id": 2001,
+      "panels": [],
+      "title": "HTTP 请求 (http)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2002,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "HTTP QPS",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(server_http_requests_total[5m])) by (route)",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "id": 2003,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "HTTP 错误率",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(server_http_requests_total{status_class=\"5xx\"}[5m])) / sum(rate(server_http_requests_total[5m])) * 100",
+          "legendFormat": "错误率",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "id": 2004,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "title": "HTTP 延迟 (P50/P95/P99)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
+          "legendFormat": "{{route}} P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
+          "legendFormat": "{{route}} P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
+          "legendFormat": "{{route}} P99",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
       "id": 1,
       "panels": [],
       "title": "获取用户信息 (get_user_info)",
@@ -89,7 +334,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 1
+        "y": 3
       },
       "id": 2,
       "options": {
@@ -185,7 +430,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 1
+        "y": 3
       },
       "id": 3,
       "options": {
@@ -308,7 +553,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 1
+        "y": 3
       },
       "id": 4,
       "options": {
@@ -353,7 +598,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 11
       },
       "id": 6,
       "panels": [],
@@ -416,7 +661,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 10
+        "y": 12
       },
       "id": 7,
       "options": {
@@ -512,7 +757,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 10
+        "y": 12
       },
       "id": 8,
       "options": {
@@ -635,7 +880,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 10
+        "y": 12
       },
       "id": 9,
       "options": {
@@ -680,7 +925,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 18
+        "y": 20
       },
       "id": 11,
       "panels": [],
@@ -743,7 +988,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 19
+        "y": 21
       },
       "id": 12,
       "options": {
@@ -839,7 +1084,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 19
+        "y": 21
       },
       "id": 13,
       "options": {
@@ -971,7 +1216,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 19
+        "y": 21
       },
       "id": 14,
       "options": {
@@ -1016,7 +1261,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 29
       },
       "id": 16,
       "panels": [],
@@ -1079,7 +1324,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 28
+        "y": 30
       },
       "id": 17,
       "options": {
@@ -1175,7 +1420,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 28
+        "y": 30
       },
       "id": 18,
       "options": {
@@ -1334,7 +1579,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 28
+        "y": 30
       },
       "id": 19,
       "options": {
@@ -1379,7 +1624,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 38
       },
       "id": 21,
       "panels": [],
@@ -1442,7 +1687,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 37
+        "y": 39
       },
       "id": 22,
       "options": {
@@ -1538,7 +1783,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 37
+        "y": 39
       },
       "id": 23,
       "options": {
@@ -1697,7 +1942,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 37
+        "y": 39
       },
       "id": 24,
       "options": {
@@ -1742,7 +1987,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 47
       },
       "id": 26,
       "panels": [],
@@ -1805,7 +2050,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 46
+        "y": 48
       },
       "id": 27,
       "options": {
@@ -1901,7 +2146,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 46
+        "y": 48
       },
       "id": 28,
       "options": {
@@ -2042,7 +2287,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 46
+        "y": 48
       },
       "id": 29,
       "options": {
@@ -2087,7 +2332,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 56
       },
       "id": 31,
       "panels": [],
@@ -2150,7 +2395,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 55
+        "y": 57
       },
       "id": 32,
       "options": {
@@ -2246,7 +2491,7 @@
         "h": 8,
         "w": 6,
         "x": 6,
-        "y": 55
+        "y": 57
       },
       "id": 33,
       "options": {
@@ -2272,7 +2517,7 @@
           },
           "expr": "rate(user:get_user_info_batch:redis_cache_sum[5m]) / rate(user:get_user_info_batch:redis_cache_count[5m]) * 1000",
           "legendFormat": "Redis 缓存",
-          "refId": "B"
+          "refId": "A"
         }
       ]
     },
@@ -2369,7 +2614,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 55
+        "y": 57
       },
       "id": 34,
       "options": {

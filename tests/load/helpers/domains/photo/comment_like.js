@@ -17,7 +17,7 @@ export function likeComment(photoId, commentId) {
     const res = http.post(
         `${BASE_URL}/photo/comment/${photoId}/${commentId}/like`,
         null,
-        { headers },
+        { headers, tags: { name: "like_comment" } },
     );
     const ok = res.status === 200;
     const result = {
@@ -41,7 +41,7 @@ export function unlikeComment(photoId, commentId) {
     const res = http.del(
         `${BASE_URL}/photo/comment/${photoId}/${commentId}/like`,
         null,
-        { headers },
+        { headers, tags: { name: "unlike_comment" } },
     );
     const ok = res.status === 200;
     const result = {

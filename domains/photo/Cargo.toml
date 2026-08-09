@@ -1,11 +1,11 @@
 [package]
 name = "photo"
-version = "0.1.1"
+version = "0.1.5"
 edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics"]
+metrics = ["common/metrics", "dep:metrics", "oss/metrics"]
 controller = ["dep:axum"]
 file_validator = ["common/file_validator"]
 face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]

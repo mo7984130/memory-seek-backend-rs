@@ -9,7 +9,7 @@ use user::UserState;
 /// 注册 User 模块路由
 pub fn register(
     state: &Arc<AppState>,
-    _cfg: &AppConfig,
+    cfg: &AppConfig,
 ) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
     info!("注册 User 模块路由");
 
@@ -17,8 +17,12 @@ pub fn register(
     let user_state = Arc::new(UserState::new(
         state.db.clone(),
         state.redis.clone(),
+        common::cache::CacheConfig::new(
+            cfg.cache.enabled,
+            cfg.cache.local_capacity,
+            std::time::Duration::from_secs(cfg.cache.local_ttl_secs),
+        ),
         state.s3_client.clone(),
-        state.token_cipher.clone(),
     ));
 
     // 获取路由

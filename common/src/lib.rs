@@ -15,6 +15,7 @@ pub mod r;
 pub mod traits;
 pub mod utils;
 
+pub mod cache;
 pub mod ext;
 pub mod macros;
 pub mod pipeline;

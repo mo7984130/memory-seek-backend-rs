@@ -1,4 +1,7 @@
-use common::{Result, ext::ToOk};
+use common::{
+    Result,
+    ext::{ResultErrExt, ToOk},
+};
 use insight_face_rs::FaceEmbedding;
 use sea_orm::{
     ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -8,6 +11,20 @@ use types::{
     cursor::FaceCountIdCursor,
     photo::{FaceBBox, face::FaceId, person::*, photo::PhotoId},
 };
+
+use crate::models::PersonBriefRow;
+
+impl From<PersonRecord> for PersonBriefRow {
+    fn from(value: PersonRecord) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            cover_file_id: value.cover_file_id,
+            cover_bbox: value.cover_bbox,
+            face_count: value.face_count as i64,
+        }
+    }
+}
 
 pub struct PersonMapper;
 
@@ -197,6 +214,51 @@ impl PersonMapper {
             .all(db)
             .await?
             .to_ok()
+    }
+
+    /// 按 ID 批量查询人物轻量摘要（不含人脸向量，供缓存使用）
+    pub async fn query_brief_by_ids(
+        db: &impl ConnectionTrait,
+        person_ids: &[PersonId],
+    ) -> Result<Vec<PersonBriefRow>> {
+        if person_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        #[derive(sea_orm::FromQueryResult)]
+        struct BriefRow {
+            id: PersonId,
+            name: String,
+            cover_file_id: String,
+            cover_bbox: sea_orm::JsonValue,
+            face_count: i64,
+        }
+        let rows = Entity::find()
+            .filter(Column::Id.is_in(person_ids.iter().copied()))
+            .select_only()
+            .column(Column::Id)
+            .column(Column::Name)
+            .column(Column::CoverFileId)
+            .column(Column::CoverBbox)
+            .column(Column::FaceCount)
+            .into_model::<BriefRow>()
+            .all(db)
+            .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let cover_bbox = serde_json::from_value(row.cover_bbox).trace_internal_err(
+                    "db:photo:person:cover_bbox_from:err",
+                    "封面 bbox 转换错误",
+                )?;
+                Ok(PersonBriefRow {
+                    id: row.id,
+                    name: row.name,
+                    cover_file_id: row.cover_file_id,
+                    cover_bbox,
+                    face_count: row.face_count,
+                })
+            })
+            .collect()
     }
 }
 

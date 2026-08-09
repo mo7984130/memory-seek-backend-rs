@@ -1,6 +1,7 @@
 use crate::state::AppState;
 use axum::{extract::Request, middleware::Next, response::Response};
 use common::{
+    Result,
     error::AppError,
     ext::{OptionExt, RedisExt, ResultErrExt},
 };
@@ -15,7 +16,7 @@ pub async fn auth_middleware(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     mut request: Request,
     next: Next,
-) -> Result<Response, AppError> {
+) -> Result<Response> {
     // 从 Authorization header 中提取 Bearer user_id access_token
     let (user_id, token) = extract_bearer(&request)?;
 
@@ -31,7 +32,7 @@ pub async fn auth_middleware(
 /// 从 Authorization header 中解析 user_id 和 access_token
 ///
 /// 格式: `Bearer user_id access_token`
-fn extract_bearer(request: &Request) -> Result<(UserId, &str), AppError> {
+fn extract_bearer(request: &Request) -> Result<(UserId, &str)> {
     let header = request
         .headers()
         .get("Authorization")
@@ -66,7 +67,7 @@ fn extract_bearer(request: &Request) -> Result<(UserId, &str), AppError> {
 /// 验证 token 是否是该 user_id 的有效 token
 ///
 /// 从 Redis 获取 `a:u:at:{user_id}` 对应的 token，与请求中的 token 比对
-async fn verify_token(state: &AppState, user_id: UserId, token: &str) -> Result<(), AppError> {
+async fn verify_token(state: &AppState, user_id: UserId, token: &str) -> Result<()> {
     use constants::RedisKeys;
 
     let key = RedisKeys::auth::user_access_token(user_id);

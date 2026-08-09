@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use crate::error::AppError;
 use crate::ext::{ResultErrExt, log_err};
+use crate::{Result, error::AppError};
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use bcrypt;
 use password_hash::SaltString;
@@ -64,7 +64,7 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: 哈希计算过程中发生内部错误
-    pub fn hash(&self, password: &str) -> Result<String, AppError> {
+    pub fn hash(&self, password: &str) -> Result<String> {
         match self {
             Self::Bcrypt(cfg) => bcrypt::hash(password, cfg.cost)
                 .trace_internal_err("bcrypt hash error", "Bcrypt 计算失败"),
@@ -89,7 +89,7 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: 哈希解析或验证过程中发生内部错误
-    pub fn verify(&self, password: &str, hash: &str) -> Result<bool, AppError> {
+    pub fn verify(&self, password: &str, hash: &str) -> Result<bool> {
         match self {
             Self::Bcrypt(_) => bcrypt::verify(password, hash)
                 .trace_internal_err("bcrypt verify error", "Bcrypt 密码验证失败"),
@@ -120,10 +120,7 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError`: 无法识别哈希算法或验证过程中发生错误
-    pub fn verify_and_detect(
-        password: &str,
-        hash: &str,
-    ) -> Result<(bool, HashAlgorithm), AppError> {
+    pub fn verify_and_detect(password: &str, hash: &str) -> Result<(bool, HashAlgorithm)> {
         match HashAlgorithm::detect(hash) {
             Some(alg) => {
                 let result = alg.verify(password, hash)?;
@@ -138,7 +135,7 @@ impl HashAlgorithm {
     }
 
     // 根据配置创建 Argon2id 哈希器实例
-    fn argon2_hasher(cfg: &Argon2idConfig) -> Result<Argon2<'static>, AppError> {
+    fn argon2_hasher(cfg: &Argon2idConfig) -> Result<Argon2<'static>> {
         let params = Params::new(cfg.m_cost, cfg.t_cost, cfg.p_cost, None)
             .trace_internal_err("argon2_params_error", "创建 Argon2 参数失败")?;
         Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))

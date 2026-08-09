@@ -1,16 +1,21 @@
 // tests/load/scenarios/photo/comment.js
-// 评论服务压测场景（comment_controller）
+// 评论服务压测场景 — arrival-rate 负载模型
+//
+// 完整流程迭代(发评论/查列表/删评论 自洽), 会话跨迭代复用。
 
-import { sleep } from "k6";
 import {
     getPhotoUserCredentials,
     recordResult,
     printSummary,
+    buildLoadOptions,
+    setupPreLogin,
+    sessionFromData,
 } from "../../helpers/common.js";
-
-export { printSummary as handleSummary };
-
-import { initSession } from "../../helpers/session.js";
+import {
+    setSession,
+    initSession,
+    maybeRefreshSession,
+} from "../../helpers/session.js";
 import { listPhotos } from "../../helpers/domains/photo/photo.js";
 import {
     createComment,
@@ -18,69 +23,61 @@ import {
     deleteComment,
 } from "../../helpers/domains/photo/comment.js";
 
-// ── 独立运行时的 options ──
+export { printSummary as handleSummary };
 
-export const options = {
-    stages: [
-        { duration: "30s", target: 10 },
-        { duration: "1m", target: 10 },
-        { duration: "30s", target: 20 },
-        { duration: "1m", target: 20 },
-        { duration: "30s", target: 0 },
-    ],
-    thresholds: {
-        http_req_duration: ["p(95)<500"],
-        http_req_failed: ["rate<0.01"],
-    },
-};
+const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
+
+export const options = buildLoadOptions({
+    targetRps: 30,
+    maxRps: 150,
+    preAllocatedVUs: PRE_ALLOCATED_VUS,
+    maxVUs: 2000,
+});
+
+// setup 预登录: login 不计入压测窗口
+export function setup() {
+    return setupPreLogin(getPhotoUserCredentials, PRE_ALLOCATED_VUS);
+}
 
 // ── 核心逻辑 ──
 
-function runCommentFlow() {
-    const { account, password } = getPhotoUserCredentials(__VU);
-    const session = initSession(account, password);
-    if (!session) return;
+function runCommentFlow(data) {
+    const session = sessionFromData(data, __VU);
+    if (session) {
+        setSession(session);
+    } else {
+        const { account, password } = getPhotoUserCredentials(__VU);
+        initSession(account, password);
+        return;
+    }
+    maybeRefreshSession();
 
-    sleep(0.3);
-
-    // 获取一张照片 ID
     const photoListResult = listPhotos(1);
     if (!photoListResult.success || !photoListResult.data?.length) {
         return;
     }
     const photoId = photoListResult.data[0].id;
 
-    sleep(0.3);
-
-    // 1. 发表评论
     let result = createComment(photoId, `Comment VU${__VU} ${Date.now()}`);
     recordResult("create_comment", result);
     if (!result.success) return;
     const commentId = result.data.id;
 
-    sleep(0.3);
-
-    // 2. 查询评论列表
     result = listComments(photoId);
     recordResult("list_comments", result);
 
-    sleep(0.3);
-
-    // 3. 删除评论
     result = deleteComment(photoId, commentId);
     recordResult("delete_comment", result);
-
-    sleep(0.5);
 }
 
 // ── 独立运行入口 ──
 
-export default function () {
-    runCommentFlow();
+export default function (data) {
+    runCommentFlow(data);
 }
 
-// ── 被统一入口调用的 exec 函数 ──
+// ── 被统一入口(photo.js)调用的 exec 函数 ──
 
-export function commentExec() {
-    runCommentFlow();
+export function commentExec(data) {
+    runCommentFlow(data);
 }

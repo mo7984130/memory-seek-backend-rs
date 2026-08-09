@@ -14,7 +14,7 @@ if (!BASE_URL) {
 
 // 数据量配置（与 seed.sql 的 psql 变量对齐）
 const AUTH_USERS = parseInt(__ENV.AUTH_USERS || "10000");
-const PHOTO_USERS = parseInt(__ENV.PHOTO_USERS || "200");
+const PHOTO_USERS = parseInt(__ENV.PHOTO_USERS || "2000");
 
 /**
  * 生成 auth 测试用户凭据
@@ -83,6 +83,15 @@ const OP_NAMES = [
     "delete_comment",
     "like_comment",
     "unlike_comment",
+    // face
+    "get_faces_by_photo",
+    "get_unassigned_face_photos",
+    "change_face_belonging",
+    // person
+    "get_persons",
+    "search_persons",
+    "get_person_photos",
+    "rename_person",
 ];
 
 const opMetrics = {};
@@ -120,11 +129,106 @@ export function logResult(label, result) {
     const status = result.success ? "\x1b[32mOK\x1b[0m" : "\x1b[31mFAIL\x1b[0m";
     console.log(`  [${status}] ${label} ${Math.round(result.duration)}ms`);
     if (!result.success && result.error) {
-        const body = result.error.body.length > 200
-            ? result.error.body.substring(0, 200) + "..."
-            : result.error.body;
-        console.error(`    → HTTP ${result.error.status}: ${body}`);
+        const body = String(result.error.body ?? "");
+        const shown = body.length > 200 ? body.substring(0, 200) + "..." : body;
+        console.error(`    → HTTP ${result.error.status ?? "?"}: ${shown}`);
     }
+}
+
+/**
+ * 构建 arrival-rate 负载模型 options(双模式)
+ *
+ * LOAD_MODE=target(默认): constant-arrival-rate 固定迭代率, 稳定可对比
+ * LOAD_MODE=max:          ramping-arrival-rate 逐步加压找系统上限
+ *
+ * 迭代率可用 __ENV.TARGET_RPS / __ENV.MAX_RPS 覆盖(单位: 迭代/秒)。
+ * 单 op 迭代脚本中迭代率即请求 QPS; 完整流程迭代脚本中 QPS ≈ 迭代率 × 每迭代请求数。
+ */
+export function buildLoadOptions({
+    targetRps,
+    maxRps,
+    preAllocatedVUs = 100,
+    maxVUs = 200,
+}) {
+    const mode = __ENV.LOAD_MODE || "target";
+    const target = parseInt(__ENV.TARGET_RPS || String(targetRps), 10);
+    const max = parseInt(__ENV.MAX_RPS || String(maxRps), 10);
+    const pre = parseInt(__ENV.PRE_ALLOCATED_VUS || String(preAllocatedVUs), 10);
+    const mv = parseInt(__ENV.MAX_VUS || String(maxVUs), 10);
+    const duration = __ENV.DURATION || "2m";
+
+    if (mode === "max") {
+        const ramp = Math.max(1, Math.floor(max * 0.1));
+        return {
+            setupTimeout: "180s",
+            scenarios: {
+                load: {
+                    executor: "ramping-arrival-rate",
+                    startRate: ramp,
+                    timeUnit: "1s",
+                    preAllocatedVUs: pre,
+                    maxVUs: mv,
+                    stages: [
+                        { duration: "1m", target: ramp },
+                        { duration: "2m", target: max },
+                        { duration: "1m", target: max },
+                    ],
+                },
+            },
+        };
+    }
+    return {
+        setupTimeout: "180s",
+        scenarios: {
+            load: {
+                executor: "constant-arrival-rate",
+                rate: target,
+                timeUnit: "1s",
+                duration,
+                preAllocatedVUs: pre,
+                maxVUs: mv,
+            },
+        },
+    };
+}
+
+/**
+ * setup 预登录: 一次性并发登录 preAllocatedVUs 个账号(batch), 返回会话数组
+ * (索引 = VU 号 - 1), 使 login 完全位于压测计时窗口之外。
+ * 登录失败项为 null, VU 侧可兜底现场登录。
+ */
+export function setupPreLogin(credentialFn, vuCount) {
+    const reqs = [];
+    for (let i = 1; i <= vuCount; i++) {
+        const { account, password } = credentialFn(i);
+        reqs.push({
+            method: "POST",
+            url: `${BASE_URL}/auth/login`,
+            body: JSON.stringify({ account, password }),
+            params: {
+                headers: { "Content-Type": "application/json" },
+                tags: { name: "prelogin" },
+            },
+        });
+    }
+    // http.batch 并发发送(默认并发受 --batch 限制, 默认 20), 远快于串行登录
+    const responses = http.batch(reqs);
+    return responses.map((res) =>
+        res.status === 200
+            ? {
+                  uid: res.json("data.user.id"),
+                  token: res.json("data.accessToken"),
+                  refreshToken: res.json("data.refreshToken"),
+              }
+            : null,
+    );
+}
+
+/**
+ * 从 setup 预登录数据中取出当前 VU 的会话; 缺失(登录失败或 VU 超出预分配)时返回 null。
+ */
+export function sessionFromData(data, vuId) {
+    return data?.[vuId - 1] ?? null;
 }
 
 /**

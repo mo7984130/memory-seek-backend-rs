@@ -14,9 +14,21 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
+#[cfg(feature = "metrics")]
+use std::time::Instant;
 
 static CHUNK_SIZE: usize = 256;
 static CONCURRENCY: usize = 16;
+
+/// 记录一次 OSS 操作的请求量、耗时与错误（仅 metrics feature 下生效）
+#[cfg(feature = "metrics")]
+fn record(op: &str, start: Instant, ok: bool) {
+    metrics::counter!(format!("oss:{op}:requests")).increment(1);
+    if !ok {
+        metrics::counter!(format!("oss:{op}:errors")).increment(1);
+    }
+    metrics::histogram!(format!("oss:{op}:duration_seconds")).record(start.elapsed().as_secs_f64());
+}
 
 #[derive(Clone)]
 pub struct S3Client {
@@ -99,13 +111,18 @@ impl S3Client {
         data: impl AsRef<[u8]>,
         content_type: &str,
     ) -> Result<ResponseData, OssError> {
-        retry_429(key, || async {
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+        let result = retry_429("put", key, || async {
             self.bucket
                 .put_object_with_content_type(key, data.as_ref(), content_type)
                 .await
                 .map_err(OssError::from)
         })
-        .await
+        .await;
+        #[cfg(feature = "metrics")]
+        record("put", start, result.is_ok());
+        result
     }
 
     /// 删除单个文件
@@ -119,10 +136,15 @@ impl S3Client {
     /// # 错误
     /// - `AppError::InternalServerError`: OSS 删除操作失败
     pub async fn delete(&self, key: &str) -> Result<ResponseData, OssError> {
-        retry_429(key, || async {
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+        let result = retry_429("delete", key, || async {
             self.bucket.delete_object(key).await.map_err(OssError::from)
         })
-        .await
+        .await;
+        #[cfg(feature = "metrics")]
+        record("delete", start, result.is_ok());
+        result
     }
 
     /// 批量删除文件，分片并发执行，遇错即停
@@ -136,27 +158,35 @@ impl S3Client {
     /// # 错误
     /// - `AppError::InternalServerError`: 删除文件失败
     pub async fn delete_batch(&self, keys: Vec<impl AsRef<str>>) -> Result<(), OssError> {
-        for concurrent_chunks in keys.chunks(CHUNK_SIZE * CONCURRENCY) {
-            let futures: Vec<_> = concurrent_chunks
-                .chunks(CHUNK_SIZE)
-                .map(|chunk| async move {
-                    for key in chunk {
-                        retry_429(key.as_ref(), || async {
-                            self.bucket
-                                .delete_object(key.as_ref())
-                                .await
-                                .map_err(OssError::from)
-                        })
-                        .await?;
-                    }
-                    Ok::<_, OssError>(())
-                })
-                .collect();
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+        let result = async {
+            for concurrent_chunks in keys.chunks(CHUNK_SIZE * CONCURRENCY) {
+                let futures: Vec<_> = concurrent_chunks
+                    .chunks(CHUNK_SIZE)
+                    .map(|chunk| async move {
+                        for key in chunk {
+                            retry_429("delete_batch", key.as_ref(), || async {
+                                self.bucket
+                                    .delete_object(key.as_ref())
+                                    .await
+                                    .map_err(OssError::from)
+                            })
+                            .await?;
+                        }
+                        Ok::<_, OssError>(())
+                    })
+                    .collect();
 
-            futures::future::try_join_all(futures).await?;
+                futures::future::try_join_all(futures).await?;
+            }
+
+            Ok(())
         }
-
-        Ok(())
+        .await;
+        #[cfg(feature = "metrics")]
+        record("delete_batch", start, result.is_ok());
+        result
     }
 
     /// 获取文件的公开访问 URL
@@ -210,10 +240,16 @@ impl S3Client {
         } else {
             None
         };
-        self.bucket
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+        let result = self
+            .bucket
             .presign_get(key, expires.as_secs() as u32, custom_queries)
             .await
-            .map_err(OssError::from)
+            .map_err(OssError::from);
+        #[cfg(feature = "metrics")]
+        record("sign", start, result.is_ok());
+        result
     }
 
     /// 下载文件
@@ -227,26 +263,42 @@ impl S3Client {
     /// # 错误
     /// - `AppError::InternalServerError`: OSS 下载操作失败
     pub async fn download(&self, key: &str) -> Result<Bytes, OssError> {
-        let response_data = retry_429(key, || async {
-            self.bucket.get_object(key).await.map_err(OssError::from)
-        })
-        .await?;
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+        let result = async {
+            let response_data = retry_429("get", key, || async {
+                self.bucket.get_object(key).await.map_err(OssError::from)
+            })
+            .await?;
 
-        Ok(response_data.into_bytes())
+            Ok::<Bytes, OssError>(response_data.into_bytes())
+        }
+        .await;
+        #[cfg(feature = "metrics")]
+        record("get", start, result.is_ok());
+        result
     }
 
     pub async fn get_download_stream_response(
         &self,
         key: &str,
     ) -> Result<impl Stream<Item = Result<Bytes, OssError>> + use<>, OssError> {
-        let response = retry_429(key, || async {
-            self.bucket
-                .get_object_stream(key)
-                .await
-                .map_err(OssError::from)
-        })
-        .await?;
-        Ok(response.bytes.map(|item| item.map_err(OssError::from)))
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+        let result = async {
+            let response = retry_429("get_stream", key, || async {
+                self.bucket
+                    .get_object_stream(key)
+                    .await
+                    .map_err(OssError::from)
+            })
+            .await?;
+            Ok::<_, OssError>(response.bytes.map(|item| item.map_err(OssError::from)))
+        }
+        .await;
+        #[cfg(feature = "metrics")]
+        record("get_stream", start, result.is_ok());
+        result
     }
 
     pub async fn download_with_process(&self, key: &str, process: &str) -> Result<Bytes, OssError> {
@@ -254,7 +306,9 @@ impl S3Client {
             .get_signed_url_with_params(key, Duration::from_secs(3600), Some(process.to_string()))
             .await?;
 
-        retry_429(key, || async {
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+        let result = retry_429("get_with_process", key, || async {
             let response = reqwest::get(&url).await?;
             if !response.status().is_success() {
                 return Err(OssError::from_response(response).await);
@@ -262,7 +316,10 @@ impl S3Client {
 
             response.bytes().await.map_err(OssError::from)
         })
-        .await
+        .await;
+        #[cfg(feature = "metrics")]
+        record("get_with_process", start, result.is_ok());
+        result
     }
 
     pub async fn download_stream_with_process(
@@ -274,17 +331,23 @@ impl S3Client {
             .get_signed_url_with_params(key, Duration::from_secs(3600), Some(process.to_string()))
             .await?;
 
-        let response = retry_429(key, || async {
-            let response = reqwest::get(&url).await?;
-            if !response.status().is_success() {
-                return Err(OssError::from_response(response).await);
-            }
-            Ok(response)
-        })
-        .await?;
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+        let result = async {
+            let response = retry_429("stream_with_process", key, || async {
+                let response = reqwest::get(&url).await?;
+                if !response.status().is_success() {
+                    return Err(OssError::from_response(response).await);
+                }
+                Ok(response)
+            })
+            .await?;
 
-        let bytes = response.bytes_stream().map(|r| r.map_err(OssError::from));
-
-        Ok(bytes)
+            Ok::<_, OssError>(response.bytes_stream().map(|r| r.map_err(OssError::from)))
+        }
+        .await;
+        #[cfg(feature = "metrics")]
+        record("stream_with_process", start, result.is_ok());
+        result
     }
 }

@@ -15,7 +15,7 @@ use common::{
     models::CursorPage,
     traits::controller::ControllerRouter,
 };
-use common::{ext::OptionExt, r::R};
+use common::{ext::OptionExt, r::R, utils::token_cipher};
 use types::auth::user::UserId;
 use types::photo::{
     ImageToken, ImageTokenType,
@@ -116,7 +116,7 @@ impl PhotoController {
         OptionalClientIp(ip): OptionalClientIp,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
-        let image_token: ImageToken = state.token_cipher.decrypt(&token).trace_warn_bad_request(
+        let image_token: ImageToken = token_cipher().decrypt(&token).trace_warn_bad_request(
             "invalid_image_token",
             "无效的图片 token",
             "无效的图片 token",

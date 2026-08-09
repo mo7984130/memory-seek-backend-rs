@@ -1,4 +1,4 @@
-use common::ext::ResultErrExt;
+use common::{Result, ext::ResultErrExt};
 use serde::Deserialize;
 
 use deadpool_redis::{Config as DeadpoolConfig, Pool, PoolConfig, Runtime};
@@ -28,7 +28,7 @@ const fn default_max_connections() -> u32 {
     16
 }
 
-pub fn init(cfg: &Config) -> Result<Pool, common::error::AppError> {
+pub fn init(cfg: &Config) -> Result<Pool> {
     info!("初始化 Redis");
     let mut redis_cfg = DeadpoolConfig::from_url(&cfg.url);
     redis_cfg.pool = Some(PoolConfig::new(cfg.max_connections as usize));

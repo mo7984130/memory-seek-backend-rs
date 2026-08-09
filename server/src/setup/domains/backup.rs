@@ -1,4 +1,4 @@
-use common::error::AppError;
+use common::Result;
 use common::ext::ResultErrExt;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ pub async fn init(
     db: &DatabaseConnection,
     s3_client: &Arc<oss::S3Client>,
     cfg: &Config,
-) -> Result<Arc<backup::BackupScheduler>, AppError> {
+) -> Result<Arc<backup::BackupScheduler>> {
     info!("初始化备份调度器");
     let bs = Arc::new(backup::BackupState::new(
         db.clone(),

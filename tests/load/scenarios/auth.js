@@ -1,43 +1,84 @@
 // tests/load/scenarios/auth.js
-// 认证模块独立压测场景
+// 认证模块压测场景 — arrival-rate 负载模型
+//
+// 双模式(通过 LOAD_MODE 切换):
+//   target: constant-arrival-rate 固定目标 QPS(稳定对比)
+//   max   : ramping-arrival-rate 逐步加压找系统上限
+//
+// 会话跨迭代复用: 每 VU 仅首次迭代登录(accessToken 2h 有效), 后续复用;
+// 迭代 = 单个业务请求, rate 即请求 QPS。
 
-import { sleep } from "k6";
-import { getTestUserCredentials, printSummary } from "../helpers/common.js";
-import { initSession, refreshSession, logout } from "../helpers/session.js";
+import {
+    getTestUserCredentials,
+    printSummary,
+} from "../helpers/common.js";
+import {
+    initSession,
+    getSession,
+    maybeRefreshSession,
+    refreshSession,
+    logout,
+} from "../helpers/session.js";
 
 export { printSummary as handleSummary };
 
-export const options = {
-    stages: [
-        { duration: "30s", target: 100 },
-        { duration: "2m", target: 100 },
-        { duration: "30s", target: 200 },
-        { duration: "2m", target: 200 },
-        { duration: "30s", target: 0 },
-    ],
-    thresholds: {
-        http_req_duration: ["p(95)<200"],
-        http_req_failed: ["rate<0.01"],
-    },
-};
+const LOAD_MODE = __ENV.LOAD_MODE || "target";
+const TARGET_RPS = parseInt(__ENV.TARGET_RPS || "400", 10);
+const MAX_RPS = parseInt(__ENV.MAX_RPS || "100000", 10);
+const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "500", 10);
+const MAX_VUS = parseInt(__ENV.MAX_VUS || "5000", 10);
+const DURATION = __ENV.DURATION || "2m";
+
+export const options = (() => {
+    if (LOAD_MODE === "max") {
+        const ramp = Math.max(1, Math.floor(MAX_RPS * 0.1));
+        return {
+            setupTimeout: "180s",
+            scenarios: {
+                load: {
+                    executor: "ramping-arrival-rate",
+                    startRate: ramp,
+                    timeUnit: "1s",
+                    preAllocatedVUs: PRE_ALLOCATED_VUS,
+                    maxVUs: MAX_VUS,
+                    stages: [
+                        { duration: "1m", target: ramp },
+                        { duration: DURATION, target: MAX_RPS },
+                        { duration: "1m", target: MAX_RPS },
+                    ],
+                },
+            },
+        };
+    }
+    return {
+        setupTimeout: "180s",
+        scenarios: {
+            load: {
+                executor: "constant-arrival-rate",
+                rate: TARGET_RPS,
+                timeUnit: "1s",
+                duration: "2m",
+                preAllocatedVUs: PRE_ALLOCATED_VUS,
+                maxVUs: MAX_VUS,
+            },
+        },
+    };
+})();
 
 export default function () {
-    const { account, password } = getTestUserCredentials(__VU);
-
-    // 1. 登录
-    const session = initSession(account, password);
-    if (!session) return;
-
-    sleep(0.5);
-
-    // 2. 循环刷新 token（模拟用户长期在线）
-    for (let i = 0; i < 10; i++) {
-        refreshSession();
-        sleep(0.5);
+    if (!getSession()) {
+        // 首迭代或登出后: 重新登录(initSession 内部已记录 login 指标)
+        const { account, password } = getTestUserCredentials(__VU);
+        initSession(account, password);
+        return;
     }
 
-    // 3. 登出
-    logout();
+    maybeRefreshSession();
 
-    sleep(0.5);
+    // 90% 续期(模拟长期在线), 10% 登出(下一迭代触发登录, 覆盖 login 路径)
+    if (Math.random() < 0.1) {
+        logout();
+    } else {
+        refreshSession();
+    }
 }

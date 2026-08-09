@@ -11,6 +11,12 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 
 command -v jq >/dev/null 2>&1 || { echo "需要 jq, 请先安装"; exit 1; }
 
+# 支持目录覆盖: 默认跑 target 的 run-*/normalized, 可指定 max 的 max-run-*/max-normalized
+: "${COLLECT_RUNS_DIR:=$RUNS_DIR}"
+: "${COLLECT_OUT_DIR:=$NORMALIZED_DIR}"
+RUNS_DIR="$COLLECT_RUNS_DIR"
+NORMALIZED_DIR="$COLLECT_OUT_DIR"
+
 # 单轮 summary 规范化提取为 {http_p50, http_p95, qps, error_rate, ops:{op:{count,errors,p95}}}
 # 说明: k6 summary 的中位数键为 "med"(等价 p50)
 EXTRACT_JQ='

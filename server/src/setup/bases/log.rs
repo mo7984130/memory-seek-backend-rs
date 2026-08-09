@@ -1,42 +1,39 @@
-use std::path::PathBuf;
-
 use tracing::info;
-use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{
-    EnvFilter, Registry,
-    fmt::{self},
-    prelude::*,
-};
+use tracing_subscriber::filter::{EnvFilter, filter_fn};
+use tracing_subscriber::{Registry, fmt, prelude::*};
 
-/// 初始化日志系统（stdout + 文件滚动写入），在 main 入口处尽早调用。
+/// 初始化日志系统（stdout/stderr 分流输出），在 main 入口处尽早调用。
 ///
-/// 参数 `cli_log_dir` 和 `cli_log_file` 为 CLI 传入值（优先级最高），
-/// 未提供时回退到环境变量 `MEMORY_SEEK_LOG_DIR` / `MEMORY_SEEK_LOG_FILE`，
-/// 最终默认 `/var/log/memory-seek-server` / `app.log`。
-pub fn init(log_dir: Option<String>, log_file: Option<String>) -> WorkerGuard {
-    let log_dir = log_dir
-        .map(PathBuf::from)
-        .or_else(|| std::env::var("MEMORY_SEEK_LOG_DIR").ok().map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from("/var/log/memory-seek-server"));
-    let log_file_name = log_file
-        .or_else(|| std::env::var("MEMORY_SEEK_LOG_FILE").ok())
-        .unwrap_or_else(|| "app.log".to_string());
+/// 不自行维护日志文件，日志统一输出到 stdout / stderr，
+/// 由 systemd 的 journald 捕获管理（见仓库根目录 memory-seek-server.service）。
+///
+/// 注意: tracing 的 Level 排序中 ERROR 为最低级别（Error < Warn < Info < Debug < Trace），
+/// 因此 stdout 用 `level > ERROR` 承接 warn 及以下，stderr 用 `level <= ERROR` 承接 error。
+/// - stdout: trace/debug/info/warn
+/// - stderr: error 及以上
+/// - 日志级别由环境变量 `RUST_LOG` 控制（默认 info）
+pub fn init() {
+    // stdout layer: 承接 warn 及以下级别（排除 error）
+    let stdout_layer = fmt::layer()
+        .with_ansi(false)
+        .with_writer(std::io::stdout)
+        .with_filter(filter_fn(|metadata| {
+            metadata.level() > &tracing::Level::ERROR
+        }));
 
-    // 每天创建一个新文件
-    let file_appender = tracing_appender::rolling::daily(&log_dir, &log_file_name);
-    // 异步写入器
-    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-
-    // 控制台 layer
-    let stdout_layer = fmt::layer().with_ansi(true).with_writer(std::io::stdout);
-    // 日志文件 layer
-    let file_layer = fmt::layer().with_ansi(false).with_writer(non_blocking);
+    // stderr layer: 承接 error 及以上级别
+    let stderr_layer = fmt::layer()
+        .with_ansi(false)
+        .with_writer(std::io::stderr)
+        .with_filter(filter_fn(|metadata| {
+            metadata.level() <= &tracing::Level::ERROR
+        }));
 
     let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let registry = Registry::default()
         .with(EnvFilter::new(format!("{},sqlx=warn", log_level)))
         .with(stdout_layer)
-        .with(file_layer);
+        .with(stderr_layer);
 
     #[cfg(feature = "metrics")]
     let registry = {
@@ -46,5 +43,4 @@ pub fn init(log_dir: Option<String>, log_file: Option<String>) -> WorkerGuard {
 
     registry.init();
     info!("日志系统初始化完成");
-    guard
 }

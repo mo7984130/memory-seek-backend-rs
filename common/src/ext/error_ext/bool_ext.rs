@@ -1,5 +1,5 @@
-use crate::error::AppError;
 use crate::ext::error_ext::log_warn;
+use crate::{Result, error::AppError};
 
 /// 为 `bool` 提供条件校验便捷方法
 pub trait BoolExt {
@@ -19,14 +19,14 @@ pub trait BoolExt {
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
-    ) -> Result<(), AppError>;
+    ) -> Result<()>;
 
     fn false_or_warn(
         self,
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
-    ) -> Result<(), AppError>;
+    ) -> Result<()>;
 }
 
 impl BoolExt for bool {
@@ -47,7 +47,7 @@ impl BoolExt for bool {
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
-    ) -> Result<(), AppError> {
+    ) -> Result<()> {
         if self {
             Ok(())
         } else {
@@ -60,7 +60,7 @@ impl BoolExt for bool {
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
-    ) -> Result<(), AppError> {
+    ) -> Result<()> {
         if self {
             Err(log_warn(reason, context, app_err))
         } else {

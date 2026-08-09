@@ -8,6 +8,4 @@ pub use state::AuthState;
 #[cfg(feature = "controller")]
 pub mod controller;
 #[cfg(feature = "controller")]
-pub use controller::AuthController;
-#[cfg(feature = "controller")]
-pub use controller::Controller;
+pub use controller::{AuthController, Controller};

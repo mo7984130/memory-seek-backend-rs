@@ -1,4 +1,5 @@
 use crate::{
+    Result,
     error::AppError,
     ext::{
         ToErr,
@@ -23,7 +24,7 @@ pub trait OptionExt<T> {
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
-    ) -> Result<T, AppError>;
+    ) -> Result<T>;
 
     #[track_caller]
     fn ok_or_warn_bad_request(
@@ -31,7 +32,7 @@ pub trait OptionExt<T> {
         reason: &'static str,
         context: &'static str,
         msg: &'static str,
-    ) -> Result<T, AppError>;
+    ) -> Result<T>;
 
     /// 将 `None` 转换为 `AppError::InternalServerError`，并通过 `tracing::error!` 记录日志
     ///
@@ -47,7 +48,7 @@ pub trait OptionExt<T> {
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
-    ) -> Result<T, AppError>;
+    ) -> Result<T>;
 }
 
 impl<T> OptionExt<T> for Option<T> {
@@ -66,7 +67,7 @@ impl<T> OptionExt<T> for Option<T> {
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
-    ) -> Result<T, AppError> {
+    ) -> Result<T> {
         match self {
             Some(v) => Ok(v),
             None => log_warn(reason, context, app_err).to_err(),
@@ -80,7 +81,7 @@ impl<T> OptionExt<T> for Option<T> {
         reason: &'static str,
         context: &'static str,
         msg: &'static str,
-    ) -> Result<T, AppError> {
+    ) -> Result<T> {
         match self {
             Some(v) => Ok(v),
             None => log_warn(reason, context, AppError::bad_request(msg)).to_err(),
@@ -94,7 +95,7 @@ impl<T> OptionExt<T> for Option<T> {
         reason: &'static str,
         context: &'static str,
         app_err: AppError,
-    ) -> Result<T, AppError> {
+    ) -> Result<T> {
         match self {
             Some(v) => Ok(v),
             None => log_err(reason, context, app_err).to_err(),
@@ -118,7 +119,7 @@ mod tests {
 
     #[test]
     fn none_ok_or_warn_returns_err() {
-        let result: Result<i32, AppError> = None.ok_or_warn(
+        let result: Result<i32> = None.ok_or_warn(
             "test_reason",
             "test_context",
             AppError::BadRequest("bad".into()),
@@ -134,7 +135,7 @@ mod tests {
 
     #[test]
     fn none_ok_or_warn_bad_request_returns_bad_request() {
-        let result: Result<i32, AppError> =
+        let result: Result<i32> =
             None.ok_or_warn_bad_request("test_reason", "test_context", "bad request");
         assert!(matches!(result.unwrap_err(), AppError::BadRequest(_)));
     }
@@ -148,7 +149,7 @@ mod tests {
 
     #[test]
     fn none_ok_or_error_returns_err() {
-        let result: Result<i32, AppError> =
+        let result: Result<i32> =
             None.ok_or_error("test_reason", "test_context", AppError::InternalServerError);
         assert!(result.is_err());
     }

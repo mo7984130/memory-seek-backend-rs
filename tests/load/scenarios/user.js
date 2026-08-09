@@ -1,99 +1,90 @@
 // tests/load/scenarios/user.js
-// 用户模块独立压测场景
+// 用户模块压测场景 — arrival-rate 负载模型, setup 预登录
+//
+// 双模式(target/max), 会话由 setup 预登录(login 不计入压测窗口),
+// 迭代 = 单个业务请求(get_me / change_nickname), 会话全程复用。
+// 说明: change_password 会使服务端登出并改变账号密码, 不适合高频压测, 故不包含。
 
-import { sleep } from "k6";
-import { getTestUserCredentials, recordResult, printSummary } from "../helpers/common.js";
-import { initSession, logout } from "../helpers/session.js";
 import {
-    getMe,
-    changeNickname,
-    changePassword,
-    generateInviterCode,
-    getUserInfoBatch,
-} from "../helpers/domains/user/user.js";
+    getTestUserCredentials,
+    setupPreLogin,
+    sessionFromData,
+    recordResult,
+    printSummary,
+} from "../helpers/common.js";
+import {
+    setSession,
+    initSession,
+    maybeRefreshSession,
+} from "../helpers/session.js";
+import { getMe, changeNickname } from "../helpers/domains/user/user.js";
 
 export { printSummary as handleSummary };
 
-export const options = {
-    stages: [
-        { duration: "30s", target: 20 },
-        { duration: "1m", target: 20 },
-        { duration: "30s", target: 50 },
-        { duration: "1m", target: 50 },
-        { duration: "30s", target: 0 },
-    ],
-    thresholds: {
-        http_req_duration: ["p(95)<200"],
-        http_req_failed: ["rate<0.01"],
-    },
-};
+const LOAD_MODE = __ENV.LOAD_MODE || "target";
+const TARGET_RPS = parseInt(__ENV.TARGET_RPS || "300", 10);
+const MAX_RPS = parseInt(__ENV.MAX_RPS || "100000", 10);
+const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
+const MAX_VUS = parseInt(__ENV.MAX_VUS || "5000", 10);
+const DURATION = __ENV.DURATION || "2m";
 
-export default function () {
-    const { account, password } = getTestUserCredentials(__VU);
+export const options = (() => {
+    if (LOAD_MODE === "max") {
+        const ramp = Math.max(1, Math.floor(MAX_RPS * 0.1));
+        return {
+            setupTimeout: "180s",
+            scenarios: {
+                load: {
+                    executor: "ramping-arrival-rate",
+                    startRate: ramp,
+                    timeUnit: "1s",
+                    preAllocatedVUs: PRE_ALLOCATED_VUS,
+                    maxVUs: MAX_VUS,
+                    stages: [
+                        { duration: "1m", target: ramp },
+                        { duration: "2m", target: MAX_RPS },
+                        { duration: "1m", target: MAX_RPS },
+                    ],
+                },
+            },
+        };
+    }
+    return {
+        setupTimeout: "180s",
+        scenarios: {
+            load: {
+                executor: "constant-arrival-rate",
+                rate: TARGET_RPS,
+                timeUnit: "1s",
+                duration: DURATION,
+                preAllocatedVUs: PRE_ALLOCATED_VUS,
+                maxVUs: MAX_VUS,
+            },
+        },
+    };
+})();
 
-    // 登录
-    const session = initSession(account, password);
-    if (!session) return;
+// setup 预登录: login 不计入压测窗口
+export function setup() {
+    return setupPreLogin(getTestUserCredentials, PRE_ALLOCATED_VUS);
+}
 
-    sleep(0.3);
+export default function (data) {
+    const session = sessionFromData(data, __VU);
+    if (session) {
+        setSession(session);
+    } else {
+        // 兜底: 预登录缺失(VU 超出预分配或登录失败), 现场登录
+        const { account, password } = getTestUserCredentials(__VU);
+        initSession(account, password);
+        return;
+    }
 
-    // 1. 获取个人信息
-    let result = getMe();
-    recordResult("get_me", result);
-    if (!result.success) return;
+    maybeRefreshSession();
 
-    sleep(0.5);
-
-    // 2. 修改昵称（限 20 字符）
-    result = changeNickname(`U${__VU}_${String(Date.now()).slice(-6)}`);
-    recordResult("change_nickname", result);
-
-    sleep(0.5);
-
-    // 3. 再次获取个人信息（验证修改生效）
-    result = getMe();
-    recordResult("get_me", result);
-
-    sleep(0.5);
-
-    // 4. 生成邀请码
-    result = generateInviterCode();
-    recordResult("generate_inviter_code", result);
-
-    sleep(0.5);
-
-    // 5. 批量获取用户信息（使用当前用户 ID 和几个模拟 ID）
-    const userIds = [String(__VU), String(__VU + 1000), String(__VU + 2000)];
-    result = getUserInfoBatch(userIds);
-    recordResult("get_user_info_batch", result);
-
-    sleep(0.5);
-
-    // 6. 修改密码（先改临时密码，再改回原密码，保证后续测试不受影响）
-    //    注意：服务端 change_password 会调用 logout 清除 token，每次改完需重新登录
-    const tempPassword = "Temp@12345";
-    result = changePassword(password, tempPassword);
-    recordResult("change_password", result);
-
-    sleep(0.3);
-
-    // 用临时密码重新登录（因服务端已清除 token）
-    if (!initSession(account, tempPassword)) return;
-
-    sleep(0.3);
-
-    result = changePassword(tempPassword, password);
-    recordResult("change_password", result);
-
-    sleep(0.3);
-
-    // 用原密码重新登录（恢复 session 以便后续 logout）
-    if (!initSession(account, password)) return;
-
-    sleep(0.5);
-
-    // 7. 登出
-    logout();
-
-    sleep(0.5);
+    if (Math.random() < 0.6) {
+        recordResult("get_me", getMe());
+    } else {
+        recordResult("change_nickname", changeNickname(`U${__VU}_${String(Date.now()).slice(-6)}`));
+    }
 }

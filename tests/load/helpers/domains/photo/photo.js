@@ -38,7 +38,7 @@ export function uploadPhoto(imageBytes) {
 export function listPhotos(pageSize = 20) {
     maybeRefreshSession();
     const headers = getSessionHeaders();
-    const res = http.get(`${BASE_URL}/photo?size=${pageSize}`, { headers });
+    const res = http.get(`${BASE_URL}/photo?size=${pageSize}`, { headers, tags: { name: "list_photos" } });
     const ok = res.status === 200;
     const result = {
         success: ok,

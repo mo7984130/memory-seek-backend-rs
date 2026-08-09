@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "auth"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "chrono",
@@ -533,13 +533,14 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "chrono",
  "common",
  "csv",
  "hex",
+ "metrics",
  "oss",
  "sea-orm",
  "serde",
@@ -946,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.1"
+version = "0.1.6"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -964,6 +965,7 @@ dependencies = [
  "image",
  "indexmap",
  "metrics",
+ "moka",
  "password-hash",
  "rand 0.10.2",
  "redis",
@@ -1475,10 +1477,11 @@ dependencies = [
 
 [[package]]
 name = "email"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "common",
  "lettre",
+ "metrics",
 ]
 
 [[package]]
@@ -3283,11 +3286,12 @@ dependencies = [
 
 [[package]]
 name = "oss"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "common",
  "futures",
+ "metrics",
  "reqwest",
  "rust-s3",
  "serde",
@@ -3483,7 +3487,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.1.1"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "axum",
@@ -4775,7 +4779,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.0"
+version = "0.1.8"
 dependencies = [
  "auth",
  "axum",
@@ -4803,7 +4807,6 @@ dependencies = [
  "tokio-util",
  "tower-http",
  "tracing",
- "tracing-appender",
  "tracing-subscriber",
  "types",
  "user",
@@ -5241,12 +5244,6 @@ dependencies = [
  "byteorder",
  "num-traits",
 ]
-
-[[package]]
-name = "symlink"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7973cce6668464ea31f176d85b13c7ab3bba2cb3b77a2ed26abd7801688010a"
 
 [[package]]
 name = "syn"
@@ -5698,19 +5695,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-appender"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "050686193eb999b4bb3bc2acfa891a13da00f79734704c4b8b4ef1a10b368a3c"
-dependencies = [
- "crossbeam-channel",
- "symlink",
- "thiserror 2.0.18",
- "time",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tracing-attributes"
 version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5819,7 +5803,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types"
-version = "0.1.5"
+version = "0.1.7"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5949,7 +5933,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.1"
+version = "0.1.5"
 dependencies = [
  "axum",
  "bytes",

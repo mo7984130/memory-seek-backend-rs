@@ -1,5 +1,5 @@
-use crate::error::AppError;
 use crate::ext::log_warn;
+use crate::{Result, error::AppError};
 
 pub trait UintExt: Sized {
     #[track_caller]
@@ -8,7 +8,7 @@ pub trait UintExt: Sized {
         reason: &'static str,
         context: &'static str,
         err: AppError,
-    ) -> Result<Self, AppError>;
+    ) -> Result<Self>;
 
     #[track_caller]
     fn no_zero_or_warn(
@@ -16,7 +16,7 @@ pub trait UintExt: Sized {
         reason: &'static str,
         context: &'static str,
         err: AppError,
-    ) -> Result<Self, AppError>;
+    ) -> Result<Self>;
 }
 
 macro_rules! impl_rows_affected_ext {
@@ -28,7 +28,7 @@ macro_rules! impl_rows_affected_ext {
                     reason: &'static str,
                     context: &'static str,
                     err: AppError,
-                ) -> Result<Self, AppError> {
+                ) -> Result<Self> {
                     if self != 0 {
                         Err(log_warn(reason, context, err))
                     } else {
@@ -41,7 +41,7 @@ macro_rules! impl_rows_affected_ext {
                     reason: &'static str,
                     context: &'static str,
                     err: AppError,
-                ) -> Result<Self, AppError> {
+                ) -> Result<Self> {
                     if self == 0 {
                         Err(log_warn(reason, context, err))
                     } else {

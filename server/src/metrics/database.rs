@@ -14,4 +14,5 @@ pub fn collect_db_metrics(db: &DatabaseConnection) {
 
     gauge!("database.connections.active").set(size - idle);
     gauge!("database.connections.idle").set(idle);
+    gauge!("database.connections.max").set(pool.options().get_max_connections() as f64);
 }

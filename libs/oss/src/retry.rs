@@ -23,10 +23,12 @@ pub const RETRY_DELAYS: [Duration; 4] = [
 /// 第 `i` 次失败后等待 `delays[i]`（`i` 从 0 开始）再重试。
 ///
 /// # 参数
+/// - `op`: 操作名（`put` / `get` / `delete` / ...），仅用于指标标签
 /// - `key`: 操作的 OSS 键名，仅用于日志定位
 /// - `delays`: 各次失败对应的等待时长；生产代码传 [`RETRY_DELAYS`]，测试可注入更短的延迟
 /// - `f`: 实际请求闭包
 pub async fn retry_with_backoff<F, Fut, T>(
+    op: &str,
     key: &str,
     delays: &[Duration],
     mut f: F,
@@ -35,11 +37,14 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, OssError>>,
 {
+    let _ = op;
     let mut attempts = 0usize;
     loop {
         match f().await {
             Ok(value) => return Ok(value),
             Err(err) if err.is_rate_limited() && attempts < delays.len() => {
+                #[cfg(feature = "metrics")]
+                metrics::counter!(format!("oss:{op}:retries")).increment(1);
                 let delay = delays[attempts];
                 tracing::warn!(
                     key = %key,
@@ -57,12 +62,12 @@ where
 }
 
 /// 使用默认延迟表 [`RETRY_DELAYS`] 的 429 重试，见 [`retry_with_backoff`]
-pub async fn retry_429<F, Fut, T>(key: &str, f: F) -> Result<T, OssError>
+pub async fn retry_429<F, Fut, T>(op: &str, key: &str, f: F) -> Result<T, OssError>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, OssError>>,
 {
-    retry_with_backoff(key, &RETRY_DELAYS, f).await
+    retry_with_backoff(op, key, &RETRY_DELAYS, f).await
 }
 
 #[cfg(test)]
@@ -100,7 +105,7 @@ mod tests {
     async fn retries_until_success() {
         let calls = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&calls);
-        let result = retry_with_backoff("k", &[Duration::from_millis(1); 4], move || {
+        let result = retry_with_backoff("test", "k", &[Duration::from_millis(1); 4], move || {
             let counter = Arc::clone(&counter);
             async move {
                 let n = counter.fetch_add(1, Ordering::SeqCst) + 1;
@@ -117,7 +122,7 @@ mod tests {
     async fn gives_up_after_exhausting_delays() {
         let calls = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&calls);
-        let result = retry_with_backoff("k", &[Duration::from_millis(1); 4], move || {
+        let result = retry_with_backoff("test", "k", &[Duration::from_millis(1); 4], move || {
             let counter = Arc::clone(&counter);
             async move {
                 counter.fetch_add(1, Ordering::SeqCst);
@@ -138,7 +143,7 @@ mod tests {
     async fn retries_inner_s3_429() {
         let calls = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&calls);
-        let result = retry_with_backoff("k", &[Duration::from_millis(1); 2], move || {
+        let result = retry_with_backoff("test", "k", &[Duration::from_millis(1); 2], move || {
             let counter = Arc::clone(&counter);
             async move {
                 let n = counter.fetch_add(1, Ordering::SeqCst) + 1;
@@ -155,7 +160,7 @@ mod tests {
     async fn does_not_retry_non_429() {
         let calls = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&calls);
-        let result = retry_with_backoff("k", &[Duration::from_millis(1); 4], move || {
+        let result = retry_with_backoff("test", "k", &[Duration::from_millis(1); 4], move || {
             let counter = Arc::clone(&counter);
             async move {
                 counter.fetch_add(1, Ordering::SeqCst);

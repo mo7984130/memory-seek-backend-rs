@@ -6,3 +6,12 @@
 -- photo_collection: 代码 Collection 实体含 cover_photo_id, init.sql 缺失
 ALTER TABLE photo_collection
     ADD COLUMN IF NOT EXISTS cover_photo_id BIGINT;
+
+-- photo_face.score: 代码 Face 实体为 f32(FLOAT4), init.sql 定义为 DOUBLE PRECISION(FLOAT8),
+-- SQLx 无法将 FLOAT8 解码到 f32, 压测环境对齐为 REAL
+ALTER TABLE photo_face ALTER COLUMN score TYPE REAL;
+
+-- photo_face: get_unassigned_face_photos 用 EXISTS 子查询过滤 person_id IS NULL,
+-- 普通 person_id 索引对 IS NULL 不高效, 部分索引大幅缩小扫描范围(seed 未分配脸占多数)
+CREATE INDEX IF NOT EXISTS idx_photo_face_unassigned
+    ON photo_face(photo_id) WHERE person_id IS NULL;

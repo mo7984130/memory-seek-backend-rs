@@ -12,7 +12,9 @@ use types::photo::dto::behavior::{
 use crate::mappers::{behavior_mapper::BehaviorMapper, photo_mapper::PhotoMapper};
 use crate::state::PhotoState;
 use common::models::CursorPage;
-use common::{Result, metrics_group, metrics_name, metrics_success, utils::MetricsTimerExt};
+use common::{
+    Result, inc_error, metrics_group, metrics_name, metrics_success, utils::MetricsTimerExt,
+};
 
 /// 行为审计记录请求（只追加，不删除）
 #[derive(Clone, Debug)]
@@ -71,6 +73,7 @@ impl BehaviorService {
         fields(user_id = %req.user_id, action = %req.action.as_str())
     )]
     pub async fn record(state: &PhotoState, req: BehaviorRecordReq) {
+        metrics_group!();
         if let Err(e) = BehaviorMapper::insert(
             &state.db,
             req.user_id,
@@ -82,7 +85,10 @@ impl BehaviorService {
         )
         .await
         {
+            inc_error!("db");
             tracing::warn!(error = %e, action = %req.action.as_str(), "record_behavior_failed");
+        } else {
+            metrics_success!();
         }
     }
 
@@ -98,10 +104,14 @@ impl BehaviorService {
     ) {
         let db = state.db.clone();
         tokio::spawn(async move {
+            // spawn 内 span 上下文丢失，显式指定操作名
+            metrics_group!("record_view_async");
+
             let photo_id = match PhotoMapper::query_photo_id_by_file_id(&db, &file_id).await {
                 Ok(Some(photo_id)) => photo_id,
                 Ok(None) => return,
                 Err(e) => {
+                    inc_error!("record_view_async", "db");
                     tracing::warn!(error = %e, file_id = %file_id, "query_photo_id_for_view_failed");
                     return;
                 }
@@ -122,7 +132,10 @@ impl BehaviorService {
             )
             .await
             {
+                inc_error!("record_view_async", "db");
                 tracing::warn!(error = %e, action = "view", "record_behavior_failed");
+            } else {
+                metrics_success!("record_view_async");
             }
         });
     }

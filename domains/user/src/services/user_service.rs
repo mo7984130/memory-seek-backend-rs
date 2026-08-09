@@ -10,10 +10,11 @@ use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
 use crate::UserState;
+use crate::mapper::UserMapper;
 use crate::models::{UserInfoRow, user_brief_view_from_dto};
-use common::ext::{CacheExtension, OptionExt, RedisExt, ResultInspectErrAsync, TraceExt, log_err};
+use common::ext::{OptionExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
 use common::utils::{DbUtils, MetricsTimerExt};
-use common::utils::{FileValidator, rand_utils};
+use common::utils::{FileValidator, rand_utils, token_cipher};
 use common::{Result, error::AppError};
 use types::auth::user::{self, UserId};
 use types::photo::ImageToken;
@@ -54,23 +55,27 @@ static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
 pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInfo> {
     metrics_group!();
 
-    // 获取用户
-    let user = user::Entity::find()
-        .filter(user::Column::Id.eq(user_id))
-        .one(&state.db)
-        .timed(metrics_name!("db_query"))
-        .await?
-        .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
+    // 带三级缓存的获取用户信息（缓存完整 UserInfo，token 确定性加密可安全缓存）
+    let info = state
+        .cache_user_info_single
+        .get_or_load(
+            RedisKeys::auth::user_info_cache(user_id),
+            USER_INFO_CACHE_TTL_SECS as u64,
+            || {
+                Box::pin(async move {
+                    let user = UserMapper::query(&state.db, user_id)
+                        .await?
+                        .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
+                    Ok(UserInfo::from_with_token(user))
+                })
+            },
+        )
+        .timed(metrics_name!("cache_get_or_load"))
+        .await?;
+
     metrics_success!();
 
-    let user_record = user::UserRecord::from(user);
-    let mut user_info = user::create_user_info(&user_record);
-    user_info.avatar_token = ImageToken::encrypt_avatar_token(
-        &state.token_cipher,
-        user_record.avatar_file_id.as_deref(),
-        user_id,
-    );
-    Ok(user_info)
+    info.to_ok()
 }
 
 /// 为用户生成唯一邀请码
@@ -154,14 +159,19 @@ pub async fn change_nickname(
         .timed(metrics_name!("db_update"))
         .await?;
 
-    // 删除用户缓存
+    // 失效用户信息缓存（L1 + L2），下次读取时自动重建
     // 错误不返回
-    let _ = state
-        .redis
-        .del(&RedisKeys::auth::user_info_cache(user_id))
-        .timed(metrics_name!("redis_delete"))
-        .await
-        .trace();
+    let cache_key = RedisKeys::auth::user_info_cache(user_id);
+    let _ = tokio::join!(
+        state
+            .cache_user_info
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate")),
+        state
+            .cache_user_info_single
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate_single"))
+    );
 
     metrics_success!();
 
@@ -235,12 +245,19 @@ pub async fn update_avatar(
     })
     .await?;
 
-    // 删除用户信息缓存
-    state
-        .redis
-        .del(&RedisKeys::auth::user_info_cache(user_id))
-        .timed(metrics_name!("redis_delete"))
-        .await?;
+    // 失效用户信息缓存
+    let cache_key = RedisKeys::auth::user_info_cache(user_id);
+    let (cache_result, _) = tokio::join!(
+        state
+            .cache_user_info
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate")),
+        state
+            .cache_user_info_single
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate_single"))
+    );
+    cache_result?;
 
     // 删除旧头像
     // 删除失败, 不返回错误
@@ -254,8 +271,8 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token =
-        ImageToken::encrypt_avatar_token(&state.token_cipher, Some(&new_key), user_id).ok_or_warn(
+    let avatar_token = ImageToken::encrypt_avatar_token(token_cipher(), Some(&new_key), user_id)
+        .ok_or_warn(
             "encrypt_avatar_token_err",
             "加密头像Token错误",
             AppError::InternalServerError,
@@ -373,7 +390,7 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
     // 清除access_token
     // 清除用户信息缓存
     let cache_key = RedisKeys::auth::user_info_cache(user_id);
-    let (refresh_token_result, access_token_result, _) = tokio::join!(
+    let (refresh_token_result, access_token_result, _, _) = tokio::join!(
         user::ActiveModel {
             id: Set(user_id),
             refresh_token: Set(None),
@@ -387,9 +404,13 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
             .del(RedisKeys::auth::user_access_token(user_id))
             .timed(metrics_name!("redis_delete")),
         state
-            .redis
-            .del(&cache_key)
-            .timed(metrics_name!("redis_delete_cache"))
+            .cache_user_info
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate")),
+        state
+            .cache_user_info_single
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate_single"))
     );
     refresh_token_result?;
     access_token_result?;
@@ -420,9 +441,9 @@ pub async fn get_user_info_batch(
 
     let user_ids = req.user_ids.into_inner();
 
-    // 带redis缓存的获取用户信息
+    // 带三级缓存的获取用户信息
     let result: Vec<Option<UserInfoRow>> = state
-        .redis
+        .cache_user_info
         .get_or_load_batch(
             &user_ids,
             |id| RedisKeys::auth::user_info_cache(*id),
@@ -446,13 +467,13 @@ pub async fn get_user_info_batch(
             },
             |dto| dto.user_id,
         )
-        .timed(metrics_name!("redis_cache"))
+        .timed(metrics_name!("cache_get_or_load_batch"))
         .await?;
 
     metrics_success!();
 
     Ok(result
         .into_iter()
-        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, &state.token_cipher, user_id)))
+        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, token_cipher(), user_id)))
         .collect())
 }

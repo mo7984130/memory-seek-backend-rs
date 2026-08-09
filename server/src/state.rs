@@ -1,16 +1,8 @@
 use deadpool_redis::Pool;
 use sea_orm::DatabaseConnection;
 
-#[cfg(any(
-    feature = "token_cipher",
-    feature = "s3",
-    feature = "backup",
-    feature = "face-engine"
-))]
+#[cfg(any(feature = "s3", feature = "backup", feature = "face-engine"))]
 use std::sync::Arc;
-
-#[cfg(feature = "token_cipher")]
-use common::utils::TokenCipher;
 
 #[cfg(feature = "email")]
 use email::EmailClient;
@@ -24,17 +16,20 @@ use oss::S3Client;
 #[cfg(feature = "backup")]
 use backup::BackupScheduler;
 
+#[cfg(feature = "metrics")]
+use metrics_exporter_prometheus::PrometheusHandle;
+
 // ============ Bases ============
 pub struct AppBases {
     pub db: DatabaseConnection,
     pub redis: Pool,
+
+    #[cfg(feature = "metrics")]
+    pub metrics_handle: PrometheusHandle,
 }
 
 // ============ Libs ============
 pub struct AppLibs {
-    #[cfg(feature = "token_cipher")]
-    pub token_cipher: Arc<TokenCipher>,
-
     #[cfg(feature = "email")]
     pub email_client: EmailClient,
 
@@ -50,9 +45,6 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub redis: Pool,
 
-    #[cfg(feature = "token_cipher")]
-    pub token_cipher: Arc<TokenCipher>,
-
     #[cfg(feature = "email")]
     pub email_client: EmailClient,
 
@@ -61,6 +53,9 @@ pub struct AppState {
 
     #[cfg(feature = "backup")]
     pub backup_scheduler: Arc<BackupScheduler>,
+
+    #[cfg(feature = "metrics")]
+    pub metrics_handle: PrometheusHandle,
 
     #[cfg(feature = "face-engine")]
     pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,

@@ -4,16 +4,6 @@
 
 crate::id_type!(UserId, "user/");
 
-impl UserId {
-    /// 管理员用户 ID
-    pub const ADMIN_ID: i64 = 1;
-
-    /// 是否为管理员
-    pub fn is_admin(&self) -> bool {
-        self.0 == Self::ADMIN_ID
-    }
-}
-
 /// 已通过管理员校验的用户身份
 ///
 /// 由 [`AdminId::new`] 构造，只有管理员才能取得。
@@ -23,6 +13,12 @@ impl UserId {
 pub struct AdminId(UserId);
 
 impl AdminId {
+    pub const ADMIN_ID: AdminId = AdminId(UserId(1));
+
+    pub fn is_admin(&self) -> bool {
+        *self == Self::ADMIN_ID
+    }
+
     /// 展开为内部 [`UserId`]
     pub fn into_inner(self) -> UserId {
         self.0
@@ -30,9 +26,10 @@ impl AdminId {
 
     /// 校验管理员权限，非管理员返回 403
     #[cfg(feature = "orm")]
-    pub fn new(user_id: UserId) -> Result<Self, common::error::AppError> {
-        if user_id.is_admin() {
-            Ok(Self(user_id))
+    pub fn new(user_id: UserId) -> common::Result<Self> {
+        let this = Self(user_id);
+        if this.is_admin() {
+            Ok(this)
         } else {
             Err(common::error::AppError::forbidden("仅管理员可访问"))
         }
@@ -45,11 +42,12 @@ impl AdminId {
 
 #[cfg(feature = "orm")]
 mod entity {
+    use common::utils::token_cipher;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::user::models::UserInfo;
+    use crate::{photo::ImageToken, user::models::UserInfo};
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
     #[sea_orm(table_name = "auth_user")]
@@ -108,15 +106,31 @@ mod entity {
 
     impl ActiveModelBehavior for ActiveModel {}
 
-    /// 从 UserRecord 创建 UserInfo
-    pub fn create_user_info(user: &UserRecord) -> UserInfo {
-        UserInfo {
-            id: user.id,
-            username: user.username.clone(),
-            nickname: user.nickname.clone(),
-            email: user.email.clone(),
-            avatar_token: user.avatar_file_id.clone(),
-            created_at: user.created_at,
+    impl From<UserRecord> for UserInfo {
+        fn from(user: UserRecord) -> Self {
+            UserInfo {
+                id: user.id,
+                username: user.username,
+                nickname: user.nickname,
+                email: user.email,
+                avatar_token: user.avatar_file_id,
+                created_at: user.created_at,
+            }
+        }
+    }
+
+    impl UserInfo {
+        pub fn with_avatar_token(mut self) -> Self {
+            self.avatar_token = ImageToken::encrypt_avatar_token(
+                token_cipher(),
+                self.avatar_token.as_deref(),
+                self.id,
+            );
+            self
+        }
+
+        pub fn from_with_token(user: UserRecord) -> Self {
+            UserInfo::from(user).with_avatar_token()
         }
     }
 }

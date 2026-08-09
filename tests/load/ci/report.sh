@@ -18,6 +18,8 @@ REPORT="$RESULTS_DIR/report.md"
 HOSTNAME=$(hostname 2>/dev/null || echo n/a)
 UNAME=$(uname -srmo 2>/dev/null || echo n/a)
 NCPU=$(nproc 2>/dev/null || echo n/a)
+# 被测 server 绑定核数(控制变量, 见 SERVER_CPUS)
+SERVER_CPUS="${SERVER_CPUS:-n/a}"
 CPUMODEL=$(lscpu 2>/dev/null | awk -F: '/Model name/{print $2}' | xargs || echo n/a)
 MEM=$(free -h 2>/dev/null | awk '/Mem:/{print $2}' || echo n/a)
 TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
@@ -35,10 +37,11 @@ TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
     echo "| Host | $HOSTNAME |"
     echo "| OS | $UNAME |"
     echo "| CPU 核数 | $NCPU |"
+    echo "| 被测 CPU 核数 | $SERVER_CPUS |"
     echo "| CPU 型号 | $CPUMODEL |"
     echo "| 内存 | $MEM |"
     echo "| 被测服务 | http://${REMOTE_HOST}:${SERVER_PORT} |"
-    echo "| metrics | http://${REMOTE_HOST}:${METRICS_PORT} |"
+    echo "| metrics | http://${REMOTE_HOST}:${SERVER_PORT}/metrics |"
     echo "| 基线目录 | $BASELINES_DIR |"
     echo ""
     echo "## 判定总览"
@@ -78,6 +81,21 @@ TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
         fi
         echo ""
     done
+    echo "## 极限压测汇总 (max, 打满上限)"
+    echo ""
+    if [ -d "$MAX_NORMALIZED_DIR" ] && ls "$MAX_NORMALIZED_DIR"/*.json >/dev/null 2>&1; then
+        echo "| 场景 | 上限 QPS | p50(ms) | p95(ms) | 错误率 |"
+        echo "|---|---|---|---|---|"
+        for f in "$MAX_NORMALIZED_DIR"/*.json; do
+            name=$(basename "$f" .json)
+            echo "| $name | $(jq -r '.qps' "$f") | $(jq -r '.http_p50' "$f") | $(jq -r '.http_p95' "$f") | $(jq -r '.error_rate' "$f") |"
+        done
+        echo ""
+        echo "> 上限 = ramping-arrival-rate 加压至系统饱和/连接数上限时的实际 QPS(非目标值)。"
+    else
+        echo "- (未运行 max 极限压测)"
+    fi
+    echo ""
     echo "## 服务端指标快照"
     echo ""
     if ls "$METRICS_DIR"/prom-*.txt >/dev/null 2>&1; then
@@ -88,8 +106,9 @@ TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
     echo ""
     echo "## 附录"
     echo ""
-    echo "- 归一化结果: \`results/normalized/\`"
-    echo "- 原始轮次结果: \`results/run-<n>/\`"
+    echo "- 归一化结果: \`results/normalized/\` (target)"
+    echo "- 极限归一化结果: \`results/max-normalized/\` (max)"
+    echo "- 原始轮次结果: \`results/run-<n>/\` / \`results/max-run-<n>/\`"
     echo "- 判定明细: \`results/verdict.json\`"
 } > "$REPORT"
 

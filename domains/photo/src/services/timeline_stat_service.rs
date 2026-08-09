@@ -1,6 +1,7 @@
 use crate::mappers::timeline_stat_mapper::TimelineStatMapper;
 use crate::state::PhotoState;
 use common::{Result, metrics_group, metrics_name, metrics_success, utils::MetricsTimerExt};
+use constants::RedisKeys;
 use types::photo::dto::timeline_stat::MonthStat;
 
 pub(crate) struct TimelineStatService;
@@ -10,12 +11,23 @@ impl TimelineStatService {
     pub async fn get_monthly_stats(state: &PhotoState) -> Result<Vec<MonthStat>> {
         metrics_group!();
 
-        let res = TimelineStatMapper::query_monthly_stats(&state.db)
-            .timed(metrics_name!("query_monthly_stats"))
-            .await;
+        // 带三级缓存的月度统计（整表一条聚合）
+        let stats = state
+            .cache_timeline_stat
+            .get_or_load(
+                RedisKeys::photo::timeline_stat::monthly_stats().to_string(),
+                60 * 60,
+                || {
+                    Box::pin(
+                        async move { TimelineStatMapper::query_monthly_stats(&state.db).await },
+                    )
+                },
+            )
+            .timed(metrics_name!("cache_get_or_load"))
+            .await?;
 
         metrics_success!();
-        res
+        Ok(stats)
     }
 }
 

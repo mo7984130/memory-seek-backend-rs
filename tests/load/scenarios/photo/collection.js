@@ -1,16 +1,22 @@
 // tests/load/scenarios/photo/collection.js
-// 收藏夹服务压测场景（collection_controller）
+// 收藏夹服务压测场景 — arrival-rate 负载模型, setup 预登录
+//
+// 完整流程迭代(create/list/update/delete 自洽, 数据不累积),
+// 会话由 setup 预登录(login 不计入压测窗口), 全程复用。
 
-import { sleep } from "k6";
 import {
     getPhotoUserCredentials,
     recordResult,
     printSummary,
+    buildLoadOptions,
+    setupPreLogin,
+    sessionFromData,
 } from "../../helpers/common.js";
-
-export { printSummary as handleSummary };
-
-import { initSession } from "../../helpers/session.js";
+import {
+    setSession,
+    initSession,
+    maybeRefreshSession,
+} from "../../helpers/session.js";
 import {
     createCollection,
     listCollections,
@@ -18,66 +24,58 @@ import {
     deleteCollection,
 } from "../../helpers/domains/photo/collection.js";
 
-// ── 独立运行时的 options ──
+export { printSummary as handleSummary };
 
-export const options = {
-    stages: [
-        { duration: "30s", target: 5 },
-        { duration: "1m", target: 5 },
-        { duration: "30s", target: 10 },
-        { duration: "1m", target: 10 },
-        { duration: "30s", target: 0 },
-    ],
-    thresholds: {
-        http_req_duration: ["p(95)<500"],
-        http_req_failed: ["rate<0.01"],
-    },
-};
+const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
+
+export const options = buildLoadOptions({
+    targetRps: 30,
+    maxRps: 150,
+    preAllocatedVUs: PRE_ALLOCATED_VUS,
+    maxVUs: 2000,
+});
+
+// setup 预登录: login 不计入压测窗口
+export function setup() {
+    return setupPreLogin(getPhotoUserCredentials, PRE_ALLOCATED_VUS);
+}
 
 // ── 核心逻辑 ──
 
-function runCollectionFlow() {
-    const { account, password } = getPhotoUserCredentials(__VU);
-    const session = initSession(account, password);
-    if (!session) return;
+function runCollectionFlow(data) {
+    const session = sessionFromData(data, __VU);
+    if (session) {
+        setSession(session);
+    } else {
+        const { account, password } = getPhotoUserCredentials(__VU);
+        initSession(account, password);
+        return;
+    }
+    maybeRefreshSession();
 
-    sleep(0.3);
-
-    // 1. 创建收藏夹
     let result = createCollection(`Collection ${__VU} ${Date.now()}`, "LoadTest");
     recordResult("create_collection", result);
     if (!result.success) return;
     const collectionId = result.data.id;
 
-    sleep(0.3);
-
-    // 2. 查询收藏夹列表
     result = listCollections();
     recordResult("list_collections", result);
 
-    sleep(0.3);
-
-    // 3. 更新收藏夹信息
     result = updateCollection(collectionId, `Updated ${__VU}`, "Updated desc");
     recordResult("update_collection", result);
 
-    sleep(0.3);
-
-    // 4. 删除收藏夹
     result = deleteCollection(collectionId);
     recordResult("delete_collection", result);
-
-    sleep(0.5);
 }
 
 // ── 独立运行入口 ──
 
-export default function () {
-    runCollectionFlow();
+export default function (data) {
+    runCollectionFlow(data);
 }
 
-// ── 被统一入口调用的 exec 函数 ──
+// ── 被统一入口(photo.js)调用的 exec 函数 ──
 
-export function collectionExec() {
-    runCollectionFlow();
+export function collectionExec(data) {
+    runCollectionFlow(data);
 }
