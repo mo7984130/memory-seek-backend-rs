@@ -1,6 +1,6 @@
 [package]
 name = "types"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 description = "Shared types for memory-seek: ID types, DTOs, SeaORM entities"
 
