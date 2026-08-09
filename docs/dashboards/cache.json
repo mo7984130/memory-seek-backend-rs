@@ -115,7 +115,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate({__name__=~\"cache:$cache:l1:hits\"}[5m]) / (rate({__name__=~\"cache:$cache:l1:hits\"}[5m]) + rate({__name__=~\"cache:$cache:l1:misses\"}[5m])) * 100",
+          "expr": "rate(cache:$cache:l1:hits[5m]) / (rate(cache:$cache:l1:hits[5m]) + rate(cache:$cache:l1:misses[5m])) * 100",
           "legendFormat": "L1 命中率",
           "refId": "A"
         }
@@ -203,7 +203,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate({__name__=~\"cache:$cache:l2:hits\"}[5m]) / (rate({__name__=~\"cache:$cache:l2:hits\"}[5m]) + rate({__name__=~\"cache:$cache:l2:misses\"}[5m])) * 100",
+          "expr": "rate(cache:$cache:l2:hits[5m]) / (rate(cache:$cache:l2:hits[5m]) + rate(cache:$cache:l2:misses[5m])) * 100",
           "legendFormat": "L2 命中率",
           "refId": "A"
         }
@@ -294,18 +294,9 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate({__name__=~\"cache:$cache:l1:get:duration_seconds_bucket\"}[5m])) by (le)) * 1000000",
-          "legendFormat": "P50",
+          "expr": "sum(rate(cache:$cache:l1:get:duration_seconds_sum[5m])) / sum(rate(cache:$cache:l1:get:duration_seconds_count[5m])) * 1000000",
+          "legendFormat": "L1 平均耗时",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"cache:$cache:l1:get:duration_seconds_bucket\"}[5m])) by (le)) * 1000000",
-          "legendFormat": "P95",
-          "refId": "B"
         }
       ]
     },
@@ -381,18 +372,9 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate({__name__=~\"cache:$cache:l2:get:duration_seconds_bucket\"}[5m])) by (le)) * 1000000",
-          "legendFormat": "P50",
+          "expr": "sum(rate(cache:$cache:l2:get:duration_seconds_sum[5m])) / sum(rate(cache:$cache:l2:get:duration_seconds_count[5m])) * 1000000",
+          "legendFormat": "L2 平均耗时",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"cache:$cache:l2:get:duration_seconds_bucket\"}[5m])) by (le)) * 1000000",
-          "legendFormat": "P95",
-          "refId": "B"
         }
       ]
     },
@@ -468,18 +450,9 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate({__name__=~\"cache:$cache:db:load:duration_seconds_bucket\"}[5m])) by (le)) * 1000",
-          "legendFormat": "P50",
+          "expr": "sum(rate(cache:$cache:db:load:duration_seconds_sum[5m])) / sum(rate(cache:$cache:db:load:duration_seconds_count[5m])) * 1000",
+          "legendFormat": "DB 平均耗时",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"cache:$cache:db:load:duration_seconds_bucket\"}[5m])) by (le)) * 1000",
-          "legendFormat": "P95",
-          "refId": "B"
         }
       ]
     },
@@ -568,7 +541,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "{__name__=~\"cache:$cache:l1:entries\"}",
+          "expr": "cache:$cache:l1:entries",
           "legendFormat": "L1 条目数",
           "refId": "A"
         }
@@ -646,7 +619,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate({__name__=~\"cache:$cache:db:loads\"}[5m])",
+          "expr": "rate(cache:$cache:db:loads[5m])",
           "legendFormat": "穿透加载",
           "refId": "A"
         }
@@ -664,25 +637,52 @@
       {
         "current": {
           "selected": true,
-          "text": "All",
-          "value": "$__all"
+          "text": "photo_info",
+          "value": "photo_info"
         },
-        "definition": "label_values({__name__=~\"cache:.*:l1:hits_total\"}, __name__)",
         "hide": 0,
-        "includeAll": true,
-        "multi": false,
+        "label": "缓存实例",
         "name": "cache",
-        "options": [],
-        "query": {
-          "query": "label_values({__name__=~\"cache:.*:l1:hits_total\"}, __name__)",
-          "refId": "StandardVariableQuery"
-        },
-        "refresh": 1,
-        "regex": "/cache:(.*):l1:hits_total/",
-        "sort": 1,
-        "type": "query",
-        "allValue": ".*",
-        "format": "regex"
+        "options": [
+          {
+            "selected": false,
+            "text": "user_info",
+            "value": "user_info"
+          },
+          {
+            "selected": false,
+            "text": "user_info_single",
+            "value": "user_info_single"
+          },
+          {
+            "selected": false,
+            "text": "photo_info",
+            "value": "photo_info"
+          },
+          {
+            "selected": false,
+            "text": "photo_dimensions",
+            "value": "photo_dimensions"
+          },
+          {
+            "selected": false,
+            "text": "photo_md5",
+            "value": "photo_md5"
+          },
+          {
+            "selected": false,
+            "text": "timeline_stat",
+            "value": "timeline_stat"
+          },
+          {
+            "selected": false,
+            "text": "person",
+            "value": "person"
+          }
+        ],
+        "query": "user_info, user_info_single, photo_info, photo_dimensions, photo_md5, timeline_stat, person",
+        "skipUrlSync": false,
+        "type": "custom"
       }
     ]
   },
@@ -694,5 +694,5 @@
   "timezone": "",
   "title": "多级缓存监控",
   "uid": "cache-monitoring",
-  "version": 3
+  "version": 7
 }
