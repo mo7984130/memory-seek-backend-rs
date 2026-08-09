@@ -19,6 +19,28 @@ use tracing::warn;
 use crate::error::AppError;
 use crate::ext::{RedisExt, TraceExt};
 
+/// 缓存实例配置
+#[derive(Debug, Clone, Copy)]
+pub struct CacheConfig {
+    /// 是否启用缓存。禁用时读写全部穿透数据库，用于压测对比
+    pub enabled: bool,
+    /// L1 本地缓存最大条目数
+    pub local_capacity: u64,
+    /// L1 本地缓存 TTL（短 TTL 保证多实例下最终一致）
+    pub local_ttl: Duration,
+}
+
+impl CacheConfig {
+    /// 基于全局开关创建配置（各实例共享同一 enabled 状态）
+    pub fn new(enabled: bool, local_capacity: u64, local_ttl: Duration) -> Self {
+        Self {
+            enabled,
+            local_capacity,
+            local_ttl,
+        }
+    }
+}
+
 /// 多级缓存组件
 ///
 /// 泛型参数 `T` 为缓存的数据类型，一个实例只缓存一种数据类型。
@@ -31,6 +53,8 @@ pub struct MultiLevelCache<T> {
     local: Cache<String, Arc<T>>,
     /// L2 Redis 连接池，以 JSON 字符串存储
     redis: Pool,
+    /// 缓存是否启用。禁用时读写全部穿透到数据库（loader），用于压测对比
+    enabled: bool,
 }
 
 impl<T> MultiLevelCache<T>
@@ -42,14 +66,24 @@ where
     /// # 参数
     /// - `name`: 缓存实例名称（用于指标前缀与日志，如 `user_info`）
     /// - `redis`: Redis 连接池（L2）
-    /// - `local_capacity`: L1 最大条目数
-    /// - `local_ttl`: L1 TTL（短 TTL，保证多实例下最终一致）
-    pub fn new(name: &'static str, redis: Pool, local_capacity: u64, local_ttl: Duration) -> Self {
+    /// - `config`: 缓存实例配置（启用开关、L1 容量、L1 TTL）
+    pub fn new(name: &'static str, redis: Pool, config: CacheConfig) -> Self {
+        // 禁用时 L1 容量置 0，避免保留无效的内存缓存
+        let capacity = if config.enabled {
+            config.local_capacity
+        } else {
+            0
+        };
         let local = Cache::builder()
-            .max_capacity(local_capacity)
-            .time_to_live(local_ttl)
+            .max_capacity(capacity)
+            .time_to_live(config.local_ttl)
             .build();
-        Self { name, local, redis }
+        Self {
+            name,
+            local,
+            redis,
+            enabled: config.enabled,
+        }
     }
 
     /// 获取缓存，未命中时依次查找 L2、调用 loader 加载并逐级回填
@@ -63,6 +97,11 @@ where
         F: FnOnce() -> Fut + Send,
         Fut: Future<Output = Result<T, AppError>> + Send,
     {
+        // 缓存禁用时直接穿透到数据库
+        if !self.enabled {
+            return loader().await;
+        }
+
         // ---- L1 命中 ----
         let start = Instant::now();
         if let Some(value) = self.local.get(&key).await {
@@ -142,6 +181,26 @@ where
     {
         if params.is_empty() {
             return Ok(vec![]);
+        }
+
+        // 缓存禁用时直接全量加载（loader 返回后按 key 对齐结果）
+        if !self.enabled {
+            let fresh_data = loader(params.to_vec()).await?;
+            // key -> [原始索引] 映射
+            let mut key_to_indices: IndexMap<String, Vec<usize>> = IndexMap::new();
+            for (i, p) in params.iter().enumerate() {
+                key_to_indices.entry(key_provider(p)).or_default().push(i);
+            }
+            let mut results: Vec<Option<T>> = vec![None; params.len()];
+            for item in fresh_data {
+                let key = key_provider(&result_mapper(&item));
+                if let Some(indices) = key_to_indices.get(&key) {
+                    for &i in indices {
+                        results[i] = Some(item.clone());
+                    }
+                }
+            }
+            return Ok(results);
         }
 
         let mut results: Vec<Option<T>> = vec![None; params.len()];
@@ -261,6 +320,11 @@ where
     ///
     /// 相比「先删后写」，覆盖避免了并发期间的穿透窗口，写后立即读也能拿到新值。
     pub async fn put(&self, key: &str, value: T, ttl: u64) -> Result<(), AppError> {
+        // 缓存禁用时写入为空操作
+        if !self.enabled {
+            return Ok(());
+        }
+
         // L1 覆盖（moka `insert` 会自动重置 TTL）
         self.write_l1(key.to_string(), value.clone()).await;
 
@@ -282,6 +346,11 @@ where
     ///
     /// 用于数据删除场景，覆盖无法表达「数据已不存在」。
     pub async fn invalidate(&self, key: &str) -> Result<(), AppError> {
+        // 缓存禁用时失效为空操作
+        if !self.enabled {
+            return Ok(());
+        }
+
         self.local.invalidate(key).await;
         self.redis.del(key).await?;
         self.update_entries_gauge();
@@ -290,6 +359,11 @@ where
 
     /// 批量删除缓存（L1 + L2）
     pub async fn invalidate_batch(&self, keys: &[String]) -> Result<(), AppError> {
+        // 缓存禁用时失效为空操作
+        if !self.enabled {
+            return Ok(());
+        }
+
         if keys.is_empty() {
             return Ok(());
         }

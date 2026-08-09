@@ -10,6 +10,7 @@
 //! 同时清理 L1 与 L2。
 //!
 //! 本地缓存（L1）仅依赖短 TTL 与主动失效保证最终一致，多实例场景下不做跨实例广播。
+//! 通过 [`CacheConfig::enabled`] 可整体禁用缓存（读写全部穿透数据库），便于压测对比。
 //!
 //! # 监控
 //!
@@ -18,4 +19,4 @@
 
 mod multi_level;
 
-pub use multi_level::MultiLevelCache;
+pub use multi_level::{CacheConfig, MultiLevelCache};

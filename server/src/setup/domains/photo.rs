@@ -26,8 +26,11 @@ pub fn register(
     let photo_state = Arc::new(PhotoState::new(
         state.db.clone(),
         state.redis.clone(),
-        _cfg.cache.local_capacity,
-        _cfg.cache.local_ttl_secs,
+        common::cache::CacheConfig::new(
+            _cfg.cache.enabled,
+            _cfg.cache.local_capacity,
+            std::time::Duration::from_secs(_cfg.cache.local_ttl_secs),
+        ),
         state.s3_client.clone(),
         #[cfg(feature = "face-engine")]
         state.face_engine.clone(),

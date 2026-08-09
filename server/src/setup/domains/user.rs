@@ -17,8 +17,11 @@ pub fn register(
     let user_state = Arc::new(UserState::new(
         state.db.clone(),
         state.redis.clone(),
-        cfg.cache.local_capacity,
-        cfg.cache.local_ttl_secs,
+        common::cache::CacheConfig::new(
+            cfg.cache.enabled,
+            cfg.cache.local_capacity,
+            std::time::Duration::from_secs(cfg.cache.local_ttl_secs),
+        ),
         state.s3_client.clone(),
     ));
 

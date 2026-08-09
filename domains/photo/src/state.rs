@@ -1,9 +1,8 @@
 use std::sync::Arc;
 #[cfg(feature = "face")]
 use std::sync::Mutex;
-use std::time::Duration;
 
-use common::cache::MultiLevelCache;
+use common::cache::{CacheConfig, MultiLevelCache};
 use deadpool_redis::Pool;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
@@ -42,32 +41,19 @@ impl PhotoState {
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,
-        cache_local_capacity: u64,
-        cache_local_ttl_secs: u64,
+        cache_config: CacheConfig,
         s3_client: Arc<S3Client>,
         #[cfg(feature = "face")] face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
         #[cfg(feature = "face")] backup_storage: BackupStorage,
     ) -> Self {
-        let local_ttl = Duration::from_secs(cache_local_ttl_secs);
-        let cache_photo_info =
-            MultiLevelCache::new("photo_info", redis.clone(), cache_local_capacity, local_ttl);
-        let cache_timeline_stat = MultiLevelCache::new(
-            "timeline_stat",
-            redis.clone(),
-            cache_local_capacity,
-            local_ttl,
-        );
-        let cache_photo_dimensions = MultiLevelCache::new(
-            "photo_dimensions",
-            redis.clone(),
-            cache_local_capacity,
-            local_ttl,
-        );
-        let cache_photo_md5 =
-            MultiLevelCache::new("photo_md5", redis.clone(), cache_local_capacity, local_ttl);
+        let cache_photo_info = MultiLevelCache::new("photo_info", redis.clone(), cache_config);
+        let cache_timeline_stat =
+            MultiLevelCache::new("timeline_stat", redis.clone(), cache_config);
+        let cache_photo_dimensions =
+            MultiLevelCache::new("photo_dimensions", redis.clone(), cache_config);
+        let cache_photo_md5 = MultiLevelCache::new("photo_md5", redis.clone(), cache_config);
         #[cfg(feature = "face")]
-        let cache_person =
-            MultiLevelCache::new("person", redis.clone(), cache_local_capacity, local_ttl);
+        let cache_person = MultiLevelCache::new("person", redis.clone(), cache_config);
         Self {
             db,
             redis,

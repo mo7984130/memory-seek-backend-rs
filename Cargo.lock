@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -3487,7 +3487,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-trait",
  "axum",
@@ -4779,7 +4779,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "auth",
  "axum",
@@ -5933,7 +5933,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "axum",
  "bytes",

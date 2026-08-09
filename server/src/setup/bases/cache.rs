@@ -2,6 +2,9 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
+    /// 是否启用缓存。`false` 时读写全部穿透数据库，便于压测对比
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     #[serde(default = "default_local_capacity")]
     pub local_capacity: u64,
     #[serde(default = "default_local_ttl_secs")]
@@ -11,10 +14,16 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            enabled: default_enabled(),
             local_capacity: default_local_capacity(),
             local_ttl_secs: default_local_ttl_secs(),
         }
     }
+}
+
+/// 默认启用缓存
+const fn default_enabled() -> bool {
+    true
 }
 
 /// L1 本地缓存最大条目数
