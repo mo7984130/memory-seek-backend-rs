@@ -11,6 +11,7 @@ use common::{
     set_gauge,
     utils::{DbUtils, GaugeGuard, MetricsTimer, MetricsTimerExt},
 };
+use constants::RedisKeys;
 use image::{ImageBuffer, Rgb};
 use insight_face_rs::Face;
 use sea_orm::{
@@ -322,7 +323,7 @@ impl FaceService {
         person_id: Option<PersonId>,
     ) -> Result<()> {
         metrics_group!();
-        DbUtils::write(&state.db, |txn| {
+        let affected_person_ids: Vec<PersonId> = DbUtils::write(&state.db, |txn| {
             Box::pin(async move {
                 // 加行锁读取人脸(读-改-写流程, 避免并发转移丢更新)
                 let face = FaceMapper::lock_by_id(txn, face_id).await?.ok_or_error(
@@ -334,7 +335,7 @@ impl FaceService {
                 // 归属未变化(均为 None 或同一人物), 直接返回
                 let old_person_id = face.person_id;
                 if person_id == old_person_id {
-                    return Ok(());
+                    return Ok(Vec::new());
                 }
 
                 match person_id {
@@ -411,10 +412,30 @@ impl FaceService {
                     }
                 }
 
-                Ok(())
+                // 返回受影响人物 ID（新旧人物）, 事务提交后用于失效人物缓存
+                let mut affected = Vec::with_capacity(2);
+                if let Some(pid) = old_person_id {
+                    affected.push(pid);
+                }
+                if let Some(pid) = person_id {
+                    affected.push(pid);
+                }
+                Ok(affected)
             })
         })
         .await?;
+
+        // 失效受影响人物缓存（L1 + L2）：新旧人物 face_count/封面/质心均已变化
+        // 错误不返回
+        let cache_keys = affected_person_ids
+            .iter()
+            .map(|&pid| RedisKeys::photo::person::person_info(pid))
+            .collect::<Vec<_>>();
+        let _ = state
+            .cache_person
+            .invalidate_batch(&cache_keys)
+            .timed(metrics_name!("cache_invalidate"))
+            .await;
 
         metrics_success!();
         Ok(())
@@ -723,6 +744,9 @@ impl FaceService {
             let faces = &by_person[&person_id];
             Self::remove_faces_from_person(txn, &person, faces).await?;
         }
+
+        // 记录受影响人物 ID, 供 delete_photos 在事务提交后失效人物缓存
+        ctx.person_ids = by_person.keys().copied().collect();
 
         Ok(())
     }

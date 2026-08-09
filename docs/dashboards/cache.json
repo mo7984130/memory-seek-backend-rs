@@ -103,7 +103,7 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -115,18 +115,9 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(cache:user_info:l1:hits[5m]) / (rate(cache:user_info:l1:hits[5m]) + rate(cache:user_info:l1:misses[5m])) * 100",
-          "legendFormat": "user_info",
+          "expr": "rate(cache:$cache:l1:hits[5m]) / (rate(cache:$cache:l1:hits[5m]) + rate(cache:$cache:l1:misses[5m])) * 100",
+          "legendFormat": "L1 命中率",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(cache:photo_info:l1:hits[5m]) / (rate(cache:photo_info:l1:hits[5m]) + rate(cache:photo_info:l1:misses[5m])) * 100",
-          "legendFormat": "photo_info",
-          "refId": "B"
         }
       ]
     },
@@ -200,7 +191,7 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -212,18 +203,9 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(cache:user_info:l2:hits[5m]) / (rate(cache:user_info:l2:hits[5m]) + rate(cache:user_info:l2:misses[5m])) * 100",
-          "legendFormat": "user_info",
+          "expr": "rate(cache:$cache:l2:hits[5m]) / (rate(cache:$cache:l2:hits[5m]) + rate(cache:$cache:l2:misses[5m])) * 100",
+          "legendFormat": "L2 命中率",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(cache:photo_info:l2:hits[5m]) / (rate(cache:photo_info:l2:hits[5m]) + rate(cache:photo_info:l2:misses[5m])) * 100",
-          "legendFormat": "photo_info",
-          "refId": "B"
         }
       ]
     },
@@ -300,7 +282,7 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -312,8 +294,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(cache:user_info:l1:get:duration_seconds_bucket[5m])) by (le)) * 1000000",
-          "legendFormat": "user_info P50",
+          "expr": "histogram_quantile(0.5, sum(rate(cache:$cache:l1:get:duration_seconds_bucket[5m])) by (le)) * 1000000",
+          "legendFormat": "P50",
           "refId": "A"
         },
         {
@@ -321,8 +303,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(cache:photo_info:l1:get:duration_seconds_bucket[5m])) by (le)) * 1000000",
-          "legendFormat": "photo_info P50",
+          "expr": "histogram_quantile(0.95, sum(rate(cache:$cache:l1:get:duration_seconds_bucket[5m])) by (le)) * 1000000",
+          "legendFormat": "P95",
           "refId": "B"
         }
       ]
@@ -387,7 +369,7 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -399,8 +381,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(cache:user_info:l2:get:duration_seconds_bucket[5m])) by (le)) * 1000000",
-          "legendFormat": "user_info P50",
+          "expr": "histogram_quantile(0.5, sum(rate(cache:$cache:l2:get:duration_seconds_bucket[5m])) by (le)) * 1000000",
+          "legendFormat": "P50",
           "refId": "A"
         },
         {
@@ -408,8 +390,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(cache:photo_info:l2:get:duration_seconds_bucket[5m])) by (le)) * 1000000",
-          "legendFormat": "photo_info P50",
+          "expr": "histogram_quantile(0.95, sum(rate(cache:$cache:l2:get:duration_seconds_bucket[5m])) by (le)) * 1000000",
+          "legendFormat": "P95",
           "refId": "B"
         }
       ]
@@ -474,7 +456,7 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -486,8 +468,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(cache:user_info:db:load:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "user_info P50",
+          "expr": "histogram_quantile(0.5, sum(rate(cache:$cache:db:load:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P50",
           "refId": "A"
         },
         {
@@ -495,8 +477,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(cache:photo_info:db:load:duration_seconds_bucket[5m])) by (le)) * 1000",
-          "legendFormat": "photo_info P50",
+          "expr": "histogram_quantile(0.95, sum(rate(cache:$cache:db:load:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95",
           "refId": "B"
         }
       ]
@@ -574,7 +556,7 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -586,18 +568,9 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "cache:user_info:l1:entries",
-          "legendFormat": "user_info",
+          "expr": "cache:$cache:l1:entries",
+          "legendFormat": "L1 条目数",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "cache:photo_info:l1:entries",
-          "legendFormat": "photo_info",
-          "refId": "B"
         }
       ]
     },
@@ -661,7 +634,7 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -673,18 +646,9 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(cache:user_info:db:loads[5m])",
-          "legendFormat": "user_info",
+          "expr": "rate(cache:$cache:db:loads[5m])",
+          "legendFormat": "穿透加载",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(cache:photo_info:db:loads[5m])",
-          "legendFormat": "photo_info",
-          "refId": "B"
         }
       ]
     }
@@ -696,7 +660,33 @@
     "monitoring"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "photo_info"
+          ],
+          "value": [
+            "photo_info"
+          ]
+        },
+        "definition": "label_values({__name__=~\"cache:.*:l1:hits_total\"}, __name__)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "cache",
+        "options": [],
+        "query": {
+          "query": "label_values({__name__=~\"cache:.*:l1:hits_total\"}, __name__)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "/cache:(.*):l1:hits_total/",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-5m",
@@ -706,5 +696,5 @@
   "timezone": "",
   "title": "多级缓存监控",
   "uid": "cache-monitoring",
-  "version": 1
+  "version": 2
 }

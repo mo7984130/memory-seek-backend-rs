@@ -10,6 +10,7 @@ use common::{
     models::CursorPage,
     utils::{DbUtils, MetricsTimerExt, token_cipher},
 };
+use constants::RedisKeys;
 use insight_face_rs::types::{DIMS, FaceEmbedding};
 use ndarray::Array2;
 use petal_clustering::{Fit, HDbscan};
@@ -28,7 +29,7 @@ use types::{
         },
         dto::photo::PhotoView,
         face::{self, FaceId},
-        person::{self, NewPerson, PersonId, PersonRecord},
+        person::{self, NewPerson, PersonId},
         photo::PhotoId,
     },
 };
@@ -40,6 +41,7 @@ use crate::{
         person_mapper::{PersonCoverUpdate, PersonMapper},
         photo_mapper::PhotoMapper,
     },
+    models::PersonBriefRow,
     services::photo_service::PhotoService,
 };
 
@@ -382,6 +384,14 @@ impl PersonService {
                 AppError::bad_request("重命名人物失败"),
             )?;
 
+        // 失效人物缓存（L1 + L2）
+        // 错误不返回
+        let _ = state
+            .cache_person
+            .invalidate(&RedisKeys::photo::person::person_info(person_id))
+            .timed(metrics_name!("cache_invalidate"))
+            .await;
+
         metrics_success!();
         Ok(())
     }
@@ -492,8 +502,20 @@ impl PersonService {
                 AppError::not_found("目标人物不存在"),
             )?;
 
+        // 失效源/目标人物缓存（L1 + L2），源人物已删除
+        // 错误不返回
+        let cache_keys = vec![
+            RedisKeys::photo::person::person_info(source_person_id),
+            RedisKeys::photo::person::person_info(target_person_id),
+        ];
+        let _ = state
+            .cache_person
+            .invalidate_batch(&cache_keys)
+            .timed(metrics_name!("cache_invalidate"))
+            .await;
+
         metrics_success!();
-        Ok(Self::to_view(admin.into_inner(), person))
+        Ok(Self::to_view(admin.into_inner(), person.into()))
     }
 }
 
@@ -515,8 +537,27 @@ impl PersonService {
     ) -> Result<CursorPage<PersonView, FaceCountIdCursor<PersonId>>> {
         metrics_group!();
         let persons = PersonMapper::query(&state.db, req.cursor, req.size).await?;
-        let views = persons
+
+        // 提取本页人物 ID, 通过三级缓存批量加载轻量摘要
+        let person_ids = persons.iter().map(|p| p.id).collect::<Vec<_>>();
+        let briefs =
+            state
+                .cache_person
+                .get_or_load_batch(
+                    &person_ids,
+                    |id| RedisKeys::photo::person::person_info(*id),
+                    24 * 60 * 60,
+                    |miss_ids| async move {
+                        PersonMapper::query_brief_by_ids(&state.db, &miss_ids).await
+                    },
+                    |b| b.id,
+                )
+                .timed(metrics_name!("cache_get_or_load_batch"))
+                .await?;
+
+        let views = briefs
             .into_iter()
+            .flatten()
             .map(|person| Self::to_view(user_id, person))
             .collect::<Vec<_>>();
         let page = CursorPage::from_oversize_fn(views, req.size, |person| {
@@ -544,8 +585,27 @@ impl PersonService {
             size,
         } = req;
         let persons = PersonMapper::query_search(&state.db, &keyword, cursor, size).await?;
-        let views = persons
+
+        // 提取本页人物 ID, 通过三级缓存批量加载轻量摘要
+        let person_ids = persons.iter().map(|p| p.id).collect::<Vec<_>>();
+        let briefs =
+            state
+                .cache_person
+                .get_or_load_batch(
+                    &person_ids,
+                    |id| RedisKeys::photo::person::person_info(*id),
+                    24 * 60 * 60,
+                    |miss_ids| async move {
+                        PersonMapper::query_brief_by_ids(&state.db, &miss_ids).await
+                    },
+                    |b| b.id,
+                )
+                .timed(metrics_name!("cache_get_or_load_batch"))
+                .await?;
+
+        let views = briefs
             .into_iter()
+            .flatten()
             .map(|person| Self::to_view(user_id, person))
             .collect::<Vec<_>>();
         let page = CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))?;
@@ -596,7 +656,7 @@ impl PersonService {
 
     /// 构建人物视图: 使用封面冗余字段直接内存组装裁剪 token, 加密后返回
     /// (与 `CollectionView::with_generate_cover_token` / `PhotoView::with_tokens` 一致)
-    fn to_view(viewer: UserId, person: PersonRecord) -> PersonView {
+    fn to_view(viewer: UserId, person: PersonBriefRow) -> PersonView {
         PersonView {
             id: person.id,
             name: person.name,
@@ -606,7 +666,7 @@ impl PersonService {
                     Some(&format!("{}:{}", person.id, viewer)),
                 )
                 .ok(),
-            face_count: person.face_count,
+            face_count: person.face_count as u64,
         }
     }
 
@@ -677,6 +737,14 @@ impl PersonService {
             })
         })
         .await?;
+
+        // 失效人物缓存（L1 + L2）
+        // 错误不返回
+        let _ = state
+            .cache_person
+            .invalidate(&RedisKeys::photo::person::person_info(person_id))
+            .timed(metrics_name!("cache_invalidate"))
+            .await;
 
         Ok(())
     }

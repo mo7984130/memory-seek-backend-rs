@@ -55,13 +55,27 @@ static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
 pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInfo> {
     metrics_group!();
 
-    // 获取用户
-    let user = UserMapper::query(&state.db, user_id)
-        .await?
-        .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
+    // 带三级缓存的获取用户信息（缓存完整 UserInfo，token 确定性加密可安全缓存）
+    let info = state
+        .cache_user_info_single
+        .get_or_load(
+            RedisKeys::auth::user_info_cache(user_id),
+            USER_INFO_CACHE_TTL_SECS as u64,
+            || {
+                Box::pin(async move {
+                    let user = UserMapper::query(&state.db, user_id)
+                        .await?
+                        .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
+                    Ok(UserInfo::from_with_token(user))
+                })
+            },
+        )
+        .timed(metrics_name!("cache_get_or_load"))
+        .await?;
+
     metrics_success!();
 
-    UserInfo::from_with_token(user).to_ok()
+    info.to_ok()
 }
 
 /// 为用户生成唯一邀请码
@@ -147,11 +161,17 @@ pub async fn change_nickname(
 
     // 失效用户信息缓存（L1 + L2），下次读取时自动重建
     // 错误不返回
-    let _ = state
-        .cache_user_info
-        .invalidate(&RedisKeys::auth::user_info_cache(user_id))
-        .timed(metrics_name!("cache_invalidate"))
-        .await;
+    let cache_key = RedisKeys::auth::user_info_cache(user_id);
+    let _ = tokio::join!(
+        state
+            .cache_user_info
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate")),
+        state
+            .cache_user_info_single
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate_single"))
+    );
 
     metrics_success!();
 
@@ -226,11 +246,18 @@ pub async fn update_avatar(
     .await?;
 
     // 失效用户信息缓存
-    state
-        .cache_user_info
-        .invalidate(&RedisKeys::auth::user_info_cache(user_id))
-        .timed(metrics_name!("cache_invalidate"))
-        .await?;
+    let cache_key = RedisKeys::auth::user_info_cache(user_id);
+    let (cache_result, _) = tokio::join!(
+        state
+            .cache_user_info
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate")),
+        state
+            .cache_user_info_single
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate_single"))
+    );
+    cache_result?;
 
     // 删除旧头像
     // 删除失败, 不返回错误
@@ -363,7 +390,7 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
     // 清除access_token
     // 清除用户信息缓存
     let cache_key = RedisKeys::auth::user_info_cache(user_id);
-    let (refresh_token_result, access_token_result, _) = tokio::join!(
+    let (refresh_token_result, access_token_result, _, _) = tokio::join!(
         user::ActiveModel {
             id: Set(user_id),
             refresh_token: Set(None),
@@ -379,7 +406,11 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
         state
             .cache_user_info
             .invalidate(&cache_key)
-            .timed(metrics_name!("cache_invalidate"))
+            .timed(metrics_name!("cache_invalidate")),
+        state
+            .cache_user_info_single
+            .invalidate(&cache_key)
+            .timed(metrics_name!("cache_invalidate_single"))
     );
     refresh_token_result?;
     access_token_result?;

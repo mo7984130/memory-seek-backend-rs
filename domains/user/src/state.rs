@@ -5,14 +5,18 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use std::time::Duration;
 
+use types::user::UserInfo;
+
 use crate::models::UserInfoRow;
 
 /// 用户模块共享状态，包含数据库、缓存、存储等依赖
 pub struct UserState {
     pub db: DatabaseConnection,
     pub redis: Pool,
-    /// 用户信息三级缓存（本地 moka → Redis → 数据库）
+    /// 用户信息批量三级缓存（本地 moka → Redis → 数据库）
     pub cache_user_info: MultiLevelCache<UserInfoRow>,
+    /// 用户信息单查三级缓存（缓存完整 UserInfo，含确定性加密的 token）
+    pub cache_user_info_single: MultiLevelCache<UserInfo>,
     pub s3_client: Arc<S3Client>,
 }
 
@@ -39,10 +43,17 @@ impl UserState {
             cache_local_capacity,
             Duration::from_secs(cache_local_ttl_secs),
         );
+        let cache_user_info_single = MultiLevelCache::new(
+            "user_info_single",
+            redis.clone(),
+            cache_local_capacity,
+            Duration::from_secs(cache_local_ttl_secs),
+        );
         Self {
             db,
             redis,
             cache_user_info,
+            cache_user_info_single,
             s3_client,
         }
     }

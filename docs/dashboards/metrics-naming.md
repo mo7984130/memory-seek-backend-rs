@@ -126,7 +126,7 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 ### 多级缓存（common，feature: `metrics`）
 
 统一缓存组件 `MultiLevelCache` 分为三级：L1 本地 moka → L2 Redis → L3 数据库（loader）。
-每个缓存实例按 `cache:{name}:{layer}:{op}` 命名，`{name}` 为实例名（如 `user_info` / `photo_info`）。
+每个缓存实例按 `cache:{name}:{layer}:{op}` 命名，`{name}` 为实例名。
 
 | 指标名 | 类型 | 含义 |
 |--------|------|------|
@@ -141,6 +141,21 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 | `cache:{name}:l1:entries` | gauge | L1 当前条目数 |
 
 命中率计算：`rate(cache:{name}:l1:hits[5m]) / (rate(cache:{name}:l1:hits[5m]) + rate(cache:{name}:l1:misses[5m])) * 100`。
+
+#### 实例清单
+
+| 实例名 `{name}` | 缓存类型 | 数据源 | 写时失效点 |
+|-----------------|----------|--------|------------|
+| `user_info` | 用户信息批量（`UserInfoRow`） | `get_user_info_batch` | `change_nickname` / `update_avatar` / `logout` |
+| `user_info_single` | 用户信息单查（完整 `UserInfo`） | `get_user_info` | 同上（独立实例，key 与批量一致） |
+| `photo_info` | 照片信息（`PhotoRecord`，按 photo_id 单一 key） | `load_photos_info` | `delete_photos` |
+| `photo_dimensions` | 照片尺寸 `(w, h)` | 裁剪 token 宽高查询 | `delete_photos` |
+| `photo_md5` | MD5 去重（`bool`） | 上传去重校验 | `upload_photo` 成功后 `put(md5, true)` |
+| `timeline_stat` | 月度统计整表（`Vec<MonthStat>`） | `get_monthly_stats` | `upload_photo` / `delete_photos` |
+| `person` | 人物轻量摘要（`PersonBriefRow`，face-engine） | `get_persons` / `search_persons` | `rename_person` / `merge_person` / `delete_person` / `change_face_belonging` / 照片删除 |
+
+> photo_info 缓存内容为 `PhotoRecord`，不含按浏览者签发的 token（token 在读取时按浏览者
+> 动态生成），因此键只按照片拆分，同一照片所有浏览者共享一份缓存。
 
 ### oss（libs/oss，feature: `metrics`）
 
@@ -193,7 +208,7 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 
 | 函数 | 指标 |
 |------|------|
-| get_user_info | `user:get_user_info:attempts` `user:get_user_info:success` `user:get_user_info:duration_seconds`<br>`user:get_user_info:db_query` |
+| get_user_info | `user:get_user_info:attempts` `user:get_user_info:success` `user:get_user_info:duration_seconds`<br>`user:get_user_info:cache_get_or_load` |
 | generate_inviter_code | `user:generate_inviter_code:attempts` `user:generate_inviter_code:success` `user:generate_inviter_code:duration_seconds`<br>`user:generate_inviter_code:redis_set` |
 | change_nickname | `user:change_nickname:attempts` `user:change_nickname:success` `user:change_nickname:duration_seconds`<br>`user:change_nickname:db_update` `user:change_nickname:cache_invalidate` |
 | update_avatar | `user:update_avatar:attempts` `user:update_avatar:success` `user:update_avatar:duration_seconds`<br>`user:update_avatar:validate_image:duration_seconds` `user:update_avatar:s3_upload` `user:update_avatar:db_transaction` `user:update_avatar:cache_invalidate` `user:update_avatar:s3_delete` |
@@ -206,9 +221,9 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 | 函数 | 指标 |
 |------|------|
 | get_photo_cursor_page | `photo:get_photo_cursor_page:attempts` `photo:get_photo_cursor_page:success` `photo:get_photo_cursor_page:duration_seconds`<br>`photo:get_photo_cursor_page:find_cursor_page_ids` `photo:get_photo_cursor_page:load_photos_info` |
-| upload_photo | `photo:upload_photo:attempts` `photo:upload_photo:success` `photo:upload_photo:duration_seconds`<br>`photo:upload_photo:validate_photo:duration_seconds` `photo:upload_photo:md5_hash:duration_seconds` `photo:upload_photo:s3_upload` `photo:upload_photo:db_insert` |
+| upload_photo | `photo:upload_photo:attempts` `photo:upload_photo:success` `photo:upload_photo:duration_seconds`<br>`photo:upload_photo:validate_photo:duration_seconds` `photo:upload_photo:md5_hash:duration_seconds` `photo:upload_photo:s3_upload` `photo:upload_photo:db_insert`<br>`photo:upload_photo:cache_get_or_load` `photo:upload_photo:cache_put` `photo:upload_photo:cache_invalidate` |
 | exists_by_md5_batch | `photo:exists_by_md5_batch:attempts` `photo:exists_by_md5_batch:success` `photo:exists_by_md5_batch:duration_seconds` |
-| delete_photos | `photo:delete_photos:attempts` `photo:delete_photos:success` `photo:delete_photos:duration_seconds`<br>`photo:delete_photos:db_transaction` `photo:delete_photos:s3_delete_batch` `photo:delete_photos:cache_invalidate` |
+| delete_photos | `photo:delete_photos:attempts` `photo:delete_photos:success` `photo:delete_photos:duration_seconds`<br>`photo:delete_photos:db_transaction` `photo:delete_photos:s3_delete_batch` `photo:delete_photos:cache_invalidate` `photo:delete_photos:cache_invalidate_dimensions` `photo:delete_photos:cache_invalidate_timeline` |
 | download_image | `photo:download_image:attempts` `photo:download_image:success` `photo:download_image:duration_seconds`<br>`photo:download_image:s3_download_process` `photo:download_image:s3_download_stream` |
 | get_collection_list | `photo:get_collection_list:attempts` `photo:get_collection_list:success` `photo:get_collection_list:duration_seconds`<br>`photo:get_collection_list:query_by_user_id` |
 | create_collection | `photo:create_collection:attempts` `photo:create_collection:success` `photo:create_collection:duration_seconds`<br>`photo:create_collection:db_insert` |
@@ -228,16 +243,16 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 | get_user_liked_photos | `photo:get_user_liked_photos:attempts` `photo:get_user_liked_photos:success` `photo:get_user_liked_photos:duration_seconds`<br>`photo:get_user_liked_photos:query_ids` |
 | record（行为审计） | `photo:record:attempts` `photo:record:success` `photo:record:errors:db` `photo:record:duration_seconds` |
 | record_view_async（图片浏览） | `photo:record_view_async:attempts` `photo:record_view_async:success` `photo:record_view_async:errors:db` `photo:record_view_async:duration_seconds` |
-| rename_person | `photo:rename_person:attempts` `photo:rename_person:success` `photo:rename_person:duration_seconds` |
-| merge_person | `photo:merge_person:attempts` `photo:merge_person:success` `photo:merge_person:duration_seconds` |
-| get_persons | `photo:get_persons:attempts` `photo:get_persons:success` `photo:get_persons:duration_seconds` |
-| search_persons | `photo:search_persons:attempts` `photo:search_persons:success` `photo:search_persons:duration_seconds` |
+| rename_person | `photo:rename_person:attempts` `photo:rename_person:success` `photo:rename_person:duration_seconds`<br>`photo:rename_person:cache_invalidate` |
+| merge_person | `photo:merge_person:attempts` `photo:merge_person:success` `photo:merge_person:duration_seconds`<br>`photo:merge_person:cache_invalidate` |
+| get_persons | `photo:get_persons:attempts` `photo:get_persons:success` `photo:get_persons:duration_seconds`<br>`photo:get_persons:cache_get_or_load_batch` |
+| search_persons | `photo:search_persons:attempts` `photo:search_persons:success` `photo:search_persons:duration_seconds`<br>`photo:search_persons:cache_get_or_load_batch` |
 | change_face_belonging | `photo:change_face_belonging:attempts` `photo:change_face_belonging:success` `photo:change_face_belonging:duration_seconds` |
 | delete_face | `photo:delete_face:attempts` `photo:delete_face:success` `photo:delete_face:errors:conflict` `photo:delete_face:duration_seconds` |
 | delete_faces_batch | `photo:delete_faces_batch:attempts` `photo:delete_faces_batch:success` `photo:delete_faces_batch:duration_seconds` |
 | upload_photo | 补充错误分类：`photo:upload_photo:errors:validation` `photo:upload_photo:errors:conflict` `photo:upload_photo:errors:s3` `photo:upload_photo:errors:db` |
 | face_compute（人脸） | counter：`photo:face_compute:attempts` `photo:face_compute:success` `photo:face_compute:photos_processed` `photo:face_compute:faces_detected` `photo:face_compute:no_face_photos` `photo:face_compute:errors:download` `photo:face_compute:errors:decode` `photo:face_compute:errors:detect` `photo:face_compute:errors:insert`<br>gauge：`photo:face_compute:running` `photo:face_compute:mode`（labels `full` / `incremental`）`photo:face_compute:batch` `photo:face_compute:total_photos` `photo:face_compute:total_faces` `photo:face_compute:total_no_face`<br>histogram：`photo:face_compute:duration_seconds` `photo:face_compute:cleanup:backup` `photo:face_compute:query` `photo:face_compute:download_batch` `photo:face_compute:photo_download` `photo:face_compute:photo_decode` `photo:face_compute:detect_batch` `photo:face_compute:photo_detect` `photo:face_compute:insert_phase` `photo:face_compute:insert` |
-| get_monthly_stats | `photo:get_monthly_stats:attempts` `photo:get_monthly_stats:success` `photo:get_monthly_stats:duration_seconds`<br>`photo:get_monthly_stats:query_monthly_stats` |
+| get_monthly_stats | `photo:get_monthly_stats:attempts` `photo:get_monthly_stats:success` `photo:get_monthly_stats:duration_seconds`<br>`photo:get_monthly_stats:cache_get_or_load` |
 
 ### server 系统指标
 
@@ -304,3 +319,8 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
   user 与 photo 模块的缓存读写迁移至新组件，原 `redis_delete` / `redis_delete_cache` /
   `redis_cache` 步骤分别更名为 `cache_invalidate` / `cache_get_or_load_batch`，
   photo 删除补充 `cache_invalidate` 步骤。
+- 2026-08-09: 扩展缓存接入范围。photo_info 缓存键改为按照片单一 key（缓存不含浏览者
+  token，token 读取时动态生成），消除同照片多浏览者的缓存冗余；新增 5 个缓存实例：
+  `user_info_single`（用户单查）、`timeline_stat`（月度统计）、`photo_dimensions`（尺寸）、
+  `photo_md5`（去重）、`person`（人物轻量摘要）；upload/delete/rename/merge/face 变更等
+  写操作补齐缓存失效；dashboard 改用 `$cache` 模板变量按实例切换。
