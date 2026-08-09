@@ -72,8 +72,8 @@ function runCommentFlow(data) {
 
 // ── 独立运行入口 ──
 
-export default function () {
-    runCommentFlow();
+export default function (data) {
+    runCommentFlow(data);
 }
 
 // ── 被统一入口(photo.js)调用的 exec 函数 ──
