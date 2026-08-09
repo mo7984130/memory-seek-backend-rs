@@ -8,7 +8,7 @@ use common::{
     inc_error, metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
-    utils::{FileValidator, MetricsTimerExt},
+    utils::{FileValidator, MetricsTimerExt, token_cipher},
 };
 use constants::RedisKeys;
 use futures::Stream;
@@ -68,11 +68,9 @@ impl PhotoService {
             .map(|p| {
                 let liked = liked_photo_ids.contains(&p.id);
                 let file_id = p.file_id.clone();
-                PhotoView::from(p).with_liked(liked).with_tokens(
-                    &file_id,
-                    user_id,
-                    &state.token_cipher,
-                )
+                PhotoView::from(p)
+                    .with_liked(liked)
+                    .with_tokens(&file_id, user_id, token_cipher())
             })
             .collect::<Vec<_>>()
             .to_ok()
@@ -222,7 +220,7 @@ impl PhotoService {
 
         let file_id = photo.file_id.clone();
         PhotoView::from(PhotoRecord::from(photo))
-            .with_tokens(&file_id, user_id, &state.token_cipher)
+            .with_tokens(&file_id, user_id, token_cipher())
             .to_ok()
     }
 

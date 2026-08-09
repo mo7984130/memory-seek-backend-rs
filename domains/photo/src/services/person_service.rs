@@ -8,7 +8,7 @@ use common::{
     ext::{OptionExt, ResultErrExt, UintExt},
     metrics_group, metrics_name, metrics_success,
     models::CursorPage,
-    utils::{DbUtils, MetricsTimerExt},
+    utils::{DbUtils, MetricsTimerExt, token_cipher},
 };
 use insight_face_rs::types::{DIMS, FaceEmbedding};
 use ndarray::Array2;
@@ -493,7 +493,7 @@ impl PersonService {
             )?;
 
         metrics_success!();
-        Ok(Self::to_view(state, admin.into_inner(), person))
+        Ok(Self::to_view(admin.into_inner(), person))
     }
 }
 
@@ -517,7 +517,7 @@ impl PersonService {
         let persons = PersonMapper::query(&state.db, req.cursor, req.size).await?;
         let views = persons
             .into_iter()
-            .map(|person| Self::to_view(state, user_id, person))
+            .map(|person| Self::to_view(user_id, person))
             .collect::<Vec<_>>();
         let page = CursorPage::from_oversize_fn(views, req.size, |person| {
             FaceCountIdCursor {
@@ -546,7 +546,7 @@ impl PersonService {
         let persons = PersonMapper::query_search(&state.db, &keyword, cursor, size).await?;
         let views = persons
             .into_iter()
-            .map(|person| Self::to_view(state, user_id, person))
+            .map(|person| Self::to_view(user_id, person))
             .collect::<Vec<_>>();
         let page = CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))?;
         metrics_success!();
@@ -596,12 +596,11 @@ impl PersonService {
 
     /// 构建人物视图: 使用封面冗余字段直接内存组装裁剪 token, 加密后返回
     /// (与 `CollectionView::with_generate_cover_token` / `PhotoView::with_tokens` 一致)
-    fn to_view(state: &PhotoState, viewer: UserId, person: PersonRecord) -> PersonView {
+    fn to_view(viewer: UserId, person: PersonRecord) -> PersonView {
         PersonView {
             id: person.id,
             name: person.name,
-            cover_token: state
-                .token_cipher
+            cover_token: token_cipher()
                 .encrypt(
                     &ImageToken::crop(viewer, person.cover_file_id, person.cover_bbox),
                     Some(&format!("{}:{}", person.id, viewer)),

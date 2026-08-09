@@ -1,3 +1,4 @@
+mod mapper;
 mod models;
 pub mod services;
 mod state;

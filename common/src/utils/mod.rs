@@ -21,7 +21,7 @@ pub use file_validator::FileValidator;
 pub use db_utils::DbUtils;
 
 pub use password_hash::{Argon2idConfig, BcryptConfig, HashAlgorithm};
-pub use token_cipher::{TokenCipher, TokenCipherConfig};
+pub use token_cipher::{TokenCipher, TokenCipherConfig, init_token_cipher, token_cipher};
 
 #[cfg(feature = "metrics")]
 pub mod metrics;

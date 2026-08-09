@@ -4,7 +4,7 @@ use crate::state::PhotoState;
 use common::Result;
 use common::error::AppError;
 use common::ext::{OkExt, UintExt};
-use common::utils::DbUtils;
+use common::utils::{DbUtils, token_cipher};
 use common::{metrics_group, metrics_name, metrics_success, utils::MetricsTimerExt};
 use types::auth::user::UserId;
 use types::photo::collection::CollectionId;
@@ -29,9 +29,7 @@ impl CollectionService {
         // 组装结果
         let result: Vec<CollectionView> = collections
             .into_iter()
-            .map(|c| {
-                CollectionView::from(c).with_generate_cover_token(user_id, &state.token_cipher)
-            })
+            .map(|c| CollectionView::from(c).with_generate_cover_token(user_id, token_cipher()))
             .collect();
 
         metrics_success!();

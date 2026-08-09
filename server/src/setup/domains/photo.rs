@@ -27,7 +27,6 @@ pub fn register(
         state.db.clone(),
         state.redis.clone(),
         state.s3_client.clone(),
-        state.token_cipher.clone(),
         #[cfg(feature = "face-engine")]
         state.face_engine.clone(),
         #[cfg(feature = "face-engine")]

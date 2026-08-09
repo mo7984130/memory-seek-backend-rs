@@ -33,8 +33,6 @@ impl AppSetup {
         let state = Arc::new(AppState {
             db: bases.db,
             redis: bases.redis,
-            #[cfg(feature = "token_cipher")]
-            token_cipher: libs.token_cipher,
             #[cfg(feature = "email")]
             email_client: libs.email_client,
             #[cfg(feature = "s3")]

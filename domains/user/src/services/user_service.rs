@@ -10,10 +10,13 @@ use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
 use crate::UserState;
+use crate::mapper::UserMapper;
 use crate::models::{UserInfoRow, user_brief_view_from_dto};
-use common::ext::{CacheExtension, OptionExt, RedisExt, ResultInspectErrAsync, TraceExt, log_err};
+use common::ext::{
+    CacheExtension, OptionExt, RedisExt, ResultInspectErrAsync, ToOk, TraceExt, log_err,
+};
 use common::utils::{DbUtils, MetricsTimerExt};
-use common::utils::{FileValidator, rand_utils};
+use common::utils::{FileValidator, rand_utils, token_cipher};
 use common::{Result, error::AppError};
 use types::auth::user::{self, UserId};
 use types::photo::ImageToken;
@@ -55,22 +58,12 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
     metrics_group!();
 
     // 获取用户
-    let user = user::Entity::find()
-        .filter(user::Column::Id.eq(user_id))
-        .one(&state.db)
-        .timed(metrics_name!("db_query"))
+    let user = UserMapper::query(&state.db, user_id)
         .await?
         .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
     metrics_success!();
 
-    let user_record = user::UserRecord::from(user);
-    let mut user_info = user::create_user_info(&user_record);
-    user_info.avatar_token = ImageToken::encrypt_avatar_token(
-        &state.token_cipher,
-        user_record.avatar_file_id.as_deref(),
-        user_id,
-    );
-    Ok(user_info)
+    UserInfo::from_with_token(user).to_ok()
 }
 
 /// 为用户生成唯一邀请码
@@ -254,8 +247,8 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token =
-        ImageToken::encrypt_avatar_token(&state.token_cipher, Some(&new_key), user_id).ok_or_warn(
+    let avatar_token = ImageToken::encrypt_avatar_token(token_cipher(), Some(&new_key), user_id)
+        .ok_or_warn(
             "encrypt_avatar_token_err",
             "加密头像Token错误",
             AppError::InternalServerError,
@@ -453,6 +446,6 @@ pub async fn get_user_info_batch(
 
     Ok(result
         .into_iter()
-        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, &state.token_cipher, user_id)))
+        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, token_cipher(), user_id)))
         .collect())
 }

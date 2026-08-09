@@ -1,16 +1,8 @@
 use deadpool_redis::Pool;
 use sea_orm::DatabaseConnection;
 
-#[cfg(any(
-    feature = "token_cipher",
-    feature = "s3",
-    feature = "backup",
-    feature = "face-engine"
-))]
+#[cfg(any(feature = "s3", feature = "backup", feature = "face-engine"))]
 use std::sync::Arc;
-
-#[cfg(feature = "token_cipher")]
-use common::utils::TokenCipher;
 
 #[cfg(feature = "email")]
 use email::EmailClient;
@@ -32,9 +24,6 @@ pub struct AppBases {
 
 // ============ Libs ============
 pub struct AppLibs {
-    #[cfg(feature = "token_cipher")]
-    pub token_cipher: Arc<TokenCipher>,
-
     #[cfg(feature = "email")]
     pub email_client: EmailClient,
 
@@ -49,9 +38,6 @@ pub struct AppLibs {
 pub struct AppState {
     pub db: DatabaseConnection,
     pub redis: Pool,
-
-    #[cfg(feature = "token_cipher")]
-    pub token_cipher: Arc<TokenCipher>,
 
     #[cfg(feature = "email")]
     pub email_client: EmailClient,

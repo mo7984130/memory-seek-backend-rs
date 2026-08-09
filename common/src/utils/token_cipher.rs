@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use aes_gcm::{
     AeadCore, Aes256Gcm, Key, Nonce,
     aead::{Aead, KeyInit, OsRng},
@@ -8,12 +10,27 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 
 use crate::ext::ResultErrExt;
-use crate::{error::AppError, Result, ext::log_err};
+use crate::{Result, error::AppError, ext::log_err};
 
 const NONCE_LEN: usize = 12;
 const HKDF_KEY_INFO: &[u8] = b"image-file-id-token-v1";
 const HKDF_NONCE_INFO: &[u8] = b"nonce-v1";
 const HKDF_NONCE_SALT: &[u8] = b"nonce-salt";
+
+/// 全局唯一的 token 加密器，由启动时 `init_token_cipher` 写入
+static TOKEN_CIPHER: OnceLock<TokenCipher> = OnceLock::new();
+
+/// 初始化全局 token 加密器，幂等且线程安全
+pub fn init_token_cipher(config: &TokenCipherConfig) -> &'static TokenCipher {
+    TOKEN_CIPHER.get_or_init(|| TokenCipher::from_config(config))
+}
+
+/// 获取全局 token 加密器
+pub fn token_cipher() -> &'static TokenCipher {
+    TOKEN_CIPHER
+        .get()
+        .expect("token_cipher 未初始化，请先调用 common::utils::init_token_cipher")
+}
 
 pub struct TokenCipher {
     cipher: Aes256Gcm,
@@ -61,11 +78,7 @@ impl TokenCipher {
     ///
     /// # 错误
     /// - `AppError`: 序列化失败或 AES-GCM 加密失败
-    pub fn encrypt<T: Serialize>(
-        &self,
-        payload: &T,
-        nonce_seed: Option<&str>,
-    ) -> Result<String> {
+    pub fn encrypt<T: Serialize>(&self, payload: &T, nonce_seed: Option<&str>) -> Result<String> {
         let nonce_bytes = match nonce_seed {
             Some(seed) => Self::derive_nonce(seed),
             None => {
@@ -272,6 +285,20 @@ mod tests {
         let payload = "test".to_string();
         let token = cipher.encrypt(&payload, Some("seed")).unwrap();
         let decrypted: String = cipher.decrypt(&token).unwrap();
+        assert_eq!(decrypted, payload);
+    }
+
+    // --- 全局静态单例 ---
+
+    #[test]
+    fn test_global_token_cipher() {
+        init_token_cipher(&TokenCipherConfig {
+            key: "global-key".to_string(),
+            salt: "global-salt".to_string(),
+        });
+        let payload = "global".to_string();
+        let token = token_cipher().encrypt(&payload, Some("seed")).unwrap();
+        let decrypted: String = token_cipher().decrypt(&token).unwrap();
         assert_eq!(decrypted, payload);
     }
 }

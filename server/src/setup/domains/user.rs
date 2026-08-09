@@ -18,7 +18,6 @@ pub fn register(
         state.db.clone(),
         state.redis.clone(),
         state.s3_client.clone(),
-        state.token_cipher.clone(),
     ));
 
     // 获取路由

@@ -42,11 +42,12 @@ impl AdminId {
 
 #[cfg(feature = "orm")]
 mod entity {
+    use common::utils::token_cipher;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::user::models::UserInfo;
+    use crate::{photo::ImageToken, user::models::UserInfo};
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
     #[sea_orm(table_name = "auth_user")]
@@ -105,15 +106,31 @@ mod entity {
 
     impl ActiveModelBehavior for ActiveModel {}
 
-    /// 从 UserRecord 创建 UserInfo
-    pub fn create_user_info(user: &UserRecord) -> UserInfo {
-        UserInfo {
-            id: user.id,
-            username: user.username.clone(),
-            nickname: user.nickname.clone(),
-            email: user.email.clone(),
-            avatar_token: user.avatar_file_id.clone(),
-            created_at: user.created_at,
+    impl From<UserRecord> for UserInfo {
+        fn from(user: UserRecord) -> Self {
+            UserInfo {
+                id: user.id,
+                username: user.username,
+                nickname: user.nickname,
+                email: user.email,
+                avatar_token: user.avatar_file_id,
+                created_at: user.created_at,
+            }
+        }
+    }
+
+    impl UserInfo {
+        pub fn with_avatar_token(mut self) -> Self {
+            self.avatar_token = ImageToken::encrypt_avatar_token(
+                token_cipher(),
+                self.avatar_token.as_deref(),
+                self.id,
+            );
+            self
+        }
+
+        pub fn from_with_token(user: UserRecord) -> Self {
+            UserInfo::from(user).with_avatar_token()
         }
     }
 }

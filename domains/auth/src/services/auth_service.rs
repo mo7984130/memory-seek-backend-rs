@@ -4,10 +4,10 @@ use chrono::{DateTime, Duration, Utc};
 use common::Result;
 use common::error::AppError;
 use common::ext::{
-    OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, TraceExt, log_err_with_err,
-    log_warn, log_warn_with_err,
+    OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, TraceExt, log_err_with_err, log_warn,
+    log_warn_with_err,
 };
-use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
+use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils, token_cipher};
 use common::{inc_error, metrics_group, metrics_name, metrics_success};
 use constants::RedisKeys;
 use constants::redis_keys;
@@ -189,17 +189,14 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     .await?;
 
     // 加密头像file_id
-    let avatar_token = ImageToken::encrypt_avatar_token(
-        &state.token_cipher,
-        user.avatar_file_id.as_deref(),
-        user.id,
-    );
+    let avatar_token =
+        ImageToken::encrypt_avatar_token(token_cipher(), user.avatar_file_id.as_deref(), user.id);
 
     metrics_success!();
 
     // 返回 LoginResult（包含用户信息和令牌）
     let user_record = user::UserRecord::from(updated_user);
-    let mut user_info = user::create_user_info(&user_record);
+    let mut user_info = UserInfo::from(user_record);
     user_info.avatar_token = avatar_token;
     Ok(LoginResponse {
         user: user_info,
@@ -287,7 +284,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     metrics_success!();
 
     let user_record = user::UserRecord::from(user_model);
-    Ok(user::create_user_info(&user_record))
+    Ok(UserInfo::from(user_record))
 }
 
 /// 将 SeaORM 插入用户时的 DbErr 转换为 AppError
