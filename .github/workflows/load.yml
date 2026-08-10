@@ -101,10 +101,27 @@ jobs:
                   # 场景脚本使用可选链 ?., 需 >= 0.50(0.49 编译器不支持)
                   k6-version: 0.57.0
 
-            - name: 启动依赖与全部 server 实例 (make ci-up)
-              # 容器(PG/Redis) + 8 个 server 实例并行启动, 各自 taskset 限核(SERVER_CPUS)
-              # SKIP_BUILD=1: release 已在上一构建步骤完成, 避免重复编译
-              run: make -C tests/load ci-up SKIP_BUILD=1 SERVER_CPUS=$SERVER_CPUS
+            - name: 启动依赖容器 (PG / Redis)
+              run: docker compose -f tests/load/docker-compose.load.yml up -d --wait
+
+            - name: 启动被测服务 (taskset 限核)
+              # 固定 server 占用核数(SERVER_CPUS), 控制变量: 压测对比不随 runner 核数漂移
+              run: |
+                  taskset -c 0-$((SERVER_CPUS - 1)) \
+                      ./target/release/memory-seek-server \
+                      --config tests/load/ci/server-config.yml \
+                      > server.log 2>&1 &
+                  echo $! > server.pid
+                  for i in $(seq 1 60); do
+                      if curl -sf http://127.0.0.1:7985/health >/dev/null; then
+                          echo "server ready (cpus=$SERVER_CPUS)"
+                          exit 0
+                      fi
+                      sleep 1
+                  done
+                  echo "server failed to start"
+                  tail -100 server.log
+                  exit 1
 
             - name: 种子数据 (建表 + 灌数据)
               # 不再容错: seed 失败必须暴露(否则压测会在无表库上全量报错)
@@ -166,16 +183,13 @@ jobs:
                   name: load-results-${{ env.MODE }}-${{ github.sha }}
                   path: |
                       tests/load/results
-                      tests/load/ci/server-*.log
+                      server.log
 
-            - name: 失败诊断 (打印各实例 server.log 与结果目录)
+            - name: 失败诊断 (打印 server.log 与结果目录)
               if: failure()
               run: |
-                  echo "===== 各实例 server log (tail 200) ====="
-                  for f in tests/load/ci/server-*.log; do
-                      echo "--- $f ---"
-                      tail -200 "$f" 2>/dev/null || echo "(不存在)"
-                  done
+                  echo "===== server.log (tail 200) ====="
+                  tail -200 server.log 2>/dev/null || echo "(server.log 不存在)"
                   echo "===== results 目录 ====="
                   ls -la tests/load/results/ 2>/dev/null || true
 

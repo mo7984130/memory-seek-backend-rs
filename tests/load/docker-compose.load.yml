@@ -19,8 +19,6 @@ services:
       POSTGRES_USER: memory_seek
       POSTGRES_PASSWORD: memseek_loadtest
       POSTGRES_DB: memory_seek
-    # 调大连接上限: 支撑多 server 实例并行(每实例连接池均分)
-    command: ["postgres", "-c", "max_connections=256"]
     ports:
       - "54329:5432"
     healthcheck:
