@@ -1,22 +1,17 @@
 use bytes::Bytes;
 use chrono::{Duration, Utc};
-use common::{metrics_group, metrics_name, metrics_success, timed};
+use common::ext::{OptionExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
+use common::utils::{FileValidator, MetricsTimerExt, rand_utils, token_cipher};
+use common::{Result, error::AppError, metrics_group, metrics_name, metrics_success, timed};
 use constants::{PasswordHasher, RedisKeys};
-use sea_orm::sea_query::Expr;
 use sea_orm::sqlx::types::uuid;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set};
 use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
 use crate::UserState;
-use crate::mapper::UserMapper;
-use crate::models::{UserInfoRow, user_brief_view_from_dto};
-use common::ext::{OptionExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
-use common::utils::{DbUtils, MetricsTimerExt};
-use common::utils::{FileValidator, rand_utils, token_cipher};
-use common::{Result, error::AppError};
-use types::auth::user::{self, UserId};
+use crate::models::user_brief_view_from_dto;
+use types::auth::user::UserId;
 use types::photo::ImageToken;
 use types::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
@@ -25,7 +20,6 @@ use types::user::{
 
 use crate::config::{
     GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL_SECONDS,
-    USER_INFO_CACHE_TTL_SECS,
 };
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
@@ -55,23 +49,7 @@ static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
 pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInfo> {
     metrics_group!();
 
-    // 带三级缓存的获取用户信息（缓存完整 UserInfo，token 确定性加密可安全缓存）
-    let info = state
-        .cache_user_info_single
-        .get_or_load(
-            RedisKeys::auth::user_info_cache(user_id),
-            USER_INFO_CACHE_TTL_SECS as u64,
-            || {
-                Box::pin(async move {
-                    let user = UserMapper::query(&state.db, user_id)
-                        .await?
-                        .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
-                    Ok(UserInfo::from_with_token(user))
-                })
-            },
-        )
-        .timed(metrics_name!("cache_get_or_load"))
-        .await?;
+    let info = state.repo.get_user_info(user_id).await?;
 
     metrics_success!();
 
@@ -150,28 +128,10 @@ pub async fn change_nickname(
 ) -> Result<String> {
     metrics_group!();
 
-    // 更新昵称
-    let new_nickname = req.new_nickname;
-    user::Entity::update_many()
-        .col_expr(user::Column::Nickname, Expr::value(new_nickname.clone()))
-        .filter(user::Column::Id.eq(user_id))
-        .exec(&state.db)
-        .timed(metrics_name!("db_update"))
+    let new_nickname = state
+        .repo
+        .change_nickname(user_id, req.new_nickname)
         .await?;
-
-    // 失效用户信息缓存（L1 + L2），下次读取时自动重建
-    // 错误不返回
-    let cache_key = RedisKeys::auth::user_info_cache(user_id);
-    let _ = tokio::join!(
-        state
-            .cache_user_info
-            .invalidate(&cache_key)
-            .timed(metrics_name!("cache_invalidate")),
-        state
-            .cache_user_info_single
-            .invalidate(&cache_key)
-            .timed(metrics_name!("cache_invalidate_single"))
-    );
 
     metrics_success!();
 
@@ -209,55 +169,20 @@ pub async fn update_avatar(
         .timed(metrics_name!("s3_upload"))
         .await?;
 
-    // 获取旧头像key并更新数据库
+    // 更新数据库（事务内查旧头像并更新），失败时删除刚上传的文件
     let new_key_for_db = new_key.clone();
-    let old_key = DbUtils::write(&state.db, move |txn| {
-        let new_key_inner = new_key_for_db;
-        Box::pin(async move {
-            let old_key: Option<String> = user::Entity::find_by_id(user_id)
-                .select_only()
-                .column(user::Column::AvatarFileId)
-                .into_values::<Option<String>, user::Column>()
-                .one(txn)
-                .await?
-                .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
-
-            user::ActiveModel {
-                id: Set(user_id),
-                avatar_file_id: Set(Some(new_key_inner)),
-                ..Default::default()
-            }
-            .update(txn)
-            .await?;
-
-            Ok(old_key)
+    let old_key = state
+        .repo
+        .update_avatar(user_id, new_key_for_db)
+        .await
+        .inspect_err_async(|_| async {
+            let _ = state
+                .s3_client
+                .delete(&new_key)
+                .await
+                .map_err(AppError::from);
         })
-    })
-    .timed(metrics_name!("db_transaction"))
-    .await
-    // 如果更新数据库失败的话, 删除刚才上传的文件
-    .inspect_err_async(|_| async {
-        let _ = state
-            .s3_client
-            .delete(&new_key)
-            .await
-            .map_err(AppError::from);
-    })
-    .await?;
-
-    // 失效用户信息缓存
-    let cache_key = RedisKeys::auth::user_info_cache(user_id);
-    let (cache_result, _) = tokio::join!(
-        state
-            .cache_user_info
-            .invalidate(&cache_key)
-            .timed(metrics_name!("cache_invalidate")),
-        state
-            .cache_user_info_single
-            .invalidate(&cache_key)
-            .timed(metrics_name!("cache_invalidate_single"))
-    );
-    cache_result?;
+        .await?;
 
     // 删除旧头像
     // 删除失败, 不返回错误
@@ -317,14 +242,7 @@ pub async fn change_password(
     }
 
     //  获取旧密码
-    let old_password: String = user::Entity::find_by_id(user_id)
-        .select_only()
-        .column(user::Column::Password)
-        .into_tuple()
-        .one(&state.db)
-        .timed(metrics_name!("db_query"))
-        .await?
-        .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
+    let old_password = state.repo.query_password_hash(user_id).await?;
 
     // 获取信号量许可，限制并发密码验证
     let _permit = PASSWORD_VERIFY_SEM
@@ -351,14 +269,7 @@ pub async fn change_password(
     };
 
     // 更新数据库
-    user::ActiveModel {
-        id: Set(user_id),
-        password: Set(new_password_hash),
-        ..Default::default()
-    }
-    .update(&state.db)
-    .timed(metrics_name!("db_update"))
-    .await?;
+    state.repo.update_password(user_id, new_password_hash).await?;
 
     // 登出. 清除token
     logout(state, user_id).await?;
@@ -386,34 +297,7 @@ pub async fn change_password(
 pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
     metrics_group!();
 
-    // 清除refresh_token
-    // 清除access_token
-    // 清除用户信息缓存
-    let cache_key = RedisKeys::auth::user_info_cache(user_id);
-    let (refresh_token_result, access_token_result, _, _) = tokio::join!(
-        user::ActiveModel {
-            id: Set(user_id),
-            refresh_token: Set(None),
-            refresh_token_expire_at: Set(None),
-            ..Default::default()
-        }
-        .update(&state.db)
-        .timed(metrics_name!("db_update")),
-        state
-            .redis
-            .del(RedisKeys::auth::user_access_token(user_id))
-            .timed(metrics_name!("redis_delete")),
-        state
-            .cache_user_info
-            .invalidate(&cache_key)
-            .timed(metrics_name!("cache_invalidate")),
-        state
-            .cache_user_info_single
-            .invalidate(&cache_key)
-            .timed(metrics_name!("cache_invalidate_single"))
-    );
-    refresh_token_result?;
-    access_token_result?;
+    state.repo.logout(user_id).await?;
 
     metrics_success!();
 
@@ -442,33 +326,7 @@ pub async fn get_user_info_batch(
     let user_ids = req.user_ids.into_inner();
 
     // 带三级缓存的获取用户信息
-    let result: Vec<Option<UserInfoRow>> = state
-        .cache_user_info
-        .get_or_load_batch(
-            &user_ids,
-            |id| RedisKeys::auth::user_info_cache(*id),
-            USER_INFO_CACHE_TTL_SECS as u64,
-            |miss_ids| {
-                Box::pin(async move {
-                    // 使用 ? 运算符进行错误处理
-                    let users: Vec<UserInfoRow> = user::Entity::find()
-                        .filter(user::Column::Id.is_in(miss_ids))
-                        .select_only()
-                        .column_as(user::Column::Id, "user_id")
-                        .column(user::Column::Nickname)
-                        .column(user::Column::AvatarFileId)
-                        .into_model::<UserInfoRow>()
-                        .all(&state.db)
-                        .await?; // 这里现在可以安全使用 ? 了，因为它在一个返回 Result 的块中
-
-                    // 返回 Result::Ok
-                    Ok(users)
-                })
-            },
-            |dto| dto.user_id,
-        )
-        .timed(metrics_name!("cache_get_or_load_batch"))
-        .await?;
+    let result = state.repo.get_user_info_batch(&user_ids).await?;
 
     metrics_success!();
 

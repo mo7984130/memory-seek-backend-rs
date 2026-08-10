@@ -1,21 +1,16 @@
-use common::cache::{CacheConfig, MultiLevelCache};
+use common::cache::CacheConfig;
 use deadpool_redis::Pool;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
-use types::user::UserInfo;
+use crate::repo::UserRepo;
 
-use crate::models::UserInfoRow;
-
-/// 用户模块共享状态，包含数据库、缓存、存储等依赖
+/// 用户模块共享状态，包含数据访问仓储、Redis、存储等依赖
 pub struct UserState {
-    pub db: DatabaseConnection,
+    /// 用户数据访问仓储，封装数据库与三级缓存
+    pub repo: UserRepo,
     pub redis: Pool,
-    /// 用户信息批量三级缓存（本地 moka → Redis → 数据库）
-    pub cache_user_info: MultiLevelCache<UserInfoRow>,
-    /// 用户信息单查三级缓存（缓存完整 UserInfo，含确定性加密的 token）
-    pub cache_user_info_single: MultiLevelCache<UserInfo>,
     pub s3_client: Arc<S3Client>,
 }
 
@@ -36,14 +31,9 @@ impl UserState {
         cache_config: CacheConfig,
         s3_client: Arc<S3Client>,
     ) -> Self {
-        let cache_user_info = MultiLevelCache::new("user_info", redis.clone(), cache_config);
-        let cache_user_info_single =
-            MultiLevelCache::new("user_info_single", redis.clone(), cache_config);
         Self {
-            db,
+            repo: UserRepo::new(db, redis.clone(), cache_config),
             redis,
-            cache_user_info,
-            cache_user_info_single,
             s3_client,
         }
     }

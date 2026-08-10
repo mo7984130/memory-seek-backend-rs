@@ -585,6 +585,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bench-support"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bytes",
+ "common",
+ "criterion",
+ "deadpool-redis",
+ "oss",
+ "redis",
+ "tokio",
+]
+
+[[package]]
 name = "bigdecimal"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -947,7 +961,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -956,6 +970,7 @@ dependencies = [
  "axum-client-ip",
  "base64 0.22.1",
  "bcrypt",
+ "bench-support",
  "chrono",
  "const_format",
  "deadpool-redis",
