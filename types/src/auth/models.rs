@@ -43,10 +43,6 @@ crate::in_dto!(RegisterRequest, "auth/", serialize; {
     pub password: String,
 
     /// 确认密码
-    #[validate(
-        custom(function = "validate_password"),
-        must_match(other = "password")
-    )]
     pub confirm_password: String,
 
     /// 昵称

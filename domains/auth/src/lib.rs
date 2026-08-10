@@ -2,6 +2,7 @@ pub mod services;
 
 mod config;
 
+pub(crate) mod mapper;
 mod state;
 pub use state::AuthState;
 

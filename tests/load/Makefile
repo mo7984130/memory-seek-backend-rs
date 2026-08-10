@@ -45,23 +45,19 @@ DURATION ?= 2m
 # 单机多 server 进程并行压测: 每实例绑定独立核心 + 独立端口 + 独立模块(组内串行),
 # 实例间通过 make -j 并行, 总时长 = max(各实例), 且各实例内部串行保证 QPS 准确。
 #
-# 实例表: <name>:<port>:<k6脚本>:<summary名>:<target_rps>:<max_rps>
-#   name       实例标识(pid/日志文件前缀)
-#   port       独立监听端口
-#   k6脚本     scenarios/ 下的脚本路径
-#   summary名  summary 输出文件名
-#   target_rps target 模式目标迭代率(单 op 场景即 QPS)
-#   max_rps    max 模式软上限
+# 实例表: <name>:<port>:<k6脚本列表>:<summary名列表>:<target_rps>:<max_rps>
+#   name         实例标识(pid/日志文件前缀)
+#   port         独立监听端口
+#   k6脚本列表   scenarios/ 下的脚本路径, 逗号分隔(实例内串行执行)
+#   summary名列表 summary 输出文件名, 逗号分隔(与脚本一一对应)
+#   target_rps   target 模式目标迭代率(单 op 场景即 QPS)
+#   max_rps      max 模式软上限
 # 核心区间不在此表: 由 SERVER_CPUS(每实例核数)按实例序号自动分配, 便于 CI 控制
 SERVER_INSTANCES ?= \
-	server-a:7985:auth.js:auth:400:100000 \
-	server-b:7986:user.js:user:300:100000 \
-	server-c:7987:photo/collection.js:photo_collection:30:100000 \
-	server-d:7988:photo/collection_photo.js:photo_collection_photo:30:100000 \
-	server-e:7989:photo/comment.js:photo_comment:30:100000 \
-	server-f:7990:photo/comment_like.js:photo_comment_like:30:100000 \
-	server-g:7991:photo/face.js:face:500:100000 \
-	server-h:7992:photo/person.js:person:500:100000
+	server-a:7985:auth.js,user.js:auth,user:400:100000 \
+	server-b:7987:photo/collection.js,photo/collection_photo.js:photo_collection,photo_collection_photo:30:100000 \
+	server-c:7989:photo/comment.js,photo/comment_like.js:photo_comment,photo_comment_like:30:100000 \
+	server-d:7991:photo/face.js,photo/person.js:face,person:500:100000
 
 # 每实例占用核数(taskset 绑定, 控制变量: 压测对比不随宿主核数漂移)
 SERVER_CPUS ?= 2
@@ -79,13 +75,15 @@ REDIS_MAX_CONNECTIONS ?= 16
 PARALLEL ?= $(shell expr $(TOTAL_CPUS) / $(SERVER_CPUS))
 
 # 解析实例表辅助: $(call inst_<字段>,<实例>)
-# 字段: 1=name 2=port 3=script 4=summary 5=target_rps 6=max_rps
+# 字段: 1=name 2=port 3=script列表 4=summary列表 5=target_rps 6=max_rps
 inst_name  = $(word 1,$(subst :, ,$(1)))
 inst_port  = $(word 2,$(subst :, ,$(1)))
-inst_script= $(word 3,$(subst :, ,$(1)))
-inst_sum   = $(word 4,$(subst :, ,$(1)))
+inst_scripts= $(subst $(comma), ,$(word 3,$(subst :, ,$(1))))
+inst_sums   = $(subst $(comma), ,$(word 4,$(subst :, ,$(1))))
 inst_trps  = $(word 5,$(subst :, ,$(1)))
 inst_mrps  = $(word 6,$(subst :, ,$(1)))
+# script:summary 对列表(与脚本/摘要一一对应), 供 run-inst 串行遍历
+inst_pairs = $(join $(addsuffix :,$(call inst_scripts,$(1))),$(call inst_sums,$(1)))
 
 # 实例序号(1-based)与核心区间
 # 第 N 个实例绑核心 [CPU_BASE + (N-1)*SERVER_CPUS, CPU_BASE + N*SERVER_CPUS - 1],
@@ -101,12 +99,18 @@ $(foreach inst,$(SERVER_INSTANCES),$(eval $(call COMPUTE_INST_CPU,$(inst))))
 
 inst_cpu = $(INST_CPU_$(1))
 
+comma := ,
+
 RESULTS_DIR  := results
 BASELINES    := baselines
 CI_DIR       := ci
 SERVER_BIN   := ../../target/release/$(BIN_NAME)
 COMPOSE      := docker compose -f docker-compose.load.yml
 BASE_URL     := http://$(REMOTE_HOST):$(SERVER_PORT)
+
+# max 模式结果目录(与 ci/env.sh 对齐, collect-max 依赖)
+MAX_RUNS_DIR      := $(RESULTS_DIR)/max-run
+MAX_NORMALIZED_DIR := $(RESULTS_DIR)/max-normalized
 
 # 多轮输出目录: 指定 RUN 时写入 run-<n>(target) 或 max-run-<n>(max), 否则沿用原路径
 RUN_PREFIX := $(if $(filter max,$(LOAD_MODE)),max-run,run)
@@ -187,11 +191,11 @@ all: auth user photo face person  ## 运行全部压测(含 S3 场景与 face/pe
 define INSTANCE_CI_RULES
 ci-up-$(call inst_name,$(1)):
 	@echo "Starting instance $(call inst_name,$(1)) (port $(call inst_port,$(1)), cpus $(call inst_cpu,$(call inst_name,$(1))))..."
-	@cd ../.. && taskset -c $(call inst_cpu,$(call inst_name,$(1))) \
+	@taskset -c $(call inst_cpu,$(call inst_name,$(1))) \
 		env MEMORY_SEEK_SERVER__PORT=$(call inst_port,$(1)) \
 			MEMORY_SEEK_DATABASE__MAX_CONNECTIONS=$(DB_MAX_CONNECTIONS) \
 			MEMORY_SEEK_REDIS__MAX_CONNECTIONS=$(REDIS_MAX_CONNECTIONS) \
-			./target/release/$(BIN_NAME) --config $(CI_DIR)/server-config.yml \
+			$(SERVER_BIN) --config $(CI_DIR)/server-config.yml \
 			> $(CI_DIR)/$(call inst_name,$(1)).log 2>&1 & \
 			echo $$! > $(CI_DIR)/$(call inst_name,$(1)).pid
 	@for i in $$(seq 1 60); do \
@@ -209,18 +213,25 @@ ci-down-$(call inst_name,$(1)):
 		rm -f $(CI_DIR)/$(call inst_name,$(1)).pid; \
 	fi
 run-inst-$(call inst_name,$(1)): $(OUT_DIR)
-	@echo "=== instance $(call inst_name,$(1)): $(call inst_script,$(1)) (port $(call inst_port,$(1))) ==="; \
-	k6 run -q \
-		-e BASE_URL=http://127.0.0.1:$(call inst_port,$(1)) \
-		-e LOAD_MODE=$(LOAD_MODE) \
-		-e TARGET_RPS=$(call inst_trps,$(1)) \
-		-e MAX_RPS=$(call inst_mrps,$(1)) \
-		-e DURATION=$(DURATION) \
-		-e PHOTO_COUNT=$(PHOTO_COUNT) \
-		-e FACES=$(FACES) \
-		-e PERSONS=$(PERSONS) \
-		-e SUMMARY_EXPORT=$(OUT_DIR)/$(call inst_sum,$(1))_summary.json \
-		scenarios/$(call inst_script,$(1)) || echo "[warn] instance $(call inst_name,$(1)) 失败"
+	@echo "=== instance $(call inst_name,$(1)): $(call inst_scripts,$(1)) (port $(call inst_port,$(1))) ==="; \
+	scripts='$(call inst_scripts,$(1))'; sums='$(call inst_sums,$(1))'; \
+	i=1; \
+	for s in $$$$scripts; do \
+		sum=$$$$(echo $$$$sums | tr ' ' '\n' | sed -n "$$$${i}p"); \
+		echo "  --- module: $$$$s (summary: $$$$sum) ---"; \
+		k6 run -q \
+			-e BASE_URL=http://127.0.0.1:$(call inst_port,$(1)) \
+			-e LOAD_MODE=$(LOAD_MODE) \
+			-e TARGET_RPS=$(call inst_trps,$(1)) \
+			-e MAX_RPS=$(call inst_mrps,$(1)) \
+			-e DURATION=$(DURATION) \
+			-e PHOTO_COUNT=$(PHOTO_COUNT) \
+			-e FACES=$(FACES) \
+			-e PERSONS=$(PERSONS) \
+			-e SUMMARY_EXPORT=$(OUT_DIR)/$$$${sum}_summary.json \
+			scenarios/$$$$s || echo "[warn] module $$$$s 失败"; \
+		i=$$$$((i+1)); \
+	done || echo "[warn] instance $(call inst_name,$(1)) 失败"
 endef
 $(foreach inst,$(SERVER_INSTANCES),$(eval $(call INSTANCE_CI_RULES,$(inst))))
 
