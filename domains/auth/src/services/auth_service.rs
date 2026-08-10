@@ -13,7 +13,7 @@ use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task::{self, spawn_blocking};
 use tracing::{error, warn};
-use types::auth::user::{self, UserId};
+use types::auth::user::UserId;
 use types::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
 };
@@ -139,7 +139,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         &state.db,
         user.id,
         new_refresh_token.clone(),
-        new_refresh_token_expires_at.clone(),
+        new_refresh_token_expires_at,
     )
     .await
     .inspect_err_async(|_| async {
@@ -236,8 +236,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
 
     metrics_success!();
 
-    let user_record = user::UserRecord::from(user_model);
-    Ok(UserInfo::from(user_record))
+    Ok(UserInfo::from(user_model))
 }
 
 /// 发送邮箱验证码
