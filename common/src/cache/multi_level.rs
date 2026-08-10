@@ -179,27 +179,21 @@ where
         Fut: Future<Output = Result<Vec<T>, AppError>> + Send,
         M: Fn(&T) -> K + Send + Sync,
     {
-        if params.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // 缓存禁用时直接全量加载（loader 返回后按 key 对齐结果）
+        // 缓存禁用时直接全量加载（loader 返回后按 K 对齐结果，无需生成 redis key）
         if !self.enabled {
             let fresh_data = loader(params.to_vec()).await?;
-            // key -> [原始索引] 映射
-            let mut key_to_indices: IndexMap<String, Vec<usize>> = IndexMap::new();
+            // K -> [原始索引] 映射
+            let mut index_by_k: IndexMap<K, Vec<usize>> = IndexMap::new();
             for (i, p) in params.iter().enumerate() {
-                key_to_indices.entry(key_provider(p)).or_default().push(i);
+                index_by_k.entry(p.clone()).or_default().push(i);
             }
             let mut results: Vec<Option<T>> = vec![None; params.len()];
-            for item in fresh_data {
-                let key = key_provider(&result_mapper(&item));
-                if let Some(indices) = key_to_indices.get(&key) {
-                    for &i in indices {
-                        results[i] = Some(item.clone());
-                    }
-                }
-            }
+            self.align_and_collect(
+                fresh_data,
+                result_mapper,
+                |k| index_by_k.get(k).map(|indices| ("", indices)),
+                &mut results,
+            );
             return Ok(results);
         }
 
@@ -227,15 +221,15 @@ where
         }
 
         // ---- L2 层：MGET 批量命中 ----
-        // redis_key -> (param, [原始索引])
-        let mut key_to_info: IndexMap<String, (K, Vec<usize>)> = IndexMap::new();
+        // param -> (redis_key, [原始索引])
+        let mut key_to_info: IndexMap<K, (String, Vec<usize>)> = IndexMap::new();
         for (i, p) in l1_miss {
             let key = key_provider(&p);
-            let entry = key_to_info.entry(key).or_insert_with(|| (p, Vec::new()));
+            let entry = key_to_info.entry(p).or_insert_with(|| (key, Vec::new()));
             entry.1.push(i);
         }
 
-        let unique_keys: Vec<&str> = key_to_info.keys().map(|s| s.as_str()).collect();
+        let unique_keys: Vec<&str> = key_to_info.values().map(|(key, _)| key.as_str()).collect();
         let start = Instant::now();
         let cached_jsons: Vec<Option<String>> = {
             let mut conn = self.redis.get().await?;
@@ -247,7 +241,7 @@ where
         self.record_duration("l2:get:duration_seconds", start);
 
         let mut l2_miss_keys: Vec<usize> = Vec::new();
-        for (idx, (key, (_, orig_indices))) in key_to_info.iter().enumerate() {
+        for (idx, (_, (key, orig_indices))) in key_to_info.iter().enumerate() {
             match cached_jsons.get(idx).and_then(|o| o.as_deref()) {
                 Some(json) => match serde_json::from_str::<T>(json) {
                     Ok(value) => {
@@ -274,7 +268,7 @@ where
         if !l2_miss_keys.is_empty() {
             let miss_params: Vec<K> = l2_miss_keys
                 .iter()
-                .map(|&idx| key_to_info.get_index(idx).unwrap().1.0.clone())
+                .map(|&idx| key_to_info.get_index(idx).unwrap().0.clone())
                 .collect();
 
             let start = Instant::now();
@@ -282,32 +276,25 @@ where
             self.record_duration("db:load:duration_seconds", start);
             self.inc_counter("db:loads", fresh_data.len() as u64);
 
-            let mut conn = self.redis.get().await?;
-            let mut pipe = redis::pipe();
-            let mut has_update = false;
+            let write_back = self.align_and_collect(
+                fresh_data,
+                result_mapper,
+                |k| {
+                    key_to_info
+                        .get(k)
+                        .map(|(key, indices)| (key.as_str(), indices))
+                },
+                &mut results,
+            );
 
-            for item in fresh_data {
-                let param = result_mapper(&item);
-                let key = key_provider(&param);
-
-                match key_to_info.get(&key) {
-                    Some((_, orig_indices)) => {
-                        let json = serde_json::to_string(&item)?;
-                        pipe.set_ex(&key, json, ttl).ignore();
-                        has_update = true;
-
-                        self.write_l1(key.clone(), item.clone()).await;
-                        for &i in orig_indices {
-                            results[i] = Some(item.clone());
-                        }
-                    }
-                    None => {
-                        warn!("MultiLevelCache loader 返回了未请求的 key={}", key);
-                    }
+            if !write_back.is_empty() {
+                let mut conn = self.redis.get().await?;
+                let mut pipe = redis::pipe();
+                for (key, item) in write_back {
+                    self.write_l1(key.clone(), item.clone()).await;
+                    let json = serde_json::to_string(&item)?;
+                    pipe.set_ex(&key, json, ttl).ignore();
                 }
-            }
-
-            if has_update {
                 let _: Result<(), AppError> = pipe.query_async(&mut conn).await.trace();
             }
         }
@@ -381,34 +368,76 @@ where
         self.local.insert(key, Arc::new(value)).await;
     }
 
+    /// 将 loader 批量加载的结果按 `result_mapper` 对齐写入 `results`
+    ///
+    /// `index_lookup` 输入 K，返回其 redis key 与原始索引列表；redis key 为空表示
+    /// 无需回写（缓存禁用路径）。返回需回写 L2 的 `(key, value)` 列表。
+    fn align_and_collect<'a, K, M, L>(
+        &self,
+        fresh_data: Vec<T>,
+        result_mapper: M,
+        index_lookup: L,
+        results: &mut Vec<Option<T>>,
+    ) -> Vec<(String, T)>
+    where
+        M: Fn(&T) -> K,
+        L: Fn(&K) -> Option<(&'a str, &'a Vec<usize>)>,
+    {
+        let mut write_back = Vec::new();
+        for item in fresh_data {
+            let k = result_mapper(&item);
+            match index_lookup(&k) {
+                Some((redis_key, indices)) => {
+                    if !redis_key.is_empty() {
+                        write_back.push((redis_key.to_owned(), item.clone()));
+                    }
+                    for &i in indices {
+                        results[i] = Some(item.clone());
+                    }
+                }
+                None => {
+                    warn!("MultiLevelCache loader 返回了未请求的 key");
+                }
+            }
+        }
+        write_back
+    }
+
     // ============ 指标埋点 ============
 
     #[cfg(feature = "metrics")]
+    #[inline]
     fn metric_name(&self, step: &str) -> String {
         format!("cache:{}:{}", self.name, step)
     }
 
     #[cfg(feature = "metrics")]
+    #[inline]
     fn inc_counter(&self, step: &str, value: u64) {
         metrics::counter!(self.metric_name(step)).increment(value);
     }
 
     #[cfg(feature = "metrics")]
+    #[inline]
     fn record_duration(&self, step: &str, start: Instant) {
         metrics::histogram!(self.metric_name(step)).record(start.elapsed().as_secs_f64());
     }
 
     #[cfg(feature = "metrics")]
+    #[inline]
     fn update_entries_gauge(&self) {
         metrics::gauge!(self.metric_name("l1:entries")).set(self.local.entry_count() as f64);
     }
 
     #[cfg(not(feature = "metrics"))]
+    #[inline]
     fn inc_counter(&self, _step: &str, _value: u64) {}
 
     #[cfg(not(feature = "metrics"))]
+    #[inline]
     fn record_duration(&self, _step: &str, _start: Instant) {}
 
     #[cfg(not(feature = "metrics"))]
+    #[inline]
     fn update_entries_gauge(&self) {}
 }

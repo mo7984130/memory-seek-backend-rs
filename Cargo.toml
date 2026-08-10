@@ -13,6 +13,7 @@ members = [
     "domains/photo",
     "domains/backup",
     "server",
+    "tools/bench-support",
 ]
 
 [workspace.dependencies]
