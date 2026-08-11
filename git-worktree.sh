@@ -191,7 +191,10 @@ merge() {
   fi
 
   if [[ -d "$(worktree_dir "$name")" ]]; then
-    git -C "$REPO_ROOT" worktree remove --force "$(worktree_dir "$name")"
+    if ! git -C "$tdir" worktree remove --force "$(worktree_dir "$name")"; then
+      log_err "删除 worktree 失败, 请手动执行: git -C $tdir worktree remove --force $(worktree_dir "$name")"
+      exit 1
+    fi
   fi
   if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
     git -C "$REPO_ROOT" branch -D "$branch"
