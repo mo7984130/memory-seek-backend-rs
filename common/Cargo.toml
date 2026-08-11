@@ -1,6 +1,6 @@
 [package]
 name = "common"
-version = "0.1.6"
+version = "0.1.9"
 edition = "2024"
 
 [features]
@@ -42,3 +42,11 @@ tokio = { workspace = true, optional = true }
 ts-rs = { workspace = true, optional = true }
 async-trait = { workspace = true }
 moka = { workspace = true }
+
+[dev-dependencies]
+bench-support = { path = "../tools/bench-support" }
+tokio = { workspace = true }
+
+[[bench]]
+name = "get_or_load_batch"
+harness = false

@@ -5,6 +5,7 @@
 
 import {
     getPhotoUserCredentials,
+    pickPhotoUserPhotoId,
     recordResult,
     printSummary,
     buildLoadOptions,
@@ -16,7 +17,6 @@ import {
     initSession,
     maybeRefreshSession,
 } from "../../helpers/session.js";
-import { listPhotos } from "../../helpers/domains/photo/photo.js";
 import { createCollection, deleteCollection } from "../../helpers/domains/photo/collection.js";
 import {
     addPhotosToCollection,
@@ -29,7 +29,7 @@ export { printSummary as handleSummary };
 const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
 
 export const options = buildLoadOptions({
-    targetRps: 20,
+    targetRps: 40,
     maxRps: 100,
     preAllocatedVUs: PRE_ALLOCATED_VUS,
     maxVUs: 2000,
@@ -53,11 +53,8 @@ function runCollectionPhotoFlow(data) {
     }
     maybeRefreshSession();
 
-    const photoListResult = listPhotos(1);
-    if (!photoListResult.success || !photoListResult.data?.length) {
-        return;
-    }
-    const photoId = photoListResult.data[0].id;
+    // 按 VU 分散取照片, 避免所有请求命中同一张最新照片造成行锁热点
+    const photoId = pickPhotoUserPhotoId(__VU);
 
     const collResult = createCollection(`CP ${__VU} ${Date.now()}`, "LoadTest");
     if (!collResult.success) return;

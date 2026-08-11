@@ -23,8 +23,10 @@ PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like
 
 # face/person 压测数据量(与 seed.sql 对齐)
 PHOTO_COUNT ?= 40000   # photo_photo 总数(= PHOTO_USERS * PHOTOS_PER_USER)
+PHOTO_USERS ?= 2000    # photo 压测用户数(seed.sql 同值)
 FACES        ?= 40000  # photo_face 总行数(= 每照片 1 张脸)
 PERSONS      ?= 2000   # photo_person 总行数(= 每 photo 用户 1 个)
+PHOTOS_PER_USER ?= 20  # 每 photo 用户照片数(seed.sql 同值; 供脚本按 VU 定位照片)
 
 # ── 负载模型 ─────────────────────────────────────────
 # LOAD_MODE=target(默认): constant-arrival-rate 固定迭代率, 稳定对比
@@ -40,8 +42,14 @@ FACE_TARGET_RPS   ?= 500
 FACE_MAX_RPS      ?= 100000
 PERSON_TARGET_RPS ?= 500
 PERSON_MAX_RPS    ?= 100000
+# photo 子场景独立目标迭代率(target 模式), 覆盖 PHOTO_NOS3_SERVICES 内各脚本
 PHOTO_TARGET_RPS  ?= 30
 PHOTO_MAX_RPS     ?= 100000
+# 各 photo 子场景目标迭代率(默认提高, 可用 <场景名>_TARGET_RPS 覆盖)
+PHOTO_COLLECTION_TARGET_RPS        ?= 60
+PHOTO_COLLECTION_PHOTO_TARGET_RPS  ?= 40
+PHOTO_COMMENT_TARGET_RPS           ?= 50
+PHOTO_COMMENT_LIKE_TARGET_RPS      ?= 50
 # 压测时长(target 模式, 如 2m/3m; max 模式 stages 固定 1m+2m+1m)
 DURATION ?= 2m
 
@@ -176,13 +184,22 @@ run-once:              ## 单轮全场景压测(auth + user + photo + face + per
 
 photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景(直接运行独立脚本)
 	@for s in $(PHOTO_NOS3_SERVICES); do \
-		echo "=== photo scenario: $$s ==="; \
+		case "$$s" in \
+			collection)        trps=$(PHOTO_COLLECTION_TARGET_RPS);; \
+			collection_photo)  trps=$(PHOTO_COLLECTION_PHOTO_TARGET_RPS);; \
+			comment)           trps=$(PHOTO_COMMENT_TARGET_RPS);; \
+			comment_like)      trps=$(PHOTO_COMMENT_LIKE_TARGET_RPS);; \
+			*)                 trps=$(PHOTO_TARGET_RPS);; \
+		esac; \
+		echo "=== photo scenario: $$s (target=$$trps) ==="; \
 		k6 run -q \
 			-e BASE_URL=$(BASE_URL) \
 			-e LOAD_MODE=$(LOAD_MODE) \
-			-e TARGET_RPS=$(PHOTO_TARGET_RPS) \
+			-e TARGET_RPS=$$trps \
 			-e MAX_RPS=$(PHOTO_MAX_RPS) \
 			-e DURATION=$(DURATION) \
+			-e PHOTOS_PER_USER=$(PHOTOS_PER_USER) \
+			-e PHOTO_USERS=$(PHOTO_USERS) \
 			-e SUMMARY_EXPORT=$(OUT_DIR)/photo_$${s}_summary.json \
 			scenarios/photo/$$s.js || echo "[warn] scenario $$s 失败"; \
 	done

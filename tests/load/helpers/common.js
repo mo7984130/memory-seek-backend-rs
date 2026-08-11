@@ -15,6 +15,7 @@ if (!BASE_URL) {
 // 数据量配置（与 seed.sql 的 psql 变量对齐）
 const AUTH_USERS = parseInt(__ENV.AUTH_USERS || "10000");
 const PHOTO_USERS = parseInt(__ENV.PHOTO_USERS || "2000");
+const PHOTOS_PER_USER = parseInt(__ENV.PHOTOS_PER_USER || "20");
 
 /**
  * 生成 auth 测试用户凭据
@@ -40,6 +41,20 @@ export function getPhotoUserCredentials(vuId) {
         account: `loadtest_photo_${userId}@test.com`,
         password: "Test123456",
     };
+}
+
+/**
+ * 取当前 VU 关联用户的一张照片 id(随机, 分散请求避免热点)。
+ *
+ * 依赖 seed.sql 的 id 分布: 用户 g 的照片 id 连续分布在
+ * [(g-1)*PHOTOS_PER_USER+1, g*PHOTOS_PER_USER](INSERT 按 (u, p) 顺序自增)。
+ * @param {number} vuId - VU ID
+ * @returns {number} 该用户某张照片的 id
+ */
+export function pickPhotoUserPhotoId(vuId) {
+    const userId = (vuId % PHOTO_USERS) + 1;
+    const base = (userId - 1) * PHOTOS_PER_USER;
+    return base + Math.floor(Math.random() * PHOTOS_PER_USER) + 1;
 }
 
 /**

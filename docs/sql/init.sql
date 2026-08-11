@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS photo_photo
 CREATE UNIQUE INDEX IF NOT EXISTS uk_photo_file_id ON photo_photo (file_id);
 
 -- 普通索引：幂等创建
-CREATE INDEX IF NOT EXISTS idx_photo_created_at ON photo_photo (created_at DESC);
+-- 复合 (created_at, id) 使 keyset 分页排序直接走索引, 避免全表排序
+CREATE INDEX IF NOT EXISTS idx_photo_created_at ON photo_photo (created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_photo_md5 ON photo_photo (md5);
 CREATE INDEX IF NOT EXISTS idx_photo_user_id ON photo_photo (user_id);
 CREATE INDEX IF NOT EXISTS idx_photo_like_count ON photo_photo (like_count DESC);

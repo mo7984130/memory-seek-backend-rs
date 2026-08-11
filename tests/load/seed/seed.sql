@@ -37,7 +37,8 @@ FROM generate_series(1, :PHOTO_USERS) AS g
 ON CONFLICT (id) DO NOTHING;
 
 -- 3. 照片元数据(每个 photo 用户预置若干张; file_id 唯一, 无需真实对象存储)
-INSERT INTO photo_photo (user_id, name, size, width, height, mime_type, md5, file_id)
+-- created_at 随 (u, p) 递增, 避免所有照片同刻导致分页排序退化(压测更贴近真实分布)
+INSERT INTO photo_photo (user_id, name, size, width, height, mime_type, md5, file_id, created_at)
 SELECT (:AUTH_USERS + u + 1),
        'seed_' || u || '_' || p,
        102400,
@@ -45,7 +46,8 @@ SELECT (:AUTH_USERS + u + 1),
        300,
        'image/jpeg',
        lpad((u::bigint * 100000 + p)::text, 32, '0'),
-       'seed_file_' || u || '_' || p
+       'seed_file_' || u || '_' || p,
+       now() - interval '1 minute' * ((:PHOTO_USERS - u) * :PHOTOS_PER_USER + (:PHOTOS_PER_USER - p))
 FROM generate_series(1, :PHOTO_USERS) AS u
 CROSS JOIN generate_series(1, :PHOTOS_PER_USER) AS p
 ON CONFLICT (file_id) DO NOTHING;
