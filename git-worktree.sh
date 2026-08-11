@@ -2,8 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR"
-WT_ROOT="${MSK_WT_ROOT:-$(dirname "$SCRIPT_DIR")/worktrees}"
+REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --git-common-dir)"
+REPO_ROOT="$(cd "$REPO_ROOT/.." && pwd)"
+WT_ROOT="${MSK_WT_ROOT:-$(dirname "$REPO_ROOT")/worktrees}"
 CARGO_TARGET_DIR="${MSK_TARGET_DIR:-$SCRIPT_DIR/target}"
 DEFAULT_BASE="${MSK_BASE_BRANCH:-develop}"
 BRANCH_PREFIX="${MSK_BRANCH_PREFIX:-feature}"
