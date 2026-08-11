@@ -6,25 +6,26 @@
 //! - [`run_bench`]: 统一入口(setup + 场景)
 //! - [`redis`]: Redis 连接池与清理(默认专用 db,避免误删本地数据)
 //! - [`s3_mock`]: 嵌入式内存 S3 mock(axum)
-//! - [`loader`] / [`delayed_loader`]: db mock loader(零 IO / 带固定延迟)
+//! - [`MockDb`]: 固定 IO 延迟的模拟数据库
+//! - [`MockRedis`]: 纯内存 L2 缓存后端
 //! - [`new_counter`]: 时间戳递增计数器起点(避免跨运行 key 冲突)
 //!
 //! # 环境变量
 //! - `BENCH_REDIS_URL`: Redis 地址(默认 `redis://127.0.0.1:6379/15`,专用 db)
 //! - `BENCH_NO_FLUSH`: 设置为任意值可跳过 Redis 清理
-//! - `BENCH_DATABASE_URL`: 保留字段(当前 DB 以 mock 方式提供)
 
 pub use criterion;
 
 use criterion::Criterion;
 
-mod keys;
-mod mock;
+pub mod cache;
+pub mod keys;
+pub mod mock;
 pub mod redis;
 pub mod s3_mock;
 
-pub use keys::new_counter;
-pub use mock::{delayed_loader, loader};
+pub use keys::{keys, new_counter};
+pub use mock::{MockDb, MockRow, id_of, key_of, loader};
 
 /// 统一 criterion 配置
 pub fn criterion_config() -> Criterion {

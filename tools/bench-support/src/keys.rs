@@ -11,3 +11,8 @@ pub fn new_counter() -> AtomicU64 {
         .as_nanos() as u64;
     AtomicU64::new(now)
 }
+
+/// 固定 key 集(0..count),用于缓存命中类场景
+pub fn keys(count: u64) -> Vec<u64> {
+    (0..count).collect()
+}

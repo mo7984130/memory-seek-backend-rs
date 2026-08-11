@@ -8,16 +8,14 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use deadpool_redis::Pool;
 use indexmap::IndexMap;
 use moka::future::Cache;
-use redis::AsyncCommands;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tracing::warn;
 
+use crate::cache::CacheBackend;
 use crate::error::AppError;
-use crate::ext::{RedisExt, TraceExt};
 
 /// 缓存实例配置
 #[derive(Debug, Clone, Copy)]
@@ -51,8 +49,8 @@ pub struct MultiLevelCache<T> {
     name: &'static str,
     /// L1 进程内缓存，直接存储反序列化对象，命中零拷贝
     local: Cache<String, Arc<T>>,
-    /// L2 Redis 连接池，以 JSON 字符串存储
-    redis: Pool,
+    /// L2 缓存后端（生产为 Redis 连接池，基准可用内存 mock），以 JSON 字符串存储
+    redis: Arc<dyn CacheBackend>,
     /// 缓存是否启用。禁用时读写全部穿透到数据库（loader），用于压测对比
     enabled: bool,
 }
@@ -65,9 +63,9 @@ where
     ///
     /// # 参数
     /// - `name`: 缓存实例名称（用于指标前缀与日志，如 `user_info`）
-    /// - `redis`: Redis 连接池（L2）
+    /// - `redis`: L2 缓存后端（生产传 Redis 连接池，基准可传内存 mock）
     /// - `config`: 缓存实例配置（启用开关、L1 容量、L1 TTL）
-    pub fn new(name: &'static str, redis: Pool, config: CacheConfig) -> Self {
+    pub fn new(name: &'static str, redis: impl CacheBackend, config: CacheConfig) -> Self {
         // 禁用时 L1 容量置 0，避免保留无效的内存缓存
         let capacity = if config.enabled {
             config.local_capacity
@@ -81,7 +79,7 @@ where
         Self {
             name,
             local,
-            redis,
+            redis: Arc::new(redis),
             enabled: config.enabled,
         }
     }
@@ -114,7 +112,7 @@ where
 
         // ---- L2 命中 ----
         let start = Instant::now();
-        let cached: Option<String> = self.redis.get_as(&key).await?;
+        let cached: Option<String> = self.redis.get(&key).await?;
         if let Some(json) = cached {
             match serde_json::from_str::<T>(&json) {
                 Ok(value) => {
@@ -145,8 +143,7 @@ where
                 .unwrap_or_else(|e| warn!("MultiLevelCache 写 L2 失败 key={}: {:?}", key, e));
         } else {
             warn!("MultiLevelCache 序列化数据失败 key={}", key);
-        }
-        self.write_l1(key, value.clone()).await;
+        }        self.write_l1(key, value.clone()).await;
 
         Ok(value)
     }
@@ -229,15 +226,13 @@ where
             entry.1.push(i);
         }
 
-        let unique_keys: Vec<&str> = key_to_info.values().map(|(key, _)| key.as_str()).collect();
+        let unique_keys: Vec<String> = key_to_info.values().map(|(key, _)| key.clone()).collect();
         let start = Instant::now();
-        let cached_jsons: Vec<Option<String>> = {
-            let mut conn = self.redis.get().await?;
-            conn.mget(&unique_keys).await.unwrap_or_else(|e| {
+        let cached_jsons: Vec<Option<String>> =
+            self.redis.get_many(&unique_keys).await.unwrap_or_else(|e| {
                 warn!("MultiLevelCache MGET 失败，降级为全量加载: {:?}", e);
                 vec![None; unique_keys.len()]
-            })
-        };
+            });
         self.record_duration("l2:get:duration_seconds", start);
 
         let mut l2_miss_keys: Vec<usize> = Vec::new();
@@ -288,14 +283,15 @@ where
             );
 
             if !write_back.is_empty() {
-                let mut conn = self.redis.get().await?;
-                let mut pipe = redis::pipe();
-                for (key, item) in write_back {
-                    self.write_l1(key.clone(), item.clone()).await;
-                    let json = serde_json::to_string(&item)?;
-                    pipe.set_ex(&key, json, ttl).ignore();
-                }
-                let _: Result<(), AppError> = pipe.query_async(&mut conn).await.trace();
+                let items: Vec<(String, String, u64)> = {
+                    let mut items = Vec::with_capacity(write_back.len());
+                    for (key, item) in write_back {
+                        self.write_l1(key.clone(), item.clone()).await;
+                        items.push((key, serde_json::to_string(&item)?, ttl));
+                    }
+                    items
+                };
+                self.redis.set_ex_many(&items).await?;
             }
         }
 
@@ -357,8 +353,7 @@ where
         for key in keys {
             self.local.invalidate(key).await;
         }
-        let mut conn = self.redis.get().await?;
-        let _: () = conn.del(keys).await?;
+        self.redis.del_many(keys).await?;
         self.update_entries_gauge();
         Ok(())
     }

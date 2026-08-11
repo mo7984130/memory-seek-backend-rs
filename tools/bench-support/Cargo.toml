@@ -1,6 +1,6 @@
 [package]
 name = "bench-support"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [dependencies]
@@ -12,3 +12,5 @@ redis = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 bytes = { workspace = true }
+serde = { workspace = true }
+async-trait = { workspace = true }
