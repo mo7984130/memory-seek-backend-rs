@@ -17,7 +17,8 @@ usage() {
   create <agent名> [基础分支]  创建独立 worktree 与分支 <前缀>/<名>, 并启动 opencode
   open   <agent名>             打开已有 worktree 并启动 opencode
   list                         列出所有 worktree
-  merge  <agent名> [目标分支] 用 --no-ff 将分支合并到目标分支(默认 $DEFAULT_BASE)
+  merge  <agent名> [目标分支] 用 --no-ff 合并到目标分支(默认 $DEFAULT_BASE), 推送远端后删除分支
+                            (加 --keep 保留分支与 worktree)
   rename <agent名> [新agent名] 重命名 worktree 分支(默认只换前缀)
   remove <agent名>             删除 worktree 与分支
   reset  <agent名>             重置 worktree 到基础分支最新状态
@@ -123,10 +124,17 @@ find_target_worktree() {
 }
 
 merge() {
-  local name target branch tdir dirty
+  local name target branch tdir dirty keep
   name="$(require_agent "${1:?缺少 agent 名}")"
   target="${2:-$DEFAULT_BASE}"
   branch="$(branch_name "$name")"
+  keep=0
+  for arg in "${@:3}"; do
+    case "$arg" in
+      --keep) keep=1 ;;
+      *) log_err "未知参数: $arg"; exit 1 ;;
+    esac
+  done
 
   if [[ "$branch" == "$target" ]]; then
     log_err "不能把分支合并到自身: $branch"
@@ -165,9 +173,30 @@ merge() {
     log_err "  4. git add <已解决的文件>"
     log_err "  5. git merge --continue (会复用上面的提交信息)"
     log_err "  或放弃合并: git merge --abort"
+    log_err "  合并失败, 未推送、未删除分支"
     exit 1
   fi
   log_info "合并完成: $target <- $branch"
+
+  if git -C "$tdir" push origin "$target"; then
+    log_info "已推送: origin/$target"
+  else
+    log_err "推送失败, 请手动执行: git -C $tdir push origin $target"
+    exit 1
+  fi
+
+  if [[ "$keep" -eq 1 ]]; then
+    log_warn "已保留分支与 worktree: $branch"
+    return 0
+  fi
+
+  if [[ -d "$(worktree_dir "$name")" ]]; then
+    git -C "$REPO_ROOT" worktree remove --force "$(worktree_dir "$name")"
+  fi
+  if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$REPO_ROOT" branch -D "$branch"
+  fi
+  log_info "已删除分支与 worktree: $branch"
 }
 
 rename() {
