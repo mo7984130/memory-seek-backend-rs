@@ -2,6 +2,7 @@ use crate::mappers::timeline_stat_mapper::TimelineStatMapper;
 use crate::state::PhotoState;
 use common::{Result, metrics_group, metrics_name, metrics_success, utils::MetricsTimerExt};
 use constants::RedisKeys;
+use std::time::Duration;
 use types::photo::dto::timeline_stat::MonthStat;
 
 pub(crate) struct TimelineStatService;
@@ -15,8 +16,8 @@ impl TimelineStatService {
         let stats = state
             .cache_timeline_stat
             .get_or_load(
-                RedisKeys::photo::timeline_stat::monthly_stats().to_string(),
-                60 * 60,
+                RedisKeys::photo::timeline_stat::monthly_stats(),
+                Duration::from_secs(60 * 60),
                 || {
                     Box::pin(
                         async move { TimelineStatMapper::query_monthly_stats(&state.db).await },

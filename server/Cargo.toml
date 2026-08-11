@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2024"
 
 [[bin]]
@@ -57,6 +57,7 @@ oss = { path = "../libs/oss", optional = true }
 sea-orm = { workspace = true }
 redis = { workspace = true }
 deadpool-redis = { workspace = true }
+multi-level-cache.workspace = true
 
 # UUID
 uuid = { workspace = true }

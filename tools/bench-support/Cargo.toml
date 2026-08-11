@@ -1,6 +1,6 @@
 [package]
 name = "bench-support"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 
 [dependencies]
@@ -14,3 +14,4 @@ axum = { workspace = true }
 bytes = { workspace = true }
 serde = { workspace = true }
 async-trait = { workspace = true }
+multi-level-cache.workspace = true

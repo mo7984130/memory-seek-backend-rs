@@ -1,11 +1,11 @@
 [package]
 name = "user"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics", "oss/metrics"]
+metrics = ["common/metrics", "dep:metrics", "oss/metrics", "multi-level-cache/metrics"]
 controller = ["dep:axum"]
 
 [dependencies]
@@ -26,6 +26,7 @@ axum = { workspace = true, optional = true }
 metrics = { workspace = true, optional = true }
 num_cpus = { workspace = true }
 bytes.workspace = true
+multi-level-cache.workspace = true
 
 [dev-dependencies]
 tokio-test = { workspace = true }

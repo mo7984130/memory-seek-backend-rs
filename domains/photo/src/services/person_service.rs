@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 
 use common::ext::ToOk;
 use common::{
@@ -546,7 +547,7 @@ impl PersonService {
                 .get_or_load_batch(
                     &person_ids,
                     |id| RedisKeys::photo::person::person_info(*id),
-                    24 * 60 * 60,
+                    Duration::from_secs(24 * 60 * 60),
                     |miss_ids| async move {
                         PersonMapper::query_brief_by_ids(&state.db, &miss_ids).await
                     },
@@ -594,7 +595,7 @@ impl PersonService {
                 .get_or_load_batch(
                     &person_ids,
                     |id| RedisKeys::photo::person::person_info(*id),
-                    24 * 60 * 60,
+                    Duration::from_secs(24 * 60 * 60),
                     |miss_ids| async move {
                         PersonMapper::query_brief_by_ids(&state.db, &miss_ids).await
                     },

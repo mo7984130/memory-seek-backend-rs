@@ -1,4 +1,5 @@
 use std::pin::Pin;
+use std::time::Duration;
 
 use bytes::Bytes;
 use chrono::Utc;
@@ -56,7 +57,7 @@ impl PhotoService {
             state.cache_photo_info.get_or_load_batch(
                 photo_ids,
                 |id| RedisKeys::photo::photo::photo_info(*id),
-                24 * 60 * 60,
+                Duration::from_secs(24 * 60 * 60),
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
                 |photo| photo.id,
             ),
@@ -171,11 +172,15 @@ impl PhotoService {
         let md5_hash_for_check = md5_hash.clone();
         let exists = state
             .cache_photo_md5
-            .get_or_load(md5_cache_key.clone(), 24 * 60 * 60, || {
-                Box::pin(
-                    async move { PhotoMapper::exists_by_md5(&state.db, &md5_hash_for_check).await },
-                )
-            })
+            .get_or_load(
+                md5_cache_key.as_str(),
+                Duration::from_secs(24 * 60 * 60),
+                || {
+                    Box::pin(async move {
+                        PhotoMapper::exists_by_md5(&state.db, &md5_hash_for_check).await
+                    })
+                },
+            )
             .timed(metrics_name!("cache_get_or_load"))
             .await?;
         if exists {
@@ -235,7 +240,7 @@ impl PhotoService {
         let _ = tokio::join!(
             state
                 .cache_photo_md5
-                .put(&md5_cache_key, true, 24 * 60 * 60)
+                .put(&md5_cache_key, true, Duration::from_secs(24 * 60 * 60))
                 .timed(metrics_name!("cache_put")),
             state
                 .cache_timeline_stat
@@ -442,8 +447,9 @@ impl PhotoService {
                         let (width, height) = state
                             .cache_photo_dimensions
                             .get_or_load(
-                                RedisKeys::photo::photo::photo_dimensions(&file_id_for_cache),
-                                24 * 60 * 60,
+                                RedisKeys::photo::photo::photo_dimensions(&file_id_for_cache)
+                                    .as_str(),
+                                Duration::from_secs(24 * 60 * 60),
                                 || {
                                     Box::pin(async move {
                                         PhotoMapper::query_dimensions_by_file_id(

@@ -586,7 +586,7 @@ dependencies = [
 
 [[package]]
 name = "bench-support"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "axum",
@@ -594,6 +594,7 @@ dependencies = [
  "common",
  "criterion",
  "deadpool-redis",
+ "multi-level-cache",
  "oss",
  "redis",
  "serde",
@@ -963,7 +964,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -972,7 +973,6 @@ dependencies = [
  "axum-client-ip",
  "base64 0.22.1",
  "bcrypt",
- "bench-support",
  "chrono",
  "const_format",
  "deadpool-redis",
@@ -980,9 +980,8 @@ dependencies = [
  "hex",
  "hkdf",
  "image",
- "indexmap",
  "metrics",
- "moka",
+ "multi-level-cache",
  "password-hash",
  "rand 0.10.2",
  "redis",
@@ -2217,7 +2216,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.57.0",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -2972,6 +2971,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "multi-level-cache"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b3284ab894df8662fc32bd9958482995962a2ddef9cd2af01fa5b1f8967a643"
+dependencies = [
+ "async-trait",
+ "deadpool-redis",
+ "indexmap",
+ "metrics",
+ "moka",
+ "redis",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "nalgebra"
 version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3504,7 +3521,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "async-trait",
  "axum",
@@ -3523,6 +3540,7 @@ dependencies = [
  "md5",
  "metrics",
  "moka",
+ "multi-level-cache",
  "ndarray",
  "once_cell",
  "oss",
@@ -4796,7 +4814,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "auth",
  "axum",
@@ -4812,6 +4830,7 @@ dependencies = [
  "metrics",
  "metrics-exporter-prometheus",
  "metrics-tracing-context",
+ "multi-level-cache",
  "oss",
  "photo",
  "redis",
@@ -5950,7 +5969,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "axum",
  "bytes",
@@ -5959,6 +5978,7 @@ dependencies = [
  "constants",
  "deadpool-redis",
  "metrics",
+ "multi-level-cache",
  "num_cpus",
  "oss",
  "redis",

@@ -1,11 +1,11 @@
 [package]
 name = "photo"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics", "oss/metrics"]
+metrics = ["common/metrics", "dep:metrics", "oss/metrics", "multi-level-cache/metrics"]
 controller = ["dep:axum"]
 file_validator = ["common/file_validator"]
 face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]
@@ -34,6 +34,7 @@ md5 = { workspace = true }
 uuid = { workspace = true }
 futures = { workspace = true }
 deadpool-redis = { workspace = true }
+multi-level-cache.workspace = true
 base64 = { workspace = true }
 moka = { workspace = true }
 bytes = { workspace = true }

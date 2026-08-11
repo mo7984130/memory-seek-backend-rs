@@ -1,5 +1,5 @@
-use common::cache::CacheConfig;
 use deadpool_redis::Pool;
+use multi_level_cache::CacheConfig;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;

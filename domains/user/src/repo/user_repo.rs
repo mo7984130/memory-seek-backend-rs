@@ -1,9 +1,11 @@
-use common::cache::{CacheConfig, MultiLevelCache};
+use std::time::Duration;
+
 use common::ext::{OptionExt, RedisExt, ToOk};
 use common::utils::{DbUtils, MetricsTimerExt};
 use common::{Result, metrics_name};
 use constants::RedisKeys;
 use deadpool_redis::Pool;
+use multi_level_cache::{CacheConfig, MultiLevelCache};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
@@ -19,8 +21,8 @@ use crate::models::UserInfoRow;
 pub struct UserRepo {
     db: DatabaseConnection,
     redis: Pool,
-    cache_user_info: MultiLevelCache<UserInfoRow>,
-    cache_user_info_single: MultiLevelCache<UserInfo>,
+    cache_user_info: MultiLevelCache<UserInfoRow, common::error::AppError>,
+    cache_user_info_single: MultiLevelCache<UserInfo, common::error::AppError>,
 }
 
 impl UserRepo {
@@ -31,9 +33,10 @@ impl UserRepo {
     /// - `redis`: Redis 连接池（缓存 L2 存储与登出时删除 access_token）
     /// - `cache_config`: 缓存配置（启用开关、L1 容量、L1 TTL）
     pub fn new(db: DatabaseConnection, redis: Pool, cache_config: CacheConfig) -> Self {
-        let cache_user_info = MultiLevelCache::new("user_info", redis.clone(), cache_config);
+        let cache_user_info =
+            MultiLevelCache::new_with_name("user_info", redis.clone(), cache_config);
         let cache_user_info_single =
-            MultiLevelCache::new("user_info_single", redis.clone(), cache_config);
+            MultiLevelCache::new_with_name("user_info_single", redis.clone(), cache_config);
         Self {
             db,
             redis,
@@ -47,8 +50,8 @@ impl UserRepo {
         let info = self
             .cache_user_info_single
             .get_or_load(
-                RedisKeys::auth::user_info_cache(user_id),
-                USER_INFO_CACHE_TTL_SECS as u64,
+                RedisKeys::auth::user_info_cache(user_id).as_str(),
+                Duration::from_secs(USER_INFO_CACHE_TTL_SECS as u64),
                 || {
                     Box::pin(async move {
                         let user = Self::query_by_id(&self.db, user_id)
@@ -74,7 +77,7 @@ impl UserRepo {
             .get_or_load_batch(
                 user_ids,
                 |id| RedisKeys::auth::user_info_cache(*id),
-                USER_INFO_CACHE_TTL_SECS as u64,
+                Duration::from_secs(USER_INFO_CACHE_TTL_SECS as u64),
                 |miss_ids| {
                     Box::pin(async move {
                         let users: Vec<UserInfoRow> = user::Entity::find()

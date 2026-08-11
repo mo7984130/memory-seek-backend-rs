@@ -5,6 +5,7 @@ use crate::config::AppConfig;
 use crate::state::AppState;
 use axum::Router;
 use common::traits::controller::ControllerRouter;
+use multi_level_cache::CacheConfig;
 use photo::PhotoState;
 use std::sync::Arc;
 use tracing::info;
@@ -26,7 +27,7 @@ pub fn register(
     let photo_state = Arc::new(PhotoState::new(
         state.db.clone(),
         state.redis.clone(),
-        common::cache::CacheConfig::new(
+        CacheConfig::new(
             _cfg.cache.enabled,
             _cfg.cache.local_capacity,
             std::time::Duration::from_secs(_cfg.cache.local_ttl_secs),
