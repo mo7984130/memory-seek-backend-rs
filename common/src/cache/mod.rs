@@ -21,6 +21,14 @@
 //!
 //! 启用 `metrics` feature 时，每个缓存实例按 `cache:{name}:{layer}:{op}` 命名采集
 //! 命中率、耗时与容量指标。
+//!
+//! # 适用范围约定
+//!
+//! [`MultiLevelCache`] 仅用于读多写少的热点数据。会话类、一次性数据
+//! （如 access_token、邮箱验证码、邀请码）仍通过 [`RedisExt`] 直连 Redis，
+//! 不进入 L1 本地缓存，避免跨实例一致性与安全风险。
+//!
+//! [`RedisExt`]: crate::ext::RedisExt
 
 mod multi_level;
 
