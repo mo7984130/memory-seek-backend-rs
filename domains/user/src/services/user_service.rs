@@ -18,7 +18,7 @@ use types::user::{
     UpdateAvatarParam, UserBriefView, UserInfo,
 };
 
-use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL_SECONDS};
+use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL};
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
 static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
@@ -83,7 +83,7 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
             .arg(&key)
             .arg(user_id.0)
             .arg("EX")
-            .arg(INVITER_CODE_TTL_SECONDS)
+            .arg(INVITER_CODE_TTL.as_secs())
             .arg("NX")
             .query_async(&mut conn)
             .timed(metrics_name!("redis_set"))
@@ -94,7 +94,7 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
 
             return Ok(InviterCodeView {
                 inviter_code: code,
-                expire_at: Utc::now() + Duration::try_seconds(INVITER_CODE_TTL_SECONDS).unwrap(),
+                expire_at: Utc::now() + Duration::from_std(INVITER_CODE_TTL).unwrap(),
             });
         }
     }

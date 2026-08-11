@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use common::ext::{OptionExt, RedisExt, ToOk};
 use common::utils::{DbUtils, MetricsTimerExt};
 use common::{Result, metrics_name};
@@ -14,7 +12,7 @@ use sea_orm::{
 use types::auth::user::{self, UserId, UserRecord};
 use types::user::UserInfo;
 
-use crate::config::USER_INFO_CACHE_TTL_SECS;
+use crate::config::USER_INFO_CACHE_TTL;
 use crate::models::UserInfoRow;
 
 /// 用户数据访问仓储，封装数据库与缓存，向 service 层提供统一的数据访问入口
@@ -51,7 +49,7 @@ impl UserRepo {
             .cache_user_info_single
             .get_or_load(
                 RedisKeys::auth::user_info_cache(user_id).as_str(),
-                Duration::from_secs(USER_INFO_CACHE_TTL_SECS as u64),
+                USER_INFO_CACHE_TTL,
                 || {
                     Box::pin(async move {
                         let user = Self::query_by_id(&self.db, user_id)
@@ -77,7 +75,7 @@ impl UserRepo {
             .get_or_load_batch(
                 user_ids,
                 |id| RedisKeys::auth::user_info_cache(*id),
-                Duration::from_secs(USER_INFO_CACHE_TTL_SECS as u64),
+                USER_INFO_CACHE_TTL,
                 |miss_ids| {
                     Box::pin(async move {
                         let users: Vec<UserInfoRow> = user::Entity::find()
