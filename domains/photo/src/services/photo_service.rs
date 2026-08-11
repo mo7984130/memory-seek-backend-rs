@@ -175,11 +175,7 @@ impl PhotoService {
             .get_or_load(
                 md5_cache_key.as_str(),
                 Duration::from_secs(24 * 60 * 60),
-                || {
-                    Box::pin(async move {
-                        PhotoMapper::exists_by_md5(&state.db, &md5_hash_for_check).await
-                    })
-                },
+                || async move { PhotoMapper::exists_by_md5(&state.db, &md5_hash_for_check).await },
             )
             .timed(metrics_name!("cache_get_or_load"))
             .await?;
@@ -450,19 +446,17 @@ impl PhotoService {
                                 RedisKeys::photo::photo::photo_dimensions(&file_id_for_cache)
                                     .as_str(),
                                 Duration::from_secs(24 * 60 * 60),
-                                || {
-                                    Box::pin(async move {
-                                        PhotoMapper::query_dimensions_by_file_id(
-                                            &state.db,
-                                            &file_id_for_cache,
-                                        )
-                                        .await?
-                                        .ok_or_warn_bad_request(
-                                            "photo_not_found",
-                                            "裁剪图片不存在",
-                                            "照片不存在",
-                                        )
-                                    })
+                                || async move {
+                                    PhotoMapper::query_dimensions_by_file_id(
+                                        &state.db,
+                                        &file_id_for_cache,
+                                    )
+                                    .await?
+                                    .ok_or_warn_bad_request(
+                                        "photo_not_found",
+                                        "裁剪图片不存在",
+                                        "照片不存在",
+                                    )
                                 },
                             )
                             .timed(metrics_name!("cache_get_or_load"))

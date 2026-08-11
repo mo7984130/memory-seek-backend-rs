@@ -50,13 +50,11 @@ impl UserRepo {
             .get_or_load(
                 RedisKeys::auth::user_info_cache(user_id).as_str(),
                 USER_INFO_CACHE_TTL,
-                || {
-                    Box::pin(async move {
-                        let user = Self::query_by_id(&self.db, user_id)
-                            .await?
-                            .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
-                        Ok(UserInfo::from_with_token(user))
-                    })
+                || async move {
+                    let user = Self::query_by_id(&self.db, user_id)
+                        .await?
+                        .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
+                    Ok(UserInfo::from_with_token(user))
                 },
             )
             .timed(metrics_name!("cache_get_or_load"))
@@ -76,19 +74,17 @@ impl UserRepo {
                 user_ids,
                 |id| RedisKeys::auth::user_info_cache(*id),
                 USER_INFO_CACHE_TTL,
-                |miss_ids| {
-                    Box::pin(async move {
-                        let users: Vec<UserInfoRow> = user::Entity::find()
-                            .filter(user::Column::Id.is_in(miss_ids))
-                            .select_only()
-                            .column_as(user::Column::Id, "user_id")
-                            .column(user::Column::Nickname)
-                            .column(user::Column::AvatarFileId)
-                            .into_model::<UserInfoRow>()
-                            .all(&self.db)
-                            .await?;
-                        Ok(users)
-                    })
+                |miss_ids| async move {
+                    let users: Vec<UserInfoRow> = user::Entity::find()
+                        .filter(user::Column::Id.is_in(miss_ids))
+                        .select_only()
+                        .column_as(user::Column::Id, "user_id")
+                        .column(user::Column::Nickname)
+                        .column(user::Column::AvatarFileId)
+                        .into_model::<UserInfoRow>()
+                        .all(&self.db)
+                        .await?;
+                    Ok(users)
                 },
                 |dto| dto.user_id,
             )

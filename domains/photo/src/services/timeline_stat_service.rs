@@ -18,11 +18,7 @@ impl TimelineStatService {
             .get_or_load(
                 RedisKeys::photo::timeline_stat::monthly_stats(),
                 Duration::from_secs(60 * 60),
-                || {
-                    Box::pin(
-                        async move { TimelineStatMapper::query_monthly_stats(&state.db).await },
-                    )
-                },
+                || async move { TimelineStatMapper::query_monthly_stats(&state.db).await },
             )
             .timed(metrics_name!("cache_get_or_load"))
             .await?;
