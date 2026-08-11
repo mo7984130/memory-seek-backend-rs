@@ -10,11 +10,11 @@
 //! let client = oss::S3Client::new(&mock.s3_config());
 //! ```
 
+use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::StatusCode;
 use axum::routing::{delete, get, put};
-use axum::Router;
 use oss::S3Config;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -137,10 +137,6 @@ async fn delete_object(
     State(store): State<Store>,
     Path((bucket, key)): Path<(String, String)>,
 ) -> StatusCode {
-    store
-        .0
-        .lock()
-        .unwrap()
-        .remove(&storage_key(&bucket, &key));
+    store.0.lock().unwrap().remove(&storage_key(&bucket, &key));
     StatusCode::NO_CONTENT
 }

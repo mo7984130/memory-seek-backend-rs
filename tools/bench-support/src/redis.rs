@@ -11,7 +11,7 @@ pub fn redis_url() -> String {
 
 /// 构建 Redis 连接池(懒连接,构建时不建立实际连接)
 pub fn make_pool() -> Pool {
-    let cfg = Config::from_url(&redis_url());
+    let cfg = Config::from_url(redis_url());
     cfg.create_pool(Some(Runtime::Tokio1)).unwrap()
 }
 
@@ -29,10 +29,7 @@ pub async fn flush_db(pool: &Pool) -> bool {
         Ok(c) => c,
         Err(_) => return false,
     };
-    match redis::cmd("FLUSHDB").query_async::<String>(&mut conn).await {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    redis::cmd("FLUSHDB").query_async::<String>(&mut conn).await.is_ok()
 }
 
 /// 按前缀清理 key(SCAN + DEL),不影响其它前缀的数据

@@ -23,10 +23,7 @@ async fn s3_mock_clear() {
     let mock = S3Mock::start("bench-bucket").await;
     let client = oss::S3Client::new(&mock.s3_config());
 
-    client
-        .upload("a", &b"x"[..], "text/plain")
-        .await
-        .unwrap();
+    client.upload("a", &b"x"[..], "text/plain").await.unwrap();
     mock.clear();
     assert!(client.download("a").await.is_err());
 }

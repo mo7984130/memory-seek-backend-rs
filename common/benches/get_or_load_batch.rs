@@ -35,7 +35,8 @@ async fn prefill(cache: &MultiLevelCache<mock::MockRow>, ks: &[u64]) {
 }
 
 fn bench_all_l1_hits(c: &mut criterion::Criterion) {
-    let cache = make_cache::<mock::MockRow>("bench_all_l1_hits", MockRedis::new(), true, 1024 * 1024);
+    let cache =
+        make_cache::<mock::MockRow>("bench_all_l1_hits", MockRedis::new(), true, 1024 * 1024);
     let ks = keys(KEY_COUNT);
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(prefill(&cache, &ks));
@@ -83,7 +84,8 @@ fn bench_l1_miss_l2_hit(c: &mut criterion::Criterion) {
 }
 
 fn bench_disabled_with_db_io(c: &mut criterion::Criterion) {
-    let cache = make_cache::<mock::MockRow>("bench_disabled_with_db_io", MockRedis::new(), false, 0);
+    let cache =
+        make_cache::<mock::MockRow>("bench_disabled_with_db_io", MockRedis::new(), false, 0);
     let db = mock::MockDb::new(DB_IO_DELAY);
     let ks = keys(KEY_COUNT);
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -108,7 +110,8 @@ fn bench_disabled_with_db_io(c: &mut criterion::Criterion) {
 fn bench_full_miss_with_db_io(c: &mut criterion::Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
-    let cache = make_cache::<mock::MockRow>("bench_full_miss_with_db_io", MockRedis::new(), true, 0);
+    let cache =
+        make_cache::<mock::MockRow>("bench_full_miss_with_db_io", MockRedis::new(), true, 0);
     let db = mock::MockDb::new(DB_IO_DELAY);
     // 每次迭代使用全新 key 集,保证 L2 必 miss(避免回填后二次命中)
     let counter = new_counter();

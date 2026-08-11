@@ -143,7 +143,8 @@ where
                 .unwrap_or_else(|e| warn!("MultiLevelCache 写 L2 失败 key={}: {:?}", key, e));
         } else {
             warn!("MultiLevelCache 序列化数据失败 key={}", key);
-        }        self.write_l1(key, value.clone()).await;
+        }
+        self.write_l1(key, value.clone()).await;
 
         Ok(value)
     }
@@ -372,7 +373,7 @@ where
         fresh_data: Vec<T>,
         result_mapper: M,
         index_lookup: L,
-        results: &mut Vec<Option<T>>,
+        results: &mut [Option<T>],
     ) -> Vec<(String, T)>
     where
         M: Fn(&T) -> K,

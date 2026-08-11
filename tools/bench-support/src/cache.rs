@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use common::cache::{CacheBackend, CacheConfig, MultiLevelCache};
 use common::error::AppError;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -23,7 +23,11 @@ pub fn make_cache<T>(
 where
     T: Clone + Serialize + DeserializeOwned + Send + Sync + 'static,
 {
-    MultiLevelCache::new(name, backend, CacheConfig::new(enabled, local_capacity, LOCAL_TTL))
+    MultiLevelCache::new(
+        name,
+        backend,
+        CacheConfig::new(enabled, local_capacity, LOCAL_TTL),
+    )
 }
 
 struct Entry {
@@ -57,10 +61,10 @@ impl CacheBackend for MockRedis {
     async fn get(&self, key: &str) -> Result<Option<String>, AppError> {
         let now = Instant::now();
         let mut map = self.store.lock().unwrap();
-        if let Some(entry) = map.get(key) {
-            if entry.expires_at.map_or(true, |t| now < t) {
-                return Ok(Some(entry.value.clone()));
-            }
+        if let Some(entry) = map.get(key)
+            && entry.expires_at.is_none_or(|t| now < t)
+        {
+            return Ok(Some(entry.value.clone()));
         }
         map.remove(key);
         Ok(None)

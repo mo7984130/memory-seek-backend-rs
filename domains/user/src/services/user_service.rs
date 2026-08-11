@@ -18,9 +18,7 @@ use types::user::{
     UpdateAvatarParam, UserBriefView, UserInfo,
 };
 
-use crate::config::{
-    GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL_SECONDS,
-};
+use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL_SECONDS};
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
 static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
@@ -269,7 +267,10 @@ pub async fn change_password(
     };
 
     // 更新数据库
-    state.repo.update_password(user_id, new_password_hash).await?;
+    state
+        .repo
+        .update_password(user_id, new_password_hash)
+        .await?;
 
     // 登出. 清除token
     logout(state, user_id).await?;
