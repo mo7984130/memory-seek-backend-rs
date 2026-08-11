@@ -5,6 +5,7 @@
 
 import {
     getPhotoUserCredentials,
+    pickPhotoUserPhotoId,
     recordResult,
     printSummary,
     buildLoadOptions,
@@ -16,7 +17,6 @@ import {
     initSession,
     maybeRefreshSession,
 } from "../../helpers/session.js";
-import { listPhotos } from "../../helpers/domains/photo/photo.js";
 import { createComment, deleteComment } from "../../helpers/domains/photo/comment.js";
 import {
     likeComment,
@@ -28,7 +28,7 @@ export { printSummary as handleSummary };
 const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
 
 export const options = buildLoadOptions({
-    targetRps: 30,
+    targetRps: 50,
     maxRps: 150,
     preAllocatedVUs: PRE_ALLOCATED_VUS,
     maxVUs: 2000,
@@ -52,11 +52,8 @@ function runCommentLikeFlow(data) {
     }
     maybeRefreshSession();
 
-    const photoListResult = listPhotos(1);
-    if (!photoListResult.success || !photoListResult.data?.length) {
-        return;
-    }
-    const photoId = photoListResult.data[0].id;
+    // 按 VU 分散取照片, 避免所有请求命中同一张最新照片造成行锁热点
+    const photoId = pickPhotoUserPhotoId(__VU);
 
     const commentResult = createComment(photoId, `Like target VU${__VU} ${Date.now()}`);
     if (!commentResult.success) return;
