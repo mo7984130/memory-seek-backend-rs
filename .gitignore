@@ -34,3 +34,4 @@ tests/load/baselines/*
 tests/load/ci/server.log
 tests/load/ci/server.pid
 tests/load/ci/logs/
+verify-test
