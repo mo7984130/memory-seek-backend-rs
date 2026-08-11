@@ -29,7 +29,10 @@ pub async fn flush_db(pool: &Pool) -> bool {
         Ok(c) => c,
         Err(_) => return false,
     };
-    redis::cmd("FLUSHDB").query_async::<String>(&mut conn).await.is_ok()
+    redis::cmd("FLUSHDB")
+        .query_async::<String>(&mut conn)
+        .await
+        .is_ok()
 }
 
 /// 按前缀清理 key(SCAN + DEL),不影响其它前缀的数据
