@@ -4,15 +4,12 @@ use common::{Result, metrics_name};
 use constants::RedisKeys;
 use deadpool_redis::Pool;
 use multi_level_cache::{CacheConfig, MultiLevelCache};
-use sea_orm::sea_query::Expr;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QuerySelect, Set,
-};
-use types::auth::user::{self, UserId, UserRecord};
+use sea_orm::DatabaseConnection;
+use types::auth::user::UserId;
 use types::user::UserInfo;
 
 use crate::config::USER_INFO_CACHE_TTL;
+use crate::mapper::UserMapper;
 use crate::models::UserInfoRow;
 
 /// 用户数据访问仓储，封装数据库与缓存，向 service 层提供统一的数据访问入口
@@ -51,7 +48,7 @@ impl UserRepo {
                 RedisKeys::auth::user_info_cache(user_id).as_str(),
                 USER_INFO_CACHE_TTL,
                 || async move {
-                    let user = Self::query_by_id(&self.db, user_id)
+                    let user = UserMapper::query_by_id(&self.db, user_id)
                         .await?
                         .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
                     Ok(UserInfo::from_with_token(user))
@@ -75,15 +72,7 @@ impl UserRepo {
                 |id| RedisKeys::auth::user_info_cache(*id),
                 USER_INFO_CACHE_TTL,
                 |miss_ids| async move {
-                    let users: Vec<UserInfoRow> = user::Entity::find()
-                        .filter(user::Column::Id.is_in(miss_ids))
-                        .select_only()
-                        .column_as(user::Column::Id, "user_id")
-                        .column(user::Column::Nickname)
-                        .column(user::Column::AvatarFileId)
-                        .into_model::<UserInfoRow>()
-                        .all(&self.db)
-                        .await?;
+                    let users = UserMapper::query_info_rows(&self.db, &miss_ids).await?;
                     Ok(users)
                 },
                 |dto| dto.user_id,
@@ -96,10 +85,7 @@ impl UserRepo {
 
     /// 修改用户昵称，并失效用户信息缓存（L1 + L2）
     pub async fn change_nickname(&self, user_id: UserId, new_nickname: String) -> Result<String> {
-        user::Entity::update_many()
-            .col_expr(user::Column::Nickname, Expr::value(new_nickname.clone()))
-            .filter(user::Column::Id.eq(user_id))
-            .exec(&self.db)
+        UserMapper::update_nickname(&self.db, user_id, &new_nickname)
             .timed(metrics_name!("db_update"))
             .await?;
 
@@ -112,25 +98,7 @@ impl UserRepo {
     pub async fn update_avatar(&self, user_id: UserId, new_key: String) -> Result<Option<String>> {
         let old_key = DbUtils::write(&self.db, move |txn| {
             let new_key = new_key.clone();
-            Box::pin(async move {
-                let old_key: Option<String> = user::Entity::find_by_id(user_id)
-                    .select_only()
-                    .column(user::Column::AvatarFileId)
-                    .into_values::<Option<String>, user::Column>()
-                    .one(txn)
-                    .await?
-                    .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
-
-                user::ActiveModel {
-                    id: Set(user_id),
-                    avatar_file_id: Set(Some(new_key)),
-                    ..Default::default()
-                }
-                .update(txn)
-                .await?;
-
-                Ok(old_key)
-            })
+            Box::pin(async move { UserMapper::update_avatar(txn, user_id, new_key).await })
         })
         .timed(metrics_name!("db_transaction"))
         .await?;
@@ -142,43 +110,23 @@ impl UserRepo {
 
     /// 查询用户密码哈希
     pub async fn query_password_hash(&self, user_id: UserId) -> Result<String> {
-        let password: String = user::Entity::find_by_id(user_id)
-            .select_only()
-            .column(user::Column::Password)
-            .into_tuple()
-            .one(&self.db)
+        UserMapper::query_password_hash(&self.db, user_id)
             .timed(metrics_name!("db_query"))
-            .await?
-            .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
-
-        password.to_ok()
+            .await
     }
 
     /// 更新用户密码哈希
     pub async fn update_password(&self, user_id: UserId, new_password_hash: String) -> Result<()> {
-        user::ActiveModel {
-            id: Set(user_id),
-            password: Set(new_password_hash),
-            ..Default::default()
-        }
-        .update(&self.db)
-        .timed(metrics_name!("db_update"))
-        .await?;
-
-        Ok(())
+        UserMapper::update_password(&self.db, user_id, new_password_hash)
+            .timed(metrics_name!("db_update"))
+            .await
     }
 
     /// 登出：清除 refresh_token 与 access_token，并失效用户信息缓存
     pub async fn logout(&self, user_id: UserId) -> Result<()> {
         let (refresh_token_result, access_token_result) = tokio::join!(
-            user::ActiveModel {
-                id: Set(user_id),
-                refresh_token: Set(None),
-                refresh_token_expire_at: Set(None),
-                ..Default::default()
-            }
-            .update(&self.db)
-            .timed(metrics_name!("db_update")),
+            UserMapper::clear_refresh_token(&self.db, user_id)
+                .timed(metrics_name!("db_update")),
             self.redis
                 .del(RedisKeys::auth::user_access_token(user_id))
                 .timed(metrics_name!("redis_delete"))
@@ -189,15 +137,6 @@ impl UserRepo {
         self.invalidate_user_info(user_id).await;
 
         Ok(())
-    }
-
-    /// 按 ID 查询完整用户记录（数据库直查，缓存未命中时由调用方回填）
-    async fn query_by_id(db: &impl ConnectionTrait, user_id: UserId) -> Result<Option<UserRecord>> {
-        user::Entity::find_by_id(user_id)
-            .one(db)
-            .await?
-            .map(UserRecord::from)
-            .to_ok()
     }
 
     /// 失效用户信息缓存（L1 + L2），失败不返回错误，下次读取时自动重建
