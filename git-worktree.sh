@@ -6,6 +6,7 @@ REPO_ROOT="$SCRIPT_DIR"
 WT_ROOT="${MSK_WT_ROOT:-$(dirname "$SCRIPT_DIR")/worktrees}"
 CARGO_TARGET_DIR="${MSK_TARGET_DIR:-$SCRIPT_DIR/target}"
 DEFAULT_BASE="${MSK_BASE_BRANCH:-develop}"
+BRANCH_PREFIX="${MSK_BRANCH_PREFIX:-feature}"
 OPENCODE_CMD="${MSK_OPENCODE:-opencode}"
 
 usage() {
@@ -13,9 +14,11 @@ usage() {
 用法: $(basename "$0") <命令> [参数]
 
 命令:
-  create <agent名> [基础分支]  创建独立 worktree 与分支 agent/<名>, 并启动 opencode
+  create <agent名> [基础分支]  创建独立 worktree 与分支 <前缀>/<名>, 并启动 opencode
   open   <agent名>             打开已有 worktree 并启动 opencode
   list                         列出所有 worktree
+  merge  <agent名> [目标分支] 用 --no-ff 将分支合并到目标分支(默认 $DEFAULT_BASE)
+  rename <agent名> [新agent名] 重命名 worktree 分支(默认只换前缀)
   remove <agent名>             删除 worktree 与分支
   reset  <agent名>             重置 worktree 到基础分支最新状态
   setenv                       打印 CARGO_TARGET_DIR 供手动 export
@@ -24,6 +27,7 @@ usage() {
   MSK_WT_ROOT        worktree 根目录    (默认: 仓库父目录/worktrees)
   MSK_TARGET_DIR     共享 target 目录   (默认: 仓库根/target)
   MSK_BASE_BRANCH    默认基础分支       (默认: develop)
+  MSK_BRANCH_PREFIX  分支前缀           (默认: feature)
   MSK_OPENCODE       opencode 命令      (默认: opencode)
 EOF
 }
@@ -41,7 +45,7 @@ require_agent() {
   echo "$name"
 }
 
-branch_name() { echo "agent/$1"; }
+branch_name() { echo "$BRANCH_PREFIX/$1"; }
 worktree_dir() { echo "$WT_ROOT/$1"; }
 
 create() {
@@ -109,6 +113,92 @@ list() {
   printf '\n共享 target: %s\n' "$CARGO_TARGET_DIR"
 }
 
+find_target_worktree() {
+  # 返回某个分支当前所在的 worktree 目录, 找不到返回空
+  local target="$1"
+  git -C "$REPO_ROOT" worktree list --porcelain | awk -v branch="branch refs/heads/$target" '
+    /^worktree / { dir=substr($0, index($0, " ")+1) }
+    $0 == branch { print dir; exit }
+  '
+}
+
+merge() {
+  local name target branch tdir dirty
+  name="$(require_agent "${1:?缺少 agent 名}")"
+  target="${2:-$DEFAULT_BASE}"
+  branch="$(branch_name "$name")"
+
+  if [[ "$branch" == "$target" ]]; then
+    log_err "不能把分支合并到自身: $branch"
+    exit 1
+  fi
+  if ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+    log_err "分支不存在: $branch"
+    exit 1
+  fi
+  if ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$target"; then
+    log_err "目标分支不存在: $target"
+    exit 1
+  fi
+
+  tdir="$(find_target_worktree "$target")"
+  if [[ -z "$tdir" ]]; then
+    log_err "目标分支 $target 未被任何 worktree 检出"
+    log_err "请先在目标分支所在 worktree 中执行: git checkout $target"
+    exit 1
+  fi
+  dirty="$(git -C "$tdir" status --porcelain | grep -v '^?? \.wt-env\.sh$' || true)"
+  if [[ -n "$dirty" ]]; then
+    log_err "目标 worktree($tdir) 存在未提交改动, 请先提交或还原"
+    git -C "$tdir" status --short
+    exit 1
+  fi
+
+  log_info "目标 worktree: $tdir"
+  log_info "执行: git merge --no-ff $branch"
+  if ! git -C "$tdir" merge --no-ff "$branch" -m "Merge branch '$branch' into $target"; then
+    log_err ""
+    log_err "合并产生冲突, 请按以下步骤解决:"
+    log_err "  1. cd $tdir"
+    log_err "  2. git status 查看冲突文件"
+    log_err "  3. 手动编辑冲突文件, 保留想要的内容"
+    log_err "  4. git add <已解决的文件>"
+    log_err "  5. git merge --continue (会复用上面的提交信息)"
+    log_err "  或放弃合并: git merge --abort"
+    exit 1
+  fi
+  log_info "合并完成: $target <- $branch"
+}
+
+rename() {
+  local name newname branch newbranch wdir
+  name="$(require_agent "${1:?缺少 agent 名}")"
+  newname="${2:-$name}"
+  newname="$(require_agent "$newname")"
+  branch="$(branch_name "$name")"
+  newbranch="$(branch_name "$newname")"
+
+  if [[ "$branch" == "$newbranch" ]]; then
+    log_warn "分支名相同: $branch"
+    exit 0
+  fi
+  if ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+    log_err "分支不存在: $branch"
+    exit 1
+  fi
+  if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$newbranch"; then
+    log_err "目标分支已存在: $newbranch"
+    exit 1
+  fi
+  wdir="$(worktree_dir "$name")"
+  if [[ ! -d "$wdir" ]]; then
+    log_err "worktree 不存在: $wdir"
+    exit 1
+  fi
+  git -C "$REPO_ROOT" branch -m "$branch" "$newbranch"
+  log_info "已重命名: $branch -> $newbranch"
+}
+
 remove() {
   local name branch wdir
   name="$(require_agent "${1:?缺少 agent 名}")"
@@ -166,7 +256,7 @@ setenv() {
 
 cmd="${1:-}"
 case "$cmd" in
-  create|open|list|remove|reset|setenv|help|-h|--help)
+  create|open|list|merge|rename|remove|reset|setenv|help|-h|--help)
     ;;
   *)
     usage
@@ -178,6 +268,8 @@ case "$cmd" in
   create) create "${@:2}" ;;
   open)   open "${@:2}" ;;
   list)   list ;;
+  merge)  merge "${@:2}" ;;
+  rename) rename "${@:2}" ;;
   remove) remove "${@:2}" ;;
   reset)  reset "${@:2}" ;;
   setenv) setenv ;;

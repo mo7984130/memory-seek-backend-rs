@@ -1,5 +1,5 @@
-mod mapper;
 mod models;
+mod repo;
 pub mod services;
 mod state;
 
@@ -10,4 +10,5 @@ pub use controller::Controller;
 
 mod config;
 
+pub use repo::UserRepo;
 pub use state::UserState;

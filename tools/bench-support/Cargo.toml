@@ -1,0 +1,16 @@
+[package]
+name = "bench-support"
+version = "0.1.1"
+edition = "2024"
+
+[dependencies]
+common = { path = "../../common" }
+oss = { path = "../../libs/oss" }
+criterion = { workspace = true }
+deadpool-redis = { workspace = true }
+redis = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+bytes = { workspace = true }
+serde = { workspace = true }
+async-trait = { workspace = true }
