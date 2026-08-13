@@ -1,4 +1,4 @@
-use common::utils::TokenCipher;
+use common::Result;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use types::auth::user::UserId;
@@ -15,43 +15,41 @@ pub struct UserInfoRow {
 }
 
 /// 将数据库查询结果转换为 API 响应类型，对头像文件 ID 进行加密（内嵌浏览者身份）
-pub fn user_brief_view_from_dto(
-    dto: UserInfoRow,
-    token_cipher: &TokenCipher,
-    viewer: UserId,
-) -> UserBriefView {
-    let avatar_token = dto.avatar_file_id.as_ref().and_then(|key| {
-        let seed = format!("{}:{}", viewer, key);
-        token_cipher
-            .encrypt(&ImageToken::thumbnail(viewer, key.clone()), Some(&seed))
-            .ok()
-    });
+pub fn user_brief_view_from_dto(dto: UserInfoRow, viewer: UserId) -> Result<UserBriefView> {
+    let avatar_token = dto
+        .avatar_file_id
+        .as_deref()
+        .map(|key| ImageToken::encrypt_avatar_token(key, viewer))
+        .transpose()?;
 
-    UserBriefView {
+    Ok(UserBriefView {
         user_id: dto.user_id,
         nickname: dto.nickname,
         avatar_token,
-    }
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::utils::TokenCipher;
+    use common::utils::{TokenCipherConfig, init_token_cipher};
 
-    fn create_test_cipher() -> TokenCipher {
-        TokenCipher::new("test-secret-key-32bytes!xxxxxx", "test-salt")
+    fn init_test_cipher() {
+        init_token_cipher(&TokenCipherConfig {
+            key: "test-secret-key-32bytes!xxxxxx".to_owned(),
+            salt: "test-salt".to_owned(),
+        });
     }
 
     #[test]
     fn test_from_dto_with_avatar() {
-        let cipher = create_test_cipher();
+        init_test_cipher();
         let dto = UserInfoRow {
             user_id: UserId(42),
             nickname: "Alice".to_string(),
             avatar_file_id: Some("file123".to_string()),
         };
-        let vo = user_brief_view_from_dto(dto, &cipher, UserId(1));
+        let vo = user_brief_view_from_dto(dto, UserId(1)).unwrap();
         assert_eq!(vo.user_id, UserId(42));
         assert_eq!(vo.nickname, "Alice");
         assert!(vo.avatar_token.is_some());
@@ -59,13 +57,13 @@ mod tests {
 
     #[test]
     fn test_from_dto_without_avatar() {
-        let cipher = create_test_cipher();
+        init_test_cipher();
         let dto = UserInfoRow {
             user_id: UserId(1),
             nickname: "Bob".to_string(),
             avatar_file_id: None,
         };
-        let vo = user_brief_view_from_dto(dto, &cipher, UserId(2));
+        let vo = user_brief_view_from_dto(dto, UserId(2)).unwrap();
         assert_eq!(vo.user_id, UserId(1));
         assert_eq!(vo.nickname, "Bob");
         assert!(vo.avatar_token.is_none());

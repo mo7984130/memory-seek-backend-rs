@@ -119,13 +119,16 @@ mod entity {
     }
 
     impl UserInfo {
-        pub fn with_avatar_token(mut self) -> Self {
-            self.avatar_token =
-                ImageToken::encrypt_avatar_token(self.avatar_token.as_deref(), self.id);
-            self
+        pub fn with_avatar_token(mut self) -> common::Result<Self> {
+            self.avatar_token = self
+                .avatar_token
+                .as_deref()
+                .map(|key| ImageToken::encrypt_avatar_token(key, self.id))
+                .transpose()?;
+            Ok(self)
         }
 
-        pub fn from_with_token(user: UserRecord) -> Self {
+        pub fn from_with_token(user: UserRecord) -> common::Result<Self> {
             UserInfo::from(user).with_avatar_token()
         }
     }

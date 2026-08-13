@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "auth"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "axum",
  "chrono",
@@ -5850,7 +5850,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5980,7 +5980,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "axum",
  "bytes",

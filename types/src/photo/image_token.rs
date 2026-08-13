@@ -7,10 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::user::UserId;
 #[cfg(feature = "orm")]
-use common::error::AppError;
-#[cfg(feature = "orm")]
-use common::ext::ResultErrExt;
-#[cfg(feature = "orm")]
 use common::utils::token_cipher;
 
 /// 图片类型
@@ -143,20 +139,15 @@ impl ImageToken {
     /// 加密头像缩略图 token
     ///
     /// # 参数
-    /// - `avatar_file_id`: 头像文件 ID，为 `None` 时返回 `None`
+    /// - `avatar_file_id`: 头像文件 ID
     /// - `viewer`: 浏览者用户 ID
     ///
     /// # 返回
-    /// 加密后的头像 token，加密失败返回 `None`
+    /// 加密后的头像 token，加密失败返回 `AppError`
     #[cfg(feature = "orm")]
-    pub fn encrypt_avatar_token(avatar_file_id: Option<&str>, viewer: UserId) -> Option<String> {
-        avatar_file_id.and_then(|key| {
-            let seed = format!("{}:{}", viewer, key);
-            token_cipher()
-                .encrypt(&Self::thumbnail(viewer, key), Some(&seed))
-                .trace_warn("encrypt_avatar_token_err", "加密头像失败", AppError::Ignore)
-                .ok()
-        })
+    pub fn encrypt_avatar_token(avatar_file_id: &str, viewer: UserId) -> common::Result<String> {
+        let seed = format!("{}:{}", viewer, avatar_file_id);
+        token_cipher().encrypt(&Self::thumbnail(viewer, avatar_file_id), Some(&seed))
     }
 }
 
@@ -361,19 +352,11 @@ mod orm_tests {
     #[test]
     fn test_encrypt_avatar_token_some() {
         let cipher = test_cipher();
-        let token = ImageToken::encrypt_avatar_token(Some("avatar-file-id"), UserId(9));
-        assert!(token.is_some());
+        let token = ImageToken::encrypt_avatar_token("avatar-file-id", UserId(9)).unwrap();
         // 验证能解密回来
-        let decrypted: ImageToken = cipher.decrypt(&token.unwrap()).unwrap();
+        let decrypted: ImageToken = cipher.decrypt(&token).unwrap();
         assert_eq!(decrypted.file_id, "avatar-file-id");
         assert_eq!(decrypted.token_type, ImageTokenType::Thumbnail);
         assert_eq!(decrypted.viewer_id, UserId(9));
-    }
-
-    #[test]
-    fn test_encrypt_avatar_token_none() {
-        test_cipher();
-        let token = ImageToken::encrypt_avatar_token(None, UserId(9));
-        assert!(token.is_none());
     }
 }

@@ -51,7 +51,7 @@ impl UserRepo {
                     let user = UserMapper::query_by_id(&self.db, user_id)
                         .await?
                         .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
-                    Ok(UserInfo::from_with_token(user))
+                    UserInfo::from_with_token(user)
                 },
             )
             .timed(metrics_name!("cache_get_or_load"))

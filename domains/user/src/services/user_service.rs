@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use chrono::{Duration, Utc};
-use common::ext::{OptionExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
-use common::utils::{FileValidator, MetricsTimerExt, rand_utils, token_cipher};
+use common::ext::{RedisExt, ResultInspectErrAsync, ToOk, log_err};
+use common::utils::{FileValidator, MetricsTimerExt, rand_utils};
 use common::{Result, error::AppError, metrics_name, timed};
 use constants::{PasswordHasher, RedisKeys};
 use sea_orm::sqlx::types::uuid;
@@ -184,11 +184,7 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token = ImageToken::encrypt_avatar_token(Some(&new_key), user_id).ok_or_warn(
-        "encrypt_avatar_token_err",
-        "加密头像Token错误",
-        AppError::InternalServerError,
-    )?;
+    let avatar_token = ImageToken::encrypt_avatar_token(&new_key, user_id)?;
 
     Ok(avatar_token)
 }
@@ -309,8 +305,11 @@ pub async fn get_user_info_batch(
     // 带三级缓存的获取用户信息
     let result = state.repo.get_user_info_batch(&user_ids).await?;
 
-    Ok(result
+    result
         .into_iter()
-        .map(|opt| opt.map(|dto| user_brief_view_from_dto(dto, token_cipher(), user_id)))
-        .collect())
+        .map(|opt| {
+            opt.map(|dto| user_brief_view_from_dto(dto, user_id))
+                .transpose()
+        })
+        .collect::<Result<Vec<_>>>()
 }
