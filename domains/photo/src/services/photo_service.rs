@@ -5,7 +5,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{DeferOptionExt, IntoDeferredExt, OptionExt, ResultInspectErrAsync, log_warn},
+    ext::{ContextOptionExt, IntoContextualExt, OptionExt, ResultInspectErrAsync, log_warn},
     inc_error, metrics_name,
     models::CursorPage,
     timed,
@@ -75,7 +75,7 @@ impl PhotoService {
                     .with_liked(liked)
                     .with_tokens(&file_id, user_id, token_cipher())
             })
-            .collect::<common::error::deferred::Result<Vec<_>>>()?;
+            .collect::<common::error::contextual::Result<Vec<_>>>()?;
         Ok(views)
     }
 
@@ -161,7 +161,7 @@ impl PhotoService {
                     md5::compute(&file_data_clone)
                 ))
                 .await
-                .into_deferred()?
+                .into_contextual()?
             )
         };
         // 带三级缓存的 MD5 去重校验
@@ -222,7 +222,7 @@ impl PhotoService {
         })
         .await
         .inspect_err(|_| inc_error!("db"))
-        .into_deferred()?;
+        .into_contextual()?;
 
         // 增加时间线统计
         // 错误不返回
@@ -443,7 +443,7 @@ impl PhotoService {
                                         &file_id_for_cache,
                                     )
                                     .await?
-                                    .defer_warn_none(
+                                    .context_warn_none(
                                         "photo_not_found",
                                         "裁剪图片不存在",
                                         AppError::bad_request("照片不存在"),

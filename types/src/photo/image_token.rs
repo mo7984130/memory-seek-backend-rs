@@ -148,7 +148,7 @@ impl ImageToken {
     pub fn encrypt_avatar_token(
         avatar_file_id: &str,
         viewer: UserId,
-    ) -> common::error::deferred::Result<String> {
+    ) -> common::error::contextual::Result<String> {
         let seed = format!("{}:{}", viewer, avatar_file_id);
         token_cipher().encrypt(&Self::thumbnail(viewer, avatar_file_id), Some(&seed))
     }

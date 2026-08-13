@@ -1,6 +1,6 @@
 use clap::Parser;
 use common::Result;
-use common::{error::DeferredError, ext::DeferResultExt};
+use common::{error::ContextualError, ext::ContextResultExt};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
 
     // 加载配置
     let cfg = AppConfig::load(cli.config).map_err(|source| {
-        DeferredError::error(
+        ContextualError::error(
             "config_load_err",
             "加载配置失败",
             source,
@@ -106,7 +106,7 @@ async fn main() -> Result<()> {
 
     // 启动服务器
     tracing::info!("尝试监听{}端口", cfg.server.port);
-    let listener = TcpListener::bind(&cfg.server_addr()).await.defer_error(
+    let listener = TcpListener::bind(&cfg.server_addr()).await.context_error(
         "tcp_bind_err",
         "端口绑定失败",
         common::error::AppError::InternalServerError,
@@ -121,7 +121,7 @@ async fn main() -> Result<()> {
     )
     .with_graceful_shutdown(shutdown_signal)
     .await
-    .defer_error(
+    .context_error(
         "server_err",
         "服务器运行异常",
         common::error::AppError::InternalServerError,

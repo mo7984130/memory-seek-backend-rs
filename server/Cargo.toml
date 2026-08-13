@@ -37,7 +37,7 @@ photo = { path = "../domains/photo", features = ["controller"], optional = true 
 backup = { path = "../domains/backup", optional = true }
 
 # 基础设施
-common = { path = "../common", features = ["deferred-redis"] }
+common = { path = "../common", features = ["contextual-redis"] }
 constants = { path = "../domains/constants" }
 types = { path = "../types", features = ["orm"] }
 email = { path = "../libs/email", optional = true }

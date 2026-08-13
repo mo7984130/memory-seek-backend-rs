@@ -13,10 +13,10 @@ common = { path = "../../common", features = [
     "file_validator",
     "validators",
     "metrics",
-    "deferred-sea-orm",
-    "deferred-redis",
-    "deferred-cache",
-    "deferred-tokio",
+    "contextual-sea-orm",
+    "contextual-redis",
+    "contextual-cache",
+    "contextual-tokio",
 ] }
 constants = { path = "../constants" }
 types = { workspace = true, features = ["orm"] }

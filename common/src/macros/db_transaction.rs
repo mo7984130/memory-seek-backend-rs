@@ -33,8 +33,8 @@
 /// ```
 #[macro_export]
 macro_rules! db_transaction {
-    (deferred $db:expr, |$txn:ident| $body:block) => {
-        $crate::utils::DbUtils::write_deferred($db, move |$txn| {
+    (contextual $db:expr, |$txn:ident| $body:block) => {
+        $crate::utils::DbUtils::write_contextual($db, move |$txn| {
             ::std::boxed::Box::pin(async move $body)
         })
     };
@@ -43,7 +43,7 @@ macro_rules! db_transaction {
             let transaction = ::sea_orm::TransactionTrait::begin($db)
                 .await
                 .map_err(|error| {
-                    $crate::error::DeferredError::error(
+                    $crate::error::ContextualError::error(
                         "db_conn_err",
                         "开启数据库事务失败",
                         error,
@@ -62,7 +62,7 @@ macro_rules! db_transaction {
                         .commit()
                         .await
                         .map_err(|error| {
-                            $crate::error::DeferredError::error(
+                            $crate::error::ContextualError::error(
                                 "db_commit_err",
                                 "提交数据库事务失败",
                                 error,
@@ -76,7 +76,7 @@ macro_rules! db_transaction {
                         .rollback()
                         .await
                         .map_err(|error| {
-                            $crate::error::DeferredError::error(
+                            $crate::error::ContextualError::error(
                                 "db_rollback_err",
                                 "回滚数据库事务失败",
                                 error,

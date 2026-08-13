@@ -10,8 +10,8 @@ crate::id_type!(FaceId, "photo/");
 
 #[cfg(feature = "face-engine")]
 mod entity {
-    use common::error::{AppError, DeferredError};
-    use common::ext::DeferResultExt;
+    use common::error::{AppError, ContextualError};
+    use common::ext::ContextResultExt;
     use insight_face_rs::types::{BoundingBox, Face, FaceEmbedding, FaceLandmarks};
     use insight_face_rs::PgVector;
     use sea_orm::entity::prelude::*;
@@ -63,14 +63,14 @@ mod entity {
     }
 
     impl TryFrom<Model> for FaceRecord {
-        type Error = DeferredError;
+        type Error = ContextualError;
         fn try_from(value: Model) -> Result<Self, Self::Error> {
-            let bbox: BoundingBox = serde_json::from_value(value.bbox).defer_error(
+            let bbox: BoundingBox = serde_json::from_value(value.bbox).context_error(
                 "db:photo:face:bbox_from:err",
                 "BoundingBox转换错误",
                 AppError::InternalServerError,
             )?;
-            let landmarks: FaceLandmarks = serde_json::from_value(value.landmarks).defer_error(
+            let landmarks: FaceLandmarks = serde_json::from_value(value.landmarks).context_error(
                 "db:photo:face:landmark_from:err",
                 "Landmarks转换错误",
                 AppError::InternalServerError,

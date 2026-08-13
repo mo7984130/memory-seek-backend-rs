@@ -1,5 +1,5 @@
-use common::error::{AppError, DeferredError, deferred::Result};
-use common::ext::{DeferOptionExt, RedisExt};
+use common::error::{AppError, ContextualError, contextual::Result};
+use common::ext::{ContextOptionExt, RedisExt};
 use common::utils::MetricsTimerExt;
 use common::{db_transaction, metrics_name};
 use constants::RedisKeys;
@@ -17,8 +17,8 @@ use crate::models::UserInfoRow;
 pub struct UserRepo {
     db: DatabaseConnection,
     redis: Pool,
-    cache_user_info: MultiLevelCache<UserInfoRow, DeferredError>,
-    cache_user_info_single: MultiLevelCache<UserInfo, DeferredError>,
+    cache_user_info: MultiLevelCache<UserInfoRow, ContextualError>,
+    cache_user_info_single: MultiLevelCache<UserInfo, ContextualError>,
 }
 
 impl UserRepo {
@@ -51,7 +51,7 @@ impl UserRepo {
                 || async move {
                     let user = UserMapper::query_by_id(&self.db, user_id)
                         .await?
-                        .defer_warn_none(
+                        .context_warn_none(
                             "user_not_found",
                             "用户不存在",
                             AppError::bad_request("用户不存在"),
@@ -101,7 +101,7 @@ impl UserRepo {
 
     /// 在事务内更新头像，返回旧头像 key（由调用方决定是否删除旧文件）
     pub async fn update_avatar(&self, user_id: UserId, new_key: String) -> Result<Option<String>> {
-        let old_key = db_transaction!(deferred & self.db, |txn| {
+        let old_key = db_transaction!(contextual & self.db, |txn| {
             UserMapper::update_avatar(txn, user_id, new_key).await
         })
         .timed(metrics_name!("db_transaction"))

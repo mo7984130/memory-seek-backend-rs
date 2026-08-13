@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use common::error::DeferredError;
+use common::error::ContextualError;
 use multi_level_cache::{CacheConfig, MultiLevelCache, backend::Backend};
 
 /// 缓存实例的 L1 TTL(1 小时),基准过程中足够避免过期
@@ -15,7 +15,7 @@ pub fn make_cache<T>(
     backend: impl Backend,
     enabled: bool,
     local_capacity: u64,
-) -> MultiLevelCache<T, DeferredError>
+) -> MultiLevelCache<T, ContextualError>
 where
     T: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
 {

@@ -1,6 +1,6 @@
 [package]
 name = "common"
-version = "0.1.18"
+version = "0.2.0"
 edition = "2024"
 
 [features]
@@ -9,11 +9,11 @@ metrics = ["dep:metrics"]
 validators = ["dep:validator"]
 file_validator = ["dep:image"]
 tokio = ["dep:tokio"]
-deferred-sea-orm = []
-deferred-redis = []
-deferred-cache = []
-deferred-serde = []
-deferred-tokio = ["tokio"]
+contextual-sea-orm = []
+contextual-redis = []
+contextual-cache = []
+contextual-serde = []
+contextual-tokio = ["tokio"]
 # TypeScript 类型导出
 ts = ["dep:ts-rs"]
 
@@ -55,5 +55,5 @@ tracing-subscriber = { workspace = true }
 criterion = { workspace = true }
 
 [[bench]]
-name = "deferred_error"
+name = "contextual_error"
 harness = false

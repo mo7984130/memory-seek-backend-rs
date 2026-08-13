@@ -13,9 +13,9 @@ types = { workspace = true, features = ["orm"] }
 common = { path = "../../common", features = [
     "validators",
     "metrics",
-    "deferred-sea-orm",
-    "deferred-redis",
-    "deferred-tokio",
+    "contextual-sea-orm",
+    "contextual-redis",
+    "contextual-tokio",
 ] }
 constants = { path = "../constants" }
 sea-orm = { workspace = true }

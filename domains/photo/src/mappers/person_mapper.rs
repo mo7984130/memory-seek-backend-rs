@@ -1,6 +1,6 @@
 use common::{
-    error::{AppError, deferred::Result},
-    ext::{DeferResultExt, ToOk},
+    error::{AppError, contextual::Result},
+    ext::{ContextResultExt, ToOk},
 };
 use insight_face_rs::FaceEmbedding;
 use sea_orm::{
@@ -246,7 +246,7 @@ impl PersonMapper {
 
         rows.into_iter()
             .map(|row| {
-                let cover_bbox = serde_json::from_value(row.cover_bbox).defer_error(
+                let cover_bbox = serde_json::from_value(row.cover_bbox).context_error(
                     "db:photo:person:cover_bbox_from:err",
                     "封面 bbox 转换错误",
                     AppError::InternalServerError,

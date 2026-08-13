@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use common::error::{AppError, DeferredError, deferred::Result};
+use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::OkExt;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait, DbErr,
@@ -40,7 +40,7 @@ impl AuthMapper {
     }
 
     /// 将 SeaORM 插入用户时的 DbErr 转换为 AppError
-    fn handle_user_insert_err(e: DbErr) -> DeferredError {
+    fn handle_user_insert_err(e: DbErr) -> ContextualError {
         // 解析 PostgreSQL 唯一约束冲突 (23505)
         if let DbErr::Query(RuntimeErr::SqlxError(ref sqlx_err)) = e
             && let Some(pg_err) = sqlx_err.as_database_error()
@@ -55,10 +55,10 @@ impl AuthMapper {
                 ("row_existed", "记录已存在")
             };
 
-            return DeferredError::warn(reason, "注册失败", e, AppError::bad_request(msg));
+            return ContextualError::warn(reason, "注册失败", e, AppError::bad_request(msg));
         }
 
-        DeferredError::error(
+        ContextualError::error(
             "register_err",
             "用户注册时发生数据库异常",
             e,

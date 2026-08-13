@@ -17,9 +17,9 @@ common = { path = "../../common", features = [
     "validators",
     "file_validator",
     "metrics",
-    "deferred-sea-orm",
-    "deferred-cache",
-    "deferred-tokio",
+    "contextual-sea-orm",
+    "contextual-cache",
+    "contextual-tokio",
 ] }
 async-trait = { workspace = true }
 step_derive = { path = "../../libs/step_derive" }

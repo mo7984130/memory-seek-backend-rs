@@ -1,4 +1,4 @@
-use common::{Result, error::DeferredError};
+use common::{Result, error::ContextualError};
 use serde::Deserialize;
 
 use deadpool_redis::{Config as DeadpoolConfig, Pool, PoolConfig, Runtime};
@@ -35,7 +35,7 @@ pub fn init(cfg: &Config) -> Result<Pool> {
     let pool = redis_cfg
         .create_pool(Some(Runtime::Tokio1))
         .map_err(|source| {
-            DeferredError::error(
+            ContextualError::error(
                 "redis_pool_err",
                 "Redis连接池创建失败",
                 source,

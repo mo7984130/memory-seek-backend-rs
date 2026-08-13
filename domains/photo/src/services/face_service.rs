@@ -4,8 +4,8 @@ use std::sync::Arc;
 use backup::storage::BackupType;
 use common::{
     Result, db_transaction,
-    error::{AppError, DeferredError, deferred},
-    ext::{DeferResultExt, IntoDeferredExt, OptionExt, ToOk, UintExt},
+    error::{AppError, ContextualError, contextual},
+    ext::{ContextResultExt, IntoContextualExt, OptionExt, ToOk, UintExt},
     inc_counter, inc_error, metrics_name,
     models::CursorPage,
     set_gauge,
@@ -189,11 +189,11 @@ impl FaceService {
             face::Entity::delete_many()
                 .exec(txn)
                 .await
-                .into_deferred()?;
+                .into_contextual()?;
             person::Entity::delete_many()
                 .exec(txn)
                 .await
-                .into_deferred()?;
+                .into_contextual()?;
             Ok(())
         })
         .await
@@ -235,7 +235,7 @@ impl FaceService {
             .into_tuple::<(PhotoId, String)>()
             .all(&state.db)
             .await
-            .into_deferred()?
+            .into_contextual()?
             .into_iter()
             .collect();
 
@@ -253,10 +253,10 @@ impl FaceService {
 
         let img = {
             let _decode_timer = MetricsTimer::start(metrics_name!("photo_decode"));
-            let decode_result = tokio::task::spawn_blocking(move || -> deferred::Result<Img> {
+            let decode_result = tokio::task::spawn_blocking(move || -> contextual::Result<Img> {
                 image::load_from_memory(&bytes)
                     .map(|img| img.into_rgb8())
-                    .defer_error(
+                    .context_error(
                         "decode_image_error",
                         "解码图片失败",
                         AppError::InternalServerError,
@@ -264,7 +264,7 @@ impl FaceService {
             })
             .await
             .inspect_err(|_| inc_error!("decode"))
-            .into_deferred()?;
+            .into_contextual()?;
             decode_result.inspect_err(|_| inc_error!("decode"))?
         };
 
@@ -275,10 +275,10 @@ impl FaceService {
     async fn detect_photo(state: &PhotoState, img: Img) -> Result<Vec<Face>> {
         debug!("检测照片中");
         let face_engine_clone = Arc::clone(&state.face_engine);
-        let detect_result = spawn_blocking(move || -> deferred::Result<Vec<Face>> {
+        let detect_result = spawn_blocking(move || -> contextual::Result<Vec<Face>> {
             debug!("获取face-engine 锁");
             let mut eng = face_engine_clone.lock().map_err(|error| {
-                DeferredError::error(
+                ContextualError::error(
                     "poison_error",
                     "人脸引擎锁中毒",
                     error.to_string(),
@@ -286,7 +286,7 @@ impl FaceService {
                 )
             })?;
             debug!("获取成功");
-            let faces = eng.run(&img).defer_error(
+            let faces = eng.run(&img).context_error(
                 "face-engine_run_error",
                 "人脸检测模型运行失败",
                 AppError::InternalServerError,
@@ -296,7 +296,7 @@ impl FaceService {
         })
         .await
         .inspect_err(|_| inc_error!("detect"))
-        .into_deferred()?;
+        .into_contextual()?;
         Ok(detect_result.inspect_err(|_| inc_error!("detect"))?)
     }
 
@@ -309,7 +309,7 @@ impl FaceService {
                 .exec_without_returning(&state.db)
                 .await
                 .inspect_err(|_| inc_error!("insert"))
-                .into_deferred()?;
+                .into_contextual()?;
         }
         debug!("插入完成");
         Ok(())

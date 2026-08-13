@@ -1,5 +1,5 @@
-use common::error::{AppError, DeferredError, deferred::Result};
-use common::ext::{DeferOptionExt, DeferResultExt, OkExt};
+use common::error::{AppError, ContextualError, contextual::Result};
+use common::ext::{ContextOptionExt, ContextResultExt, OkExt};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
@@ -40,7 +40,7 @@ impl CommentMapper {
             .filter(Column::Id.eq(comment_id))
             .count(db)
             .await
-            .defer_error(
+            .context_error(
                 "db_query_err",
                 "查询评论是否存在失败",
                 AppError::InternalServerError,
@@ -50,7 +50,7 @@ impl CommentMapper {
 
     pub async fn ensure_exist(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<()> {
         if !Self::exists(db, comment_id).await? {
-            return Err(DeferredError::warn_without_source(
+            return Err(ContextualError::warn_without_source(
                 "comment_not_exist",
                 "评论不存在",
                 AppError::not_found("评论不存在"),
@@ -138,7 +138,7 @@ impl CommentMapper {
             .into_tuple::<PhotoId>()
             .one(db)
             .await?
-            .defer_warn_none(
+            .context_warn_none(
                 "comment_not_found",
                 "评论不存在",
                 AppError::bad_request("评论不存在"),

@@ -3,8 +3,8 @@ pub(crate) struct CollectionMapper;
 use std::collections::HashMap;
 
 use chrono::Utc;
-use common::error::{AppError, DeferredError, deferred::Result};
-use common::ext::{DeferOptionExt, OkExt};
+use common::error::{AppError, ContextualError, contextual::Result};
+use common::ext::{ContextOptionExt, OkExt};
 use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
@@ -59,7 +59,7 @@ impl CollectionMapper {
             [collection_id.into(), ids.into(), user_id.into()],
         );
 
-        let result = db.query_one(stmt).await?.defer_warn_none(
+        let result = db.query_one(stmt).await?.context_warn_none(
             "collection_not_found",
             "收藏夹不存在",
             AppError::not_found("收藏夹不存在"),
@@ -68,7 +68,7 @@ impl CollectionMapper {
         let new_count: i64 = result.try_get("", &c_photo_count)?;
 
         u64::try_from(new_count).map_err(|error| {
-            DeferredError::error(
+            ContextualError::error(
                 "collection_photo_count_negative",
                 "photo_count 异常为负值",
                 error,
@@ -265,7 +265,7 @@ impl CollectionMapper {
         collection_id: CollectionId,
     ) -> Result<()> {
         if !Self::is_belong(db, user_id, collection_id).await? {
-            return Err(DeferredError::warn_without_source(
+            return Err(ContextualError::warn_without_source(
                 "collection_not_belong_user",
                 "收藏夹不属于用户",
                 AppError::forbidden("该收藏夹不属于你"),
@@ -284,7 +284,7 @@ impl CollectionMapper {
             .filter(Column::UserId.eq(user_id))
             .one(db)
             .await?
-            .defer_warn_none(
+            .context_warn_none(
                 "collection_not_belong_user",
                 "收藏夹不属于用户",
                 AppError::forbidden("该收藏夹不属于你"),

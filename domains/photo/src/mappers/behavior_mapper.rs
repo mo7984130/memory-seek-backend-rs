@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use common::error::{AppError, deferred::Result};
-use common::ext::{DeferResultExt, ToOk};
+use common::error::{AppError, contextual::Result};
+use common::ext::{ContextResultExt, ToOk};
 use sea_orm::entity::prelude::Json;
 use sea_orm::{
     ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
@@ -37,7 +37,7 @@ impl BehaviorMapper {
         })
         .exec(db)
         .await
-        .defer_error(
+        .context_error(
             "db_insert_err",
             "插入行为审计记录失败",
             AppError::InternalServerError,
@@ -90,7 +90,7 @@ impl BehaviorMapper {
         sql.push_str(" GROUP BY bucket ORDER BY bucket ASC");
 
         let stmt = Statement::from_sql_and_values(DbBackend::Postgres, &sql, binds);
-        let rows = db.query_all(stmt).await.defer_error(
+        let rows = db.query_all(stmt).await.context_error(
             "db_query_err",
             "查询行为量统计失败",
             AppError::InternalServerError,
@@ -124,7 +124,7 @@ impl BehaviorMapper {
             ],
         );
 
-        let rows = db.query_all(stmt).await.defer_error(
+        let rows = db.query_all(stmt).await.context_error(
             "db_query_err",
             "查询热门目标排行失败",
             AppError::InternalServerError,
@@ -174,7 +174,7 @@ impl BehaviorMapper {
         query
             .all(db)
             .await
-            .defer_error(
+            .context_error(
                 "db_query_err",
                 "查询审计流水失败",
                 AppError::InternalServerError,

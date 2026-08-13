@@ -1,6 +1,6 @@
 use common::{
-    error::{AppError, deferred::Result},
-    ext::DeferResultExt,
+    error::{AppError, contextual::Result},
+    ext::ContextResultExt,
 };
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
@@ -70,7 +70,7 @@ impl EmailClient {
     /// 发送成功返回 `()`
     ///
     /// # 错误
-    /// - `DeferredError`: 由调用 service 记录并转换为 `AppError`
+    /// - `ContextualError`: 由调用 service 记录并转换为 `AppError`
     pub async fn send_message(&self, to: &str, subject: &str, body: String) -> Result<()> {
         #[cfg(feature = "metrics")]
         let start = std::time::Instant::now();
@@ -82,13 +82,13 @@ impl EmailClient {
                 .from(
                     format!("{} <{}>", self.from_name, self.from_email)
                         .parse::<Mailbox>()
-                        .defer_error(
+                        .context_error(
                             "email_from_email_err",
                             "发件人地址格式错误",
                             AppError::InternalServerError,
                         )?,
                 )
-                .to(to.parse::<Mailbox>().defer_warn(
+                .to(to.parse::<Mailbox>().context_warn(
                     "email_to_email_err",
                     "目标邮箱格式错误",
                     AppError::bad_request("邮箱格式错误"),
@@ -96,13 +96,13 @@ impl EmailClient {
                 .subject(subject)
                 .header(ContentType::TEXT_HTML)
                 .body(body)
-                .defer_error(
+                .context_error(
                     "email_body_err",
                     "构建邮件消息失败",
                     AppError::InternalServerError,
                 )?;
 
-            self.transport.send(email).await.defer_error(
+            self.transport.send(email).await.context_error(
                 "email_send_err",
                 "邮件服务商发送失败",
                 AppError::InternalServerError,

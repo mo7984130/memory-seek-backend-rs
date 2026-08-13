@@ -94,7 +94,7 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
                 self.file,
                 item.span(),
                 format!(
-                    "禁止实现 From<{source}> for AppError，基础设施错误必须先转换为 DeferredError"
+                    "禁止实现 From<{source}> for AppError，基础设施错误必须先转换为 ContextualError"
                 ),
             ));
         }
@@ -106,7 +106,7 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
             self.violations.push(Violation::new(
                 self.file,
                 item.span(),
-                "下层模块必须使用 common::error::deferred::Result，不能提前返回 common::Result/AppError",
+                "下层模块必须使用 common::error::contextual::Result，不能提前返回 common::Result/AppError",
             ));
         }
         syn::visit::visit_item_use(self, item);
@@ -127,7 +127,7 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
                 self.violations.push(Violation::new(
                     self.file,
                     path.span(),
-                    "下层模块必须使用 common::error::deferred::Result，不能提前返回 common::Result/AppError",
+                    "下层模块必须使用 common::error::contextual::Result，不能提前返回 common::Result/AppError",
                 ));
             }
             if names.last().is_some_and(|name| {
@@ -519,14 +519,14 @@ impl Step<Ctx> for MyStep {{
         let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
         assert!(violations
             .iter()
-            .any(|v| v.message.contains("common::error::deferred::Result")));
+            .any(|v| v.message.contains("common::error::contextual::Result")));
         assert!(violations.iter().any(|v| v.message.contains("错误扩展")));
     }
 
     #[test]
-    fn allows_deferred_error_in_mapper() {
+    fn allows_contextual_error_in_mapper() {
         let source = r#"
-            use common::error::deferred::Result;
+            use common::error::contextual::Result;
             async fn query() -> Result<()> { Ok(()) }
         "#;
         assert!(check_source(source, "/repo/domains/photo/src/mappers/demo.rs").is_empty());
@@ -541,7 +541,7 @@ impl Step<Ctx> for MyStep {{
         let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
         assert!(violations
             .iter()
-            .any(|v| v.message.contains("common::error::deferred::Result")));
+            .any(|v| v.message.contains("common::error::contextual::Result")));
     }
 
     #[test]
@@ -554,7 +554,7 @@ impl Step<Ctx> for MyStep {{
         let violations = check_source(source, "/repo/common/src/error/db_error.rs");
         assert!(violations.iter().any(|violation| {
             violation.message.contains("From<sea_orm::DbErr>")
-                && violation.message.contains("DeferredError")
+                && violation.message.contains("ContextualError")
         }));
     }
 

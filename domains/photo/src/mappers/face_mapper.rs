@@ -1,4 +1,4 @@
-use common::{error::deferred::Result, ext::ToOk};
+use common::{error::contextual::Result, ext::ToOk};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Expr, Query},

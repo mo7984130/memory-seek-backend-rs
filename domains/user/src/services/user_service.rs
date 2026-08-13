@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use chrono::{Duration, Utc};
-use common::ext::{IntoDeferredExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
+use common::ext::{IntoContextualExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
 use common::utils::{FileValidator, MetricsTimerExt, rand_utils};
 use common::{Result, error::AppError, metrics_name, timed};
 use constants::{PasswordHasher, RedisKeys};
@@ -70,7 +70,7 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
 pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result<InviterCodeView> {
     // 循环生成邀请码, 防止冲突
     // 最大生成次数为3
-    let mut conn = state.redis.get_conn().await.into_deferred()?;
+    let mut conn = state.redis.get_conn().await.into_contextual()?;
     for _ in 0..GENERATE_INVITER_CODE_MAX_RETRY {
         let code: String = rand_utils::generate_random_uppercase_str(INVITER_CODE_LEN);
         let key = RedisKeys::auth::inviter_code(&code);
@@ -84,7 +84,7 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
             .query_async(&mut conn)
             .timed(metrics_name!("redis_set"))
             .await
-            .into_deferred()?;
+            .into_contextual()?;
 
         if success {
             return Ok(InviterCodeView {
@@ -229,7 +229,7 @@ pub async fn change_password(
         .acquire()
         .timed(metrics_name!("acquire_permit"))
         .await
-        .into_deferred()?;
+        .into_contextual()?;
 
     // 校验旧密码
     let is_valid = {
@@ -237,7 +237,7 @@ pub async fn change_password(
             spawn_blocking(move || PasswordHasher.verify(&req.old_password, &old_password))
                 .timed(metrics_name!("verify_password"))
                 .await
-                .into_deferred()?;
+                .into_contextual()?;
         verify_result?
     };
     if !is_valid {
@@ -250,7 +250,7 @@ pub async fn change_password(
         let hash_result = spawn_blocking(move || PasswordHasher.hash(&password))
             .timed(metrics_name!("hash_password"))
             .await
-            .into_deferred()?;
+            .into_contextual()?;
         hash_result?
     };
 

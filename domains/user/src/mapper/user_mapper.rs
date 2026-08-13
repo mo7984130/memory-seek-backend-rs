@@ -1,5 +1,5 @@
-use common::error::{AppError, deferred::Result};
-use common::ext::{DeferOptionExt, OkExt};
+use common::error::{AppError, contextual::Result};
+use common::ext::{ContextOptionExt, OkExt};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter,
@@ -42,7 +42,7 @@ impl UserMapper {
             .into_values::<Option<String>, Column>()
             .one(txn)
             .await?
-            .defer_warn_none(
+            .context_warn_none(
                 "user_not_found",
                 "用户不存在",
                 AppError::bad_request("用户不存在"),
@@ -130,7 +130,7 @@ impl UserMapper {
             .into_tuple()
             .one(db)
             .await?
-            .defer_warn_none(
+            .context_warn_none(
                 "user_not_found",
                 "用户不存在",
                 AppError::bad_request("用户不存在"),

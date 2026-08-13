@@ -1,4 +1,4 @@
-use common::{Result, error::DeferredError};
+use common::{Result, error::ContextualError};
 use serde::Deserialize;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -19,7 +19,7 @@ pub async fn init(cfg: &Config) -> Result<DatabaseConnection> {
     let mut opt = ConnectOptions::new(&cfg.url);
     opt.max_connections(cfg.max_connections);
     let db = Database::connect(opt).await.map_err(|source| {
-        DeferredError::error(
+        ContextualError::error(
             "db_connect_err",
             "数据库连接失败",
             source,

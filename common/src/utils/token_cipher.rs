@@ -9,7 +9,7 @@ use hkdf::Hkdf;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 
-use crate::error::{AppError, DeferredError, deferred::Result};
+use crate::error::{AppError, ContextualError, contextual::Result};
 
 const NONCE_LEN: usize = 12;
 const HKDF_KEY_INFO: &[u8] = b"image-file-id-token-v1";
@@ -87,7 +87,7 @@ impl TokenCipher {
         };
         let nonce = Nonce::from_slice(&nonce_bytes);
         let plaintext = serde_json::to_vec(payload).map_err(|error| {
-            DeferredError::error(
+            ContextualError::error(
                 "token_serialize_error",
                 "序列化 Payload 失败",
                 error,
@@ -98,7 +98,7 @@ impl TokenCipher {
             .cipher
             .encrypt(nonce, plaintext.as_slice())
             .map_err(|error| {
-                DeferredError::error(
+                ContextualError::error(
                     "aes_gcm_encrypt_error",
                     "AES-GCM 加密失败",
                     error,
@@ -123,7 +123,7 @@ impl TokenCipher {
     /// - `AppError`: Base64 解码失败、token 长度不合法、AES-GCM 解密失败或反序列化失败
     pub fn decrypt<T: DeserializeOwned>(&self, token: &str) -> Result<T> {
         let combined = URL_SAFE_NO_PAD.decode(token).map_err(|error| {
-            DeferredError::error(
+            ContextualError::error(
                 "token_base64_decode_error",
                 "Token Base64 解码失败",
                 error,
@@ -131,7 +131,7 @@ impl TokenCipher {
             )
         })?;
         if combined.len() <= NONCE_LEN {
-            return Err(DeferredError::error_without_source(
+            return Err(ContextualError::error_without_source(
                 "token_too_short",
                 "Token 长度不合法",
                 AppError::InternalServerError,
@@ -140,7 +140,7 @@ impl TokenCipher {
         let (nonce_bytes, ciphertext) = combined.split_at(NONCE_LEN);
         let nonce = Nonce::from_slice(nonce_bytes);
         let plaintext = self.cipher.decrypt(nonce, ciphertext).map_err(|error| {
-            DeferredError::error(
+            ContextualError::error(
                 "aes_gcm_decrypt_error",
                 "AES-GCM 解密失败",
                 error,
@@ -148,7 +148,7 @@ impl TokenCipher {
             )
         })?;
         serde_json::from_slice(&plaintext).map_err(|error| {
-            DeferredError::error(
+            ContextualError::error(
                 "token_deserialize_error",
                 "反序列化 Payload 失败",
                 error,

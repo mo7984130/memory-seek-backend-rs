@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use common::error::{AppError, DeferredError, deferred::Result};
+use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::OkExt;
 use sea_orm::entity::prelude::DateTimeUtc;
 use sea_orm::sea_query::Expr;
@@ -64,7 +64,7 @@ impl PhotoMapper {
 
     pub async fn ensure_exist(db: &impl ConnectionTrait, photo_id: PhotoId) -> Result<()> {
         if !Self::exists(db, photo_id).await? {
-            return Err(DeferredError::warn_without_source(
+            return Err(ContextualError::warn_without_source(
                 "photo_not_exist",
                 "照片不存在",
                 AppError::not_found("照片不存在"),

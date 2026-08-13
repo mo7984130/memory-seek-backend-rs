@@ -2,7 +2,7 @@ use std::sync::Arc;
 #[cfg(feature = "face")]
 use std::sync::Mutex;
 
-use common::error::DeferredError;
+use common::error::ContextualError;
 use deadpool_redis::Pool;
 use multi_level_cache::{CacheConfig, MultiLevelCache};
 use oss::S3Client;
@@ -21,16 +21,16 @@ pub struct PhotoState {
     pub db: DatabaseConnection,
     pub redis: Pool,
     /// 照片信息三级缓存（本地 moka → Redis → 数据库）
-    pub cache_photo_info: MultiLevelCache<PhotoRecord, DeferredError>,
+    pub cache_photo_info: MultiLevelCache<PhotoRecord, ContextualError>,
     /// 时间线月度统计三级缓存（整表一条）
-    pub cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, DeferredError>,
+    pub cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     /// 照片尺寸三级缓存（按 file_id）
-    pub cache_photo_dimensions: MultiLevelCache<(i32, i32), DeferredError>,
+    pub cache_photo_dimensions: MultiLevelCache<(i32, i32), ContextualError>,
     /// 照片 MD5 去重三级缓存（按 md5）
-    pub cache_photo_md5: MultiLevelCache<bool, DeferredError>,
+    pub cache_photo_md5: MultiLevelCache<bool, ContextualError>,
     /// 人物轻量摘要三级缓存（face-engine feature）
     #[cfg(feature = "face")]
-    pub cache_person: MultiLevelCache<PersonBriefRow, DeferredError>,
+    pub cache_person: MultiLevelCache<PersonBriefRow, ContextualError>,
     pub s3_client: Arc<S3Client>,
     #[cfg(feature = "face")]
     pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,

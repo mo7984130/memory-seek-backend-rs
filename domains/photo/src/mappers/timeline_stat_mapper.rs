@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use common::{
-    error::{AppError, deferred::Result},
-    ext::DeferResultExt,
+    error::{AppError, contextual::Result},
+    ext::ContextResultExt,
 };
 use sea_orm::{
     ActiveValue::Set,
@@ -38,7 +38,7 @@ impl TimelineStatMapper {
             .on_conflict(on_conflict)
             .exec(db)
             .await
-            .defer_error(
+            .context_error(
                 "db_update_err",
                 "更新照片时间线统计失败",
                 AppError::InternalServerError,
@@ -101,7 +101,7 @@ impl TimelineStatMapper {
             .into_model::<MonthStat>()
             .all(db)
             .await
-            .defer_error(
+            .context_error(
                 "db_query_err",
                 "查询月度照片统计失败",
                 AppError::InternalServerError,
