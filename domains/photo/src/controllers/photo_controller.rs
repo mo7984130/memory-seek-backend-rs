@@ -10,7 +10,7 @@ use axum::{
 };
 use common::{
     Result,
-    ext::{ResultErrExt, ResultRExt},
+    ext::{ResultRExt, log_warn_with_source},
     extractors::{OptionalClientIp, ValidatedJson, ValidatedQuery},
     models::CursorPage,
     traits::controller::ControllerRouter,
@@ -63,15 +63,26 @@ impl PhotoController {
         let field = multipart
             .next_field()
             .await
-            .trace_warn_bad_request("invalid_mutipart", "无效的表单数据", "无效的表单数据")?
+            .map_err(|source| {
+                log_warn_with_source(
+                    "invalid_mutipart",
+                    "无效的表单数据",
+                    source,
+                    common::error::AppError::bad_request("无效的表单数据"),
+                )
+            })?
             .ok_or_warn_bad_request("upload_file_not_found", "未找到上传文件", "未找到上传文件")?;
 
         let file_name = field.file_name().unwrap_or("photo.jpg").to_string();
         let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field
-            .bytes()
-            .await
-            .trace_internal_err("read_file_err", "读取文件失败")?;
+        let file_data = field.bytes().await.map_err(|source| {
+            common::ext::log_err_with_source(
+                "read_file_err",
+                "读取文件失败",
+                source,
+                common::error::AppError::InternalServerError,
+            )
+        })?;
 
         let req = types::photo::models::UploadPhotoParam {
             file_name,
@@ -116,11 +127,14 @@ impl PhotoController {
         OptionalClientIp(ip): OptionalClientIp,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
-        let image_token: ImageToken = token_cipher().decrypt(&token).trace_warn_bad_request(
-            "invalid_image_token",
-            "无效的图片 token",
-            "无效的图片 token",
-        )?;
+        let image_token: ImageToken = token_cipher().decrypt(&token).map_err(|source| {
+            log_warn_with_source(
+                "invalid_image_token",
+                "无效的图片 token",
+                source,
+                common::error::AppError::bad_request("无效的图片 token"),
+            )
+        })?;
 
         // 浏览埋点：仅预览/原图访问计入，缩略图/裁剪不计入
         if matches!(

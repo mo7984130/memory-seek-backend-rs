@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "auth"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "axum",
  "chrono",
@@ -964,7 +964,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1506,7 +1506,7 @@ dependencies = [
 
 [[package]]
 name = "email"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "common",
  "lettre",
@@ -3534,7 +3534,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "async-trait",
  "axum",
@@ -4827,7 +4827,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "auth",
  "axum",
@@ -5852,7 +5852,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5982,7 +5982,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "axum",
  "bytes",

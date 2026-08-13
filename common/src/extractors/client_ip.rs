@@ -4,7 +4,7 @@ use axum::{
 };
 use std::net::{IpAddr, SocketAddr};
 
-use crate::{Result, error::AppError, ext::ResultErrExt};
+use crate::{Result, error::AppError, ext::log_err_with_source};
 
 #[derive(Clone)]
 pub struct ClientIp(pub IpAddr);
@@ -71,10 +71,14 @@ where
     ConnectInfo::<SocketAddr>::from_request_parts(parts, state)
         .await
         .map(|ConnectInfo(addr)| ClientIp(addr.ip()))
-        .trace_internal_err(
-            "no_client_ip",
-            "无法提取客户端 IP，无代理头且未配置 ConnectInfo",
-        )
+        .map_err(|source| {
+            log_err_with_source(
+                "no_client_ip",
+                "无法提取客户端 IP，无代理头且未配置 ConnectInfo",
+                source,
+                AppError::InternalServerError,
+            )
+        })
 }
 
 impl<S> FromRequestParts<S> for OptionalClientIp

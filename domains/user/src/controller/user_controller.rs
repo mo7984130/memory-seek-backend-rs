@@ -2,8 +2,7 @@ use axum::extract::{Multipart, State};
 use axum::routing::{get, patch, post, put};
 use axum::{Extension, Router};
 use common::Result;
-use common::ext::ResultErrExt;
-use common::ext::{OptionExt, ResultRExt};
+use common::ext::{OptionExt, ResultRExt, log_warn_with_source};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use common::traits::controller::ControllerRouter;
@@ -120,16 +119,26 @@ impl UserController {
         let field = multipart
             .next_field()
             .await
-            .trace_warn_bad_request("invaild_multipart", "无效的表单数据", "无效的表单数据")?
+            .map_err(|source| {
+                log_warn_with_source(
+                    "invaild_multipart",
+                    "无效的表单数据",
+                    source,
+                    common::error::AppError::bad_request("无效的表单数据"),
+                )
+            })?
             .ok_or_warn_bad_request("mutipart_not_found", "未找到上传文件", "未找到上传文件")?;
 
         let file_name = field.file_name().unwrap_or("avatar.jpg").to_string();
         let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field.bytes().await.trace_warn_bad_request(
-            "read_file_err",
-            "读取文件失败",
-            "读取文件失败",
-        )?;
+        let file_data = field.bytes().await.map_err(|source| {
+            log_warn_with_source(
+                "read_file_err",
+                "读取文件失败",
+                source,
+                common::error::AppError::bad_request("读取文件失败"),
+            )
+        })?;
 
         let req = UpdateAvatarParam {
             file_name,

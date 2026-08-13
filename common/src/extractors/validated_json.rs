@@ -1,6 +1,6 @@
 use crate::{
     error::AppError,
-    ext::{ResultErrExt, log_warn},
+    ext::{log_warn, log_warn_with_source},
 };
 use axum::{
     body::Bytes,
@@ -29,13 +29,14 @@ where
 
         // 直接拿 Bytes，body 大小限制已由 DefaultBodyLimit 中间件保证
         // axum 内部会一次性读完 stream 拼成一个连续的 Bytes，没有多余的中间层拷贝
-        let bytes = Bytes::from_request(req, state)
-            .await
-            .trace_warn_bad_request(
+        let bytes = Bytes::from_request(req, state).await.map_err(|source| {
+            log_warn_with_source(
                 "validated_json_read_error",
                 "读取请求体失败",
-                " 请求体读取失败",
-            )?;
+                source,
+                AppError::bad_request(" 请求体读取失败"),
+            )
+        })?;
 
         // 空 body 时跳过 Content-Type 检查, 用空对象反序列化:
         // 带默认值的 DTO(如全字段可选的参数)直接得到默认值, 必填字段报 missing field;

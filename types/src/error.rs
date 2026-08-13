@@ -13,7 +13,7 @@ pub struct ParseEnumError(pub String);
 
 /// ID 解析错误（轻量，不依赖 AppError）
 ///
-/// 调用方可通过 `trace_warn_bad_request` 等方式转换为 `AppError`。
+/// 调用方可按其边界策略转换为 `AppError`。
 /// 后端 orm 模式下直接实现 `From<ParseIdError> for AppError` 以便 `?` 直接使用。
 #[derive(Error, Debug)]
 #[error("{0}")]

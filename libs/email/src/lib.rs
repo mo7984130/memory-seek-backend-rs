@@ -1,5 +1,7 @@
-use common::ext::ResultErrExt;
-use common::{Result, error::AppError};
+use common::{
+    error::{AppError, deferred::Result},
+    ext::DeferResultExt,
+};
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
@@ -68,8 +70,7 @@ impl EmailClient {
     /// 发送成功返回 `()`
     ///
     /// # 错误
-    /// - `AppError::BadRequest`: 收件人邮箱格式无效
-    /// - `AppError::InternalServerError`: 发件人地址格式错误、邮件构建失败或 SMTP 发送失败
+    /// - `DeferredError`: 由调用 service 记录并转换为 `AppError`
     pub async fn send_message(&self, to: &str, subject: &str, body: String) -> Result<()> {
         #[cfg(feature = "metrics")]
         let start = std::time::Instant::now();
@@ -81,9 +82,13 @@ impl EmailClient {
                 .from(
                     format!("{} <{}>", self.from_name, self.from_email)
                         .parse::<Mailbox>()
-                        .trace_internal_err("email_from_email_err", "发件人地址格式错误")?,
+                        .defer_error(
+                            "email_from_email_err",
+                            "发件人地址格式错误",
+                            AppError::InternalServerError,
+                        )?,
                 )
-                .to(to.parse::<Mailbox>().trace_warn(
+                .to(to.parse::<Mailbox>().defer_warn(
                     "email_to_email_err",
                     "目标邮箱格式错误",
                     AppError::bad_request("邮箱格式错误"),
@@ -91,12 +96,17 @@ impl EmailClient {
                 .subject(subject)
                 .header(ContentType::TEXT_HTML)
                 .body(body)
-                .trace_internal_err("email_body_err", "构建邮件消息失败")?;
+                .defer_error(
+                    "email_body_err",
+                    "构建邮件消息失败",
+                    AppError::InternalServerError,
+                )?;
 
-            self.transport
-                .send(email)
-                .await
-                .trace_internal_err("email_send_err", "邮件服务商发送失败")?;
+            self.transport.send(email).await.defer_error(
+                "email_send_err",
+                "邮件服务商发送失败",
+                AppError::InternalServerError,
+            )?;
 
             Ok(())
         })

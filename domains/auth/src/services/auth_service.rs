@@ -5,7 +5,7 @@ use chrono::{Duration, Utc};
 use common::Result;
 use common::error::AppError;
 use common::ext::{
-    DeferFromExt, OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, log_warn,
+    DeferResultExt, IntoDeferredExt, OptionExt, RedisExt, ResultInspectErrAsync, log_warn,
 };
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{inc_error, metrics_name};
@@ -84,7 +84,11 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
             .acquire()
             .timed(metrics_name!("acquire_permit"))
             .await
-            .trace_internal_err("semaphore_error", "获取密码验证信号量失败")?;
+            .defer_error(
+                "semaphore_error",
+                "获取密码验证信号量失败",
+                AppError::InternalServerError,
+            )?;
 
         let password_clone = req.password.clone();
         let stored_hash = user.password.clone();
@@ -93,9 +97,16 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         })
         .timed(metrics_name!("verify_password"))
         .await
-        .trace_internal_err("spawn_blocking_error", "密码验证任务执行失败")?;
-        let verify_result =
-            result.trace_internal_err("verify_password_error", "密码验证内部错误")?;
+        .defer_error(
+            "spawn_blocking_error",
+            "密码验证任务执行失败",
+            AppError::InternalServerError,
+        )?;
+        let verify_result = result.defer_error(
+            "verify_password_error",
+            "密码验证内部错误",
+            AppError::InternalServerError,
+        )?;
 
         if !verify_result.0 {
             inc_error!("auth");
@@ -116,7 +127,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         let password_result =
             spawn_blocking(move || constants::PasswordHasher.hash(&password_for_migration))
                 .await
-                .defer()?;
+                .into_deferred()?;
         let new_password = password_result?;
 
         AuthMapper::update_password(&state.db, user.id, &new_password).await?;
@@ -136,7 +147,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         )
         .timed(metrics_name!("redis_set"))
         .await
-        .defer()?;
+        .into_deferred()?;
 
     let updated_user = AuthMapper::update_refresh_token(
         &state.db,
@@ -150,7 +161,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
             .redis
             .del(RedisKeys::auth::user_access_token(user.id))
             .await
-            .defer()
+            .into_deferred()
         {
             let _ = AppError::from(error);
         }
@@ -214,8 +225,16 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     let hashed_pw = task::spawn_blocking(move || constants::PasswordHasher.hash(&clone_password))
         .timed(metrics_name!("hash_password"))
         .await
-        .trace_internal_err("spawn_blocking_error", "密码哈希任务执行失败")?
-        .trace_internal_err("hash_password_error", "密码哈希计算失败")?;
+        .defer_error(
+            "spawn_blocking_error",
+            "密码哈希任务执行失败",
+            AppError::InternalServerError,
+        )?
+        .defer_error(
+            "hash_password_error",
+            "密码哈希计算失败",
+            AppError::InternalServerError,
+        )?;
 
     // 插入用户
     let user_model = AuthMapper::insert(
@@ -236,7 +255,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
         .redis
         .del(&redis_keys::auth::email_verify_code(&user_model.email))
         .await
-        .defer()?;
+        .into_deferred()?;
 
     Ok(UserInfo::from(user_model))
 }
@@ -276,11 +295,11 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
         )
         .timed(metrics_name!("redis_set"))
         .await
-        .defer()?;
+        .into_deferred()?;
 
     // 在独立作用域内获取信号量并发送邮件，发送完成后立即释放信号量
     {
-        let _permit = EMAIL_SEND_SEM.acquire().await.defer()?;
+        let _permit = EMAIL_SEND_SEM.acquire().await.into_deferred()?;
 
         let html_body = format!(
             "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 10 分钟。</p>",
@@ -291,8 +310,7 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
             .email_client
             .send_message(&req.email, "寻忆邮箱验证码", html_body)
             .timed(metrics_name!("send_message"))
-            .await
-            .trace_internal_err("send_email_error", "发送邮件失败")?;
+            .await?;
     } // _permit 在此释放，其他并发请求可继续发送
 
     Ok(())
@@ -336,7 +354,7 @@ pub async fn refresh_access_token(
         )
         .timed(metrics_name!("set_token"))
         .await
-        .defer()?;
+        .into_deferred()?;
 
     Ok(RefreshAccessTokenResponse {
         access_token: new_access_token,
@@ -350,7 +368,7 @@ async fn verify_email_verify_code(state: &AuthState, email: &str, code: &str) ->
         .redis
         .get_as(&RedisKeys::auth::email_verify_code(email))
         .await
-        .defer()?;
+        .into_deferred()?;
     let code_upper = code.to_uppercase();
     match stored_code {
         Some(v) if v == code_upper => Ok(()),
@@ -369,7 +387,7 @@ async fn verify_inviter_code(state: &AuthState, inviter_code: &str) -> Result<Us
         .redis
         .get_as(&RedisKeys::auth::inviter_code(&code_upper))
         .await
-        .defer()?
+        .into_deferred()?
         .map(UserId)
         .ok_or_warn(
             "invalid_inviter_code",

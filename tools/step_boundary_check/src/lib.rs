@@ -151,11 +151,7 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
             let method = call.method.to_string();
             if matches!(
                 method.as_str(),
-                "trace_err"
-                    | "trace_internal_err"
-                    | "trace_warn"
-                    | "trace_warn_bad_request"
-                    | "ok_or_warn"
+                "ok_or_warn"
                     | "ok_or_warn_bad_request"
                     | "ok_or_error"
                     | "true_or_warn"
@@ -516,8 +512,7 @@ impl Step<Ctx> for MyStep {{
         let source = r#"
             use common::Result;
             async fn query() -> Result<()> {
-                Err::<(), String>("db".into())
-                    .trace_internal_err("db", "query")?;
+                None::<()>.ok_or_warn("db", "query", AppError::InternalServerError)?;
                 Ok(())
             }
         "#;

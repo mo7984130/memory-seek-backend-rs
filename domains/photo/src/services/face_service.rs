@@ -5,7 +5,7 @@ use backup::storage::BackupType;
 use common::{
     Result, db_transaction,
     error::{AppError, DeferredError, deferred},
-    ext::{DeferFromExt, DeferResultExt, OptionExt, ToOk, UintExt},
+    ext::{DeferResultExt, IntoDeferredExt, OptionExt, ToOk, UintExt},
     inc_counter, inc_error, metrics_name,
     models::CursorPage,
     set_gauge,
@@ -186,8 +186,14 @@ impl FaceService {
             .await?;
 
         db_transaction!(&state.db, |txn| {
-            face::Entity::delete_many().exec(txn).await.defer()?;
-            person::Entity::delete_many().exec(txn).await.defer()?;
+            face::Entity::delete_many()
+                .exec(txn)
+                .await
+                .into_deferred()?;
+            person::Entity::delete_many()
+                .exec(txn)
+                .await
+                .into_deferred()?;
             Ok(())
         })
         .await
@@ -229,7 +235,7 @@ impl FaceService {
             .into_tuple::<(PhotoId, String)>()
             .all(&state.db)
             .await
-            .defer()?
+            .into_deferred()?
             .into_iter()
             .collect();
 
@@ -258,7 +264,7 @@ impl FaceService {
             })
             .await
             .inspect_err(|_| inc_error!("decode"))
-            .defer()?;
+            .into_deferred()?;
             decode_result.inspect_err(|_| inc_error!("decode"))?
         };
 
@@ -290,7 +296,7 @@ impl FaceService {
         })
         .await
         .inspect_err(|_| inc_error!("detect"))
-        .defer()?;
+        .into_deferred()?;
         Ok(detect_result.inspect_err(|_| inc_error!("detect"))?)
     }
 
@@ -303,7 +309,7 @@ impl FaceService {
                 .exec_without_returning(&state.db)
                 .await
                 .inspect_err(|_| inc_error!("insert"))
-                .defer()?;
+                .into_deferred()?;
         }
         debug!("插入完成");
         Ok(())

@@ -5,7 +5,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{DeferFromExt, DeferOptionExt, OptionExt, ResultInspectErrAsync, log_warn},
+    ext::{DeferOptionExt, IntoDeferredExt, OptionExt, ResultInspectErrAsync, log_warn},
     inc_error, metrics_name,
     models::CursorPage,
     timed,
@@ -161,7 +161,7 @@ impl PhotoService {
                     md5::compute(&file_data_clone)
                 ))
                 .await
-                .defer()?
+                .into_deferred()?
             )
         };
         // 带三级缓存的 MD5 去重校验
@@ -223,7 +223,7 @@ impl PhotoService {
         })
         .await
         .inspect_err(|_| inc_error!("db"))
-        .defer()?;
+        .into_deferred()?;
 
         // 增加时间线统计
         // 错误不返回

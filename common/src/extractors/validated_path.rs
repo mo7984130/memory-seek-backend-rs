@@ -1,4 +1,4 @@
-use crate::{error::AppError, ext::ResultErrExt};
+use crate::{error::AppError, ext::log_warn_with_source};
 use axum::extract::{FromRequestParts, Path};
 use serde::de::DeserializeOwned;
 use std::ops::Deref;
@@ -30,11 +30,14 @@ where
     ) -> Result<Self, Self::Rejection> {
         let Path(value) = Path::<T>::from_request_parts(parts, state)
             .await
-            .trace_warn_bad_request(
-                "validated_path_parse_error",
-                "解析路径参数失败",
-                "解析路径参数失败",
-            )?;
+            .map_err(|source| {
+                log_warn_with_source(
+                    "validated_path_parse_error",
+                    "解析路径参数失败",
+                    source,
+                    AppError::bad_request("解析路径参数失败"),
+                )
+            })?;
 
         Ok(ValidatedPath(value))
     }

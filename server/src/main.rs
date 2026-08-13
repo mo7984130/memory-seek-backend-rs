@@ -1,6 +1,6 @@
 use clap::Parser;
 use common::Result;
-use common::ext::ResultErrExt;
+use common::{error::DeferredError, ext::DeferResultExt};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,7 +37,14 @@ async fn main() -> Result<()> {
     setup::bases::log::init();
 
     // 加载配置
-    let cfg = AppConfig::load(cli.config).trace_internal_err("config_load_err", "加载配置失败")?;
+    let cfg = AppConfig::load(cli.config).map_err(|source| {
+        DeferredError::error(
+            "config_load_err",
+            "加载配置失败",
+            source,
+            common::error::AppError::InternalServerError,
+        )
+    })?;
 
     // 初始化应用（内部会初始化日志、数据库、Redis、metrics 等）
     let app_setup = AppSetup::init(&cfg).await?;
@@ -99,9 +106,11 @@ async fn main() -> Result<()> {
 
     // 启动服务器
     tracing::info!("尝试监听{}端口", cfg.server.port);
-    let listener = TcpListener::bind(&cfg.server_addr())
-        .await
-        .trace_internal_err("tcp_bind_err", "端口绑定失败")?;
+    let listener = TcpListener::bind(&cfg.server_addr()).await.defer_error(
+        "tcp_bind_err",
+        "端口绑定失败",
+        common::error::AppError::InternalServerError,
+    )?;
     tracing::info!("Server listening on {}", cfg.server_addr());
 
     let shutdown_signal = shutdown_signal(graceful_state, cancel_token);
@@ -112,7 +121,11 @@ async fn main() -> Result<()> {
     )
     .with_graceful_shutdown(shutdown_signal)
     .await
-    .trace_internal_err("server_err", "服务器运行异常")?;
+    .defer_error(
+        "server_err",
+        "服务器运行异常",
+        common::error::AppError::InternalServerError,
+    )?;
 
     tracing::info!("服务已完全关闭");
     Ok(())

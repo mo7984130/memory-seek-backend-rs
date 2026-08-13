@@ -1,4 +1,4 @@
-use common::{Result, ext::ResultErrExt};
+use common::{Result, error::DeferredError};
 use serde::Deserialize;
 
 use deadpool_redis::{Config as DeadpoolConfig, Pool, PoolConfig, Runtime};
@@ -34,7 +34,14 @@ pub fn init(cfg: &Config) -> Result<Pool> {
     redis_cfg.pool = Some(PoolConfig::new(cfg.max_connections as usize));
     let pool = redis_cfg
         .create_pool(Some(Runtime::Tokio1))
-        .trace_internal_err("redis_pool_err", "Redis连接池创建失败")?;
+        .map_err(|source| {
+            DeferredError::error(
+                "redis_pool_err",
+                "Redis连接池创建失败",
+                source,
+                common::error::AppError::InternalServerError,
+            )
+        })?;
     info!("Redis 连接成功, max_connections: {}", cfg.max_connections);
     Ok(pool)
 }

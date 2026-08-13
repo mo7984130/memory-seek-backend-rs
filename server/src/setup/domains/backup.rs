@@ -1,5 +1,5 @@
 use common::Result;
-use common::ext::ResultErrExt;
+use common::{error::AppError, ext::DeferResultExt};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::info;
@@ -20,13 +20,16 @@ pub async fn init(
         s3_client.clone(),
         cfg.clone(),
     ));
-    let scheduler = backup::BackupScheduler::new(bs.clone())
-        .await
-        .trace_internal_err("backup_init_err", "备份调度器初始化失败")?;
-    scheduler
-        .start()
-        .await
-        .trace_internal_err("backup_start_err", "备份调度器启动失败")?;
+    let scheduler = backup::BackupScheduler::new(bs.clone()).await.defer_error(
+        "backup_init_err",
+        "备份调度器初始化失败",
+        AppError::InternalServerError,
+    )?;
+    scheduler.start().await.defer_error(
+        "backup_start_err",
+        "备份调度器启动失败",
+        AppError::InternalServerError,
+    )?;
     info!("备份调度器初始化成功");
 
     Ok(Arc::new(scheduler))
