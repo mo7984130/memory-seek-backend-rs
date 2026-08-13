@@ -30,17 +30,13 @@ pub(crate) fn log_and_map_at(
                     reason,
                     status = "failed",
                     error = ?e,
-                    caller.file = loc.file(),
-                    caller.line = loc.line(),
-                    "{context} ({}:{})",    // <-- 加入 path:line
+                    "{context} ({}:{})",
                     loc.file(),
                     loc.line()
                 ),
                 None => tracing::$lvl!(
                     reason,
                     status = "failed",
-                    caller.file = loc.file(),
-                    caller.line = loc.line(),
                     "{context} ({}:{})",
                     loc.file(),
                     loc.line()

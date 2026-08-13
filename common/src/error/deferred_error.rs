@@ -13,7 +13,9 @@ pub struct DeferredError(Box<dyn DeferredReport>);
 
 trait DeferredReport: Debug + Send + Sync {
     fn app_error(&self) -> &AppError;
-    fn emit(self: Box<Self>, location: &'static Location<'static>) -> AppError;
+
+    #[track_caller]
+    fn emit(self: Box<Self>) -> AppError;
 }
 
 #[derive(Debug)]
@@ -33,14 +35,15 @@ where
         &self.app_error
     }
 
-    fn emit(self: Box<Self>, location: &'static Location<'static>) -> AppError {
+    #[track_caller]
+    fn emit(self: Box<Self>) -> AppError {
         log_and_map_at(
             self.level,
             self.reason,
             self.context,
             Some(&self.source),
             self.app_error,
-            location,
+            Location::caller(),
         )
     }
 }
@@ -58,14 +61,15 @@ impl DeferredReport for ReportWithoutSource {
         &self.app_error
     }
 
-    fn emit(self: Box<Self>, location: &'static Location<'static>) -> AppError {
+    #[track_caller]
+    fn emit(self: Box<Self>) -> AppError {
         log_and_map_at(
             self.level,
             self.reason,
             self.context,
             None,
             self.app_error,
-            location,
+            Location::caller(),
         )
     }
 }
@@ -235,7 +239,7 @@ impl From<tokio::task::JoinError> for DeferredError {
 impl From<DeferredError> for AppError {
     #[track_caller]
     fn from(error: DeferredError) -> Self {
-        error.0.emit(Location::caller())
+        error.0.emit()
     }
 }
 
@@ -307,7 +311,9 @@ mod tests {
             "unexpected log output: {output}"
         );
         assert!(
-            output.contains(&format!("caller.line={expected_line}")),
+            output.contains(&format!(
+                "common/src/error/deferred_error.rs:{expected_line}"
+            )),
             "unexpected log output: {output}"
         );
         assert_eq!(output.matches("reason=\"db_err\"").count(), 1);
