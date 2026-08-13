@@ -964,7 +964,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -5969,7 +5969,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "axum",
  "bytes",

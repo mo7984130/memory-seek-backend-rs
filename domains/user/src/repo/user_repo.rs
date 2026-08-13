@@ -97,8 +97,7 @@ impl UserRepo {
     /// 在事务内更新头像，返回旧头像 key（由调用方决定是否删除旧文件）
     pub async fn update_avatar(&self, user_id: UserId, new_key: String) -> Result<Option<String>> {
         let old_key = DbUtils::write(&self.db, move |txn| {
-            let new_key = new_key.clone();
-            Box::pin(async move { UserMapper::update_avatar(txn, user_id, new_key).await })
+            Box::pin(UserMapper::update_avatar(txn, user_id, new_key))
         })
         .timed(metrics_name!("db_transaction"))
         .await?;
