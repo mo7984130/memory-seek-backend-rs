@@ -5,8 +5,7 @@ use chrono::{Duration, Utc};
 use common::Result;
 use common::error::AppError;
 use common::ext::{
-    ContextResultExt, ContextualResultExt, IntoContextualExt, OptionExt, RedisExt,
-    ResultInspectErrAsync, log_warn,
+    ContextualResultExt, IntoContextualExt, OptionExt, RedisExt, ResultInspectErrAsync, log_warn,
 };
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{inc_error, metrics_name};
@@ -84,11 +83,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
             .acquire()
             .timed(metrics_name!("acquire_permit"))
             .await
-            .context_error(
-                "semaphore_error",
-                "获取密码验证信号量失败",
-                AppError::InternalServerError,
-            )?;
+            .into_contextual()?;
 
         let password_clone = req.password.clone();
         let stored_hash = user.password.clone();
@@ -97,16 +92,8 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         })
         .timed(metrics_name!("verify_password"))
         .await
-        .context_error(
-            "spawn_blocking_error",
-            "密码验证任务执行失败",
-            AppError::InternalServerError,
-        )?;
-        let verify_result = result.context_error(
-            "verify_password_error",
-            "密码验证内部错误",
-            AppError::InternalServerError,
-        )?;
+        .into_contextual()?;
+        let verify_result = result?;
 
         if !verify_result.0 {
             return inc_error!("auth" => log_warn(
@@ -218,20 +205,11 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
         .inspect_err(|_| inc_error!("validation"))?;
 
     // 加密密码
-    let clone_password = req.password.clone();
-    let hashed_pw = task::spawn_blocking(move || constants::PasswordHasher.hash(&clone_password))
+    let password = req.password.clone();
+    let hashed_pw = task::spawn_blocking(move || constants::PasswordHasher.hash(&password))
         .timed(metrics_name!("hash_password"))
         .await
-        .context_error(
-            "spawn_blocking_error",
-            "密码哈希任务执行失败",
-            AppError::InternalServerError,
-        )?
-        .context_error(
-            "hash_password_error",
-            "密码哈希计算失败",
-            AppError::InternalServerError,
-        )?;
+        .into_contextual()??;
 
     // 插入用户
     let user_model = AuthMapper::insert(

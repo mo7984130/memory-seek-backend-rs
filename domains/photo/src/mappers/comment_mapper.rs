@@ -1,5 +1,5 @@
 use common::error::{AppError, ContextualError, contextual::Result};
-use common::ext::{ContextOptionExt, ContextResultExt, OkExt};
+use common::ext::{ContextOptionExt, IntoContextualExt, OkExt};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
@@ -40,11 +40,7 @@ impl CommentMapper {
             .filter(Column::Id.eq(comment_id))
             .count(db)
             .await
-            .context_error(
-                "db_query_err",
-                "查询评论是否存在失败",
-                AppError::InternalServerError,
-            )?;
+            .into_contextual()?;
         Ok(count > 0)
     }
 
