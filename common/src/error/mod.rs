@@ -6,14 +6,11 @@ pub use app_error::AppError;
 mod deferred_error;
 pub use deferred_error::DeferredError;
 pub mod app_error_response;
-pub mod cache_error;
-pub mod db_error;
-pub mod mutex_error;
-pub mod redis_error;
-pub mod serde_error;
-#[cfg(feature = "tokio")]
-pub mod tokio_error;
 
+/// service、controller 与请求处理边界使用的结果。
+///
+/// 基础设施错误不会直接实现 `Into<AppError>`；必须先进入 [`DeferredError`]，
+/// 防止 `?` 绕过 service caller 边界。
 pub type Result<T> = std::result::Result<T, AppError>;
 
 /// 尚未在 service 边界转换和记录的错误结果。

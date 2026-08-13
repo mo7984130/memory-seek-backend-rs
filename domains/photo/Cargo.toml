@@ -1,6 +1,6 @@
 [package]
 name = "photo"
-version = "0.1.10"
+version = "0.1.11"
 edition = "2024"
 
 [features]
@@ -13,7 +13,14 @@ face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]
 ts = ["types/ts", "common/ts"]
 
 [dependencies]
-common = { path = "../../common", features = ["validators", "file_validator", "metrics", "tokio"] }
+common = { path = "../../common", features = [
+    "validators",
+    "file_validator",
+    "metrics",
+    "deferred-sea-orm",
+    "deferred-cache",
+    "deferred-tokio",
+] }
 async-trait = { workspace = true }
 step_derive = { path = "../../libs/step_derive" }
 linkme = { workspace = true }

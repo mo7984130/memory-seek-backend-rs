@@ -2,6 +2,20 @@ use std::fmt::Debug;
 
 use crate::error::{AppError, DeferredError, deferred::Result};
 
+/// 使用按 feature 开启的 `From<E> for DeferredError` 显式延迟错误。
+pub trait DeferFromExt<T> {
+    fn defer(self) -> Result<T>;
+}
+
+impl<T, E> DeferFromExt<T> for std::result::Result<T, E>
+where
+    DeferredError: From<E>,
+{
+    fn defer(self) -> Result<T> {
+        self.map_err(DeferredError::from)
+    }
+}
+
 pub trait DeferResultExt<T> {
     fn defer_error(
         self,

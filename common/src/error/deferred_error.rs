@@ -153,12 +153,14 @@ impl Display for DeferredError {
 
 impl std::error::Error for DeferredError {}
 
+#[cfg(feature = "deferred-sea-orm")]
 impl From<sea_orm::DbErr> for DeferredError {
     fn from(error: sea_orm::DbErr) -> Self {
         Self::error("db_err", "数据库错误", error, AppError::InternalServerError)
     }
 }
 
+#[cfg(feature = "deferred-redis")]
 impl From<deadpool_redis::PoolError> for DeferredError {
     fn from(error: deadpool_redis::PoolError) -> Self {
         Self::error(
@@ -170,6 +172,7 @@ impl From<deadpool_redis::PoolError> for DeferredError {
     }
 }
 
+#[cfg(feature = "deferred-redis")]
 impl From<redis::RedisError> for DeferredError {
     fn from(error: redis::RedisError) -> Self {
         Self::error(
@@ -181,6 +184,7 @@ impl From<redis::RedisError> for DeferredError {
     }
 }
 
+#[cfg(feature = "deferred-cache")]
 impl From<multi_level_cache::CacheError> for DeferredError {
     fn from(error: multi_level_cache::CacheError) -> Self {
         Self::warn(
@@ -192,6 +196,7 @@ impl From<multi_level_cache::CacheError> for DeferredError {
     }
 }
 
+#[cfg(feature = "deferred-serde")]
 impl From<serde_json::Error> for DeferredError {
     fn from(error: serde_json::Error) -> Self {
         Self::warn(
@@ -203,7 +208,7 @@ impl From<serde_json::Error> for DeferredError {
     }
 }
 
-#[cfg(feature = "tokio")]
+#[cfg(feature = "deferred-tokio")]
 impl From<tokio::sync::AcquireError> for DeferredError {
     fn from(error: tokio::sync::AcquireError) -> Self {
         Self::error(
@@ -215,7 +220,7 @@ impl From<tokio::sync::AcquireError> for DeferredError {
     }
 }
 
-#[cfg(feature = "tokio")]
+#[cfg(feature = "deferred-tokio")]
 impl From<tokio::task::JoinError> for DeferredError {
     fn from(error: tokio::task::JoinError) -> Self {
         Self::error(
@@ -314,5 +319,50 @@ mod tests {
             std::mem::size_of::<DeferredError>(),
             2 * std::mem::size_of::<usize>()
         );
+    }
+
+    #[cfg(any(
+        feature = "deferred-sea-orm",
+        feature = "deferred-redis",
+        feature = "deferred-cache",
+        feature = "deferred-serde",
+        feature = "deferred-tokio"
+    ))]
+    fn assert_from<T>()
+    where
+        DeferredError: From<T>,
+    {
+    }
+
+    #[test]
+    #[cfg(feature = "deferred-sea-orm")]
+    fn sea_orm_conversion_is_available_when_enabled() {
+        assert_from::<sea_orm::DbErr>();
+    }
+
+    #[test]
+    #[cfg(feature = "deferred-redis")]
+    fn redis_conversions_are_available_when_enabled() {
+        assert_from::<deadpool_redis::PoolError>();
+        assert_from::<redis::RedisError>();
+    }
+
+    #[test]
+    #[cfg(feature = "deferred-cache")]
+    fn cache_conversion_is_available_when_enabled() {
+        assert_from::<multi_level_cache::CacheError>();
+    }
+
+    #[test]
+    #[cfg(feature = "deferred-serde")]
+    fn serde_conversion_is_available_when_enabled() {
+        assert_from::<serde_json::Error>();
+    }
+
+    #[test]
+    #[cfg(feature = "deferred-tokio")]
+    fn tokio_conversions_are_available_when_enabled() {
+        assert_from::<tokio::sync::AcquireError>();
+        assert_from::<tokio::task::JoinError>();
     }
 }

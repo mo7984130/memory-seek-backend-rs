@@ -1,6 +1,6 @@
 [package]
 name = "common"
-version = "0.1.14"
+version = "0.1.15"
 edition = "2024"
 
 [features]
@@ -9,6 +9,11 @@ metrics = ["dep:metrics"]
 validators = ["dep:validator"]
 file_validator = ["dep:image"]
 tokio = ["dep:tokio"]
+deferred-sea-orm = []
+deferred-redis = []
+deferred-cache = []
+deferred-serde = []
+deferred-tokio = ["tokio"]
 # TypeScript 类型导出
 ts = ["dep:ts-rs"]
 

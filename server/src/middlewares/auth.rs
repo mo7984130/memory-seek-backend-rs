@@ -3,7 +3,7 @@ use axum::{extract::Request, middleware::Next, response::Response};
 use common::{
     Result,
     error::AppError,
-    ext::{OptionExt, RedisExt, ResultErrExt},
+    ext::{DeferFromExt, OptionExt, RedisExt, ResultErrExt},
 };
 use std::{str::FromStr, sync::Arc};
 use types::auth::user::UserId;
@@ -71,7 +71,7 @@ async fn verify_token(state: &AppState, user_id: UserId, token: &str) -> Result<
     use constants::RedisKeys;
 
     let key = RedisKeys::auth::user_access_token(user_id);
-    let stored_token: Option<String> = state.redis.get_as(&key).await?;
+    let stored_token: Option<String> = state.redis.get_as(&key).await.defer()?;
 
     match stored_token {
         Some(stored) if stored == token => Ok(()),

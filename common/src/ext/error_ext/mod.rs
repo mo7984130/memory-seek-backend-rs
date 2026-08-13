@@ -9,7 +9,7 @@ mod uint_ext;
 
 pub use base::*;
 pub use bool_ext::BoolExt;
-pub use deferred_ext::{DeferOptionExt, DeferResultExt};
+pub use deferred_ext::{DeferFromExt, DeferOptionExt, DeferResultExt};
 pub use ok_ext::*;
 pub use option_ext::OptionExt;
 pub use result_err_ext::*;

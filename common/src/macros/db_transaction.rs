@@ -40,7 +40,16 @@ macro_rules! db_transaction {
     };
     (scoped $db:expr, |$txn:ident| $body:block) => {
         async {
-            let transaction = ::sea_orm::TransactionTrait::begin($db).await?;
+            let transaction = ::sea_orm::TransactionTrait::begin($db)
+                .await
+                .map_err(|error| {
+                    $crate::error::DeferredError::error(
+                        "db_conn_err",
+                        "开启数据库事务失败",
+                        error,
+                        $crate::error::AppError::InternalServerError,
+                    )
+                })?;
             let result: $crate::Result<_> = async {
                 let $txn = &transaction;
                 $body
@@ -49,11 +58,31 @@ macro_rules! db_transaction {
 
             match result {
                 Ok(value) => {
-                    transaction.commit().await?;
+                    transaction
+                        .commit()
+                        .await
+                        .map_err(|error| {
+                            $crate::error::DeferredError::error(
+                                "db_commit_err",
+                                "提交数据库事务失败",
+                                error,
+                                $crate::error::AppError::InternalServerError,
+                            )
+                        })?;
                     Ok(value)
                 }
                 Err(error) => {
-                    transaction.rollback().await?;
+                    transaction
+                        .rollback()
+                        .await
+                        .map_err(|error| {
+                            $crate::error::DeferredError::error(
+                                "db_rollback_err",
+                                "回滚数据库事务失败",
+                                error,
+                                $crate::error::AppError::InternalServerError,
+                            )
+                        })?;
                     Err(error)
                 }
             }

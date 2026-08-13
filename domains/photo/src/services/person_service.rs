@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use common::ext::ToOk;
+use common::ext::{DeferFromExt, ToOk};
 use common::{
     Result, db_transaction,
     error::AppError,
@@ -101,9 +101,10 @@ impl PersonService {
                 ..Default::default()
             };
 
-            Ok::<_, AppError>(hdbscan.fit(&embedding_array, None))
+            hdbscan.fit(&embedding_array, None)
         })
-        .await??;
+        .await
+        .defer()?;
         info!("聚类完成");
 
         info!("开始保存 person/face 表");
@@ -119,7 +120,7 @@ impl PersonService {
         db_transaction!(&state.db, |txn| {
             info!("开始清除 person 表");
             // 保存表(聚类会重建 person 并改写 photo_face.person_id, 两张表都备份)
-            person::Entity::delete_many().exec(txn).await?;
+            person::Entity::delete_many().exec(txn).await.defer()?;
             // 清空所有人脸归属, 避免指向已删除人物的悬空引用
             // (离群/噪声人脸不在聚类结果中, 不会在下方循环里被重新指派)
             FaceMapper::clear_person_id(txn).await?;
@@ -229,9 +230,10 @@ impl PersonService {
                 .map(|p| (p.id, &p.centroid))
                 .collect::<Vec<_>>();
             let classified = Self::classify_unassigned(&face_refs, &person_refs, threshold);
-            Ok::<_, AppError>((classified, faces))
+            (classified, faces)
         })
-        .await??;
+        .await
+        .defer()?;
         let (classified, faces) = classified;
 
         let matched = classified.len();

@@ -1,6 +1,6 @@
 [package]
 name = "user"
-version = "0.1.16"
+version = "0.1.17"
 edition = "2024"
 
 [features]
@@ -9,7 +9,15 @@ metrics = ["common/metrics", "dep:metrics", "oss/metrics", "multi-level-cache/me
 controller = ["dep:axum"]
 
 [dependencies]
-common = { path = "../../common", features = ["file_validator", "validators", "metrics", "tokio"] }
+common = { path = "../../common", features = [
+    "file_validator",
+    "validators",
+    "metrics",
+    "deferred-sea-orm",
+    "deferred-redis",
+    "deferred-cache",
+    "deferred-tokio",
+] }
 constants = { path = "../constants" }
 types = { workspace = true, features = ["orm"] }
 oss = { path = "../../libs/oss" }

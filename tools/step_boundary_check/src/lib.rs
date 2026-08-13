@@ -12,7 +12,9 @@
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{Block, Expr, ImplItem, Item, ItemImpl, Path, UseTree};
+use syn::{
+    Block, Expr, GenericArgument, ImplItem, Item, ItemImpl, Path, PathArguments, Type, UseTree,
+};
 
 /// 一次边界违规
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +88,19 @@ struct ErrorBoundaryVisitor<'a> {
 }
 
 impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
+    fn visit_item_impl(&mut self, item: &'ast ItemImpl) {
+        if let Some(source) = forbidden_app_error_from_source(item) {
+            self.violations.push(Violation::new(
+                self.file,
+                item.span(),
+                format!(
+                    "禁止实现 From<{source}> for AppError，基础设施错误必须先转换为 DeferredError"
+                ),
+            ));
+        }
+        syn::visit::visit_item_impl(self, item);
+    }
+
     fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
         if self.is_domain_lower && imports_common_result(&item.tree, &[]) {
             self.violations.push(Violation::new(
@@ -186,6 +201,40 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
         }
         syn::visit::visit_macro(self, mac);
     }
+}
+
+fn forbidden_app_error_from_source(item: &ItemImpl) -> Option<String> {
+    let Type::Path(self_type) = item.self_ty.as_ref() else {
+        return None;
+    };
+    if self_type.path.segments.last()?.ident != "AppError" {
+        return None;
+    }
+
+    let (_, trait_path, _) = item.trait_.as_ref()?;
+    let from = trait_path.segments.last()?;
+    if from.ident != "From" {
+        return None;
+    }
+    let PathArguments::AngleBracketed(arguments) = &from.arguments else {
+        return None;
+    };
+    let source = arguments.args.iter().find_map(|argument| match argument {
+        GenericArgument::Type(Type::Path(source)) => Some(&source.path),
+        _ => None,
+    })?;
+    let names = source
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect::<Vec<_>>();
+    let last = names.last()?.as_str();
+    let forbidden = matches!(
+        last,
+        "DbErr" | "PoolError" | "RedisError" | "CacheError" | "AcquireError" | "JoinError"
+    ) || (last == "Error" && names.iter().any(|name| name == "serde_json"));
+
+    forbidden.then(|| names.join("::"))
 }
 
 fn imports_common_result(tree: &UseTree, prefix: &[String]) -> bool {
@@ -498,6 +547,30 @@ impl Step<Ctx> for MyStep {{
         assert!(violations
             .iter()
             .any(|v| v.message.contains("common::error::deferred::Result")));
+    }
+
+    #[test]
+    fn rejects_infrastructure_from_for_app_error() {
+        let source = r#"
+            impl From<sea_orm::DbErr> for AppError {
+                fn from(_: sea_orm::DbErr) -> Self { AppError::InternalServerError }
+            }
+        "#;
+        let violations = check_source(source, "/repo/common/src/error/db_error.rs");
+        assert!(violations.iter().any(|violation| {
+            violation.message.contains("From<sea_orm::DbErr>")
+                && violation.message.contains("DeferredError")
+        }));
+    }
+
+    #[test]
+    fn allows_domain_error_from_for_app_error() {
+        let source = r#"
+            impl From<BackupError> for AppError {
+                fn from(_: BackupError) -> Self { AppError::InternalServerError }
+            }
+        "#;
+        assert!(check_source(source, "/repo/domains/backup/src/error.rs").is_empty());
     }
 
     #[test]

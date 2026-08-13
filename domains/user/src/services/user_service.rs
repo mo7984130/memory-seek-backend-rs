@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use chrono::{Duration, Utc};
-use common::ext::{RedisExt, ResultInspectErrAsync, ToOk, log_err};
+use common::ext::{DeferFromExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
 use common::utils::{FileValidator, MetricsTimerExt, rand_utils};
 use common::{Result, error::AppError, metrics_name, timed};
 use constants::{PasswordHasher, RedisKeys};
@@ -70,7 +70,7 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
 pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result<InviterCodeView> {
     // 循环生成邀请码, 防止冲突
     // 最大生成次数为3
-    let mut conn = state.redis.get_conn().await?;
+    let mut conn = state.redis.get_conn().await.defer()?;
     for _ in 0..GENERATE_INVITER_CODE_MAX_RETRY {
         let code: String = rand_utils::generate_random_uppercase_str(INVITER_CODE_LEN);
         let key = RedisKeys::auth::inviter_code(&code);
@@ -83,7 +83,8 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
             .arg("NX")
             .query_async(&mut conn)
             .timed(metrics_name!("redis_set"))
-            .await?;
+            .await
+            .defer()?;
 
         if success {
             return Ok(InviterCodeView {
@@ -227,13 +228,17 @@ pub async fn change_password(
     let _permit = PASSWORD_VERIFY_SEM
         .acquire()
         .timed(metrics_name!("acquire_permit"))
-        .await?;
+        .await
+        .defer()?;
 
     // 校验旧密码
     let is_valid = {
-        spawn_blocking(move || PasswordHasher.verify(&req.old_password, &old_password))
-            .timed(metrics_name!("verify_password"))
-            .await??
+        let verify_result =
+            spawn_blocking(move || PasswordHasher.verify(&req.old_password, &old_password))
+                .timed(metrics_name!("verify_password"))
+                .await
+                .defer()?;
+        verify_result?
     };
     if !is_valid {
         return Err(AppError::bad_request("原密码错误"));
@@ -242,9 +247,11 @@ pub async fn change_password(
     // 加密新密码
     let new_password_hash = {
         let password = req.new_password;
-        spawn_blocking(move || PasswordHasher.hash(&password))
+        let hash_result = spawn_blocking(move || PasswordHasher.hash(&password))
             .timed(metrics_name!("hash_password"))
-            .await??
+            .await
+            .defer()?;
+        hash_result?
     };
 
     // 更新数据库

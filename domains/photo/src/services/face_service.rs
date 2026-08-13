@@ -4,8 +4,8 @@ use std::sync::Arc;
 use backup::storage::BackupType;
 use common::{
     Result, db_transaction,
-    error::AppError,
-    ext::{OptionExt, ResultErrExt, ToOk, UintExt},
+    error::{AppError, DeferredError, deferred},
+    ext::{DeferFromExt, DeferResultExt, OptionExt, ToOk, UintExt},
     inc_counter, inc_error, metrics_name,
     models::CursorPage,
     set_gauge,
@@ -186,8 +186,8 @@ impl FaceService {
             .await?;
 
         db_transaction!(&state.db, |txn| {
-            face::Entity::delete_many().exec(txn).await?;
-            person::Entity::delete_many().exec(txn).await?;
+            face::Entity::delete_many().exec(txn).await.defer()?;
+            person::Entity::delete_many().exec(txn).await.defer()?;
             Ok(())
         })
         .await
@@ -228,7 +228,8 @@ impl FaceService {
             .limit(size)
             .into_tuple::<(PhotoId, String)>()
             .all(&state.db)
-            .await?
+            .await
+            .defer()?
             .into_iter()
             .collect();
 
@@ -246,17 +247,19 @@ impl FaceService {
 
         let img = {
             let _decode_timer = MetricsTimer::start(metrics_name!("photo_decode"));
-            tokio::task::spawn_blocking(move || {
+            let decode_result = tokio::task::spawn_blocking(move || -> deferred::Result<Img> {
                 image::load_from_memory(&bytes)
                     .map(|img| img.into_rgb8())
-                    .trace_internal_err("decode_image_error", "解码图片失败")
+                    .defer_error(
+                        "decode_image_error",
+                        "解码图片失败",
+                        AppError::InternalServerError,
+                    )
             })
             .await
-            .map_err(|e| {
-                inc_error!("decode");
-                AppError::from(e)
-            })?
-            .inspect_err(|_| inc_error!("decode"))?
+            .inspect_err(|_| inc_error!("decode"))
+            .defer()?;
+            decode_result.inspect_err(|_| inc_error!("decode"))?
         };
 
         debug!("下载完成");
@@ -266,22 +269,29 @@ impl FaceService {
     async fn detect_photo(state: &PhotoState, img: Img) -> Result<Vec<Face>> {
         debug!("检测照片中");
         let face_engine_clone = Arc::clone(&state.face_engine);
-        spawn_blocking(move || {
+        let detect_result = spawn_blocking(move || -> deferred::Result<Vec<Face>> {
             debug!("获取face-engine 锁");
-            let mut eng = face_engine_clone.lock()?;
+            let mut eng = face_engine_clone.lock().map_err(|error| {
+                DeferredError::error(
+                    "poison_error",
+                    "人脸引擎锁中毒",
+                    error.to_string(),
+                    AppError::InternalServerError,
+                )
+            })?;
             debug!("获取成功");
-            let faces = eng
-                .run(&img)
-                .trace_internal_err("face-engine_run_error", "人脸检测模型运行失败")
-                .inspect_err(|_| inc_error!("detect"))?;
+            let faces = eng.run(&img).defer_error(
+                "face-engine_run_error",
+                "人脸检测模型运行失败",
+                AppError::InternalServerError,
+            )?;
             debug!("转换成功");
             Ok(faces)
         })
         .await
-        .map_err(|e| {
-            inc_error!("detect");
-            AppError::from(e)
-        })?
+        .inspect_err(|_| inc_error!("detect"))
+        .defer()?;
+        Ok(detect_result.inspect_err(|_| inc_error!("detect"))?)
     }
 
     async fn insert_faces(state: &PhotoState, faces: Vec<face::NewFaceRecord>) -> Result<()> {
@@ -292,7 +302,8 @@ impl FaceService {
             face::Entity::insert_many(faces.into_iter().map(face::ActiveModel::from))
                 .exec_without_returning(&state.db)
                 .await
-                .inspect_err(|_| inc_error!("insert"))?;
+                .inspect_err(|_| inc_error!("insert"))
+                .defer()?;
         }
         debug!("插入完成");
         Ok(())

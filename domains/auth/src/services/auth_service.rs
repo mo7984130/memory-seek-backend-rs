@@ -4,7 +4,9 @@ use crate::mapper::{AuthInsertParam, AuthMapper};
 use chrono::{Duration, Utc};
 use common::Result;
 use common::error::AppError;
-use common::ext::{OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, TraceExt, log_warn};
+use common::ext::{
+    DeferFromExt, OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, log_warn,
+};
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{inc_error, metrics_name};
 use constants::RedisKeys;
@@ -111,9 +113,11 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     // 登录成功后异步迁移，不影响登录响应时间
     if constants::PasswordHasher != old_alg {
         let password_for_migration = req.password.clone();
-        let new_password =
+        let password_result =
             spawn_blocking(move || constants::PasswordHasher.hash(&password_for_migration))
-                .await??;
+                .await
+                .defer()?;
+        let new_password = password_result?;
 
         AuthMapper::update_password(&state.db, user.id, &new_password).await?;
     }
@@ -131,7 +135,8 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
             ACCESS_TOKEN_EXPIRE_SECONDS as u64,
         )
         .timed(metrics_name!("redis_set"))
-        .await?;
+        .await
+        .defer()?;
 
     let updated_user = AuthMapper::update_refresh_token(
         &state.db,
@@ -141,11 +146,14 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     )
     .await
     .inspect_err_async(|_| async {
-        let _ = state
+        if let Err(error) = state
             .redis
             .del(RedisKeys::auth::user_access_token(user.id))
             .await
-            .trace();
+            .defer()
+        {
+            let _ = AppError::from(error);
+        }
     })
     .await?;
 
@@ -227,7 +235,8 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     state
         .redis
         .del(&redis_keys::auth::email_verify_code(&user_model.email))
-        .await?;
+        .await
+        .defer()?;
 
     Ok(UserInfo::from(user_model))
 }
@@ -266,11 +275,12 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
             10 * 60,
         )
         .timed(metrics_name!("redis_set"))
-        .await?;
+        .await
+        .defer()?;
 
     // 在独立作用域内获取信号量并发送邮件，发送完成后立即释放信号量
     {
-        let _permit = EMAIL_SEND_SEM.acquire().await?;
+        let _permit = EMAIL_SEND_SEM.acquire().await.defer()?;
 
         let html_body = format!(
             "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 10 分钟。</p>",
@@ -325,7 +335,8 @@ pub async fn refresh_access_token(
             ACCESS_TOKEN_EXPIRE_SECONDS as u64,
         )
         .timed(metrics_name!("set_token"))
-        .await?;
+        .await
+        .defer()?;
 
     Ok(RefreshAccessTokenResponse {
         access_token: new_access_token,
@@ -338,7 +349,8 @@ async fn verify_email_verify_code(state: &AuthState, email: &str, code: &str) ->
     let stored_code: Option<String> = state
         .redis
         .get_as(&RedisKeys::auth::email_verify_code(email))
-        .await?;
+        .await
+        .defer()?;
     let code_upper = code.to_uppercase();
     match stored_code {
         Some(v) if v == code_upper => Ok(()),
@@ -356,7 +368,8 @@ async fn verify_inviter_code(state: &AuthState, inviter_code: &str) -> Result<Us
     state
         .redis
         .get_as(&RedisKeys::auth::inviter_code(&code_upper))
-        .await?
+        .await
+        .defer()?
         .map(UserId)
         .ok_or_warn(
             "invalid_inviter_code",
