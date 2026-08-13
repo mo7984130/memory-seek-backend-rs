@@ -4,8 +4,10 @@ use crate::state::PhotoState;
 use common::Result;
 use common::error::AppError;
 use common::ext::{OkExt, UintExt};
-use common::utils::{DbUtils, token_cipher};
-use common::{metrics_group, metrics_name, metrics_success, utils::MetricsTimerExt};
+use common::utils::token_cipher;
+use common::{
+    db_transaction, metrics_group, metrics_name, metrics_success, utils::MetricsTimerExt,
+};
 use types::auth::user::UserId;
 use types::photo::collection::CollectionId;
 use types::photo::dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView};
@@ -100,21 +102,19 @@ impl CollectionService {
         metrics_group!();
 
         // 删除收藏夹 和 收藏夹照片
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                // 删除收藏夹本身
-                CollectionMapper::delete_by_id(txn, collection_id, user_id)
-                    .await?
-                    .no_zero_or_warn(
-                        "delete_collection_fail",
-                        "删除收藏夹失败",
-                        AppError::bad_request("删除收藏夹失败"),
-                    )?;
+        db_transaction!(&state.db, |txn| {
+            // 删除收藏夹本身
+            CollectionMapper::delete_by_id(txn, collection_id, user_id)
+                .await?
+                .no_zero_or_warn(
+                    "delete_collection_fail",
+                    "删除收藏夹失败",
+                    AppError::bad_request("删除收藏夹失败"),
+                )?;
 
-                // 删除收藏夹里面的照片
-                CollectionPhotoMapper::delete_by_collection_id(txn, collection_id, user_id).await?;
-                Ok(())
-            })
+            // 删除收藏夹里面的照片
+            CollectionPhotoMapper::delete_by_collection_id(txn, collection_id, user_id).await?;
+            Ok(())
         })
         .timed(metrics_name!("db_transaction"))
         .await?;

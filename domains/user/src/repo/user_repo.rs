@@ -1,6 +1,6 @@
 use common::ext::{OptionExt, RedisExt, ToOk};
-use common::utils::{DbUtils, MetricsTimerExt};
-use common::{Result, metrics_name};
+use common::utils::MetricsTimerExt;
+use common::{Result, db_transaction, metrics_name};
 use constants::RedisKeys;
 use deadpool_redis::Pool;
 use multi_level_cache::{CacheConfig, MultiLevelCache};
@@ -96,8 +96,8 @@ impl UserRepo {
 
     /// 在事务内更新头像，返回旧头像 key（由调用方决定是否删除旧文件）
     pub async fn update_avatar(&self, user_id: UserId, new_key: String) -> Result<Option<String>> {
-        let old_key = DbUtils::write(&self.db, move |txn| {
-            Box::pin(UserMapper::update_avatar(txn, user_id, new_key))
+        let old_key = db_transaction!(&self.db, |txn| {
+            UserMapper::update_avatar(txn, user_id, new_key).await
         })
         .timed(metrics_name!("db_transaction"))
         .await?;

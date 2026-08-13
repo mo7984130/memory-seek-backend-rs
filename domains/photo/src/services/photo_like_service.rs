@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 use common::{
-    Result,
+    Result, db_transaction,
     error::AppError,
     ext::{ToErr, log_warn},
     metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
-    utils::{DbUtils, MetricsTimerExt},
+    utils::MetricsTimerExt,
 };
 use sea_orm::entity::prelude::DateTimeUtc;
 use types::{auth::user::UserId, cursor::TimeIdCursor, photo::photo::PhotoId};
@@ -33,25 +33,23 @@ impl PhotoLikeService {
         metrics_group!();
 
         timed!("db_transaction", {
-            DbUtils::write(&state.db, |txn| {
-                Box::pin(async move {
-                    PhotoMapper::ensure_exist(txn, photo_id).await?;
+            db_transaction!(&state.db, |txn| {
+                PhotoMapper::ensure_exist(txn, photo_id).await?;
 
-                    let inserted = PhotoLikeMapper::insert(txn, user_id, photo_id).await?;
+                let inserted = PhotoLikeMapper::insert(txn, user_id, photo_id).await?;
 
-                    if !inserted {
-                        return log_warn(
-                            "photo_like_already_exist",
-                            "用户尝试点赞一个已经点赞过的照片",
-                            AppError::bad_request("已经点赞过"),
-                        )
-                        .to_err();
-                    }
+                if !inserted {
+                    return log_warn(
+                        "photo_like_already_exist",
+                        "用户尝试点赞一个已经点赞过的照片",
+                        AppError::bad_request("已经点赞过"),
+                    )
+                    .to_err();
+                }
 
-                    // 增加点赞总数
-                    PhotoMapper::update_like_count_delta(txn, photo_id, 1).await?;
-                    Ok(())
-                })
+                // 增加点赞总数
+                PhotoMapper::update_like_count_delta(txn, photo_id, 1).await?;
+                Ok(())
             })
             .await
         })?;
@@ -136,23 +134,21 @@ impl PhotoLikeService {
         metrics_group!();
 
         timed!("db_transaction", {
-            DbUtils::write(&state.db, |txn| {
-                Box::pin(async move {
-                    let deleted = PhotoLikeMapper::delete(txn, user_id, photo_id).await?;
+            db_transaction!(&state.db, |txn| {
+                let deleted = PhotoLikeMapper::delete(txn, user_id, photo_id).await?;
 
-                    if !deleted {
-                        return log_warn(
-                            "photo_like_not_exist",
-                            "用户尝试取消点赞一个未点赞过的照片",
-                            AppError::bad_request("还未点赞"),
-                        )
-                        .to_err();
-                    }
+                if !deleted {
+                    return log_warn(
+                        "photo_like_not_exist",
+                        "用户尝试取消点赞一个未点赞过的照片",
+                        AppError::bad_request("还未点赞"),
+                    )
+                    .to_err();
+                }
 
-                    // 减少点赞总数
-                    PhotoMapper::update_like_count_delta(txn, photo_id, -1).await?;
-                    Ok(())
-                })
+                // 减少点赞总数
+                PhotoMapper::update_like_count_delta(txn, photo_id, -1).await?;
+                Ok(())
             })
             .await
         })?;

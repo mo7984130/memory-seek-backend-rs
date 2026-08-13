@@ -7,11 +7,8 @@ use crate::{
     state::PhotoState,
 };
 use common::{
-    Result,
-    ext::OkExt,
-    metrics_group, metrics_name, metrics_success,
-    models::CursorPage,
-    utils::{DbUtils, MetricsTimerExt},
+    Result, db_transaction, ext::OkExt, metrics_group, metrics_name, metrics_success,
+    models::CursorPage, utils::MetricsTimerExt,
 };
 use types::{
     auth::user::UserId,
@@ -138,26 +135,18 @@ impl CollectionPhotoService {
             .await?;
 
         // 插入
-        let photo_count = DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                let new_photo_count =
-                    CollectionMapper::add_photos_batch(txn, user_id, collection_id, &photo_ids)
-                        .await?;
+        let photo_count = db_transaction!(&state.db, |txn| {
+            let new_photo_count =
+                CollectionMapper::add_photos_batch(txn, user_id, collection_id, &photo_ids).await?;
 
-                // 将新添加的第一张照片设为封面
-                if let Some(photo_id) = photo_ids.first() {
-                    let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
-                    CollectionMapper::update_cover_photo(
-                        txn,
-                        collection_id,
-                        Some(*photo_id),
-                        file_id,
-                    )
+            // 将新添加的第一张照片设为封面
+            if let Some(photo_id) = photo_ids.first() {
+                let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
+                CollectionMapper::update_cover_photo(txn, collection_id, Some(*photo_id), file_id)
                     .await?;
-                }
+            }
 
-                Ok(new_photo_count)
-            })
+            Ok(new_photo_count)
         })
         .timed(metrics_name!("db_transaction"))
         .await?;
@@ -184,58 +173,53 @@ impl CollectionPhotoService {
     ) -> Result<CollectionPhotoRemoveBatchResult> {
         metrics_group!();
 
-        let remove_count = DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                let collection =
-                    CollectionMapper::ensure_belong_with_return(txn, user_id, collection_id)
-                        .await?;
+        let remove_count = db_transaction!(&state.db, |txn| {
+            let collection =
+                CollectionMapper::ensure_belong_with_return(txn, user_id, collection_id).await?;
 
-                // 先检查封面是否需要更新
-                let need_update_cover = collection
-                    .cover_photo_id
-                    .map(|cover_pid| photo_ids.contains(&cover_pid))
-                    .unwrap_or(false);
+            // 先检查封面是否需要更新
+            let need_update_cover = collection
+                .cover_photo_id
+                .map(|cover_pid| photo_ids.contains(&cover_pid))
+                .unwrap_or(false);
 
-                let rows = CollectionPhotoMapper::delete_by_collection_id_and_photo_ids(
+            let rows = CollectionPhotoMapper::delete_by_collection_id_and_photo_ids(
+                txn,
+                user_id,
+                collection_id,
+                &photo_ids,
+            )
+            .await?;
+
+            // 如果封面照片被删除，更新封面
+            if need_update_cover {
+                // 获取剩余的第一张照片作为新封面
+                let remaining_photo_ids = CollectionPhotoMapper::query_photo_id_by_collection_id(
                     txn,
                     user_id,
                     collection_id,
-                    &photo_ids,
+                    None,
+                    1,
                 )
                 .await?;
 
-                // 如果封面照片被删除，更新封面
-                if need_update_cover {
-                    // 获取剩余的第一张照片作为新封面
-                    let remaining_photo_ids =
-                        CollectionPhotoMapper::query_photo_id_by_collection_id(
-                            txn,
-                            user_id,
-                            collection_id,
-                            None,
-                            1,
-                        )
-                        .await?;
+                if let Some(photo_id) = remaining_photo_ids.first() {
+                    let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
 
-                    if let Some(photo_id) = remaining_photo_ids.first() {
-                        let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
-
-                        CollectionMapper::update_cover_photo(
-                            txn,
-                            collection_id,
-                            Some(*photo_id),
-                            file_id,
-                        )
-                        .await?;
-                    }
-                }
-
-                // 更新收藏夹照片数量
-                CollectionMapper::update_photo_count_delta(txn, collection_id, -(rows as i64))
+                    CollectionMapper::update_cover_photo(
+                        txn,
+                        collection_id,
+                        Some(*photo_id),
+                        file_id,
+                    )
                     .await?;
+                }
+            }
 
-                Ok(rows)
-            })
+            // 更新收藏夹照片数量
+            CollectionMapper::update_photo_count_delta(txn, collection_id, -(rows as i64)).await?;
+
+            Ok(rows)
         })
         .timed(metrics_name!("db_transaction"))
         .await?;

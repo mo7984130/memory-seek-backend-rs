@@ -1,5 +1,5 @@
 use common::{
-    Result, error::AppError, ext::BoolExt, metrics_group, metrics_success, timed, utils::DbUtils,
+    Result, db_transaction, error::AppError, ext::BoolExt, metrics_group, metrics_success, timed,
 };
 use types::{auth::user::UserId, photo::comment::CommentId};
 
@@ -22,22 +22,20 @@ impl CommentLikeService {
 
         // 检查评论是否存在
         timed!("db_transaction", {
-            DbUtils::write(&state.db, |txn| {
-                Box::pin(async move {
-                    CommentMapper::ensure_exist(txn, comment_id).await?;
+            db_transaction!(&state.db, |txn| {
+                CommentMapper::ensure_exist(txn, comment_id).await?;
 
-                    CommentLikeMapper::insert(txn, user_id, comment_id)
-                        .await?
-                        .true_or_warn(
-                            "comment_like_already_exist",
-                            "用户尝试点赞一个已经点赞过的评论",
-                            AppError::bad_request("已经点赞过"),
-                        )?;
+                CommentLikeMapper::insert(txn, user_id, comment_id)
+                    .await?
+                    .true_or_warn(
+                        "comment_like_already_exist",
+                        "用户尝试点赞一个已经点赞过的评论",
+                        AppError::bad_request("已经点赞过"),
+                    )?;
 
-                    // 增加点赞总数
-                    CommentMapper::update_like_count_delta(txn, comment_id, 1).await?;
-                    Ok(())
-                })
+                // 增加点赞总数
+                CommentMapper::update_like_count_delta(txn, comment_id, 1).await?;
+                Ok(())
             })
             .await
         })?;
@@ -64,20 +62,18 @@ impl CommentLikeService {
         metrics_group!();
 
         timed!("db_transaction", {
-            DbUtils::write(&state.db, |txn| {
-                Box::pin(async move {
-                    CommentLikeMapper::delete(txn, user_id, comment_id)
-                        .await?
-                        .true_or_warn(
-                            "comment_like_already_exist",
-                            "用户尝试取消点赞还未点赞过的",
-                            AppError::bad_request("还未点赞"),
-                        )?;
+            db_transaction!(&state.db, |txn| {
+                CommentLikeMapper::delete(txn, user_id, comment_id)
+                    .await?
+                    .true_or_warn(
+                        "comment_like_already_exist",
+                        "用户尝试取消点赞还未点赞过的",
+                        AppError::bad_request("还未点赞"),
+                    )?;
 
-                    // 减少点赞总数
-                    CommentMapper::update_like_count_delta(txn, comment_id, -1).await?;
-                    Ok(())
-                })
+                // 减少点赞总数
+                CommentMapper::update_like_count_delta(txn, comment_id, -1).await?;
+                Ok(())
             })
             .await
         })?;

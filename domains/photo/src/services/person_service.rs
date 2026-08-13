@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use common::ext::ToOk;
 use common::{
-    Result,
+    Result, db_transaction,
     error::AppError,
     ext::{OptionExt, ResultErrExt, UintExt},
     metrics_group, metrics_name, metrics_success,
@@ -117,63 +117,61 @@ impl PersonService {
             )
             .await?;
         info!("保存表完成");
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                info!("开始清除 person 表");
-                // 保存表(聚类会重建 person 并改写 photo_face.person_id, 两张表都备份)
-                person::Entity::delete_many().exec(txn).await?;
-                // 清空所有人脸归属, 避免指向已删除人物的悬空引用
-                // (离群/噪声人脸不在聚类结果中, 不会在下方循环里被重新指派)
-                FaceMapper::clear_person_id(txn).await?;
-                info!("清除完成");
+        db_transaction!(&state.db, |txn| {
+            info!("开始清除 person 表");
+            // 保存表(聚类会重建 person 并改写 photo_face.person_id, 两张表都备份)
+            person::Entity::delete_many().exec(txn).await?;
+            // 清空所有人脸归属, 避免指向已删除人物的悬空引用
+            // (离群/噪声人脸不在聚类结果中, 不会在下方循环里被重新指派)
+            FaceMapper::clear_person_id(txn).await?;
+            info!("清除完成");
 
-                info!("开始插入人物");
-                for cluster in cluster_result.0 {
-                    let embedding_ids = cluster.1;
-                    // 封面人脸: 取 cluster 内 score 最高的人脸
-                    let cover_face = embedding_ids
+            info!("开始插入人物");
+            for cluster in cluster_result.0 {
+                let embedding_ids = cluster.1;
+                // 封面人脸: 取 cluster 内 score 最高的人脸
+                let cover_face = embedding_ids
+                    .iter()
+                    .max_by(|&&a, &&b| faces[a].score.total_cmp(&faces[b].score))
+                    .map(|&idx| &faces[idx])
+                    .expect("cluster should not be empty");
+                // score 加权质心: (weight, centroid) = (Σscore, Σ(score×embedding))
+                let (weight, centroid) = FaceEmbedding::weighted_sum(
+                    embedding_ids
                         .iter()
-                        .max_by(|&&a, &&b| faces[a].score.total_cmp(&faces[b].score))
-                        .map(|&idx| &faces[idx])
-                        .expect("cluster should not be empty");
-                    // score 加权质心: (weight, centroid) = (Σscore, Σ(score×embedding))
-                    let (weight, centroid) = FaceEmbedding::weighted_sum(
-                        embedding_ids
-                            .iter()
-                            .map(|idx| (faces[*idx].score, &faces[*idx].embedding)),
-                    );
-                    // 插入人物
-                    let person = NewPerson {
-                        name: cluster.0.to_string(),
-                        weight,
-                        centroid,
-                        cover_face_id: cover_face.id,
-                        cover_photo_id: cover_face.photo_id,
-                        cover_file_id: photo_file_ids
-                            .get(&cover_face.photo_id)
-                            .cloned()
-                            .ok_or_error(
-                                "person_cover_photo_not_found",
-                                "封面人脸所属照片不存在",
-                                AppError::InternalServerError,
-                            )?,
-                        cover_bbox: bbox_from_insight(cover_face.bbox),
-                        face_count: embedding_ids.len() as u64,
-                    };
-                    let person = PersonMapper::insert(txn, person).await?;
+                        .map(|idx| (faces[*idx].score, &faces[*idx].embedding)),
+                );
+                // 插入人物
+                let person = NewPerson {
+                    name: cluster.0.to_string(),
+                    weight,
+                    centroid,
+                    cover_face_id: cover_face.id,
+                    cover_photo_id: cover_face.photo_id,
+                    cover_file_id: photo_file_ids
+                        .get(&cover_face.photo_id)
+                        .cloned()
+                        .ok_or_error(
+                            "person_cover_photo_not_found",
+                            "封面人脸所属照片不存在",
+                            AppError::InternalServerError,
+                        )?,
+                    cover_bbox: bbox_from_insight(cover_face.bbox),
+                    face_count: embedding_ids.len() as u64,
+                };
+                let person = PersonMapper::insert(txn, person).await?;
 
-                    // 更新人脸归属
-                    FaceMapper::update_person_id(
-                        txn,
-                        person.id,
-                        embedding_ids.iter().map(|idx| faces[*idx].id),
-                    )
-                    .await?;
-                }
-                info!("插入人物完成");
-                info!("人脸聚类完成");
-                Ok(())
-            })
+                // 更新人脸归属
+                FaceMapper::update_person_id(
+                    txn,
+                    person.id,
+                    embedding_ids.iter().map(|idx| faces[*idx].id),
+                )
+                .await?;
+            }
+            info!("插入人物完成");
+            info!("人脸聚类完成");
+            Ok(())
         })
         .await?;
 
@@ -248,91 +246,83 @@ impl PersonService {
             return Ok(());
         }
 
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                // 按人物分组聚合(一次事务内批量写入, 保持不变量一致)
-                let face_by_id: HashMap<FaceId, &face::FaceRecord> =
-                    faces.iter().map(|f| (f.id, f)).collect();
-                let mut per_person: HashMap<PersonId, Vec<&face::FaceRecord>> = HashMap::new();
-                for (face_id, person_id) in &classified {
-                    per_person
-                        .entry(*person_id)
-                        .or_default()
-                        .push(face_by_id[face_id]);
-                }
+        db_transaction!(&state.db, |txn| {
+            // 按人物分组聚合(一次事务内批量写入, 保持不变量一致)
+            let face_by_id: HashMap<FaceId, &face::FaceRecord> =
+                faces.iter().map(|f| (f.id, f)).collect();
+            let mut per_person: HashMap<PersonId, Vec<&face::FaceRecord>> = HashMap::new();
+            for (face_id, person_id) in &classified {
+                per_person
+                    .entry(*person_id)
+                    .or_default()
+                    .push(face_by_id[face_id]);
+            }
 
-                // 涉及的人物按 id 升序加行锁(与 change_face_belonging 加锁顺序一致, 防死锁)
-                let mut person_ids: Vec<PersonId> = per_person.keys().copied().collect();
-                person_ids.sort_unstable();
-                for person_id in person_ids {
-                    let assigned_faces = &per_person[&person_id];
-                    let person = PersonMapper::lock_by_id(txn, person_id)
+            // 涉及的人物按 id 升序加行锁(与 change_face_belonging 加锁顺序一致, 防死锁)
+            let mut person_ids: Vec<PersonId> = per_person.keys().copied().collect();
+            person_ids.sort_unstable();
+            for person_id in person_ids {
+                let assigned_faces = &per_person[&person_id];
+                let person = PersonMapper::lock_by_id(txn, person_id)
+                    .await?
+                    .ok_or_error(
+                        "person_not_found",
+                        "二次聚类时, 人物不存在",
+                        AppError::InternalServerError,
+                    )?;
+
+                // Δweight / Δcentroid = Σscore / Σ(score×embedding)
+                let (delta_weight, delta_centroid) = FaceEmbedding::weighted_sum(
+                    assigned_faces.iter().map(|f| (f.score, &f.embedding)),
+                );
+
+                // 封面: 集合新增多张人脸, 新封面 = max(当前封面, 组内 score 最高脸)
+                let cover = {
+                    let top_in_group = assigned_faces
+                        .iter()
+                        .max_by(|&&a, &&b| a.score.total_cmp(&b.score))
+                        .expect("assigned_faces should not be empty");
+                    let current_cover_score = FaceMapper::query_by_id(txn, person.cover_face_id)
                         .await?
                         .ok_or_error(
-                            "person_not_found",
-                            "二次聚类时, 人物不存在",
+                            "person_cover_face_not_found",
+                            "人物封面人脸不存在",
                             AppError::InternalServerError,
-                        )?;
+                        )?
+                        .score;
+                    if top_in_group.score > current_cover_score {
+                        let file_id = PhotoMapper::query_file_id_by_id(txn, top_in_group.photo_id)
+                            .await?
+                            .ok_or_error(
+                                "person_cover_photo_not_found",
+                                "封面人脸所属照片不存在",
+                                AppError::InternalServerError,
+                            )?;
+                        Some(PersonCoverUpdate {
+                            cover_face_id: top_in_group.id,
+                            cover_photo_id: top_in_group.photo_id,
+                            cover_file_id: file_id,
+                            cover_bbox: bbox_from_insight(top_in_group.bbox),
+                        })
+                    } else {
+                        None
+                    }
+                };
 
-                    // Δweight / Δcentroid = Σscore / Σ(score×embedding)
-                    let (delta_weight, delta_centroid) = FaceEmbedding::weighted_sum(
-                        assigned_faces.iter().map(|f| (f.score, &f.embedding)),
-                    );
+                PersonMapper::update_stats(
+                    txn,
+                    person_id,
+                    person.face_count + assigned_faces.len() as u64,
+                    person.weight + delta_weight,
+                    person.centroid.add(&delta_centroid),
+                    cover,
+                )
+                .await?;
 
-                    // 封面: 集合新增多张人脸, 新封面 = max(当前封面, 组内 score 最高脸)
-                    let cover = {
-                        let top_in_group = assigned_faces
-                            .iter()
-                            .max_by(|&&a, &&b| a.score.total_cmp(&b.score))
-                            .expect("assigned_faces should not be empty");
-                        let current_cover_score =
-                            FaceMapper::query_by_id(txn, person.cover_face_id)
-                                .await?
-                                .ok_or_error(
-                                    "person_cover_face_not_found",
-                                    "人物封面人脸不存在",
-                                    AppError::InternalServerError,
-                                )?
-                                .score;
-                        if top_in_group.score > current_cover_score {
-                            let file_id =
-                                PhotoMapper::query_file_id_by_id(txn, top_in_group.photo_id)
-                                    .await?
-                                    .ok_or_error(
-                                        "person_cover_photo_not_found",
-                                        "封面人脸所属照片不存在",
-                                        AppError::InternalServerError,
-                                    )?;
-                            Some(PersonCoverUpdate {
-                                cover_face_id: top_in_group.id,
-                                cover_photo_id: top_in_group.photo_id,
-                                cover_file_id: file_id,
-                                cover_bbox: bbox_from_insight(top_in_group.bbox),
-                            })
-                        } else {
-                            None
-                        }
-                    };
-
-                    PersonMapper::update_stats(
-                        txn,
-                        person_id,
-                        person.face_count + assigned_faces.len() as u64,
-                        person.weight + delta_weight,
-                        person.centroid.add(&delta_centroid),
-                        cover,
-                    )
+                FaceMapper::update_person_id(txn, person_id, assigned_faces.iter().map(|f| f.id))
                     .await?;
-
-                    FaceMapper::update_person_id(
-                        txn,
-                        person_id,
-                        assigned_faces.iter().map(|f| f.id),
-                    )
-                    .await?;
-                }
-                Ok(())
-            })
+            }
+            Ok(())
         })
         .await?;
 
@@ -410,87 +400,82 @@ impl PersonService {
             target_person_id,
         } = req;
 
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                let (source, target) = DbUtils::ensure_lock_two_ordered(
-                    txn,
-                    source_person_id,
-                    target_person_id,
-                    PersonMapper::lock_by_id,
-                    |person| {
-                        person.ok_or_warn_bad_request(
-                            "person_not_found",
-                            "合并人物时, 人物不存在",
-                            "人物不存在",
-                        )
-                    },
-                )
-                .await?;
-
-                // 转移人脸归属
-                FaceMapper::move_person_faces(txn, source_person_id, target_person_id).await?;
-
-                // 封面: 合并后取两者封面中 score 更高者(集合取并, 极值 = max(两个封面))
-                let cover = {
-                    let faces = FaceMapper::query_by_ids(
-                        txn,
-                        &[source.cover_face_id, target.cover_face_id],
+        db_transaction!(&state.db, |txn| {
+            let (source, target) = DbUtils::ensure_lock_two_ordered(
+                txn,
+                source_person_id,
+                target_person_id,
+                PersonMapper::lock_by_id,
+                |person| {
+                    person.ok_or_warn_bad_request(
+                        "person_not_found",
+                        "合并人物时, 人物不存在",
+                        "人物不存在",
                     )
-                    .await?;
+                },
+            )
+            .await?;
 
-                    let source_cover_face = faces
-                        .iter()
-                        .find(|f| f.id == source.cover_face_id)
+            // 转移人脸归属
+            FaceMapper::move_person_faces(txn, source_person_id, target_person_id).await?;
+
+            // 封面: 合并后取两者封面中 score 更高者(集合取并, 极值 = max(两个封面))
+            let cover = {
+                let faces =
+                    FaceMapper::query_by_ids(txn, &[source.cover_face_id, target.cover_face_id])
+                        .await?;
+
+                let source_cover_face = faces
+                    .iter()
+                    .find(|f| f.id == source.cover_face_id)
+                    .ok_or_error(
+                        "person_cover_face_not_found",
+                        "人物封面人脸不存在",
+                        AppError::InternalServerError,
+                    )?;
+
+                let target_cover_face = faces
+                    .iter()
+                    .find(|f| f.id == target.cover_face_id)
+                    .ok_or_error(
+                        "person_cover_face_not_found",
+                        "人物封面人脸不存在",
+                        AppError::InternalServerError,
+                    )?;
+
+                if source_cover_face.score > target_cover_face.score {
+                    let file_id = PhotoMapper::query_file_id_by_id(txn, source_cover_face.photo_id)
+                        .await?
                         .ok_or_error(
-                            "person_cover_face_not_found",
-                            "人物封面人脸不存在",
+                            "person_cover_photo_not_found",
+                            "封面人脸所属照片不存在",
                             AppError::InternalServerError,
                         )?;
+                    Some(PersonCoverUpdate {
+                        cover_face_id: source_cover_face.id,
+                        cover_photo_id: source_cover_face.photo_id,
+                        cover_file_id: file_id,
+                        cover_bbox: bbox_from_insight(source_cover_face.bbox),
+                    })
+                } else {
+                    None
+                }
+            };
 
-                    let target_cover_face = faces
-                        .iter()
-                        .find(|f| f.id == target.cover_face_id)
-                        .ok_or_error(
-                            "person_cover_face_not_found",
-                            "人物封面人脸不存在",
-                            AppError::InternalServerError,
-                        )?;
+            // 目标人物: 数量/权重/质心合并(封面可能替换)
+            PersonMapper::update_stats(
+                txn,
+                target_person_id,
+                target.face_count + source.face_count,
+                target.weight + source.weight,
+                target.centroid.add(&source.centroid),
+                cover,
+            )
+            .await?;
 
-                    if source_cover_face.score > target_cover_face.score {
-                        let file_id =
-                            PhotoMapper::query_file_id_by_id(txn, source_cover_face.photo_id)
-                                .await?
-                                .ok_or_error(
-                                    "person_cover_photo_not_found",
-                                    "封面人脸所属照片不存在",
-                                    AppError::InternalServerError,
-                                )?;
-                        Some(PersonCoverUpdate {
-                            cover_face_id: source_cover_face.id,
-                            cover_photo_id: source_cover_face.photo_id,
-                            cover_file_id: file_id,
-                            cover_bbox: bbox_from_insight(source_cover_face.bbox),
-                        })
-                    } else {
-                        None
-                    }
-                };
-
-                // 目标人物: 数量/权重/质心合并(封面可能替换)
-                PersonMapper::update_stats(
-                    txn,
-                    target_person_id,
-                    target.face_count + source.face_count,
-                    target.weight + source.weight,
-                    target.centroid.add(&source.centroid),
-                    cover,
-                )
-                .await?;
-
-                // 删除源人物
-                PersonMapper::delete_by_id(txn, source_person_id).await?;
-                Ok(())
-            })
+            // 删除源人物
+            PersonMapper::delete_by_id(txn, source_person_id).await?;
+            Ok(())
         })
         .await?;
 
@@ -722,20 +707,18 @@ impl PersonService {
         admin: AdminId,
         person_id: PersonId,
     ) -> Result<()> {
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                // 清空该人物所有人脸归属, 避免悬空引用
-                FaceMapper::clear_person_id_by_person(txn, person_id).await?;
-                // 删除人物
-                PersonMapper::delete_by_id(txn, person_id)
-                    .await?
-                    .no_zero_or_warn(
-                        "person_delete_fail",
-                        "删除人物失败",
-                        AppError::not_found("人物不存在"),
-                    )?;
-                Ok(())
-            })
+        db_transaction!(&state.db, |txn| {
+            // 清空该人物所有人脸归属, 避免悬空引用
+            FaceMapper::clear_person_id_by_person(txn, person_id).await?;
+            // 删除人物
+            PersonMapper::delete_by_id(txn, person_id)
+                .await?
+                .no_zero_or_warn(
+                    "person_delete_fail",
+                    "删除人物失败",
+                    AppError::not_found("人物不存在"),
+                )?;
+            Ok(())
         })
         .await?;
 

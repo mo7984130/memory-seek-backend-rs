@@ -6,13 +6,13 @@ use crate::{
     state::PhotoState,
 };
 use common::{
-    Result,
+    Result, db_transaction,
     error::AppError,
     ext::{BoolExt, ToOk},
     metrics_group, metrics_name, metrics_success,
     models::CursorPage,
     timed,
-    utils::{DbUtils, MetricsTimerExt},
+    utils::MetricsTimerExt,
 };
 use types::{
     auth::user::UserId,
@@ -47,18 +47,16 @@ impl CommentService {
         let CommentPublishParam { content } = req;
 
         let comment = timed!("db_transaction", {
-            DbUtils::write(&state.db, |txn| {
-                Box::pin(async move {
-                    // 查询照片是否存在
-                    PhotoMapper::ensure_exist(txn, photo_id).await?;
+            db_transaction!(&state.db, |txn| {
+                // 查询照片是否存在
+                PhotoMapper::ensure_exist(txn, photo_id).await?;
 
-                    // 插入评论
-                    let comment =
-                        CommentMapper::insert(txn, photo_id, user_id, content.into_inner()).await?;
-                    // 更新评论总数
-                    PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
-                    Ok(comment)
-                })
+                // 插入评论
+                let comment =
+                    CommentMapper::insert(txn, photo_id, user_id, content.into_inner()).await?;
+                // 更新评论总数
+                PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
+                Ok(comment)
             })
             .await
         })?;
@@ -171,28 +169,26 @@ impl CommentService {
         metrics_group!();
 
         timed!("db_transaction", {
-            DbUtils::write(&state.db, |txn| {
-                Box::pin(async move {
-                    let photo_id = CommentMapper::query_photo_id_by_id(txn, comment_id).await?;
+            db_transaction!(&state.db, |txn| {
+                let photo_id = CommentMapper::query_photo_id_by_id(txn, comment_id).await?;
 
-                    // 先删除评论, 在删除评论的同时, 校验权限
-                    CommentMapper::delete(txn, user_id, comment_id)
-                        .await?
-                        .true_or_warn(
-                            "del_comment_not_deleted",
-                            "用户尝试删除评论, 失败",
-                            AppError::bad_request("删除评论失败"),
-                        )?;
+                // 先删除评论, 在删除评论的同时, 校验权限
+                CommentMapper::delete(txn, user_id, comment_id)
+                    .await?
+                    .true_or_warn(
+                        "del_comment_not_deleted",
+                        "用户尝试删除评论, 失败",
+                        AppError::bad_request("删除评论失败"),
+                    )?;
 
-                    // 更新照片评论数
-                    PhotoMapper::update_comment_count_delta(txn, photo_id, -1).await?;
+                // 更新照片评论数
+                PhotoMapper::update_comment_count_delta(txn, photo_id, -1).await?;
 
-                    // 删除评论喜欢
-                    // 错误不返回
-                    let _ = CommentLikeMapper::delete_all_by_comment_id(txn, comment_id).await;
+                // 删除评论喜欢
+                // 错误不返回
+                let _ = CommentLikeMapper::delete_all_by_comment_id(txn, comment_id).await;
 
-                    Ok(())
-                })
+                Ok(())
             })
             .await
         })?;
