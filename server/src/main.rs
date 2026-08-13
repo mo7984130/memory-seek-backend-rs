@@ -1,6 +1,6 @@
 use clap::Parser;
 use common::Result;
-use common::{error::ContextualError, ext::ContextResultExt};
+use common::{error::ContextualError, ext::IntoContextualExt};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -106,11 +106,9 @@ async fn main() -> Result<()> {
 
     // 启动服务器
     tracing::info!("尝试监听{}端口", cfg.server.port);
-    let listener = TcpListener::bind(&cfg.server_addr()).await.context_error(
-        "tcp_bind_err",
-        "端口绑定失败",
-        common::error::AppError::InternalServerError,
-    )?;
+    let listener = TcpListener::bind(&cfg.server_addr())
+        .await
+        .into_contextual()?;
     tracing::info!("Server listening on {}", cfg.server_addr());
 
     let shutdown_signal = shutdown_signal(graceful_state, cancel_token);
@@ -121,11 +119,7 @@ async fn main() -> Result<()> {
     )
     .with_graceful_shutdown(shutdown_signal)
     .await
-    .context_error(
-        "server_err",
-        "服务器运行异常",
-        common::error::AppError::InternalServerError,
-    )?;
+    .into_contextual()?;
 
     tracing::info!("服务已完全关闭");
     Ok(())

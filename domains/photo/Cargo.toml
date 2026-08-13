@@ -19,6 +19,7 @@ common = { path = "../../common", features = [
     "metrics",
     "contextual-sea-orm",
     "contextual-cache",
+    "contextual-serde",
     "contextual-tokio",
 ] }
 async-trait = { workspace = true }

@@ -10,8 +10,8 @@ crate::id_type!(PersonId, "photo/");
 
 #[cfg(feature = "face-engine")]
 mod entity {
-    use common::error::{AppError, ContextualError};
-    use common::ext::ContextResultExt;
+    use common::error::ContextualError;
+    use common::ext::IntoContextualExt;
     use insight_face_rs::types::FaceEmbedding;
     use insight_face_rs::PgVector;
     use sea_orm::{entity::prelude::*, ActiveValue::Set};
@@ -69,11 +69,8 @@ mod entity {
         type Error = ContextualError;
         fn try_from(value: Model) -> Result<Self, Self::Error> {
             let embedding: FaceEmbedding = value.centroid.into();
-            let cover_bbox: FaceBBox = serde_json::from_value(value.cover_bbox).context_error(
-                "db:photo:person:cover_bbox_from:err",
-                "封面 bbox 转换错误",
-                AppError::InternalServerError,
-            )?;
+            let cover_bbox: FaceBBox =
+                serde_json::from_value(value.cover_bbox).into_contextual()?;
 
             Ok(Self {
                 id: value.id,

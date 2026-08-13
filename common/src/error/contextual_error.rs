@@ -166,6 +166,17 @@ impl Display for ContextualError {
 
 impl std::error::Error for ContextualError {}
 
+impl From<std::io::Error> for ContextualError {
+    fn from(error: std::io::Error) -> Self {
+        Self::error(
+            "io_error",
+            "I/O 操作失败",
+            error,
+            AppError::InternalServerError,
+        )
+    }
+}
+
 #[cfg(feature = "contextual-sea-orm")]
 impl From<sea_orm::DbErr> for ContextualError {
     fn from(error: sea_orm::DbErr) -> Self {
@@ -336,17 +347,15 @@ mod tests {
         );
     }
 
-    #[cfg(any(
-        feature = "contextual-sea-orm",
-        feature = "contextual-redis",
-        feature = "contextual-cache",
-        feature = "contextual-serde",
-        feature = "contextual-tokio"
-    ))]
     fn assert_from<T>()
     where
         ContextualError: From<T>,
     {
+    }
+
+    #[test]
+    fn io_conversion_is_available() {
+        assert_from::<std::io::Error>();
     }
 
     #[test]

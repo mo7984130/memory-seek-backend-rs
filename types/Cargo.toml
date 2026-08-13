@@ -39,7 +39,7 @@ ts-rs = { workspace = true, optional = true }
 sea-orm = { workspace = true, features = ["sqlx-postgres", "macros"], optional = true }
 sqlx = { workspace = true, optional = true }
 pgvector = { workspace = true, optional = true }
-common = { path = "../common", optional = true }
+common = { path = "../common", features = ["contextual-serde"], optional = true }
 insight-face-rs = { workspace = true, features = ["pgvector"], optional = true }
 
 [dev-dependencies]
