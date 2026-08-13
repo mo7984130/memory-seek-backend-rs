@@ -86,7 +86,7 @@ impl BehaviorService {
         .await
         {
             inc_error!("db");
-            tracing::warn!(error = %e, action = %req.action.as_str(), "record_behavior_failed");
+            common::caller_warn!(error = ?e, action = %req.action.as_str(), "record_behavior_failed");
         } else {
             metrics_success!();
         }
@@ -112,7 +112,7 @@ impl BehaviorService {
                 Ok(None) => return,
                 Err(e) => {
                     inc_error!("record_view_async", "db");
-                    tracing::warn!(error = %e, file_id = %file_id, "query_photo_id_for_view_failed");
+                    common::caller_warn!(error = ?e, file_id = %file_id, "query_photo_id_for_view_failed");
                     return;
                 }
             };
@@ -133,7 +133,7 @@ impl BehaviorService {
             .await
             {
                 inc_error!("record_view_async", "db");
-                tracing::warn!(error = %e, action = "view", "record_behavior_failed");
+                common::caller_warn!(error = ?e, action = "view", "record_behavior_failed");
             } else {
                 metrics_success!("record_view_async");
             }

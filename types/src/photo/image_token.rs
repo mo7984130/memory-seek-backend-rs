@@ -145,7 +145,10 @@ impl ImageToken {
     /// # 返回
     /// 加密后的头像 token，加密失败返回 `AppError`
     #[cfg(feature = "orm")]
-    pub fn encrypt_avatar_token(avatar_file_id: &str, viewer: UserId) -> common::Result<String> {
+    pub fn encrypt_avatar_token(
+        avatar_file_id: &str,
+        viewer: UserId,
+    ) -> common::error::DeferredResult<String> {
         let seed = format!("{}:{}", viewer, avatar_file_id);
         token_cipher().encrypt(&Self::thumbnail(viewer, avatar_file_id), Some(&seed))
     }

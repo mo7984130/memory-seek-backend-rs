@@ -10,8 +10,8 @@ crate::id_type!(FaceId, "photo/");
 
 #[cfg(feature = "face-engine")]
 mod entity {
-    use common::error::AppError;
-    use common::ext::ResultErrExt;
+    use common::error::{AppError, DeferredError};
+    use common::ext::DeferResultExt;
     use insight_face_rs::types::{BoundingBox, Face, FaceEmbedding, FaceLandmarks};
     use insight_face_rs::PgVector;
     use sea_orm::entity::prelude::*;
@@ -63,12 +63,18 @@ mod entity {
     }
 
     impl TryFrom<Model> for FaceRecord {
-        type Error = AppError;
+        type Error = DeferredError;
         fn try_from(value: Model) -> Result<Self, Self::Error> {
-            let bbox: BoundingBox = serde_json::from_value(value.bbox)
-                .trace_internal_err("db:photo:face:bbox_from:err", "BoundingBox转换错误")?;
-            let landmarks: FaceLandmarks = serde_json::from_value(value.landmarks)
-                .trace_internal_err("db:photo:face:landmark_from:err", "Landmarks转换错误")?;
+            let bbox: BoundingBox = serde_json::from_value(value.bbox).defer_error(
+                "db:photo:face:bbox_from:err",
+                "BoundingBox转换错误",
+                AppError::InternalServerError,
+            )?;
+            let landmarks: FaceLandmarks = serde_json::from_value(value.landmarks).defer_error(
+                "db:photo:face:landmark_from:err",
+                "Landmarks转换错误",
+                AppError::InternalServerError,
+            )?;
             let embedding: FaceEmbedding = value.embedding.into();
 
             Ok(Self {

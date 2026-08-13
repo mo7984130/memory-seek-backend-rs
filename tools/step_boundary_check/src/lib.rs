@@ -12,7 +12,7 @@
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{Block, Expr, ImplItem, Item, ItemImpl, Path};
+use syn::{Block, Expr, ImplItem, Item, ItemImpl, Path, UseTree};
 
 /// 一次边界违规
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,7 +54,155 @@ pub fn check_source(source: &str, file: &str) -> Vec<Violation> {
         }
     });
     collect_declare_step_impls(&ast.items, file, &mut violations);
+    check_error_boundaries(&ast, file, &mut violations);
     violations
+}
+
+fn check_error_boundaries(ast: &syn::File, file: &str, violations: &mut Vec<Violation>) {
+    let normalized = file.replace('\\', "/");
+    let is_domain_lower = normalized.contains("/src/mappers/")
+        || normalized.contains("/src/mapper/")
+        || normalized.contains("/src/repo/")
+        || normalized.ends_with("/domains/backup/src/storage.rs")
+        || normalized.ends_with("/domains/backup/src/exporter.rs")
+        || normalized.ends_with("/domains/backup/src/hasher.rs")
+        || normalized.ends_with("/domains/backup/src/state.rs");
+    let enforce_caller_macro = normalized.contains("/domains/") || normalized.contains("/server/");
+
+    let mut visitor = ErrorBoundaryVisitor {
+        file,
+        is_domain_lower,
+        enforce_caller_macro,
+        violations,
+    };
+    visitor.visit_file(ast);
+}
+
+struct ErrorBoundaryVisitor<'a> {
+    file: &'a str,
+    is_domain_lower: bool,
+    enforce_caller_macro: bool,
+    violations: &'a mut Vec<Violation>,
+}
+
+impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
+    fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
+        if self.is_domain_lower && imports_common_result(&item.tree, &[]) {
+            self.violations.push(Violation::new(
+                self.file,
+                item.span(),
+                "下层模块必须返回 DeferredResult，不能提前返回 common::Result/AppError",
+            ));
+        }
+        syn::visit::visit_item_use(self, item);
+    }
+
+    fn visit_path(&mut self, path: &'ast Path) {
+        if self.is_domain_lower {
+            let names = path
+                .segments
+                .iter()
+                .map(|segment| segment.ident.to_string())
+                .collect::<Vec<_>>();
+            if names.windows(2).any(|pair| pair == ["common", "Result"]) {
+                self.violations.push(Violation::new(
+                    self.file,
+                    path.span(),
+                    "下层模块必须返回 DeferredResult，不能提前返回 common::Result/AppError",
+                ));
+            }
+            if names.last().is_some_and(|name| {
+                matches!(
+                    name.as_str(),
+                    "log_err" | "log_err_with_err" | "log_warn" | "log_warn_with_err"
+                )
+            }) {
+                self.violations.push(Violation::new(
+                    self.file,
+                    path.span(),
+                    "下层模块禁止直接记录错误，必须延迟到 service 边界",
+                ));
+            }
+        }
+        syn::visit::visit_path(self, path);
+    }
+
+    fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+        if self.is_domain_lower {
+            let method = call.method.to_string();
+            if matches!(
+                method.as_str(),
+                "trace_err"
+                    | "trace_internal_err"
+                    | "trace_warn"
+                    | "trace_warn_bad_request"
+                    | "ok_or_warn"
+                    | "ok_or_warn_bad_request"
+                    | "ok_or_error"
+                    | "true_or_warn"
+                    | "false_or_warn"
+            ) {
+                self.violations.push(Violation::new(
+                    self.file,
+                    call.method.span(),
+                    "下层模块禁止调用会记录日志的错误扩展",
+                ));
+            }
+        }
+        syn::visit::visit_expr_method_call(self, call);
+    }
+
+    fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+        let name = mac
+            .path
+            .segments
+            .last()
+            .map(|segment| segment.ident.to_string());
+        if self.is_domain_lower
+            && name
+                .as_deref()
+                .is_some_and(|name| matches!(name, "caller_warn" | "caller_error"))
+        {
+            self.violations.push(Violation::new(
+                self.file,
+                mac.path.span(),
+                "下层模块禁止直接记录错误，必须把问题返回 service",
+            ));
+        }
+        if self.enforce_caller_macro
+            && name
+                .as_deref()
+                .is_some_and(|name| matches!(name, "warn" | "error"))
+        {
+            self.violations.push(Violation::new(
+                self.file,
+                mac.path.span(),
+                "项目错误日志必须使用 caller_warn!/caller_error! 写入 caller 字段",
+            ));
+        }
+        syn::visit::visit_macro(self, mac);
+    }
+}
+
+fn imports_common_result(tree: &UseTree, prefix: &[String]) -> bool {
+    match tree {
+        UseTree::Path(path) => {
+            let mut next = prefix.to_vec();
+            next.push(path.ident.to_string());
+            imports_common_result(&path.tree, &next)
+        }
+        UseTree::Name(name) => {
+            prefix.first().is_some_and(|segment| segment == "common") && name.ident == "Result"
+        }
+        UseTree::Rename(rename) => {
+            prefix.first().is_some_and(|segment| segment == "common") && rename.ident == "Result"
+        }
+        UseTree::Group(group) => group
+            .items
+            .iter()
+            .any(|item| imports_common_result(item, prefix)),
+        UseTree::Glob(_) => false,
+    }
 }
 
 /// 对一个 execute 方法体 / 宏 body 执行边界检查
@@ -222,7 +370,8 @@ impl<'ast> Visit<'ast> for StepVisitor<'_> {
             if let Some(seg) = s.path.segments.last() {
                 let name = seg.ident.to_string();
                 if matches!(name.as_str(), "ActiveModel" | "Model") {
-                    self.violations.push(Violation::new(self.file, s.path.span(), ENTITY_MSG));
+                    self.violations
+                        .push(Violation::new(self.file, s.path.span(), ENTITY_MSG));
                 }
             }
         }
@@ -244,7 +393,8 @@ impl StepVisitor<'_> {
         let type_name = segments[segments.len() - 2].ident.to_string();
 
         if matches!(type_name.as_str(), "Entity" | "Column") {
-            self.violations.push(Violation::new(self.file, span, ENTITY_MSG));
+            self.violations
+                .push(Violation::new(self.file, span, ENTITY_MSG));
             return;
         }
 
@@ -285,17 +435,60 @@ impl Step<Ctx> for MyStep {{
 
     #[test]
     fn allows_owned_mapper() {
-        let src = source_with("CollectionMapper::update_count().await?;", r#"&["CollectionMapper"]"#);
+        let src = source_with(
+            "CollectionMapper::update_count().await?;",
+            r#"&["CollectionMapper"]"#,
+        );
         assert!(check_source(&src, "t.rs").is_empty());
     }
 
     #[test]
     fn rejects_unowned_mapper() {
-        let src = source_with("CommentMapper::delete_all().await?;", r#"&["CollectionMapper"]"#);
+        let src = source_with(
+            "CommentMapper::delete_all().await?;",
+            r#"&["CollectionMapper"]"#,
+        );
         let vs = check_source(&src, "t.rs");
         assert_eq!(vs.len(), 1);
         assert!(vs[0].message.contains("CommentMapper"));
         assert!(vs[0].line > 1);
+    }
+
+    #[test]
+    fn rejects_logging_result_in_mapper() {
+        let source = r#"
+            use common::Result;
+            async fn query() -> Result<()> {
+                Err::<(), String>("db".into())
+                    .trace_internal_err("db", "query")?;
+                Ok(())
+            }
+        "#;
+        let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
+        assert!(violations
+            .iter()
+            .any(|v| v.message.contains("DeferredResult")));
+        assert!(violations.iter().any(|v| v.message.contains("错误扩展")));
+    }
+
+    #[test]
+    fn allows_deferred_error_in_mapper() {
+        let source = r#"
+            use common::error::DeferredResult as Result;
+            async fn query() -> Result<()> { Ok(()) }
+        "#;
+        assert!(check_source(source, "/repo/domains/photo/src/mappers/demo.rs").is_empty());
+    }
+
+    #[test]
+    fn rejects_direct_error_macro_in_service() {
+        let source = r#"
+            fn service() { tracing::error!("failed"); }
+        "#;
+        let violations = check_source(source, "/repo/domains/photo/src/services/demo.rs");
+        assert!(violations
+            .iter()
+            .any(|v| v.message.contains("caller_error")));
     }
 
     #[test]
@@ -312,7 +505,10 @@ impl Step<Ctx> for MyStep {{
 
     #[test]
     fn rejects_active_model_struct() {
-        let src = source_with("let _ = ActiveModel { id: Set(1), ..Default::default() };", r#"&[]"#);
+        let src = source_with(
+            "let _ = ActiveModel { id: Set(1), ..Default::default() };",
+            r#"&[]"#,
+        );
         assert_eq!(check_source(&src, "t.rs").len(), 1);
     }
 

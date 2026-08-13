@@ -1,12 +1,11 @@
 use std::str::FromStr;
 
-use crate::ext::{ResultErrExt, log_err};
-use crate::{Result, error::AppError};
+use crate::error::{AppError, DeferredError, DeferredResult};
+use crate::ext::DeferResultExt;
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use bcrypt;
 use password_hash::SaltString;
 use password_hash::rand_core::OsRng;
-use tracing::error;
 
 /// 哈希算法类型枚举
 #[derive(Debug, Clone, PartialEq)]
@@ -64,14 +63,21 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: 哈希计算过程中发生内部错误
-    pub fn hash(&self, password: &str) -> Result<String> {
+    pub fn hash(&self, password: &str) -> DeferredResult<String> {
         match self {
-            Self::Bcrypt(cfg) => bcrypt::hash(password, cfg.cost)
-                .trace_internal_err("bcrypt hash error", "Bcrypt 计算失败"),
+            Self::Bcrypt(cfg) => bcrypt::hash(password, cfg.cost).defer_error(
+                "bcrypt hash error",
+                "Bcrypt 计算失败",
+                AppError::InternalServerError,
+            ),
             Self::Argon2id(cfg) => {
                 let hash = Self::argon2_hasher(cfg)?
                     .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
-                    .trace_internal_err("argon2id hash error", "Argon2id 计算失败")?
+                    .defer_error(
+                        "argon2id hash error",
+                        "Argon2id 计算失败",
+                        AppError::InternalServerError,
+                    )?
                     .to_string();
                 Ok(hash)
             }
@@ -89,21 +95,29 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: 哈希解析或验证过程中发生内部错误
-    pub fn verify(&self, password: &str, hash: &str) -> Result<bool> {
+    pub fn verify(&self, password: &str, hash: &str) -> DeferredResult<bool> {
         match self {
-            Self::Bcrypt(_) => bcrypt::verify(password, hash)
-                .trace_internal_err("bcrypt verify error", "Bcrypt 密码验证失败"),
+            Self::Bcrypt(_) => bcrypt::verify(password, hash).defer_error(
+                "bcrypt verify error",
+                "Bcrypt 密码验证失败",
+                AppError::InternalServerError,
+            ),
             Self::Argon2id(cfg) => {
                 let hasher = Self::argon2_hasher(cfg)?;
-                let parsed = PasswordHash::new(hash)
-                    .trace_internal_err("argon2 parse error", "解析 Argon2 哈希失败")?;
+                let parsed = PasswordHash::new(hash).defer_error(
+                    "argon2 parse error",
+                    "解析 Argon2 哈希失败",
+                    AppError::InternalServerError,
+                )?;
                 match hasher.verify_password(password.as_bytes(), &parsed) {
                     Ok(()) => Ok(true),
                     Err(password_hash::Error::Password) => Ok(false),
-                    Err(e) => {
-                        error!(reason = "argon2_verify_error", error = %e);
-                        Err(AppError::InternalServerError)
-                    }
+                    Err(error) => Err(DeferredError::error(
+                        "argon2_verify_error",
+                        "Argon2 密码验证失败",
+                        error,
+                        AppError::InternalServerError,
+                    )),
                 }
             }
         }
@@ -120,13 +134,13 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError`: 无法识别哈希算法或验证过程中发生错误
-    pub fn verify_and_detect(password: &str, hash: &str) -> Result<(bool, HashAlgorithm)> {
+    pub fn verify_and_detect(password: &str, hash: &str) -> DeferredResult<(bool, HashAlgorithm)> {
         match HashAlgorithm::detect(hash) {
             Some(alg) => {
                 let result = alg.verify(password, hash)?;
                 Ok((result, alg))
             }
-            None => Err(log_err(
+            None => Err(DeferredError::error_without_source(
                 "password_not_detect",
                 "密码算法检测失败",
                 AppError::InternalServerError,
@@ -135,9 +149,12 @@ impl HashAlgorithm {
     }
 
     // 根据配置创建 Argon2id 哈希器实例
-    fn argon2_hasher(cfg: &Argon2idConfig) -> Result<Argon2<'static>> {
-        let params = Params::new(cfg.m_cost, cfg.t_cost, cfg.p_cost, None)
-            .trace_internal_err("argon2_params_error", "创建 Argon2 参数失败")?;
+    fn argon2_hasher(cfg: &Argon2idConfig) -> DeferredResult<Argon2<'static>> {
+        let params = Params::new(cfg.m_cost, cfg.t_cost, cfg.p_cost, None).defer_error(
+            "argon2_params_error",
+            "创建 Argon2 参数失败",
+            AppError::InternalServerError,
+        )?;
         Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
     }
 

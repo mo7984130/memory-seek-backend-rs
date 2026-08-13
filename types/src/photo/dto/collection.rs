@@ -42,14 +42,20 @@ impl From<CollectionRecord> for CollectionView {
 
 #[cfg(feature = "orm")]
 impl CollectionView {
-    pub fn with_generate_cover_token(mut self, viewer: UserId, cipher: &TokenCipher) -> Self {
-        self.cover_token = self.cover_token.as_ref().and_then(|fid| {
-            let seed = format!("{}:{}", viewer, fid);
-            cipher
-                .encrypt(&ImageToken::thumbnail(viewer, fid.to_string()), Some(&seed))
-                .ok()
-        });
-        self
+    pub fn with_generate_cover_token(
+        mut self,
+        viewer: UserId,
+        cipher: &TokenCipher,
+    ) -> common::error::DeferredResult<Self> {
+        self.cover_token = self
+            .cover_token
+            .as_ref()
+            .map(|fid| {
+                let seed = format!("{}:{}", viewer, fid);
+                cipher.encrypt(&ImageToken::thumbnail(viewer, fid.to_string()), Some(&seed))
+            })
+            .transpose()?;
+        Ok(self)
     }
 }
 

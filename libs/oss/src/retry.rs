@@ -46,7 +46,7 @@ where
                 #[cfg(feature = "metrics")]
                 metrics::counter!(format!("oss:{op}:retries")).increment(1);
                 let delay = delays[attempts];
-                tracing::warn!(
+                tracing::debug!(
                     key = %key,
                     attempt = attempts + 1,
                     delay_ms = delay.as_millis(),

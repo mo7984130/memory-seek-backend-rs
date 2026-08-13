@@ -10,8 +10,8 @@ crate::id_type!(PersonId, "photo/");
 
 #[cfg(feature = "face-engine")]
 mod entity {
-    use common::error::AppError;
-    use common::ext::ResultErrExt;
+    use common::error::{AppError, DeferredError};
+    use common::ext::DeferResultExt;
     use insight_face_rs::types::FaceEmbedding;
     use insight_face_rs::PgVector;
     use sea_orm::{entity::prelude::*, ActiveValue::Set};
@@ -66,11 +66,14 @@ mod entity {
     }
 
     impl TryFrom<Model> for PersonRecord {
-        type Error = AppError;
+        type Error = DeferredError;
         fn try_from(value: Model) -> Result<Self, Self::Error> {
             let embedding: FaceEmbedding = value.centroid.into();
-            let cover_bbox: FaceBBox = serde_json::from_value(value.cover_bbox)
-                .trace_internal_err("db:photo:person:cover_bbox_from:err", "封面 bbox 转换错误")?;
+            let cover_bbox: FaceBBox = serde_json::from_value(value.cover_bbox).defer_error(
+                "db:photo:person:cover_bbox_from:err",
+                "封面 bbox 转换错误",
+                AppError::InternalServerError,
+            )?;
 
             Ok(Self {
                 id: value.id,

@@ -12,7 +12,6 @@ use constants::redis_keys;
 use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task::{self, spawn_blocking};
-use tracing::{error, warn};
 use types::auth::user::UserId;
 use types::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
@@ -87,7 +86,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
 
         let password_clone = req.password.clone();
         let stored_hash = user.password.clone();
-        let result: Result<(bool, HashAlgorithm)> = task::spawn_blocking(move || {
+        let result = task::spawn_blocking(move || {
             HashAlgorithm::verify_and_detect(&password_clone, &stored_hash)
         })
         .timed(metrics_name!("verify_password"))
@@ -381,7 +380,7 @@ async fn verify_refresh_token(
             AppError::bad_request("用户不存在"),
         )?;
     if res.refresh_token.as_deref() != Some(refresh_token) {
-        warn!("refresh_token不匹配");
+        common::caller_warn!("refresh_token不匹配");
         return Err(AppError::Unauthorized);
     }
     if let Some(expire_at) = res.refresh_token_expire_at {
@@ -389,7 +388,7 @@ async fn verify_refresh_token(
             return Err(AppError::Unauthorized);
         }
     } else {
-        error!("refresh_token过期时间不存在");
+        common::caller_error!("refresh_token过期时间不存在");
         return Err(AppError::Unauthorized);
     }
 

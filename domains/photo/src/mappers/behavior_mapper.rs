@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use common::ext::ToOk;
-use common::{Result, ext::ResultErrExt};
+use common::error::{AppError, DeferredResult as Result};
+use common::ext::{DeferResultExt, ToOk};
 use sea_orm::entity::prelude::Json;
 use sea_orm::{
     ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
@@ -37,7 +37,11 @@ impl BehaviorMapper {
         })
         .exec(db)
         .await
-        .trace_internal_err("db_insert_err", "插入行为审计记录失败")?;
+        .defer_error(
+            "db_insert_err",
+            "插入行为审计记录失败",
+            AppError::InternalServerError,
+        )?;
         Ok(())
     }
 }
@@ -86,10 +90,11 @@ impl BehaviorMapper {
         sql.push_str(" GROUP BY bucket ORDER BY bucket ASC");
 
         let stmt = Statement::from_sql_and_values(DbBackend::Postgres, &sql, binds);
-        let rows = db
-            .query_all(stmt)
-            .await
-            .trace_internal_err("db_query_err", "查询行为量统计失败")?;
+        let rows = db.query_all(stmt).await.defer_error(
+            "db_query_err",
+            "查询行为量统计失败",
+            AppError::InternalServerError,
+        )?;
 
         let mut result = Vec::with_capacity(rows.len());
         for row in rows {
@@ -119,10 +124,11 @@ impl BehaviorMapper {
             ],
         );
 
-        let rows = db
-            .query_all(stmt)
-            .await
-            .trace_internal_err("db_query_err", "查询热门目标排行失败")?;
+        let rows = db.query_all(stmt).await.defer_error(
+            "db_query_err",
+            "查询热门目标排行失败",
+            AppError::InternalServerError,
+        )?;
 
         let mut result = Vec::with_capacity(rows.len());
         for row in rows {
@@ -168,7 +174,11 @@ impl BehaviorMapper {
         query
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询审计流水失败")?
+            .defer_error(
+                "db_query_err",
+                "查询审计流水失败",
+                AppError::InternalServerError,
+            )?
             .into_iter()
             .map(BehaviorRecord::from)
             .collect::<Vec<_>>()

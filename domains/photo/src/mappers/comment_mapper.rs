@@ -1,9 +1,5 @@
-use common::error::AppError;
-use common::ext::OkExt;
-use common::{
-    Result,
-    ext::{BoolExt, OptionExt, ResultErrExt},
-};
+use common::error::{AppError, DeferredError, DeferredResult as Result};
+use common::ext::{DeferOptionExt, DeferResultExt, OkExt};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
@@ -44,16 +40,23 @@ impl CommentMapper {
             .filter(Column::Id.eq(comment_id))
             .count(db)
             .await
-            .trace_internal_err("db_query_err", "查询评论是否存在失败")?;
+            .defer_error(
+                "db_query_err",
+                "查询评论是否存在失败",
+                AppError::InternalServerError,
+            )?;
         Ok(count > 0)
     }
 
     pub async fn ensure_exist(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<()> {
-        Self::exists(db, comment_id).await?.true_or_warn(
-            "comment_not_exist",
-            "评论不存在",
-            AppError::not_found("评论不存在"),
-        )
+        if !Self::exists(db, comment_id).await? {
+            return Err(DeferredError::warn_without_source(
+                "comment_not_exist",
+                "评论不存在",
+                AppError::not_found("评论不存在"),
+            ));
+        }
+        Ok(())
     }
 
     pub async fn update_like_count_delta(
@@ -135,7 +138,11 @@ impl CommentMapper {
             .into_tuple::<PhotoId>()
             .one(db)
             .await?
-            .ok_or_warn_bad_request("comment_not_found", "评论不存在", "评论不存在")
+            .defer_warn_none(
+                "comment_not_found",
+                "评论不存在",
+                AppError::bad_request("评论不存在"),
+            )
     }
 }
 

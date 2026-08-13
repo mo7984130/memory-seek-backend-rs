@@ -33,6 +33,11 @@
 /// ```
 #[macro_export]
 macro_rules! db_transaction {
+    (deferred $db:expr, |$txn:ident| $body:block) => {
+        $crate::utils::DbUtils::write_deferred($db, move |$txn| {
+            ::std::boxed::Box::pin(async move $body)
+        })
+    };
     (scoped $db:expr, |$txn:ident| $body:block) => {
         async {
             let transaction = ::sea_orm::TransactionTrait::begin($db).await?;

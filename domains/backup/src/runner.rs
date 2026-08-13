@@ -3,7 +3,8 @@ use crate::exporter::CsvExporter;
 use crate::hasher::TableHasher;
 use crate::state::BackupState;
 use crate::storage::BackupType;
-use common::{inc_counter, inc_error};
+use crate::storage::CleanupIssueSeverity;
+use common::{Result, caller_error, caller_warn, inc_counter, inc_error};
 use std::sync::Arc;
 use types::auth::user::AdminId;
 
@@ -12,7 +13,7 @@ pub struct BackupRunner;
 
 impl BackupRunner {
     /// 获取需要备份的表名列表
-    async fn get_tables(state: &BackupState) -> Result<Vec<String>, BackupError> {
+    async fn get_tables(state: &BackupState) -> std::result::Result<Vec<String>, BackupError> {
         if let Some(ref tables) = state.config.tables {
             return Ok(tables.clone());
         }
@@ -21,13 +22,13 @@ impl BackupRunner {
 
     /// 定时调度备份：导出并保存到 daily / weekly / monthly，然后 GFS 清理
     #[common::metered(name = "scheduled")]
-    pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult, BackupError> {
+    pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult> {
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
         tracing::info!(run_id = %run_id, "Starting scheduled backup");
 
-        state.ensure_dirs()?;
+        state.ensure_dirs().map_err(BackupError::from)?;
 
         let tables = Self::get_tables(&state).await?;
         let mut result = BackupResult::default();
@@ -47,7 +48,7 @@ impl BackupRunner {
                         Err(e) => {
                             result.failed += 1;
                             inc_error!("scheduled", "save");
-                            tracing::error!(run_id = %run_id, table = %table_name, "Save failed: {}", e);
+                            caller_error!(run_id = %run_id, table = %table_name, error = %e, "Save failed");
                         }
                     }
                     let _ = std::fs::remove_file(&csv_path);
@@ -55,20 +56,36 @@ impl BackupRunner {
                 Err(e) => {
                     result.failed += 1;
                     inc_error!("scheduled", "export");
-                    tracing::error!(run_id = %run_id, table = %table_name, "Export failed: {}", e);
+                    caller_error!(run_id = %run_id, table = %table_name, error = %e, "Export failed");
                 }
             }
         }
 
         // GFS 清理
         match state.storage.cleanup_gfs(&state.config.scheduled).await {
-            Ok(count) => {
-                result.cleaned = count;
-                tracing::info!("GFS cleanup: removed {} expired backups", count);
+            Ok(report) => {
+                result.cleaned = report.removed;
+                for issue in report.issues {
+                    match issue.severity {
+                        CleanupIssueSeverity::Error => caller_error!(
+                            run = %issue.run_id,
+                            dir = %issue.rel_dir,
+                            error = %issue.error,
+                            "Failed to remove local backup dir"
+                        ),
+                        CleanupIssueSeverity::Warn => caller_warn!(
+                            run = %issue.run_id,
+                            dir = %issue.rel_dir,
+                            error = %issue.error,
+                            "GFS cleanup partial S3 deletion"
+                        ),
+                    }
+                }
+                tracing::info!("GFS cleanup: removed {} expired backups", result.cleaned);
             }
             Err(e) => {
                 inc_error!("scheduled", "cleanup");
-                tracing::error!("GFS cleanup failed: {}", e);
+                caller_error!(error = %e, "GFS cleanup failed");
             }
         }
 
@@ -89,10 +106,7 @@ impl BackupRunner {
 
     /// 手动备份：导出并保存到 manual 目录（永不清理）
     #[common::metered(name = "manual")]
-    pub async fn execute_manual(
-        state: Arc<BackupState>,
-        admin: AdminId,
-    ) -> Result<BackupResult, BackupError> {
+    pub async fn execute_manual(state: Arc<BackupState>, admin: AdminId) -> Result<BackupResult> {
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
@@ -102,7 +116,7 @@ impl BackupRunner {
             "Starting manual backup"
         );
 
-        state.ensure_dirs()?;
+        state.ensure_dirs().map_err(BackupError::from)?;
 
         let tables = Self::get_tables(&state).await?;
         let mut result = BackupResult::default();
@@ -122,7 +136,7 @@ impl BackupRunner {
                         Err(e) => {
                             result.failed += 1;
                             inc_error!("manual", "save");
-                            tracing::error!(run_id = %run_id, table = %table_name, "Manual save failed: {}", e);
+                            caller_error!(run_id = %run_id, table = %table_name, error = %e, "Manual save failed");
                         }
                     }
                     let _ = std::fs::remove_file(&csv_path);
@@ -130,7 +144,7 @@ impl BackupRunner {
                 Err(e) => {
                     result.failed += 1;
                     inc_error!("manual", "export");
-                    tracing::error!(run_id = %run_id, table = %table_name, "Export failed: {}", e);
+                    caller_error!(run_id = %run_id, table = %table_name, error = %e, "Export failed");
                 }
             }
         }
@@ -152,7 +166,7 @@ impl BackupRunner {
     async fn export_table(
         state: &BackupState,
         table_name: &str,
-    ) -> Result<std::path::PathBuf, BackupError> {
+    ) -> std::result::Result<std::path::PathBuf, BackupError> {
         let (csv_path, _) = CsvExporter::export(&state.db, table_name, &state.temp_dir).await?;
         Ok(csv_path)
     }

@@ -12,7 +12,17 @@ pub fn log_and_map(
     app_err: AppError,
 ) -> AppError {
     let loc = Location::caller();
+    log_and_map_at(level, reason, context, err, app_err, loc)
+}
 
+pub(crate) fn log_and_map_at(
+    level: Level,
+    reason: &'static str,
+    context: &'static str,
+    err: Option<&dyn Debug>,
+    app_err: AppError,
+    loc: &'static Location<'static>,
+) -> AppError {
     macro_rules! emit {
         ($lvl:ident) => {
             match err {

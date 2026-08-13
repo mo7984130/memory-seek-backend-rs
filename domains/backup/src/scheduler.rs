@@ -21,9 +21,7 @@ impl BackupScheduler {
         let job = Job::new(schedule.as_str(), move |_, _| {
             let state = state_clone.clone();
             tokio::spawn(async move {
-                if let Err(e) = BackupRunner::execute_scheduled(state).await {
-                    tracing::error!("Scheduled backup job failed: {}", e);
-                }
+                let _ = BackupRunner::execute_scheduled(state).await;
             });
         })?;
 

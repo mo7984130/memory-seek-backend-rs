@@ -1,5 +1,5 @@
-use common::Result;
-use common::ext::{OkExt, OptionExt};
+use common::error::{AppError, DeferredResult};
+use common::ext::DeferOptionExt;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter,
@@ -19,7 +19,7 @@ impl UserMapper {
         db: &impl ConnectionTrait,
         user_id: UserId,
         new_nickname: &str,
-    ) -> Result<()> {
+    ) -> DeferredResult<()> {
         Entity::update_many()
             .col_expr(Column::Nickname, Expr::value(new_nickname))
             .filter(Column::Id.eq(user_id))
@@ -34,7 +34,7 @@ impl UserMapper {
         txn: &DatabaseTransaction,
         user_id: UserId,
         new_key: String,
-    ) -> Result<Option<String>> {
+    ) -> DeferredResult<Option<String>> {
         let old_key: Option<String> = Entity::find_by_id(user_id)
             .select_only()
             .column(Column::AvatarFileId)
@@ -42,7 +42,11 @@ impl UserMapper {
             .into_values::<Option<String>, Column>()
             .one(txn)
             .await?
-            .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
+            .defer_warn_none(
+                "user_not_found",
+                "用户不存在",
+                AppError::bad_request("用户不存在"),
+            )?;
 
         ActiveModel {
             id: Set(user_id),
@@ -60,7 +64,7 @@ impl UserMapper {
         db: &impl ConnectionTrait,
         user_id: UserId,
         new_password_hash: String,
-    ) -> Result<()> {
+    ) -> DeferredResult<()> {
         ActiveModel {
             id: Set(user_id),
             password: Set(new_password_hash),
@@ -76,7 +80,7 @@ impl UserMapper {
     pub async fn clear_refresh_token(
         db: &impl ConnectionTrait,
         user_id: UserId,
-    ) -> Result<()> {
+    ) -> DeferredResult<()> {
         ActiveModel {
             id: Set(user_id),
             refresh_token: Set(None),
@@ -96,20 +100,19 @@ impl UserMapper {
     pub async fn query_by_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
-    ) -> Result<Option<UserRecord>> {
-        Entity::find_by_id(user_id)
+    ) -> DeferredResult<Option<UserRecord>> {
+        Ok(Entity::find_by_id(user_id)
             .one(db)
             .await?
-            .map(UserRecord::from)
-            .to_ok()
+            .map(UserRecord::from))
     }
 
     /// 批量查询用户基本信息（未找到的用户不包含在结果中）
     pub async fn query_info_rows(
         db: &impl ConnectionTrait,
         user_ids: &[UserId],
-    ) -> Result<Vec<UserInfoRow>> {
-        Entity::find()
+    ) -> DeferredResult<Vec<UserInfoRow>> {
+        Ok(Entity::find()
             .filter(Column::Id.is_in(user_ids.iter().copied()))
             .select_only()
             .column_as(Column::Id, "user_id")
@@ -117,22 +120,25 @@ impl UserMapper {
             .column(Column::AvatarFileId)
             .into_model::<UserInfoRow>()
             .all(db)
-            .await?
-            .to_ok()
+            .await?)
     }
 
     /// 查询用户密码哈希
     pub async fn query_password_hash(
         db: &impl ConnectionTrait,
         user_id: UserId,
-    ) -> Result<String> {
+    ) -> DeferredResult<String> {
         Entity::find_by_id(user_id)
             .select_only()
             .column(Column::Password)
             .into_tuple()
             .one(db)
             .await?
-            .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")
+            .defer_warn_none(
+                "user_not_found",
+                "用户不存在",
+                AppError::bad_request("用户不存在"),
+            )
     }
 }
 

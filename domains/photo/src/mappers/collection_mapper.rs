@@ -3,9 +3,8 @@ pub(crate) struct CollectionMapper;
 use std::collections::HashMap;
 
 use chrono::Utc;
-use common::Result;
-use common::error::AppError;
-use common::ext::{BoolExt, OkExt, OptionExt};
+use common::error::{AppError, DeferredError, DeferredResult as Result};
+use common::ext::{DeferOptionExt, OkExt};
 use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
@@ -60,7 +59,7 @@ impl CollectionMapper {
             [collection_id.into(), ids.into(), user_id.into()],
         );
 
-        let result = db.query_one(stmt).await?.ok_or_warn(
+        let result = db.query_one(stmt).await?.defer_warn_none(
             "collection_not_found",
             "收藏夹不存在",
             AppError::not_found("收藏夹不存在"),
@@ -68,9 +67,13 @@ impl CollectionMapper {
 
         let new_count: i64 = result.try_get("", &c_photo_count)?;
 
-        u64::try_from(new_count).map_err(|_| {
-            tracing::error!(collection_id = %collection_id, count = new_count, "photo_count 异常为负值");
-            AppError::InternalServerError
+        u64::try_from(new_count).map_err(|error| {
+            DeferredError::error(
+                "collection_photo_count_negative",
+                "photo_count 异常为负值",
+                error,
+                AppError::InternalServerError,
+            )
         })
     }
 
@@ -261,13 +264,14 @@ impl CollectionMapper {
         user_id: UserId,
         collection_id: CollectionId,
     ) -> Result<()> {
-        Self::is_belong(db, user_id, collection_id)
-            .await?
-            .true_or_warn(
+        if !Self::is_belong(db, user_id, collection_id).await? {
+            return Err(DeferredError::warn_without_source(
                 "collection_not_belong_user",
                 "收藏夹不属于用户",
                 AppError::forbidden("该收藏夹不属于你"),
-            )
+            ));
+        }
+        Ok(())
     }
 
     pub async fn ensure_belong_with_return(
@@ -280,7 +284,7 @@ impl CollectionMapper {
             .filter(Column::UserId.eq(user_id))
             .one(db)
             .await?
-            .ok_or_warn(
+            .defer_warn_none(
                 "collection_not_belong_user",
                 "收藏夹不属于用户",
                 AppError::forbidden("该收藏夹不属于你"),

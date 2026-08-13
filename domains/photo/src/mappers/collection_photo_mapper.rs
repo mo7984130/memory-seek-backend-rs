@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use common::Result;
+use common::error::DeferredResult as Result;
 use common::ext::OkExt;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use types::auth::user::UserId;

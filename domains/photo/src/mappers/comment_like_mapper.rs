@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use common::Result;
+use common::error::DeferredResult as Result;
 use common::ext::ToOk;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};

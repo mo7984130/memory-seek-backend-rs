@@ -5,7 +5,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{OkExt, OptionExt, ResultInspectErrAsync, log_warn},
+    ext::{DeferOptionExt, OptionExt, ResultInspectErrAsync, log_warn},
     inc_error, metrics_name,
     models::CursorPage,
     timed,
@@ -65,7 +65,7 @@ impl PhotoService {
         );
         let photos = photos_result?;
         let liked_photo_ids = liked_photo_ids_result?;
-        photos
+        let views = photos
             .into_iter()
             .flatten()
             .map(|p| {
@@ -75,8 +75,8 @@ impl PhotoService {
                     .with_liked(liked)
                     .with_tokens(&file_id, user_id, token_cipher())
             })
-            .collect::<Vec<_>>()
-            .to_ok()
+            .collect::<common::error::DeferredResult<Vec<_>>>()?;
+        Ok(views)
     }
 
     #[common::metered]
@@ -241,9 +241,11 @@ impl PhotoService {
         );
 
         let file_id = photo.file_id.clone();
-        PhotoView::from(PhotoRecord::from(photo))
-            .with_tokens(&file_id, user_id, token_cipher())
-            .to_ok()
+        Ok(PhotoView::from(PhotoRecord::from(photo)).with_tokens(
+            &file_id,
+            user_id,
+            token_cipher(),
+        )?)
     }
 
     #[common::metered]
@@ -440,10 +442,10 @@ impl PhotoService {
                                         &file_id_for_cache,
                                     )
                                     .await?
-                                    .ok_or_warn_bad_request(
+                                    .defer_warn_none(
                                         "photo_not_found",
                                         "裁剪图片不存在",
-                                        "照片不存在",
+                                        AppError::bad_request("照片不存在"),
                                     )
                                 },
                             )

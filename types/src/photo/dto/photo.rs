@@ -64,11 +64,11 @@ impl PhotoView {
         file_id: &str,
         viewer: UserId,
         token_cipher: &TokenCipher,
-    ) -> Self {
-        self = self.with_original_token(file_id, viewer, token_cipher);
-        self = self.with_thumbnail_token(file_id, viewer, token_cipher);
-        self = self.with_preview_token(file_id, viewer, token_cipher);
-        self
+    ) -> common::error::DeferredResult<Self> {
+        self = self.with_original_token(file_id, viewer, token_cipher)?;
+        self = self.with_thumbnail_token(file_id, viewer, token_cipher)?;
+        self = self.with_preview_token(file_id, viewer, token_cipher)?;
+        Ok(self)
     }
 
     #[cfg(feature = "orm")]
@@ -77,14 +77,12 @@ impl PhotoView {
         file_id: &str,
         viewer: UserId,
         token_cipher: &TokenCipher,
-    ) -> Self {
-        self.thumbnail_token = token_cipher
-            .encrypt(
-                &ImageToken::thumbnail(viewer, file_id),
-                Some(&format!("{}:{}", self.id, viewer)),
-            )
-            .ok();
-        self
+    ) -> common::error::DeferredResult<Self> {
+        self.thumbnail_token = Some(token_cipher.encrypt(
+            &ImageToken::thumbnail(viewer, file_id),
+            Some(&format!("{}:{}", self.id, viewer)),
+        )?);
+        Ok(self)
     }
 
     #[cfg(feature = "orm")]
@@ -93,14 +91,12 @@ impl PhotoView {
         file_id: &str,
         viewer: UserId,
         token_cipher: &TokenCipher,
-    ) -> Self {
-        self.preview_token = token_cipher
-            .encrypt(
-                &ImageToken::preview(viewer, file_id),
-                Some(&format!("{}:{}", self.id, viewer)),
-            )
-            .ok();
-        self
+    ) -> common::error::DeferredResult<Self> {
+        self.preview_token = Some(token_cipher.encrypt(
+            &ImageToken::preview(viewer, file_id),
+            Some(&format!("{}:{}", self.id, viewer)),
+        )?);
+        Ok(self)
     }
 
     #[cfg(feature = "orm")]
@@ -109,14 +105,12 @@ impl PhotoView {
         file_id: &str,
         viewer: UserId,
         token_cipher: &TokenCipher,
-    ) -> Self {
-        self.original_token = token_cipher
-            .encrypt(
-                &ImageToken::original(viewer, file_id),
-                Some(&format!("{}:{}", self.id, viewer)),
-            )
-            .ok();
-        self
+    ) -> common::error::DeferredResult<Self> {
+        self.original_token = Some(token_cipher.encrypt(
+            &ImageToken::original(viewer, file_id),
+            Some(&format!("{}:{}", self.id, viewer)),
+        )?);
+        Ok(self)
     }
 }
 

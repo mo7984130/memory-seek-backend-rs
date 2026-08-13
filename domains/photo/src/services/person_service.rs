@@ -398,7 +398,7 @@ impl PersonService {
                 txn,
                 source_person_id,
                 target_person_id,
-                PersonMapper::lock_by_id,
+                |db, id| async move { Ok(PersonMapper::lock_by_id(db, id).await?) },
                 |person| {
                     person.ok_or_warn_bad_request(
                         "person_not_found",
@@ -493,7 +493,7 @@ impl PersonService {
             .timed(metrics_name!("cache_invalidate"))
             .await;
 
-        Ok(Self::to_view(admin.into_inner(), person.into()))
+        Self::to_view(admin.into_inner(), person.into())
     }
 }
 
@@ -502,9 +502,8 @@ impl PersonService {
     /// 查询人物名称（审计记录改名前后用）
     #[tracing::instrument(skip_all, fields(person_id = %person_id))]
     pub async fn query_name(state: &PhotoState, person_id: PersonId) -> Result<Option<String>> {
-        PersonMapper::query_by_id(&state.db, person_id)
-            .await
-            .map(|p| p.map(|r| r.name))
+        let person = PersonMapper::query_by_id(&state.db, person_id).await?;
+        Ok(person.map(|record| record.name))
     }
 
     #[common::metered]
@@ -537,7 +536,7 @@ impl PersonService {
             .into_iter()
             .flatten()
             .map(|person| Self::to_view(user_id, person))
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         let page = CursorPage::from_oversize_fn(views, req.size, |person| {
             FaceCountIdCursor {
                 face_count: person.face_count,
@@ -584,7 +583,7 @@ impl PersonService {
             .into_iter()
             .flatten()
             .map(|person| Self::to_view(user_id, person))
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         let page = CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))?;
         Ok(page)
     }
@@ -632,18 +631,16 @@ impl PersonService {
 
     /// 构建人物视图: 使用封面冗余字段直接内存组装裁剪 token, 加密后返回
     /// (与 `CollectionView::with_generate_cover_token` / `PhotoView::with_tokens` 一致)
-    fn to_view(viewer: UserId, person: PersonBriefRow) -> PersonView {
-        PersonView {
+    fn to_view(viewer: UserId, person: PersonBriefRow) -> Result<PersonView> {
+        Ok(PersonView {
             id: person.id,
             name: person.name,
-            cover_token: token_cipher()
-                .encrypt(
-                    &ImageToken::crop(viewer, person.cover_file_id, person.cover_bbox),
-                    Some(&format!("{}:{}", person.id, viewer)),
-                )
-                .ok(),
+            cover_token: Some(token_cipher().encrypt(
+                &ImageToken::crop(viewer, person.cover_file_id, person.cover_bbox),
+                Some(&format!("{}:{}", person.id, viewer)),
+            )?),
             face_count: person.face_count as u64,
-        }
+        })
     }
 
     /// 获取人物的照片列表(游标分页, 参照 `CollectionPhotoService::get_photos`)

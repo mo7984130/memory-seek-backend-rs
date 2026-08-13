@@ -20,7 +20,7 @@ use sea_orm::{
     sea_query::{Expr, Query},
 };
 use tokio::{spawn, task::spawn_blocking};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use types::{
     auth::user::{AdminId, UserId},
     cursor::TimeIdCursor,
@@ -149,7 +149,7 @@ impl FaceService {
                     }
                 })
                 .inspect_err(|_| {
-                    warn!(photo_id = %photo_id, %file_id, "照片流程错误, 跳过");
+                    common::caller_warn!(photo_id = %photo_id, %file_id, "照片流程错误, 跳过");
                 });
             }
             drop(_download_batch_timer);
@@ -340,7 +340,7 @@ impl FaceService {
                         txn,
                         new_person_id,
                         old_person_id,
-                        PersonMapper::lock_by_id,
+                        |db, id| async move { Ok(PersonMapper::lock_by_id(db, id).await?) },
                         |person| {
                             person.ok_or_error(
                                 "person_not_found",

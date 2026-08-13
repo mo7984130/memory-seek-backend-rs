@@ -130,34 +130,44 @@ impl BackupStorage {
     }
 
     /// GFS 分层清理：按保留数清理 daily / weekly / monthly 目录
-    pub async fn cleanup_gfs(&self, config: &BackupScheduleConfig) -> Result<u32, BackupError> {
-        let mut removed = 0;
+    pub async fn cleanup_gfs(
+        &self,
+        config: &BackupScheduleConfig,
+    ) -> Result<CleanupReport, BackupError> {
+        let mut report = CleanupReport::default();
 
         if !self.local_path.exists() {
-            return Ok(0);
+            return Ok(report);
         }
 
-        removed += self
-            .cleanup_subdir("scheduled/daily", config.daily_retention)
-            .await?;
-        removed += self
-            .cleanup_subdir("scheduled/weekly", config.weekly_retention)
-            .await?;
-        removed += self
-            .cleanup_subdir("scheduled/monthly", config.monthly_retention)
-            .await?;
+        report.append(
+            self.cleanup_subdir("scheduled/daily", config.daily_retention)
+                .await?,
+        );
+        report.append(
+            self.cleanup_subdir("scheduled/weekly", config.weekly_retention)
+                .await?,
+        );
+        report.append(
+            self.cleanup_subdir("scheduled/monthly", config.monthly_retention)
+                .await?,
+        );
         // manual 目录不做清理
 
-        Ok(removed)
+        Ok(report)
     }
 
     /// 清理指定子目录下超出保留数的历史备份 run
     ///
     /// 每个子目录是一个备份运行（按 run_id 命名），删除整个目录 = 删除该次所有表。
-    async fn cleanup_subdir(&self, rel_dir: &str, keep_count: u32) -> Result<u32, BackupError> {
+    async fn cleanup_subdir(
+        &self,
+        rel_dir: &str,
+        keep_count: u32,
+    ) -> Result<CleanupReport, BackupError> {
         let dir = self.local_path.join(rel_dir);
         if !dir.exists() {
-            return Ok(0);
+            return Ok(CleanupReport::default());
         }
 
         let mut run_dirs: Vec<_> = std::fs::read_dir(&dir)?
@@ -171,7 +181,7 @@ impl BackupStorage {
             b_name.cmp(&a_name)
         });
 
-        let mut removed = 0;
+        let mut report = CleanupReport::default();
 
         for entry in run_dirs.iter().skip(keep_count as usize) {
             let run_id = entry.file_name().to_string_lossy().to_string();
@@ -180,21 +190,31 @@ impl BackupStorage {
             let s3_keys = self.collect_s3_keys_for_run(&run_dir);
 
             if let Err(e) = std::fs::remove_dir_all(&run_dir) {
-                tracing::error!(run = %run_id, dir = %rel_dir, err = %e, "Failed to remove local backup dir");
+                report.issues.push(CleanupIssue {
+                    run_id,
+                    rel_dir: rel_dir.to_owned(),
+                    severity: CleanupIssueSeverity::Error,
+                    error: BackupError::Io(e),
+                });
                 continue;
             }
 
             if !s3_keys.is_empty()
                 && let Err(e) = self.s3_client.delete_batch(s3_keys).await
             {
-                tracing::warn!(run = %run_id, dir = %rel_dir, err = %e, "GFS cleanup partial S3 deletion");
+                report.issues.push(CleanupIssue {
+                    run_id: run_id.clone(),
+                    rel_dir: rel_dir.to_owned(),
+                    severity: CleanupIssueSeverity::Warn,
+                    error: BackupError::S3(e),
+                });
             }
 
-            removed += 1;
+            report.removed += 1;
             tracing::info!(run = %run_id, dir = %rel_dir, "GFS cleanup removed expired backup run");
         }
 
-        Ok(removed)
+        Ok(report)
     }
 
     /// 收集一个 run 目录下所有 CSV 文件对应的 S3 路径
@@ -218,4 +238,31 @@ impl BackupStorage {
             }
         }
     }
+}
+
+#[derive(Debug, Default)]
+pub struct CleanupReport {
+    pub removed: u32,
+    pub issues: Vec<CleanupIssue>,
+}
+
+impl CleanupReport {
+    fn append(&mut self, mut other: Self) {
+        self.removed += other.removed;
+        self.issues.append(&mut other.issues);
+    }
+}
+
+#[derive(Debug)]
+pub struct CleanupIssue {
+    pub run_id: String,
+    pub rel_dir: String,
+    pub severity: CleanupIssueSeverity,
+    pub error: BackupError,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CleanupIssueSeverity {
+    Error,
+    Warn,
 }

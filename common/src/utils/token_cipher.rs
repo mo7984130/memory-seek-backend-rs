@@ -9,8 +9,7 @@ use hkdf::Hkdf;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 
-use crate::ext::ResultErrExt;
-use crate::{Result, error::AppError, ext::log_err};
+use crate::error::{AppError, DeferredError, DeferredResult};
 
 const NONCE_LEN: usize = 12;
 const HKDF_KEY_INFO: &[u8] = b"image-file-id-token-v1";
@@ -78,7 +77,11 @@ impl TokenCipher {
     ///
     /// # 错误
     /// - `AppError`: 序列化失败或 AES-GCM 加密失败
-    pub fn encrypt<T: Serialize>(&self, payload: &T, nonce_seed: Option<&str>) -> Result<String> {
+    pub fn encrypt<T: Serialize>(
+        &self,
+        payload: &T,
+        nonce_seed: Option<&str>,
+    ) -> DeferredResult<String> {
         let nonce_bytes = match nonce_seed {
             Some(seed) => Self::derive_nonce(seed),
             None => {
@@ -87,12 +90,25 @@ impl TokenCipher {
             }
         };
         let nonce = Nonce::from_slice(&nonce_bytes);
-        let plaintext = serde_json::to_vec(payload)
-            .trace_internal_err("token_serialize_error", "序列化 Payload 失败")?;
+        let plaintext = serde_json::to_vec(payload).map_err(|error| {
+            DeferredError::error(
+                "token_serialize_error",
+                "序列化 Payload 失败",
+                error,
+                AppError::InternalServerError,
+            )
+        })?;
         let ciphertext = self
             .cipher
             .encrypt(nonce, plaintext.as_slice())
-            .trace_internal_err("aes_gcm_encrypt_error", "AES-GCM 加密失败")?;
+            .map_err(|error| {
+                DeferredError::error(
+                    "aes_gcm_encrypt_error",
+                    "AES-GCM 加密失败",
+                    error,
+                    AppError::InternalServerError,
+                )
+            })?;
         let mut combined = Vec::with_capacity(NONCE_LEN + ciphertext.len());
         combined.extend_from_slice(&nonce_bytes);
         combined.extend_from_slice(&ciphertext);
@@ -109,12 +125,17 @@ impl TokenCipher {
     ///
     /// # 错误
     /// - `AppError`: Base64 解码失败、token 长度不合法、AES-GCM 解密失败或反序列化失败
-    pub fn decrypt<T: DeserializeOwned>(&self, token: &str) -> Result<T> {
-        let combined = URL_SAFE_NO_PAD
-            .decode(token)
-            .trace_internal_err("token_base64_decode_error", "Token Base64 解码失败")?;
+    pub fn decrypt<T: DeserializeOwned>(&self, token: &str) -> DeferredResult<T> {
+        let combined = URL_SAFE_NO_PAD.decode(token).map_err(|error| {
+            DeferredError::error(
+                "token_base64_decode_error",
+                "Token Base64 解码失败",
+                error,
+                AppError::InternalServerError,
+            )
+        })?;
         if combined.len() <= NONCE_LEN {
-            return Err(log_err(
+            return Err(DeferredError::error_without_source(
                 "token_too_short",
                 "Token 长度不合法",
                 AppError::InternalServerError,
@@ -122,12 +143,22 @@ impl TokenCipher {
         }
         let (nonce_bytes, ciphertext) = combined.split_at(NONCE_LEN);
         let nonce = Nonce::from_slice(nonce_bytes);
-        let plaintext = self
-            .cipher
-            .decrypt(nonce, ciphertext)
-            .trace_internal_err("aes_gcm_decrypt_error", "AES-GCM 解密失败")?;
-        serde_json::from_slice(&plaintext)
-            .trace_internal_err("token_deserialize_error", "反序列化 Payload 失败")
+        let plaintext = self.cipher.decrypt(nonce, ciphertext).map_err(|error| {
+            DeferredError::error(
+                "aes_gcm_decrypt_error",
+                "AES-GCM 解密失败",
+                error,
+                AppError::InternalServerError,
+            )
+        })?;
+        serde_json::from_slice(&plaintext).map_err(|error| {
+            DeferredError::error(
+                "token_deserialize_error",
+                "反序列化 Payload 失败",
+                error,
+                AppError::InternalServerError,
+            )
+        })
     }
 
     // 通过 HKDF 从原始密钥和盐派生 AES-256-GCM 密钥并创建加密器
@@ -230,7 +261,7 @@ mod tests {
         let cipher2 = TokenCipher::new("key-2", "salt");
         let payload = "secret".to_string();
         let token = cipher1.encrypt(&payload, Some("seed")).unwrap();
-        let result: Result<String> = cipher2.decrypt(&token);
+        let result: DeferredResult<String> = cipher2.decrypt(&token);
         assert!(result.is_err());
     }
 
@@ -239,7 +270,7 @@ mod tests {
     #[test]
     fn test_decrypt_invalid_base64() {
         let cipher = test_cipher();
-        let result: Result<String> = cipher.decrypt("not-valid-base64!!!");
+        let result: DeferredResult<String> = cipher.decrypt("not-valid-base64!!!");
         assert!(result.is_err());
     }
 
@@ -249,14 +280,14 @@ mod tests {
         // 编码一个长度 <= NONCE_LEN 的 bytes
         let short_bytes = vec![0u8; NONCE_LEN]; // 刚好等于 NONCE_LEN，应该 <= NONCE_LEN
         let short_token = URL_SAFE_NO_PAD.encode(&short_bytes);
-        let result: Result<String> = cipher.decrypt(&short_token);
+        let result: DeferredResult<String> = cipher.decrypt(&short_token);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_decrypt_empty_token() {
         let cipher = test_cipher();
-        let result: Result<String> = cipher.decrypt("");
+        let result: DeferredResult<String> = cipher.decrypt("");
         assert!(result.is_err());
     }
 
@@ -269,7 +300,7 @@ mod tests {
         let mut corrupted = token.clone();
         let last = corrupted.pop().unwrap();
         corrupted.push(if last == 'A' { 'B' } else { 'A' });
-        let result: Result<String> = cipher.decrypt(&corrupted);
+        let result: DeferredResult<String> = cipher.decrypt(&corrupted);
         assert!(result.is_err());
     }
 

@@ -26,10 +26,10 @@ impl CollectionService {
             .await?;
 
         // 组装结果
-        let result: Vec<CollectionView> = collections
+        let result = collections
             .into_iter()
             .map(|c| CollectionView::from(c).with_generate_cover_token(user_id, token_cipher()))
-            .collect();
+            .collect::<common::error::DeferredResult<Vec<_>>>()?;
 
         Ok(result)
     }
