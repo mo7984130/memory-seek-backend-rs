@@ -46,7 +46,7 @@ impl CollectionView {
         mut self,
         viewer: UserId,
         cipher: &TokenCipher,
-    ) -> common::error::DeferredResult<Self> {
+    ) -> common::error::deferred::Result<Self> {
         self.cover_token = self
             .cover_token
             .as_ref()

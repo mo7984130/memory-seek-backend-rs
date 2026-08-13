@@ -1,7 +1,7 @@
 use crate::Result;
 use crate::ext::ToOk;
 use crate::{
-    error::{AppError, DeferredError, DeferredResult},
+    error::{AppError, DeferredError, deferred},
     ext::log_err_with_err,
 };
 use futures::future::BoxFuture;
@@ -13,9 +13,9 @@ pub struct DbUtils;
 
 impl DbUtils {
     /// 在下层执行事务，但把连接和事务错误延迟到 service 边界再记录。
-    pub async fn write_deferred<F, T>(db: &DatabaseConnection, block: F) -> DeferredResult<T>
+    pub async fn write_deferred<F, T>(db: &DatabaseConnection, block: F) -> deferred::Result<T>
     where
-        F: for<'a> FnOnce(&'a DatabaseTransaction) -> BoxFuture<'a, DeferredResult<T>> + Send,
+        F: for<'a> FnOnce(&'a DatabaseTransaction) -> BoxFuture<'a, deferred::Result<T>> + Send,
         T: Send,
     {
         db.transaction(|txn| block(txn))

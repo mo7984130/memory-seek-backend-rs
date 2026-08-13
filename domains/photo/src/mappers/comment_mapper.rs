@@ -1,4 +1,4 @@
-use common::error::{AppError, DeferredError, DeferredResult as Result};
+use common::error::{AppError, DeferredError, deferred::Result};
 use common::ext::{DeferOptionExt, DeferResultExt, OkExt};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,

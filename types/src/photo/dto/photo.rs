@@ -64,7 +64,7 @@ impl PhotoView {
         file_id: &str,
         viewer: UserId,
         token_cipher: &TokenCipher,
-    ) -> common::error::DeferredResult<Self> {
+    ) -> common::error::deferred::Result<Self> {
         self = self.with_original_token(file_id, viewer, token_cipher)?;
         self = self.with_thumbnail_token(file_id, viewer, token_cipher)?;
         self = self.with_preview_token(file_id, viewer, token_cipher)?;
@@ -77,7 +77,7 @@ impl PhotoView {
         file_id: &str,
         viewer: UserId,
         token_cipher: &TokenCipher,
-    ) -> common::error::DeferredResult<Self> {
+    ) -> common::error::deferred::Result<Self> {
         self.thumbnail_token = Some(token_cipher.encrypt(
             &ImageToken::thumbnail(viewer, file_id),
             Some(&format!("{}:{}", self.id, viewer)),
@@ -91,7 +91,7 @@ impl PhotoView {
         file_id: &str,
         viewer: UserId,
         token_cipher: &TokenCipher,
-    ) -> common::error::DeferredResult<Self> {
+    ) -> common::error::deferred::Result<Self> {
         self.preview_token = Some(token_cipher.encrypt(
             &ImageToken::preview(viewer, file_id),
             Some(&format!("{}:{}", self.id, viewer)),
@@ -105,7 +105,7 @@ impl PhotoView {
         file_id: &str,
         viewer: UserId,
         token_cipher: &TokenCipher,
-    ) -> common::error::DeferredResult<Self> {
+    ) -> common::error::deferred::Result<Self> {
         self.original_token = Some(token_cipher.encrypt(
             &ImageToken::original(viewer, file_id),
             Some(&format!("{}:{}", self.id, viewer)),

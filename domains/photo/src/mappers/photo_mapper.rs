@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use common::error::{AppError, DeferredError, DeferredResult as Result};
+use common::error::{AppError, DeferredError, deferred::Result};
 use common::ext::OkExt;
 use sea_orm::entity::prelude::DateTimeUtc;
 use sea_orm::sea_query::Expr;

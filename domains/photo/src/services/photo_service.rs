@@ -75,7 +75,7 @@ impl PhotoService {
                     .with_liked(liked)
                     .with_tokens(&file_id, user_id, token_cipher())
             })
-            .collect::<common::error::DeferredResult<Vec<_>>>()?;
+            .collect::<common::error::deferred::Result<Vec<_>>>()?;
         Ok(views)
     }
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use common::{
-    error::{AppError, DeferredResult as Result},
+    error::{AppError, deferred::Result},
     ext::DeferResultExt,
 };
 use sea_orm::{

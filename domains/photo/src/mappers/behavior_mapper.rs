@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use common::error::{AppError, DeferredResult as Result};
+use common::error::{AppError, deferred::Result};
 use common::ext::{DeferResultExt, ToOk};
 use sea_orm::entity::prelude::Json;
 use sea_orm::{

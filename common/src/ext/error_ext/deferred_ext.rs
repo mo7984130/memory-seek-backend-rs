@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::error::{AppError, DeferredError, DeferredResult};
+use crate::error::{AppError, DeferredError, deferred::Result};
 
 pub trait DeferResultExt<T> {
     fn defer_error(
@@ -8,14 +8,14 @@ pub trait DeferResultExt<T> {
         reason: &'static str,
         context: &'static str,
         app_error: AppError,
-    ) -> DeferredResult<T>;
+    ) -> Result<T>;
 
     fn defer_warn(
         self,
         reason: &'static str,
         context: &'static str,
         app_error: AppError,
-    ) -> DeferredResult<T>;
+    ) -> Result<T>;
 }
 
 impl<T, E> DeferResultExt<T> for std::result::Result<T, E>
@@ -27,7 +27,7 @@ where
         reason: &'static str,
         context: &'static str,
         app_error: AppError,
-    ) -> DeferredResult<T> {
+    ) -> Result<T> {
         self.map_err(|error| DeferredError::error(reason, context, error, app_error))
     }
 
@@ -36,7 +36,7 @@ where
         reason: &'static str,
         context: &'static str,
         app_error: AppError,
-    ) -> DeferredResult<T> {
+    ) -> Result<T> {
         self.map_err(|error| DeferredError::warn(reason, context, error, app_error))
     }
 }
@@ -47,14 +47,14 @@ pub trait DeferOptionExt<T> {
         reason: &'static str,
         context: &'static str,
         app_error: AppError,
-    ) -> DeferredResult<T>;
+    ) -> Result<T>;
 
     fn defer_error_none(
         self,
         reason: &'static str,
         context: &'static str,
         app_error: AppError,
-    ) -> DeferredResult<T>;
+    ) -> Result<T>;
 }
 
 impl<T> DeferOptionExt<T> for Option<T> {
@@ -63,7 +63,7 @@ impl<T> DeferOptionExt<T> for Option<T> {
         reason: &'static str,
         context: &'static str,
         app_error: AppError,
-    ) -> DeferredResult<T> {
+    ) -> Result<T> {
         self.ok_or_else(|| DeferredError::warn_without_source(reason, context, app_error))
     }
 
@@ -72,7 +72,7 @@ impl<T> DeferOptionExt<T> for Option<T> {
         reason: &'static str,
         context: &'static str,
         app_error: AppError,
-    ) -> DeferredResult<T> {
+    ) -> Result<T> {
         self.ok_or_else(|| DeferredError::error_without_source(reason, context, app_error))
     }
 }

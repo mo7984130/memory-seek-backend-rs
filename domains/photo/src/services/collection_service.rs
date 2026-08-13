@@ -29,7 +29,7 @@ impl CollectionService {
         let result = collections
             .into_iter()
             .map(|c| CollectionView::from(c).with_generate_cover_token(user_id, token_cipher()))
-            .collect::<common::error::DeferredResult<Vec<_>>>()?;
+            .collect::<common::error::deferred::Result<Vec<_>>>()?;
 
         Ok(result)
     }

@@ -1,4 +1,4 @@
-use common::error::{AppError, DeferredError, DeferredResult};
+use common::error::{AppError, DeferredError, deferred::Result};
 use common::ext::{DeferOptionExt, RedisExt};
 use common::utils::MetricsTimerExt;
 use common::{db_transaction, metrics_name};
@@ -42,7 +42,7 @@ impl UserRepo {
     }
 
     /// 获取用户完整信息（带三级缓存，缓存完整 `UserInfo`，token 确定性加密可安全缓存）
-    pub async fn get_user_info(&self, user_id: UserId) -> DeferredResult<UserInfo> {
+    pub async fn get_user_info(&self, user_id: UserId) -> Result<UserInfo> {
         let info = self
             .cache_user_info_single
             .get_or_load(
@@ -69,7 +69,7 @@ impl UserRepo {
     pub async fn get_user_info_batch(
         &self,
         user_ids: &[UserId],
-    ) -> DeferredResult<Vec<Option<UserInfoRow>>> {
+    ) -> Result<Vec<Option<UserInfoRow>>> {
         let result: Vec<Option<UserInfoRow>> = self
             .cache_user_info
             .get_or_load_batch(
@@ -89,11 +89,7 @@ impl UserRepo {
     }
 
     /// 修改用户昵称，并失效用户信息缓存（L1 + L2）
-    pub async fn change_nickname(
-        &self,
-        user_id: UserId,
-        new_nickname: String,
-    ) -> DeferredResult<String> {
+    pub async fn change_nickname(&self, user_id: UserId, new_nickname: String) -> Result<String> {
         UserMapper::update_nickname(&self.db, user_id, &new_nickname)
             .timed(metrics_name!("db_update"))
             .await?;
@@ -104,11 +100,7 @@ impl UserRepo {
     }
 
     /// 在事务内更新头像，返回旧头像 key（由调用方决定是否删除旧文件）
-    pub async fn update_avatar(
-        &self,
-        user_id: UserId,
-        new_key: String,
-    ) -> DeferredResult<Option<String>> {
+    pub async fn update_avatar(&self, user_id: UserId, new_key: String) -> Result<Option<String>> {
         let old_key = db_transaction!(deferred & self.db, |txn| {
             UserMapper::update_avatar(txn, user_id, new_key).await
         })
@@ -121,28 +113,23 @@ impl UserRepo {
     }
 
     /// 查询用户密码哈希
-    pub async fn query_password_hash(&self, user_id: UserId) -> DeferredResult<String> {
+    pub async fn query_password_hash(&self, user_id: UserId) -> Result<String> {
         UserMapper::query_password_hash(&self.db, user_id)
             .timed(metrics_name!("db_query"))
             .await
     }
 
     /// 更新用户密码哈希
-    pub async fn update_password(
-        &self,
-        user_id: UserId,
-        new_password_hash: String,
-    ) -> DeferredResult<()> {
+    pub async fn update_password(&self, user_id: UserId, new_password_hash: String) -> Result<()> {
         UserMapper::update_password(&self.db, user_id, new_password_hash)
             .timed(metrics_name!("db_update"))
             .await
     }
 
     /// 登出：清除 refresh_token 与 access_token，并失效用户信息缓存
-    pub async fn logout(&self, user_id: UserId) -> DeferredResult<()> {
+    pub async fn logout(&self, user_id: UserId) -> Result<()> {
         let (refresh_token_result, access_token_result) = tokio::join!(
-            UserMapper::clear_refresh_token(&self.db, user_id)
-                .timed(metrics_name!("db_update")),
+            UserMapper::clear_refresh_token(&self.db, user_id).timed(metrics_name!("db_update")),
             self.redis
                 .del(RedisKeys::auth::user_access_token(user_id))
                 .timed(metrics_name!("redis_delete"))

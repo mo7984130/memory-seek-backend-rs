@@ -1,5 +1,5 @@
 use common::{
-    error::{AppError, DeferredResult as Result},
+    error::{AppError, deferred::Result},
     ext::{DeferResultExt, ToOk},
 };
 use insight_face_rs::FaceEmbedding;

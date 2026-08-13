@@ -91,7 +91,7 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
             self.violations.push(Violation::new(
                 self.file,
                 item.span(),
-                "下层模块必须返回 DeferredResult，不能提前返回 common::Result/AppError",
+                "下层模块必须使用 common::error::deferred::Result，不能提前返回 common::Result/AppError",
             ));
         }
         syn::visit::visit_item_use(self, item);
@@ -104,11 +104,15 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
                 .iter()
                 .map(|segment| segment.ident.to_string())
                 .collect::<Vec<_>>();
-            if names.windows(2).any(|pair| pair == ["common", "Result"]) {
+            if names.windows(2).any(|pair| pair == ["common", "Result"])
+                || names
+                    .windows(3)
+                    .any(|parts| parts == ["common", "error", "Result"])
+            {
                 self.violations.push(Violation::new(
                     self.file,
                     path.span(),
-                    "下层模块必须返回 DeferredResult，不能提前返回 common::Result/AppError",
+                    "下层模块必须使用 common::error::deferred::Result，不能提前返回 common::Result/AppError",
                 ));
             }
             if names.last().is_some_and(|name| {
@@ -192,10 +196,14 @@ fn imports_common_result(tree: &UseTree, prefix: &[String]) -> bool {
             imports_common_result(&path.tree, &next)
         }
         UseTree::Name(name) => {
-            prefix.first().is_some_and(|segment| segment == "common") && name.ident == "Result"
+            matches!(prefix, [common] if common == "common") && name.ident == "Result"
+                || matches!(prefix, [common, error] if common == "common" && error == "error")
+                    && name.ident == "Result"
         }
         UseTree::Rename(rename) => {
-            prefix.first().is_some_and(|segment| segment == "common") && rename.ident == "Result"
+            matches!(prefix, [common] if common == "common") && rename.ident == "Result"
+                || matches!(prefix, [common, error] if common == "common" && error == "error")
+                    && rename.ident == "Result"
         }
         UseTree::Group(group) => group
             .items
@@ -467,17 +475,29 @@ impl Step<Ctx> for MyStep {{
         let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
         assert!(violations
             .iter()
-            .any(|v| v.message.contains("DeferredResult")));
+            .any(|v| v.message.contains("common::error::deferred::Result")));
         assert!(violations.iter().any(|v| v.message.contains("错误扩展")));
     }
 
     #[test]
     fn allows_deferred_error_in_mapper() {
         let source = r#"
-            use common::error::DeferredResult as Result;
+            use common::error::deferred::Result;
             async fn query() -> Result<()> { Ok(()) }
         "#;
         assert!(check_source(source, "/repo/domains/photo/src/mappers/demo.rs").is_empty());
+    }
+
+    #[test]
+    fn rejects_app_error_result_imported_from_error_module() {
+        let source = r#"
+            use common::error::Result;
+            async fn query() -> Result<()> { Ok(()) }
+        "#;
+        let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
+        assert!(violations
+            .iter()
+            .any(|v| v.message.contains("common::error::deferred::Result")));
     }
 
     #[test]

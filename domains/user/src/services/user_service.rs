@@ -158,10 +158,9 @@ pub async fn update_avatar(
         .await?;
 
     // 更新数据库（事务内查旧头像并更新），失败时删除刚上传的文件
-    let new_key_for_db = new_key.clone();
     let old_key = state
         .repo
-        .update_avatar(user_id, new_key_for_db)
+        .update_avatar(user_id, new_key.clone())
         .await
         .inspect_err_async(|_| async {
             let _ = state

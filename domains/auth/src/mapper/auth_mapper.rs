@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use common::error::{AppError, DeferredError, DeferredResult};
+use common::error::{AppError, DeferredError, deferred::Result};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait, DbErr,
     EntityTrait, FromQueryResult, QueryFilter, QuerySelect, RuntimeErr, sea_query::Expr,
@@ -23,10 +23,7 @@ pub struct RefreshTokenValidation {
 }
 // 创建
 impl AuthMapper {
-    pub async fn insert(
-        db: &impl ConnectionTrait,
-        param: AuthInsertParam,
-    ) -> DeferredResult<UserRecord> {
+    pub async fn insert(db: &impl ConnectionTrait, param: AuthInsertParam) -> Result<UserRecord> {
         let model = ActiveModel {
             username: Set(param.username),
             email: Set(param.email),
@@ -71,7 +68,7 @@ impl AuthMapper {
     pub async fn query_refresh_token(
         db: &impl ConnectionTrait,
         user_id: UserId,
-    ) -> DeferredResult<Option<RefreshTokenValidation>> {
+    ) -> Result<Option<RefreshTokenValidation>> {
         Ok(Entity::find()
             .select_only()
             .column(Column::RefreshToken)
@@ -89,7 +86,7 @@ impl AuthMapper {
         db: &impl ConnectionTrait,
         user_id: UserId,
         password: &str,
-    ) -> DeferredResult<u64> {
+    ) -> Result<u64> {
         Ok(Entity::update_many()
             .filter(Column::Id.eq(user_id))
             .col_expr(Column::Password, Expr::value(password))
@@ -103,7 +100,7 @@ impl AuthMapper {
         user_id: UserId,
         refresh_token: String,
         refresh_token_expires_at: DateTime<Utc>,
-    ) -> DeferredResult<UserRecord> {
+    ) -> Result<UserRecord> {
         let model = ActiveModel {
             id: Set(user_id),
             refresh_token: Set(Some(refresh_token)),
@@ -126,7 +123,7 @@ impl AuthMapper {
     pub async fn query_by_account(
         db: &impl ConnectionTrait,
         account: &str,
-    ) -> DeferredResult<Option<UserPasswordId>> {
+    ) -> Result<Option<UserPasswordId>> {
         Ok(Entity::find()
             .select_only()
             .column(Column::Id)

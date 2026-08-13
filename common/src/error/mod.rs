@@ -15,4 +15,10 @@ pub mod serde_error;
 pub mod tokio_error;
 
 pub type Result<T> = std::result::Result<T, AppError>;
-pub type DeferredResult<T> = std::result::Result<T, DeferredError>;
+
+/// 尚未在 service 边界转换和记录的错误结果。
+pub mod deferred {
+    use super::DeferredError;
+
+    pub type Result<T> = std::result::Result<T, DeferredError>;
+}

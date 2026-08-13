@@ -1,4 +1,4 @@
-use common::error::{AppError, DeferredResult};
+use common::error::{AppError, deferred::Result};
 use common::ext::DeferOptionExt;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
@@ -19,7 +19,7 @@ impl UserMapper {
         db: &impl ConnectionTrait,
         user_id: UserId,
         new_nickname: &str,
-    ) -> DeferredResult<()> {
+    ) -> Result<()> {
         Entity::update_many()
             .col_expr(Column::Nickname, Expr::value(new_nickname))
             .filter(Column::Id.eq(user_id))
@@ -34,7 +34,7 @@ impl UserMapper {
         txn: &DatabaseTransaction,
         user_id: UserId,
         new_key: String,
-    ) -> DeferredResult<Option<String>> {
+    ) -> Result<Option<String>> {
         let old_key: Option<String> = Entity::find_by_id(user_id)
             .select_only()
             .column(Column::AvatarFileId)
@@ -64,7 +64,7 @@ impl UserMapper {
         db: &impl ConnectionTrait,
         user_id: UserId,
         new_password_hash: String,
-    ) -> DeferredResult<()> {
+    ) -> Result<()> {
         ActiveModel {
             id: Set(user_id),
             password: Set(new_password_hash),
@@ -77,10 +77,7 @@ impl UserMapper {
     }
 
     /// 登出时清除 refresh_token 与过期时间
-    pub async fn clear_refresh_token(
-        db: &impl ConnectionTrait,
-        user_id: UserId,
-    ) -> DeferredResult<()> {
+    pub async fn clear_refresh_token(db: &impl ConnectionTrait, user_id: UserId) -> Result<()> {
         ActiveModel {
             id: Set(user_id),
             refresh_token: Set(None),
@@ -100,7 +97,7 @@ impl UserMapper {
     pub async fn query_by_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
-    ) -> DeferredResult<Option<UserRecord>> {
+    ) -> Result<Option<UserRecord>> {
         Ok(Entity::find_by_id(user_id)
             .one(db)
             .await?
@@ -111,7 +108,7 @@ impl UserMapper {
     pub async fn query_info_rows(
         db: &impl ConnectionTrait,
         user_ids: &[UserId],
-    ) -> DeferredResult<Vec<UserInfoRow>> {
+    ) -> Result<Vec<UserInfoRow>> {
         Ok(Entity::find()
             .filter(Column::Id.is_in(user_ids.iter().copied()))
             .select_only()
@@ -124,10 +121,7 @@ impl UserMapper {
     }
 
     /// 查询用户密码哈希
-    pub async fn query_password_hash(
-        db: &impl ConnectionTrait,
-        user_id: UserId,
-    ) -> DeferredResult<String> {
+    pub async fn query_password_hash(db: &impl ConnectionTrait, user_id: UserId) -> Result<String> {
         Entity::find_by_id(user_id)
             .select_only()
             .column(Column::Password)

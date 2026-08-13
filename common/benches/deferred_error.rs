@@ -1,12 +1,12 @@
 use std::hint::black_box;
 
-use common::error::{AppError, DeferredError, DeferredResult};
+use common::error::{AppError, DeferredError, deferred::Result};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 fn successful_result(c: &mut Criterion) {
     c.bench_function("deferred_result_success", |b| {
         b.iter(|| {
-            let result: DeferredResult<u64> = Ok(black_box(42));
+            let result: Result<u64> = Ok(black_box(42));
             black_box(result)
         })
     });

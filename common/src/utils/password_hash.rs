@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::error::{AppError, DeferredError, DeferredResult};
+use crate::error::{AppError, DeferredError, deferred::Result};
 use crate::ext::DeferResultExt;
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use bcrypt;
@@ -63,7 +63,7 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: 哈希计算过程中发生内部错误
-    pub fn hash(&self, password: &str) -> DeferredResult<String> {
+    pub fn hash(&self, password: &str) -> Result<String> {
         match self {
             Self::Bcrypt(cfg) => bcrypt::hash(password, cfg.cost).defer_error(
                 "bcrypt hash error",
@@ -95,7 +95,7 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError::InternalServerError`: 哈希解析或验证过程中发生内部错误
-    pub fn verify(&self, password: &str, hash: &str) -> DeferredResult<bool> {
+    pub fn verify(&self, password: &str, hash: &str) -> Result<bool> {
         match self {
             Self::Bcrypt(_) => bcrypt::verify(password, hash).defer_error(
                 "bcrypt verify error",
@@ -134,7 +134,7 @@ impl HashAlgorithm {
     ///
     /// # 错误
     /// - `AppError`: 无法识别哈希算法或验证过程中发生错误
-    pub fn verify_and_detect(password: &str, hash: &str) -> DeferredResult<(bool, HashAlgorithm)> {
+    pub fn verify_and_detect(password: &str, hash: &str) -> Result<(bool, HashAlgorithm)> {
         match HashAlgorithm::detect(hash) {
             Some(alg) => {
                 let result = alg.verify(password, hash)?;
@@ -149,7 +149,7 @@ impl HashAlgorithm {
     }
 
     // 根据配置创建 Argon2id 哈希器实例
-    fn argon2_hasher(cfg: &Argon2idConfig) -> DeferredResult<Argon2<'static>> {
+    fn argon2_hasher(cfg: &Argon2idConfig) -> Result<Argon2<'static>> {
         let params = Params::new(cfg.m_cost, cfg.t_cost, cfg.p_cost, None).defer_error(
             "argon2_params_error",
             "创建 Argon2 参数失败",

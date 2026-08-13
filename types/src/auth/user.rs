@@ -119,7 +119,7 @@ mod entity {
     }
 
     impl UserInfo {
-        pub fn with_avatar_token(mut self) -> common::error::DeferredResult<Self> {
+        pub fn with_avatar_token(mut self) -> common::error::deferred::Result<Self> {
             self.avatar_token = self
                 .avatar_token
                 .as_deref()
@@ -128,7 +128,7 @@ mod entity {
             Ok(self)
         }
 
-        pub fn from_with_token(user: UserRecord) -> common::error::DeferredResult<Self> {
+        pub fn from_with_token(user: UserRecord) -> common::error::deferred::Result<Self> {
             UserInfo::from(user).with_avatar_token()
         }
     }

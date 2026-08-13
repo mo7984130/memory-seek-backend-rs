@@ -3,7 +3,7 @@ pub(crate) struct CollectionMapper;
 use std::collections::HashMap;
 
 use chrono::Utc;
-use common::error::{AppError, DeferredError, DeferredResult as Result};
+use common::error::{AppError, DeferredError, deferred::Result};
 use common::ext::{DeferOptionExt, OkExt};
 use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
