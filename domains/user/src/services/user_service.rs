@@ -184,12 +184,11 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token = ImageToken::encrypt_avatar_token(token_cipher(), Some(&new_key), user_id)
-        .ok_or_warn(
-            "encrypt_avatar_token_err",
-            "加密头像Token错误",
-            AppError::InternalServerError,
-        )?;
+    let avatar_token = ImageToken::encrypt_avatar_token(Some(&new_key), user_id).ok_or_warn(
+        "encrypt_avatar_token_err",
+        "加密头像Token错误",
+        AppError::InternalServerError,
+    )?;
 
     Ok(avatar_token)
 }

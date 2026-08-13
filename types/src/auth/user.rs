@@ -42,7 +42,6 @@ impl AdminId {
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::utils::token_cipher;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
@@ -121,11 +120,8 @@ mod entity {
 
     impl UserInfo {
         pub fn with_avatar_token(mut self) -> Self {
-            self.avatar_token = ImageToken::encrypt_avatar_token(
-                token_cipher(),
-                self.avatar_token.as_deref(),
-                self.id,
-            );
+            self.avatar_token =
+                ImageToken::encrypt_avatar_token(self.avatar_token.as_deref(), self.id);
             self
         }
 

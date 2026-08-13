@@ -11,7 +11,7 @@ use common::error::AppError;
 #[cfg(feature = "orm")]
 use common::ext::ResultErrExt;
 #[cfg(feature = "orm")]
-use common::utils::TokenCipher;
+use common::utils::token_cipher;
 
 /// 图片类型
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
@@ -143,21 +143,16 @@ impl ImageToken {
     /// 加密头像缩略图 token
     ///
     /// # 参数
-    /// - `cipher`: token 加密器
     /// - `avatar_file_id`: 头像文件 ID，为 `None` 时返回 `None`
     /// - `viewer`: 浏览者用户 ID
     ///
     /// # 返回
     /// 加密后的头像 token，加密失败返回 `None`
     #[cfg(feature = "orm")]
-    pub fn encrypt_avatar_token(
-        cipher: &TokenCipher,
-        avatar_file_id: Option<&str>,
-        viewer: UserId,
-    ) -> Option<String> {
+    pub fn encrypt_avatar_token(avatar_file_id: Option<&str>, viewer: UserId) -> Option<String> {
         avatar_file_id.and_then(|key| {
             let seed = format!("{}:{}", viewer, key);
-            cipher
+            token_cipher()
                 .encrypt(&Self::thumbnail(viewer, key), Some(&seed))
                 .trace_warn("encrypt_avatar_token_err", "加密头像失败", AppError::Ignore)
                 .ok()
@@ -354,16 +349,19 @@ mod tests {
 #[cfg(all(test, feature = "orm"))]
 mod orm_tests {
     use super::*;
-    use common::utils::TokenCipher;
+    use common::utils::{init_token_cipher, TokenCipherConfig};
 
-    fn test_cipher() -> TokenCipher {
-        TokenCipher::new("test-key-for-unit-tests", "test-salt")
+    fn test_cipher() -> &'static common::utils::TokenCipher {
+        init_token_cipher(&TokenCipherConfig {
+            key: "test-key-for-unit-tests".to_owned(),
+            salt: "test-salt".to_owned(),
+        })
     }
 
     #[test]
     fn test_encrypt_avatar_token_some() {
         let cipher = test_cipher();
-        let token = ImageToken::encrypt_avatar_token(&cipher, Some("avatar-file-id"), UserId(9));
+        let token = ImageToken::encrypt_avatar_token(Some("avatar-file-id"), UserId(9));
         assert!(token.is_some());
         // 验证能解密回来
         let decrypted: ImageToken = cipher.decrypt(&token.unwrap()).unwrap();
@@ -374,8 +372,8 @@ mod orm_tests {
 
     #[test]
     fn test_encrypt_avatar_token_none() {
-        let cipher = test_cipher();
-        let token = ImageToken::encrypt_avatar_token(&cipher, None, UserId(9));
+        test_cipher();
+        let token = ImageToken::encrypt_avatar_token(None, UserId(9));
         assert!(token.is_none());
     }
 }
