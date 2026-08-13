@@ -133,7 +133,7 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
             if names.last().is_some_and(|name| {
                 matches!(
                     name.as_str(),
-                    "log_err" | "log_err_with_err" | "log_warn" | "log_warn_with_err"
+                    "log_err" | "log_err_with_source" | "log_warn" | "log_warn_with_source"
                 )
             }) {
                 self.violations.push(Violation::new(

@@ -3,7 +3,7 @@ use reqwest::StatusCode;
 use thiserror::Error;
 
 use common::error::AppError;
-use common::ext::log_err_with_err;
+use common::ext::log_err_with_source;
 
 /// OSS / S3 / 其他 HTTP 对象存储服务的统一错误类型
 ///
@@ -56,6 +56,6 @@ impl OssError {
 impl From<OssError> for AppError {
     #[track_caller]
     fn from(value: OssError) -> Self {
-        log_err_with_err("oss_error", "Oss错误", value, AppError::InternalServerError)
+        log_err_with_source("oss_error", "Oss错误", value, AppError::InternalServerError)
     }
 }

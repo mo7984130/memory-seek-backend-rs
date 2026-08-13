@@ -2,7 +2,7 @@ use crate::Result;
 use crate::ext::ToOk;
 use crate::{
     error::{AppError, DeferredError, deferred},
-    ext::log_err_with_err,
+    ext::log_err_with_source,
 };
 use futures::future::BoxFuture;
 use sea_orm::{
@@ -53,7 +53,7 @@ impl DbUtils {
         T: Send,
     {
         db.transaction(|txn| block(txn)).await.map_err(|e| match e {
-            TransactionError::Connection(e) => log_err_with_err(
+            TransactionError::Connection(e) => log_err_with_source(
                 "db_conn_err",
                 "获取数据库连接错误",
                 e,

@@ -1,6 +1,6 @@
 use crate::{
     error::AppError,
-    ext::error_ext::{log_err_with_err, log_warn_with_err},
+    ext::error_ext::{log_err_with_source, log_warn_with_source},
 };
 use std::fmt::Debug;
 
@@ -44,7 +44,7 @@ impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
     ) -> Result<T, AppError> {
         match self {
             Ok(v) => Ok(v),
-            Err(e) => Err(log_err_with_err(reason, context, e, app_err)),
+            Err(e) => Err(log_err_with_source(reason, context, e, app_err)),
         }
     }
 
@@ -56,7 +56,7 @@ impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
     ) -> Result<T, AppError> {
         match self {
             Ok(v) => Ok(v),
-            Err(e) => Err(log_err_with_err(
+            Err(e) => Err(log_err_with_source(
                 reason,
                 context,
                 e,
@@ -74,7 +74,7 @@ impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
     ) -> Result<T, AppError> {
         match self {
             Ok(v) => Ok(v),
-            Err(e) => Err(log_warn_with_err(reason, context, e, app_err)),
+            Err(e) => Err(log_warn_with_source(reason, context, e, app_err)),
         }
     }
 
@@ -87,7 +87,7 @@ impl<T, E: Debug> ResultErrExt<T, E> for Result<T, E> {
     ) -> Result<T, AppError> {
         match self {
             Ok(v) => Ok(v),
-            Err(e) => Err(log_warn_with_err(
+            Err(e) => Err(log_warn_with_source(
                 reason,
                 context,
                 e,
