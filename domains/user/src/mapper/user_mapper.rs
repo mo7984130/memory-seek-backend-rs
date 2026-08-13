@@ -1,5 +1,5 @@
 use common::error::{AppError, deferred::Result};
-use common::ext::DeferOptionExt;
+use common::ext::{DeferOptionExt, OkExt};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter,
@@ -98,10 +98,11 @@ impl UserMapper {
         db: &impl ConnectionTrait,
         user_id: UserId,
     ) -> Result<Option<UserRecord>> {
-        Ok(Entity::find_by_id(user_id)
+        Entity::find_by_id(user_id)
             .one(db)
             .await?
-            .map(UserRecord::from))
+            .map(UserRecord::from)
+            .to_ok()
     }
 
     /// 批量查询用户基本信息（未找到的用户不包含在结果中）
@@ -109,7 +110,7 @@ impl UserMapper {
         db: &impl ConnectionTrait,
         user_ids: &[UserId],
     ) -> Result<Vec<UserInfoRow>> {
-        Ok(Entity::find()
+        Entity::find()
             .filter(Column::Id.is_in(user_ids.iter().copied()))
             .select_only()
             .column_as(Column::Id, "user_id")
@@ -117,7 +118,8 @@ impl UserMapper {
             .column(Column::AvatarFileId)
             .into_model::<UserInfoRow>()
             .all(db)
-            .await?)
+            .await?
+            .to_ok()
     }
 
     /// 查询用户密码哈希

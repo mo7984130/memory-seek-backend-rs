@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use common::error::{AppError, DeferredError, deferred::Result};
+use common::ext::OkExt;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait, DbErr,
     EntityTrait, FromQueryResult, QueryFilter, QuerySelect, RuntimeErr, sea_query::Expr,
@@ -69,14 +70,15 @@ impl AuthMapper {
         db: &impl ConnectionTrait,
         user_id: UserId,
     ) -> Result<Option<RefreshTokenValidation>> {
-        Ok(Entity::find()
+        Entity::find()
             .select_only()
             .column(Column::RefreshToken)
             .column(Column::RefreshTokenExpireAt)
             .filter(Column::Id.eq(user_id))
             .into_model::<RefreshTokenValidation>()
             .one(db)
-            .await?)
+            .await?
+            .to_ok()
     }
 }
 
@@ -124,7 +126,7 @@ impl AuthMapper {
         db: &impl ConnectionTrait,
         account: &str,
     ) -> Result<Option<UserPasswordId>> {
-        Ok(Entity::find()
+        Entity::find()
             .select_only()
             .column(Column::Id)
             .column(Column::Password)
@@ -135,7 +137,8 @@ impl AuthMapper {
             )
             .into_model::<UserPasswordId>()
             .one(db)
-            .await?)
+            .await?
+            .to_ok()
     }
 }
 
