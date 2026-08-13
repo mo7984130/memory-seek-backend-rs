@@ -2,7 +2,8 @@ use common::Result;
 use common::ext::{OkExt, OptionExt};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter,
+    QuerySelect, Set,
 };
 use types::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
@@ -28,17 +29,18 @@ impl UserMapper {
         Ok(())
     }
 
-    /// 更新头像，返回旧头像 key（由调用方决定是否删除旧文件）
+    /// 在事务中锁定用户行并更新头像，返回旧头像 key（由调用方决定是否删除旧文件）
     pub async fn update_avatar(
-        db: &impl ConnectionTrait,
+        txn: &DatabaseTransaction,
         user_id: UserId,
         new_key: String,
     ) -> Result<Option<String>> {
         let old_key: Option<String> = Entity::find_by_id(user_id)
             .select_only()
             .column(Column::AvatarFileId)
+            .lock_exclusive()
             .into_values::<Option<String>, Column>()
-            .one(db)
+            .one(txn)
             .await?
             .ok_or_warn_bad_request("user_not_found", "用户不存在", "用户不存在")?;
 
@@ -47,7 +49,7 @@ impl UserMapper {
             avatar_file_id: Set(Some(new_key)),
             ..Default::default()
         }
-        .update(db)
+        .update(txn)
         .await?;
 
         Ok(old_key)
