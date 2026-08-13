@@ -21,6 +21,7 @@ pub trait BoolExt {
         app_err: AppError,
     ) -> Result<()>;
 
+    #[track_caller]
     fn false_or_warn(
         self,
         reason: &'static str,
@@ -55,6 +56,7 @@ impl BoolExt for bool {
         }
     }
 
+    #[track_caller]
     fn false_or_warn(
         self,
         reason: &'static str,

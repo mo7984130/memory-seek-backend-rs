@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use chrono::{Duration, Utc};
-use common::ext::{IntoContextualExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
+use common::ext::{BoolExt, IntoContextualExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
 use common::utils::{FileValidator, MetricsTimerExt, rand_utils};
 use common::{Result, error::AppError, metrics_name, timed};
 use constants::{PasswordHasher, RedisKeys};
@@ -212,14 +212,18 @@ pub async fn change_password(
     req: ChangePasswordParam,
 ) -> Result<()> {
     // 新旧密码不可相同
-    if req.old_password == req.new_password {
-        return Err(AppError::bad_request("新密码不能与旧密码相同"));
-    }
+    (req.old_password != req.new_password).true_or_warn(
+        "new_password_unchanged",
+        "修改密码时，新密码不能与旧密码相同",
+        AppError::bad_request("新密码不能与旧密码相同"),
+    )?;
 
     // 确认密码必须与新密码一致
-    if req.new_password != req.confirm_password {
-        return Err(AppError::bad_request("两次输入的新密码不一致"));
-    }
+    (req.new_password == req.confirm_password).true_or_warn(
+        "password_confirmation_mismatch",
+        "修改密码时，两次输入的新密码不一致",
+        AppError::bad_request("两次输入的新密码不一致"),
+    )?;
 
     //  获取旧密码
     let old_password = state.repo.query_password_hash(user_id).await?;
@@ -240,9 +244,11 @@ pub async fn change_password(
                 .into_contextual()?;
         verify_result?
     };
-    if !is_valid {
-        return Err(AppError::bad_request("原密码错误"));
-    }
+    is_valid.true_or_warn(
+        "old_password_invalid",
+        "修改密码时，原密码错误",
+        AppError::bad_request("原密码错误"),
+    )?;
 
     // 加密新密码
     let new_password_hash = {

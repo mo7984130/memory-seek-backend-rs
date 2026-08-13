@@ -5,7 +5,8 @@ use chrono::{Duration, Utc};
 use common::Result;
 use common::error::AppError;
 use common::ext::{
-    ContextualResultExt, IntoContextualExt, OptionExt, RedisExt, ResultInspectErrAsync, log_warn,
+    BoolExt, ContextualResultExt, IntoContextualExt, OptionExt, RedisExt, ResultInspectErrAsync,
+    log_warn,
 };
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{inc_error, metrics_name};
@@ -385,18 +386,21 @@ async fn verify_refresh_token(
             "刷新access_token时, 用户不存在",
             AppError::bad_request("用户不存在"),
         )?;
-    if res.refresh_token.as_deref() != Some(refresh_token) {
-        common::caller_warn!("refresh_token不匹配");
-        return Err(AppError::Unauthorized);
-    }
-    if let Some(expire_at) = res.refresh_token_expire_at {
-        if Utc::now() > expire_at {
-            return Err(AppError::Unauthorized);
-        }
-    } else {
-        common::caller_error!("refresh_token过期时间不存在");
-        return Err(AppError::Unauthorized);
-    }
+    (res.refresh_token.as_deref() == Some(refresh_token)).true_or_warn(
+        "refresh_token_mismatch",
+        "刷新 access_token 时，refresh token 不匹配",
+        AppError::Unauthorized,
+    )?;
+    let expire_at = res.refresh_token_expire_at.ok_or_error(
+        "refresh_token_expiry_missing",
+        "刷新 access_token 时，refresh token 过期时间不存在",
+        AppError::Unauthorized,
+    )?;
+    (Utc::now() <= expire_at).true_or_warn(
+        "refresh_token_expired",
+        "刷新 access_token 时，refresh token 已过期",
+        AppError::Unauthorized,
+    )?;
 
     Ok(())
 }

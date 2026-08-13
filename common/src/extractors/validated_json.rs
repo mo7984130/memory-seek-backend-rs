@@ -1,6 +1,6 @@
 use crate::{
     error::AppError,
-    ext::{ResultLogExt, log_warn},
+    ext::{BoolExt, ResultLogExt, log_warn},
 };
 use axum::{
     body::Bytes,
@@ -47,11 +47,11 @@ where
                 )
             })?
         } else {
-            if !content_type_ok {
-                return Err(AppError::bad_request(
-                    "Content-Type 必须为 application/json",
-                ));
-            }
+            content_type_ok.true_or_warn(
+                "validated_json_content_type_invalid",
+                "请求 Content-Type 必须为 application/json",
+                AppError::bad_request("Content-Type 必须为 application/json"),
+            )?;
 
             serde_json::from_slice(&bytes).map_err(|e| {
                 log_warn(
