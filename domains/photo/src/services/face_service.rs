@@ -656,8 +656,7 @@ impl FaceService {
 
             // 已归属人物的人脸禁止直接删除(需先取消归属), 防止人物统计悬空
             if face.person_id.is_some() {
-                inc_error!("conflict");
-                return Err(AppError::bad_request(
+                return inc_error!("conflict" => AppError::bad_request(
                     "人脸已归属人物, 请先取消归属后再删除",
                 ));
             }

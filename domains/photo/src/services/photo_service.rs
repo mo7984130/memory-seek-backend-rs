@@ -177,8 +177,7 @@ impl PhotoService {
             .timed(metrics_name!("cache_get_or_load"))
             .await?;
         if exists {
-            inc_error!("conflict");
-            return Err(log_warn(
+            return inc_error!("conflict" => log_warn(
                 "upload_photo:img_exist",
                 "图片已存在",
                 AppError::bad_request("图片已存在"),

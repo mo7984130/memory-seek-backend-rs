@@ -12,9 +12,21 @@
 /// inc_error!("db");
 /// // 显式指定函数名
 /// inc_error!("face:compute", "detect");
+/// // 递增计数并构造错误结果
+/// return inc_error!("auth" => AppError::bad_request("账号或密码错误"));
 /// ```
 #[macro_export]
 macro_rules! inc_error {
+    ($kind:literal => $error:expr) => {{
+        let error = $error;
+        $crate::inc_error!($kind);
+        Err(error)
+    }};
+    ($func_name:literal, $kind:literal => $error:expr) => {{
+        let error = $error;
+        $crate::inc_error!($func_name, $kind);
+        Err(error)
+    }};
     ($kind:literal) => {{
         #[cfg(feature = "metrics")]
         $crate::metrics::counter!(format!(
@@ -40,4 +52,21 @@ macro_rules! inc_error {
         #[cfg(not(feature = "metrics"))]
         {}
     }};
+}
+
+#[cfg(test)]
+mod tests {
+    fn fails() -> Result<(), &'static str> {
+        inc_error!("test" => "failed")
+    }
+
+    fn fails_with_explicit_function() -> Result<(), &'static str> {
+        inc_error!("test_function", "test" => "failed")
+    }
+
+    #[test]
+    fn error_return_variants_construct_err() {
+        assert_eq!(fails(), Err("failed"));
+        assert_eq!(fails_with_explicit_function(), Err("failed"));
+    }
 }

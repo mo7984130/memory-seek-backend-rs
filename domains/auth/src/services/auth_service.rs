@@ -67,9 +67,8 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     let user = match user_result {
         Some(u) => u,
         None => {
-            inc_error!("auth");
             let _ = task::spawn_blocking(HashAlgorithm::dummy_verify).await;
-            return Err(log_warn(
+            return inc_error!("auth" => log_warn(
                 "account_not_found",
                 "用户登陆时账号不存在",
                 AppError::bad_request("账号或者密码错误"),
@@ -109,8 +108,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         )?;
 
         if !verify_result.0 {
-            inc_error!("auth");
-            return Err(log_warn(
+            return inc_error!("auth" => log_warn(
                 "invalid_password",
                 "用户登录时密码错误",
                 AppError::bad_request("账号或者密码错误"),
