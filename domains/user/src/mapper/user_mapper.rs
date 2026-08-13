@@ -1,5 +1,5 @@
-use common::error::{AppError, contextual::Result};
-use common::ext::{ContextOptionExt, OkExt};
+use common::error::contextual::Result;
+use common::ext::OkExt;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter,
@@ -7,6 +7,7 @@ use sea_orm::{
 };
 use types::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
+use crate::error_ext::UserOptionExt;
 use crate::models::UserInfoRow;
 
 /// 用户表数据访问，向 repo 层提供统一的数据库访问入口
@@ -42,11 +43,7 @@ impl UserMapper {
             .into_values::<Option<String>, Column>()
             .one(txn)
             .await?
-            .context_warn_none(
-                "user_not_found",
-                "用户不存在",
-                AppError::bad_request("用户不存在"),
-            )?;
+            .user_not_found()?;
 
         ActiveModel {
             id: Set(user_id),
@@ -130,11 +127,7 @@ impl UserMapper {
             .into_tuple()
             .one(db)
             .await?
-            .context_warn_none(
-                "user_not_found",
-                "用户不存在",
-                AppError::bad_request("用户不存在"),
-            )
+            .user_not_found()
     }
 }
 

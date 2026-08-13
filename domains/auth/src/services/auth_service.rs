@@ -1,5 +1,6 @@
 use crate::AuthState;
 use crate::config::{ACCESS_TOKEN_EXPIRE_SECONDS, REFRESH_TOKEN_EXPIRE_DAYS};
+use crate::error_ext::AuthOptionExt;
 use crate::mapper::{AuthInsertParam, AuthMapper};
 use chrono::{Duration, Utc};
 use common::Result;
@@ -381,11 +382,7 @@ async fn verify_refresh_token(
     // 从数据库中获取RefreshToken 和 RefreshTokenExpireAt
     let res = AuthMapper::query_refresh_token(&state.db, user_id)
         .await?
-        .ok_or_warn(
-            "user_not_found",
-            "刷新access_token时, 用户不存在",
-            AppError::bad_request("用户不存在"),
-        )?;
+        .user_not_found()?;
     (res.refresh_token.as_deref() == Some(refresh_token)).true_or_warn(
         "refresh_token_mismatch",
         "刷新 access_token 时，refresh token 不匹配",

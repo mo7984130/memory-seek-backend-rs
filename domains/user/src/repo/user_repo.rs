@@ -1,5 +1,5 @@
-use common::error::{AppError, ContextualError, contextual::Result};
-use common::ext::{ContextOptionExt, RedisExt};
+use common::error::{ContextualError, contextual::Result};
+use common::ext::RedisExt;
 use common::utils::MetricsTimerExt;
 use common::{db_transaction, metrics_name};
 use constants::RedisKeys;
@@ -10,6 +10,7 @@ use types::auth::user::UserId;
 use types::user::UserInfo;
 
 use crate::config::USER_INFO_CACHE_TTL;
+use crate::error_ext::UserOptionExt;
 use crate::mapper::UserMapper;
 use crate::models::UserInfoRow;
 
@@ -46,16 +47,12 @@ impl UserRepo {
         let info = self
             .cache_user_info_single
             .get_or_load(
-                RedisKeys::auth::user_info_cache(user_id).as_str(),
+                &RedisKeys::auth::user_info_cache(user_id),
                 USER_INFO_CACHE_TTL,
                 || async move {
                     let user = UserMapper::query_by_id(&self.db, user_id)
                         .await?
-                        .context_warn_none(
-                            "user_not_found",
-                            "用户不存在",
-                            AppError::bad_request("用户不存在"),
-                        )?;
+                        .user_not_found()?;
                     UserInfo::from_with_token(user)
                 },
             )

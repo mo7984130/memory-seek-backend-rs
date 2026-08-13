@@ -1,6 +1,7 @@
 pub mod services;
 
 mod config;
+mod error_ext;
 
 pub(crate) mod mapper;
 mod state;

@@ -10,6 +10,7 @@ pub mod controller;
 pub use controller::Controller;
 
 mod config;
+mod error_ext;
 
 pub use repo::UserRepo;
 pub use state::UserState;
