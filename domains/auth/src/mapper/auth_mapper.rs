@@ -89,12 +89,13 @@ impl AuthMapper {
         user_id: UserId,
         password: &str,
     ) -> Result<u64> {
-        Ok(Entity::update_many()
+        Entity::update_many()
             .filter(Column::Id.eq(user_id))
             .col_expr(Column::Password, Expr::value(password))
             .exec(db)
             .await?
-            .rows_affected)
+            .rows_affected
+            .to_ok()
     }
 
     pub async fn update_refresh_token(
