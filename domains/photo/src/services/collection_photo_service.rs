@@ -7,8 +7,7 @@ use crate::{
     state::PhotoState,
 };
 use common::{
-    Result, db_transaction, ext::OkExt, metrics_group, metrics_name, metrics_success,
-    models::CursorPage, utils::MetricsTimerExt,
+    Result, db_transaction, ext::OkExt, metrics_name, models::CursorPage, utils::MetricsTimerExt,
 };
 use types::{
     auth::user::UserId,
@@ -30,6 +29,7 @@ pub(crate) struct CollectionPhotoService;
 // 查询
 impl CollectionPhotoService {
     /// 获取包含指定照片的所有收藏夹
+    #[common::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, photo_id = %photo_id)
@@ -39,14 +39,11 @@ impl CollectionPhotoService {
         user_id: UserId,
         photo_id: PhotoId,
     ) -> Result<Vec<CollectionBriefView>> {
-        metrics_group!();
-
         let collection_ids =
             CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.db, user_id, photo_id)
                 .await?;
 
         if collection_ids.is_empty() {
-            metrics_success!();
             return Ok(vec![]);
         }
 
@@ -56,10 +53,10 @@ impl CollectionPhotoService {
             .map(|(id, name)| CollectionBriefView { id, name })
             .collect();
 
-        metrics_success!();
         Ok(collections)
     }
 
+    #[common::metered(name = "get_collection_photos")]
     #[tracing::instrument(
         name = "get_collection_photos",
         skip_all,
@@ -71,8 +68,6 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         req: CollectionPhotoCursorPageParam,
     ) -> Result<CursorPage<PhotoView, String>> {
-        metrics_group!();
-
         let photo_ids = CollectionPhotoMapper::query_photo_id_by_collection_id(
             &state.db,
             user_id,
@@ -104,7 +99,6 @@ impl CollectionPhotoService {
             None
         };
 
-        metrics_success!();
         CursorPage {
             records: photo_vos,
             has_more,
@@ -116,6 +110,7 @@ impl CollectionPhotoService {
 
 // 添加
 impl CollectionPhotoService {
+    #[common::metered(name = "add_collection_photos")]
     #[tracing::instrument(
         name = "add_collection_photos",
         skip_all,
@@ -127,8 +122,6 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoAddBatchResult> {
-        metrics_group!();
-
         // 插入前, 需要鉴权
         CollectionMapper::ensure_belong(&state.db, user_id, collection_id)
             .timed(metrics_name!("auth_check"))
@@ -151,7 +144,6 @@ impl CollectionPhotoService {
         .timed(metrics_name!("db_transaction"))
         .await?;
 
-        metrics_success!();
         Ok(CollectionPhotoAddBatchResult {
             new_photo_count: photo_count,
         })
@@ -160,6 +152,7 @@ impl CollectionPhotoService {
 
 // 删除
 impl CollectionPhotoService {
+    #[common::metered(name = "remove_collection_photos")]
     #[tracing::instrument(
         name = "remove_collection_photos",
         skip_all,
@@ -171,8 +164,6 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoRemoveBatchResult> {
-        metrics_group!();
-
         let remove_count = db_transaction!(&state.db, |txn| {
             let collection =
                 CollectionMapper::ensure_belong_with_return(txn, user_id, collection_id).await?;
@@ -224,7 +215,6 @@ impl CollectionPhotoService {
         .timed(metrics_name!("db_transaction"))
         .await?;
 
-        metrics_success!();
         CollectionPhotoRemoveBatchResult {
             removed_photo_count: remove_count,
         }

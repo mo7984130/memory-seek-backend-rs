@@ -9,7 +9,7 @@ use common::{
     Result, db_transaction,
     error::AppError,
     ext::{BoolExt, ToOk},
-    metrics_group, metrics_name, metrics_success,
+    metrics_name,
     models::CursorPage,
     timed,
     utils::MetricsTimerExt,
@@ -31,6 +31,7 @@ pub(crate) struct CommentService;
 
 // 创建
 impl CommentService {
+    #[common::metered(name = "publish_comment")]
     #[tracing::instrument(
         name = "publish_comment",
         skip_all,
@@ -42,8 +43,6 @@ impl CommentService {
         photo_id: PhotoId,
         req: CommentPublishParam,
     ) -> Result<CommentView> {
-        metrics_group!();
-
         let CommentPublishParam { content } = req;
 
         let comment = timed!("db_transaction", {
@@ -61,7 +60,6 @@ impl CommentService {
             .await
         })?;
 
-        metrics_success!();
         CommentView::from(comment).to_ok()
     }
 }
@@ -71,6 +69,7 @@ impl CommentService {}
 
 // 查询
 impl CommentService {
+    #[common::metered(name = "get_comment_cursor_page")]
     #[tracing::instrument(
         name = "get_comment_cursor_page",
         skip_all,
@@ -82,8 +81,6 @@ impl CommentService {
         photo_id: PhotoId,
         req: CommentCursorPageParam,
     ) -> Result<CursorPage<CommentView, String>> {
-        metrics_group!();
-
         // 如果是第一次(不带Cursor)获取的话, 展示热门评论
         let hot_comments = if req.cursor.is_none() {
             CommentMapper::query_hot_comments(
@@ -148,7 +145,6 @@ impl CommentService {
             })
             .collect();
 
-        metrics_success!();
         CursorPage {
             records,
             has_more,
@@ -160,14 +156,13 @@ impl CommentService {
 
 // 删除
 impl CommentService {
+    #[common::metered(name = "delete_comment")]
     #[tracing::instrument(
         name = "delete_comment",
         skip_all,
         fields(user_id = %user_id, comment_id = %comment_id)
     )]
     pub async fn delete(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
-        metrics_group!();
-
         timed!("db_transaction", {
             db_transaction!(&state.db, |txn| {
                 let photo_id = CommentMapper::query_photo_id_by_id(txn, comment_id).await?;
@@ -193,7 +188,6 @@ impl CommentService {
             .await
         })?;
 
-        metrics_success!();
         Ok(())
     }
 }

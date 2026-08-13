@@ -1,6 +1,4 @@
-use common::{
-    Result, db_transaction, error::AppError, ext::BoolExt, metrics_group, metrics_success, timed,
-};
+use common::{Result, db_transaction, error::AppError, ext::BoolExt, timed};
 use types::{auth::user::UserId, photo::comment::CommentId};
 
 use crate::{
@@ -12,14 +10,13 @@ pub(crate) struct CommentLikeService;
 
 // 创建
 impl CommentLikeService {
+    #[common::metered(name = "like_comment")]
     #[tracing::instrument(
         name = "like_comment",
         skip_all,
         fields(user_id = %user_id, comment_id = %comment_id)
     )]
     pub async fn like(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
-        metrics_group!();
-
         // 检查评论是否存在
         timed!("db_transaction", {
             db_transaction!(&state.db, |txn| {
@@ -40,7 +37,6 @@ impl CommentLikeService {
             .await
         })?;
 
-        metrics_success!();
         Ok(())
     }
 }
@@ -53,14 +49,13 @@ impl CommentLikeService {}
 
 // 删除
 impl CommentLikeService {
+    #[common::metered(name = "unlike_comment")]
     #[tracing::instrument(
         name = "unlike_comment",
         skip_all,
         fields(user_id = %user_id, comment_id = %comment_id)
     )]
     pub async fn unlike(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
-        metrics_group!();
-
         timed!("db_transaction", {
             db_transaction!(&state.db, |txn| {
                 CommentLikeMapper::delete(txn, user_id, comment_id)
@@ -78,7 +73,6 @@ impl CommentLikeService {
             .await
         })?;
 
-        metrics_success!();
         Ok(())
     }
 }

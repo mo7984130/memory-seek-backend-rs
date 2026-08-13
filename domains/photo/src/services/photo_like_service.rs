@@ -4,7 +4,7 @@ use common::{
     Result, db_transaction,
     error::AppError,
     ext::{ToErr, log_warn},
-    metrics_group, metrics_name, metrics_success,
+    metrics_name,
     models::CursorPage,
     timed,
     utils::MetricsTimerExt,
@@ -24,14 +24,13 @@ pub(crate) struct PhotoLikeService;
 
 // 创建
 impl PhotoLikeService {
+    #[common::metered(name = "like_photo")]
     #[tracing::instrument(
         name = "like_photo",
         skip_all,
         fields(user_id = %user_id, photo_id = %photo_id)
     )]
     pub async fn like(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
-        metrics_group!();
-
         timed!("db_transaction", {
             db_transaction!(&state.db, |txn| {
                 PhotoMapper::ensure_exist(txn, photo_id).await?;
@@ -54,7 +53,6 @@ impl PhotoLikeService {
             .await
         })?;
 
-        metrics_success!();
         Ok(())
     }
 }
@@ -62,14 +60,13 @@ impl PhotoLikeService {
 // 查询
 impl PhotoLikeService {
     /// 查询用户点赞的照片列表（带分页和照片详情）
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_user_liked_photos(
         state: &PhotoState,
         user_id: UserId,
         req: LikedPhotosQuery,
     ) -> Result<CursorPage<PhotoView, String>> {
-        metrics_group!();
-
         // 查询用户点赞的照片ID列表和点赞时间（mapper 内部多查 1 条用于判断 has_more）
         let photo_ids_with_like_time =
             PhotoLikeMapper::query_user_liked_photo_ids(&state.db, user_id, &req.cursor, req.size)
@@ -85,7 +82,6 @@ impl PhotoLikeService {
         } = CursorPage::from_oversize(photo_ids, req.size);
 
         if photo_ids.is_empty() {
-            metrics_success!();
             return Ok(CursorPage::empty());
         }
 
@@ -114,7 +110,6 @@ impl PhotoLikeService {
             None
         };
 
-        metrics_success!();
         Ok(CursorPage {
             records: photos,
             next_cursor,
@@ -125,14 +120,13 @@ impl PhotoLikeService {
 
 // 删除
 impl PhotoLikeService {
+    #[common::metered(name = "unlike_photo")]
     #[tracing::instrument(
         name = "unlike_photo",
         skip_all,
         fields(user_id = %user_id, photo_id = %photo_id)
     )]
     pub async fn unlike(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
-        metrics_group!();
-
         timed!("db_transaction", {
             db_transaction!(&state.db, |txn| {
                 let deleted = PhotoLikeMapper::delete(txn, user_id, photo_id).await?;
@@ -153,7 +147,6 @@ impl PhotoLikeService {
             .await
         })?;
 
-        metrics_success!();
         Ok(())
     }
 }

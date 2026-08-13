@@ -6,7 +6,7 @@ use chrono::Utc;
 use common::{
     error::AppError,
     ext::{OkExt, OptionExt, ResultInspectErrAsync, log_warn},
-    inc_error, metrics_group, metrics_name, metrics_success,
+    inc_error, metrics_name,
     models::CursorPage,
     timed,
     utils::{FileValidator, MetricsTimerExt, token_cipher},
@@ -79,14 +79,13 @@ impl PhotoService {
             .to_ok()
     }
 
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_photo_cursor_page(
         state: &PhotoState,
         user_id: UserId,
         req: PhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, String>> {
-        metrics_group!();
-
         // 获取photo_ids
         let photo_ids = PhotoMapper::query_cursor_page_ids(
             &state.db,
@@ -124,8 +123,6 @@ impl PhotoService {
             None
         };
 
-        metrics_success!();
-
         Ok(CursorPage {
             records: photo_vos,
             next_cursor,
@@ -135,6 +132,7 @@ impl PhotoService {
 }
 
 impl PhotoService {
+    #[common::metered]
     #[instrument(
         skip_all,
         fields(user_id = %user_id, file_name = %req.file_name)
@@ -145,8 +143,6 @@ impl PhotoService {
         file_data: Bytes,
         req: UploadPhotoParam,
     ) -> Result<PhotoView> {
-        metrics_group!();
-
         // 效验文件
         let metadata = {
             timed!("validate_photo", {
@@ -244,21 +240,18 @@ impl PhotoService {
                 .timed(metrics_name!("cache_invalidate"))
         );
 
-        metrics_success!();
-
         let file_id = photo.file_id.clone();
         PhotoView::from(PhotoRecord::from(photo))
             .with_tokens(&file_id, user_id, token_cipher())
             .to_ok()
     }
 
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(count = %req.md5s.len()))]
     pub async fn exists_by_md5_batch(
         state: &PhotoState,
         req: ExistsByMd5BatchParam,
     ) -> Result<Vec<bool>> {
-        metrics_group!();
-
         let existing = PhotoMapper::exists_by_md5_batch(&state.db, &req.md5s).await?;
         let res = req
             .md5s
@@ -266,10 +259,10 @@ impl PhotoService {
             .map(|md5| existing.contains(md5))
             .collect::<Vec<bool>>();
 
-        metrics_success!();
         Ok(res)
     }
 
+    #[common::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, count = %req.photo_ids.len())
@@ -279,8 +272,6 @@ impl PhotoService {
         user_id: UserId,
         req: DeletePhotosParam,
     ) -> Result<()> {
-        metrics_group!();
-
         // 查询照片信息并鉴权
         let photos =
             PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &req.photo_ids).await?;
@@ -360,8 +351,6 @@ impl PhotoService {
                 .timed(metrics_name!("cache_invalidate_timeline"))
         );
 
-        metrics_success!();
-
         Ok(())
     }
 }
@@ -417,6 +406,7 @@ pub(crate) enum ImageDownloadData {
 // 图片下载
 impl PhotoService {
     /// 根据 ImageToken 下载图片，返回处理后的数据或原始流
+    #[common::metered]
     #[tracing::instrument(
         skip_all,
         fields(viewer_id = %token.viewer_id, file_id = %token.file_id)
@@ -425,8 +415,6 @@ impl PhotoService {
         state: &PhotoState,
         token: ImageToken,
     ) -> Result<ImageDownloadData> {
-        metrics_group!();
-
         match token.token_type {
             ImageTokenType::Thumbnail | ImageTokenType::Preview | ImageTokenType::Crop => {
                 let process_param: String = match token.token_type {
@@ -472,7 +460,6 @@ impl PhotoService {
                     .timed(metrics_name!("s3_download_process"))
                     .await?;
 
-                metrics_success!();
                 Ok(ImageDownloadData::Processed(bytes))
             }
             ImageTokenType::Original => {
@@ -487,7 +474,6 @@ impl PhotoService {
                 > = Box::pin(stream_resp);
 
                 let content_type = Self::get_image_content_type(&token.file_id);
-                metrics_success!();
                 Ok(ImageDownloadData::Original {
                     stream,
                     content_type,

@@ -143,14 +143,13 @@ impl BehaviorService {
 
 // 管理端统计
 impl BehaviorService {
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn get_stats(
         state: &PhotoState,
         admin: AdminId,
         req: BehaviorStatsQuery,
     ) -> Result<Vec<BehaviorStatsItem>> {
-        metrics_group!();
-
         let rows = BehaviorMapper::query_stats(
             &state.db,
             req.action,
@@ -162,41 +161,37 @@ impl BehaviorService {
         .timed(metrics_name!("query_stats"))
         .await?;
 
-        metrics_success!();
         Ok(rows
             .into_iter()
             .map(|(bucket, count)| BehaviorStatsItem { bucket, count })
             .collect())
     }
 
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn get_top(
         state: &PhotoState,
         admin: AdminId,
         req: BehaviorTopQuery,
     ) -> Result<Vec<BehaviorTopItem>> {
-        metrics_group!();
-
         let rows =
             BehaviorMapper::query_top_targets(&state.db, req.action, req.target_type, req.limit)
                 .timed(metrics_name!("query_top"))
                 .await?;
 
-        metrics_success!();
         Ok(rows
             .into_iter()
             .map(|(target_id, count)| BehaviorTopItem { target_id, count })
             .collect())
     }
 
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn get_audit(
         state: &PhotoState,
         admin: AdminId,
         req: BehaviorAuditQuery,
     ) -> Result<CursorPage<BehaviorAuditItem, String>> {
-        metrics_group!();
-
         let records = BehaviorMapper::query_audit_page(
             &state.db,
             req.action,
@@ -218,7 +213,6 @@ impl BehaviorService {
             .encode())
         })?;
 
-        metrics_success!();
         Ok(CursorPage {
             records: page
                 .records

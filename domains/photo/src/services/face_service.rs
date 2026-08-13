@@ -6,7 +6,7 @@ use common::{
     Result, db_transaction,
     error::AppError,
     ext::{OptionExt, ResultErrExt, ToOk, UintExt},
-    inc_counter, inc_error, metrics_group, metrics_name, metrics_success,
+    inc_counter, inc_error, metrics_name,
     models::CursorPage,
     set_gauge,
     utils::{DbUtils, GaugeGuard, MetricsTimer, MetricsTimerExt},
@@ -62,14 +62,13 @@ impl FaceService {
         Ok(())
     }
 
+    #[common::metered(name = "face_compute")]
     #[tracing::instrument(
         name = "face_compute",
         skip_all,
         fields(user_id = %admin, full = %full)
     )]
     async fn compute_inner(state: Arc<PhotoState>, admin: AdminId, full: bool) -> Result<()> {
-        metrics_group!();
-
         let user_id = admin.into_inner();
         info!(user_id = %user_id, "管理员触发人脸计算");
 
@@ -172,7 +171,6 @@ impl FaceService {
         set_gauge!("total_faces", total_faces as f64);
         set_gauge!("total_no_face", total_no_face as f64);
 
-        metrics_success!();
         Ok(())
     }
 
@@ -311,6 +309,7 @@ impl FaceService {
     /// - 封面按「score 最高 = 封面」规则维护: 移入可能替换新人物封面,
     ///   移出若曾是旧人物封面则回退到剩余 score 最高人脸;
     /// - 涉及的行加锁且按 id 升序, 避免并发丢失更新与死锁。
+    #[common::metered]
     #[tracing::instrument(
         skip_all,
         fields(face_id = %face_id, person_id = ?person_id)
@@ -320,7 +319,6 @@ impl FaceService {
         face_id: FaceId,
         person_id: Option<PersonId>,
     ) -> Result<()> {
-        metrics_group!();
         let affected_person_ids: Vec<PersonId> = db_transaction!(&state.db, |txn| {
             // 加行锁读取人脸(读-改-写流程, 避免并发转移丢更新)
             let face = FaceMapper::lock_by_id(txn, face_id).await?.ok_or_error(
@@ -432,7 +430,6 @@ impl FaceService {
             .timed(metrics_name!("cache_invalidate"))
             .await;
 
-        metrics_success!();
         Ok(())
     }
 
@@ -562,13 +559,12 @@ impl FaceService {
 
 // 查询
 impl FaceService {
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(photo_id = %photo_id))]
     pub async fn get_faces_by_photo_id(
         state: &PhotoState,
         photo_id: PhotoId,
     ) -> Result<Vec<FaceView>> {
-        metrics_group!();
-
         let faces = FaceMapper::query_by_photo_id(&state.db, photo_id).await?;
 
         // 批量加载归属人物名称
@@ -591,26 +587,23 @@ impl FaceService {
             })
             .collect::<Vec<FaceView>>();
 
-        metrics_success!();
         views.to_ok()
     }
 
     /// 获取"包含未分配人脸"的照片列表(游标分页, 不区分照片归属者)
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_unassigned_face_photos(
         state: &PhotoState,
         user_id: UserId,
         req: UnassignedFacePhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
-        metrics_group!();
-
         let photo_ids = FaceMapper::query_unassigned_face_photo_ids_cursor_page(
             &state.db, req.cursor, req.size,
         )
         .timed(metrics_name!("query_unassigned_face_photo_ids"))
         .await?;
         if photo_ids.is_empty() {
-            metrics_success!();
             return Ok(CursorPage::empty());
         }
 
@@ -626,7 +619,6 @@ impl FaceService {
             .to_ok()
         })?;
 
-        metrics_success!();
         Ok(page)
     }
 }
@@ -634,9 +626,9 @@ impl FaceService {
 // 删除
 impl FaceService {
     /// 删除单张人脸(仅限未归属人物的人脸, 避免破坏人物统计不变量)
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(face_id = %face_id))]
     pub async fn delete_face(state: &PhotoState, face_id: FaceId) -> Result<()> {
-        metrics_group!();
         db_transaction!(&state.db, |txn| {
             // 加行锁读取人脸(读-改-写流程, 防止并发转移归属后误删)
             let face = FaceMapper::lock_by_id(txn, face_id).await?.ok_or_error(
@@ -664,7 +656,6 @@ impl FaceService {
         })
         .await?;
 
-        metrics_success!();
         Ok(())
     }
 
@@ -672,15 +663,14 @@ impl FaceService {
     ///
     /// 与单张删除一致, 已归属人脸会被跳过, 不参与删除;
     /// 通过 SQL 条件 `person_id IS NULL` 原子过滤, 无需逐张加锁。
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(count = %face_ids.len()))]
     pub async fn delete_faces_batch(
         state: &PhotoState,
         face_ids: &FaceIds,
     ) -> Result<FaceDeleteBatchResult> {
-        metrics_group!();
         let deleted_face_count = FaceMapper::delete_unassigned_by_ids(&state.db, face_ids).await?;
 
-        metrics_success!();
         Ok(FaceDeleteBatchResult { deleted_face_count })
     }
 }

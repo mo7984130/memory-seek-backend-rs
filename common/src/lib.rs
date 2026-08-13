@@ -19,5 +19,7 @@ pub mod ext;
 pub mod macros;
 pub mod pipeline;
 
+pub use common_macros::metered;
+
 #[cfg(feature = "metrics")]
 pub use metrics;

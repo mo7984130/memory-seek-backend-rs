@@ -6,7 +6,7 @@ use common::Result;
 use common::error::AppError;
 use common::ext::{OptionExt, RedisExt, ResultErrExt, ResultInspectErrAsync, TraceExt, log_warn};
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
-use common::{inc_error, metrics_group, metrics_name, metrics_success};
+use common::{inc_error, metrics_name};
 use constants::RedisKeys;
 use constants::redis_keys;
 use std::sync::LazyLock;
@@ -47,6 +47,7 @@ static EMAIL_SEND_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(16)
 /// # 错误
 /// - `AppError::bad_request`: 账号不存在或密码错误
 /// - `AppError::InternalServerError`: 数据库查询/更新失败或 Redis 操作失败
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(
@@ -54,8 +55,6 @@ static EMAIL_SEND_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(16)
     )
 )]
 pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse> {
-    metrics_group!();
-
     // 获取用户Id, 密码, 头像FileId
     // username 或者 email 等于 account都可以
 
@@ -153,8 +152,6 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
 
     // 加密头像file_id
 
-    metrics_success!();
-
     // 返回 LoginResult（包含用户信息和令牌）
     let user_info = UserInfo::from_with_token(updated_user);
     Ok(LoginResponse {
@@ -181,6 +178,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
 /// # 错误
 /// - `AppError::bad_request`: 邮箱验证码错误、邀请码无效、用户名或邮箱已被占用
 /// - `AppError::InternalServerError`: 数据库插入失败或其他内部错误
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(
@@ -192,8 +190,6 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     )
 )]
 pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInfo> {
-    metrics_group!();
-
     // 校验邮箱验证码
     verify_email_verify_code(state, &req.email, &req.email_verify_code)
         .timed(metrics_name!("verify_email_code"))
@@ -234,8 +230,6 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
         .del(&redis_keys::auth::email_verify_code(&user_model.email))
         .await?;
 
-    metrics_success!();
-
     Ok(UserInfo::from(user_model))
 }
 
@@ -253,6 +247,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
 ///
 /// # 错误
 /// - `AppError::InternalServerError`: Redis 操作失败或邮件发送失败
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(
@@ -260,8 +255,6 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     )
 )]
 pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Result<()> {
-    metrics_group!();
-
     // 生成大写字母+数字验证码
     let code = rand_utils::generate_random_uppercase_str(6);
 
@@ -293,8 +286,6 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
             .trace_internal_err("send_email_error", "发送邮件失败")?;
     } // _permit 在此释放，其他并发请求可继续发送
 
-    metrics_success!();
-
     Ok(())
 }
 
@@ -313,14 +304,13 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
 /// # 错误
 /// - `AppError::Unauthorized`: refresh_token 不存在、不匹配或已过期
 /// - `AppError::InternalServerError`: 数据库查询或 Redis 操作失败
+#[common::metered]
 #[tracing::instrument(skip_all, fields(user_id = %user_id))]
 pub async fn refresh_access_token(
     state: &AuthState,
     user_id: UserId,
     refresh_token: String,
 ) -> Result<RefreshAccessTokenResponse> {
-    metrics_group!();
-
     // 校验refresh_token
     verify_refresh_token(state, user_id, &refresh_token)
         .timed(metrics_name!("verify_token"))
@@ -337,8 +327,6 @@ pub async fn refresh_access_token(
         )
         .timed(metrics_name!("set_token"))
         .await?;
-
-    metrics_success!();
 
     Ok(RefreshAccessTokenResponse {
         access_token: new_access_token,

@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "common",
+    "libs/common_macros",
     "types",
     "libs/email",
     "libs/img_url_generator",

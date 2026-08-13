@@ -7,7 +7,7 @@ use common::{
     Result, db_transaction,
     error::AppError,
     ext::{OptionExt, ResultErrExt, UintExt},
-    metrics_group, metrics_name, metrics_success,
+    metrics_name,
     models::CursorPage,
     utils::{DbUtils, MetricsTimerExt, token_cipher},
 };
@@ -56,14 +56,13 @@ impl PersonService {
         Ok(())
     }
 
+    #[common::metered(name = "person_full_scan")]
     #[instrument(
         name = "person_full_scan",
         skip_all,
         fields(admin_user_id = %admin)
     )]
     pub async fn inner_full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
-        metrics_group!();
-
         let user_id = admin.into_inner();
         info!(user_id = %user_id, "管理员触发人物全量聚类");
 
@@ -175,7 +174,6 @@ impl PersonService {
         })
         .await?;
 
-        metrics_success!();
         Ok(())
     }
 
@@ -194,6 +192,7 @@ impl PersonService {
         Ok(())
     }
 
+    #[common::metered(name = "person_secondary_cluster")]
     #[instrument(
         name = "person_secondary_cluster",
         skip_all,
@@ -204,8 +203,6 @@ impl PersonService {
         admin: AdminId,
         req: SecondaryClusterParam,
     ) -> Result<()> {
-        metrics_group!();
-
         let user_id = admin.into_inner();
         let SecondaryClusterParam { threshold } = req;
         info!(user_id = %user_id, threshold, "管理员触发二次聚类");
@@ -218,7 +215,6 @@ impl PersonService {
             persons.len()
         );
         if faces.is_empty() || persons.is_empty() {
-            metrics_success!();
             return Ok(());
         }
 
@@ -242,7 +238,6 @@ impl PersonService {
         let unmatched = faces.len() - matched;
         info!("分类完成: 匹配 {} 张, 未匹配 {} 张", matched, unmatched);
         if classified.is_empty() {
-            metrics_success!();
             return Ok(());
         }
 
@@ -326,7 +321,6 @@ impl PersonService {
         })
         .await?;
 
-        metrics_success!();
         Ok(())
     }
 
@@ -357,13 +351,13 @@ impl PersonService {
 // 修改
 impl PersonService {
     /// 重命名人物(同步维护姓名首字母)
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(person_id = %person_id))]
     pub async fn rename_person(
         state: &PhotoState,
         person_id: PersonId,
         req: RenamePersonParam,
     ) -> Result<()> {
-        metrics_group!();
         let new_name = req.new_name.into_inner();
         let name_initials = Self::compute_name_initials(&new_name);
         // 校验人物存在
@@ -383,18 +377,17 @@ impl PersonService {
             .timed(metrics_name!("cache_invalidate"))
             .await;
 
-        metrics_success!();
         Ok(())
     }
 
     /// 合并人物（高危操作，仅管理员）: 将 source 的全部人脸归属转移到 target, 并删除 source
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn merge_person(
         state: &PhotoState,
         admin: AdminId,
         req: MergePersonParam,
     ) -> Result<PersonView> {
-        metrics_group!();
         let MergePersonParam {
             source_person_id,
             target_person_id,
@@ -500,7 +493,6 @@ impl PersonService {
             .timed(metrics_name!("cache_invalidate"))
             .await;
 
-        metrics_success!();
         Ok(Self::to_view(admin.into_inner(), person.into()))
     }
 }
@@ -515,13 +507,13 @@ impl PersonService {
             .map(|p| p.map(|r| r.name))
     }
 
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_persons(
         state: &PhotoState,
         user_id: UserId,
         req: PersonCursorParam,
     ) -> Result<CursorPage<PersonView, FaceCountIdCursor<PersonId>>> {
-        metrics_group!();
         let persons = PersonMapper::query(&state.db, req.cursor, req.size).await?;
 
         // 提取本页人物 ID, 通过三级缓存批量加载轻量摘要
@@ -553,18 +545,17 @@ impl PersonService {
             }
             .to_ok()
         })?;
-        metrics_success!();
         Ok(page)
     }
 
     /// 按关键词前缀搜索人物(匹配完整名字或姓名首字母)
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn search_persons(
         state: &PhotoState,
         user_id: UserId,
         req: PersonSearchParam,
     ) -> Result<CursorPage<PersonView, PersonId>> {
-        metrics_group!();
         let PersonSearchParam {
             keyword,
             cursor,
@@ -595,7 +586,6 @@ impl PersonService {
             .map(|person| Self::to_view(user_id, person))
             .collect::<Vec<_>>();
         let page = CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))?;
-        metrics_success!();
         Ok(page)
     }
 
@@ -657,6 +647,7 @@ impl PersonService {
     }
 
     /// 获取人物的照片列表(游标分页, 参照 `CollectionPhotoService::get_photos`)
+    #[common::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, person_id = %person_id)
@@ -667,14 +658,11 @@ impl PersonService {
         person_id: PersonId,
         req: PersonPhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
-        metrics_group!();
-
         let photo_ids =
             FaceMapper::query_photo_ids_cursor_page(&state.db, person_id, req.cursor, req.size)
                 .timed(metrics_name!("query_photo_ids"))
                 .await?;
         if photo_ids.is_empty() {
-            metrics_success!();
             return Ok(CursorPage::empty());
         }
 
@@ -690,7 +678,6 @@ impl PersonService {
             .to_ok()
         })?;
 
-        metrics_success!();
         Ok(page)
     }
 }

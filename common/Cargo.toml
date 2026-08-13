@@ -1,6 +1,6 @@
 [package]
 name = "common"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2024"
 
 [features]
@@ -13,6 +13,7 @@ tokio = ["dep:tokio"]
 ts = ["dep:ts-rs"]
 
 [dependencies]
+common_macros = { path = "../libs/common_macros" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 axum = { workspace = true }
@@ -41,3 +42,7 @@ tokio = { workspace = true, optional = true }
 ts-rs = { workspace = true, optional = true }
 async-trait = { workspace = true }
 multi-level-cache.workspace = true
+
+[dev-dependencies]
+metrics-util = "0.20.4"
+tokio = { workspace = true }

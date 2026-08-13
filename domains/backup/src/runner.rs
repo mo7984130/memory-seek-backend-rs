@@ -3,7 +3,7 @@ use crate::exporter::CsvExporter;
 use crate::hasher::TableHasher;
 use crate::state::BackupState;
 use crate::storage::BackupType;
-use common::{inc_counter, inc_error, metrics_group, metrics_success};
+use common::{inc_counter, inc_error};
 use std::sync::Arc;
 use types::auth::user::AdminId;
 
@@ -20,8 +20,8 @@ impl BackupRunner {
     }
 
     /// 定时调度备份：导出并保存到 daily / weekly / monthly，然后 GFS 清理
+    #[common::metered(name = "scheduled")]
     pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult, BackupError> {
-        metrics_group!("scheduled");
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
@@ -84,16 +84,15 @@ impl BackupRunner {
             result.cleaned
         );
 
-        metrics_success!("scheduled");
         Ok(result)
     }
 
     /// 手动备份：导出并保存到 manual 目录（永不清理）
+    #[common::metered(name = "manual")]
     pub async fn execute_manual(
         state: Arc<BackupState>,
         admin: AdminId,
     ) -> Result<BackupResult, BackupError> {
-        metrics_group!("manual");
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
@@ -146,7 +145,6 @@ impl BackupRunner {
             result.failed
         );
 
-        metrics_success!("manual");
         Ok(result)
     }
 

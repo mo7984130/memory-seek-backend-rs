@@ -2,7 +2,7 @@ use bytes::Bytes;
 use chrono::{Duration, Utc};
 use common::ext::{OptionExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
 use common::utils::{FileValidator, MetricsTimerExt, rand_utils, token_cipher};
-use common::{Result, error::AppError, metrics_group, metrics_name, metrics_success, timed};
+use common::{Result, error::AppError, metrics_name, timed};
 use constants::{PasswordHasher, RedisKeys};
 use sea_orm::sqlx::types::uuid;
 use std::sync::LazyLock;
@@ -40,16 +40,13 @@ static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
 ///
 /// # 错误
 /// - `AppError`: 用户不存在或数据库查询失败时返回错误
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
 )]
 pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInfo> {
-    metrics_group!();
-
     let info = state.repo.get_user_info(user_id).await?;
-
-    metrics_success!();
 
     info.to_ok()
 }
@@ -65,13 +62,12 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
 ///
 /// # 错误
 /// - `AppError`: 邀请码生成重试耗尽（冲突）或 Redis 操作失败时返回内部服务器错误
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
 )]
 pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result<InviterCodeView> {
-    metrics_group!();
-
     // 循环生成邀请码, 防止冲突
     // 最大生成次数为3
     let mut conn = state.redis.get_conn().await?;
@@ -90,8 +86,6 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
             .await?;
 
         if success {
-            metrics_success!();
-
             return Ok(InviterCodeView {
                 inviter_code: code,
                 expire_at: Utc::now() + Duration::from_std(INVITER_CODE_TTL).unwrap(),
@@ -115,6 +109,7 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
 ///
 /// # 返回
 /// 返回更新后的昵称字符串
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id, new_nickname = %req.new_nickname)
@@ -124,19 +119,16 @@ pub async fn change_nickname(
     user_id: UserId,
     req: ChangeNicknameParam,
 ) -> Result<String> {
-    metrics_group!();
-
     let new_nickname = state
         .repo
         .change_nickname(user_id, req.new_nickname)
         .await?;
 
-    metrics_success!();
-
     Ok(new_nickname)
 }
 
 /// 上传并更新用户头像
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
@@ -147,8 +139,6 @@ pub async fn update_avatar(
     file_data: Bytes,
     req: UpdateAvatarParam,
 ) -> Result<String> {
-    metrics_group!();
-
     // 校验图片
     let img_metadata = timed!("validate_image", {
         FileValidator::validate_image(file_data.as_ref(), &req.file_name, &req.content_type)?
@@ -201,8 +191,6 @@ pub async fn update_avatar(
             AppError::InternalServerError,
         )?;
 
-    metrics_success!();
-
     Ok(avatar_token)
 }
 
@@ -218,6 +206,7 @@ pub async fn update_avatar(
 ///
 /// # 错误
 /// - `AppError`: 用户不存在、旧密码校验失败、新旧密码相同或数据库更新失败时返回错误
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
@@ -227,8 +216,6 @@ pub async fn change_password(
     user_id: UserId,
     req: ChangePasswordParam,
 ) -> Result<()> {
-    metrics_group!();
-
     // 新旧密码不可相同
     if req.old_password == req.new_password {
         return Err(AppError::bad_request("新密码不能与旧密码相同"));
@@ -275,8 +262,6 @@ pub async fn change_password(
     // 登出. 清除token
     logout(state, user_id).await?;
 
-    metrics_success!();
-
     Ok(())
 }
 
@@ -291,16 +276,13 @@ pub async fn change_password(
 ///
 /// # 错误
 /// - `AppError`: 数据库更新或 Redis 删除失败时返回错误
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
 )]
 pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
-    metrics_group!();
-
     state.repo.logout(user_id).await?;
-
-    metrics_success!();
 
     Ok(())
 }
@@ -313,6 +295,7 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
 ///
 /// # 返回
 /// 返回用户信息列表，未找到的用户对应位置为 `None`
+#[common::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id, count = %req.user_ids.len())
@@ -322,14 +305,10 @@ pub async fn get_user_info_batch(
     user_id: UserId,
     req: GetUserInfoBatchParam,
 ) -> Result<Vec<Option<UserBriefView>>> {
-    metrics_group!();
-
     let user_ids = req.user_ids.into_inner();
 
     // 带三级缓存的获取用户信息
     let result = state.repo.get_user_info_batch(&user_ids).await?;
-
-    metrics_success!();
 
     Ok(result
         .into_iter()
