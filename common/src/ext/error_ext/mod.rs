@@ -5,6 +5,7 @@ mod ok_ext;
 mod option_ext;
 mod result_ext;
 mod result_inspect_ext;
+mod result_log_ext;
 mod uint_ext;
 
 pub use base::*;
@@ -16,4 +17,5 @@ pub use ok_ext::*;
 pub use option_ext::OptionExt;
 pub use result_ext::*;
 pub use result_inspect_ext::ResultInspectErrAsync;
+pub use result_log_ext::ResultLogExt;
 pub use uint_ext::*;
