@@ -12,7 +12,6 @@ use common::{
 };
 use futures::Stream;
 use oss::OssError;
-use sea_orm::ActiveValue::Set;
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -29,7 +28,7 @@ use types::photo::{
 use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
-    photo::photo::{ActiveModel, PhotoId, PhotoRecord},
+    photo::photo::{NewPhotoRecord, PhotoId, PhotoRecord},
 };
 
 pub(crate) struct PhotoService;
@@ -139,9 +138,8 @@ impl PhotoService {
                 .into_contextual()?
             )
         };
-        // 带三级缓存的 MD5 去重校验
-        let exists = state.repo.exists_by_md5(&md5_hash).await?;
-        if exists {
+        // MD5 去重校验
+        if state.repo.exists_by_md5(&md5_hash).await? {
             return inc_error!("conflict" => log_warn(
                 "upload_photo:img_exist",
                 "图片已存在",
@@ -165,18 +163,17 @@ impl PhotoService {
         let now = Utc::now();
         let photo = state
             .repo
-            .insert_photo(ActiveModel {
-                user_id: Set(user_id),
-                name: Set(metadata.name),
-                size: Set(file_data.len() as i64),
-                width: Set(metadata.width as i32),
-                height: Set(metadata.height as i32),
-                mime_type: Set(metadata.mime_type),
-                md5: Set(md5_hash.clone()),
-                file_id: Set(file_id.clone()),
-                created_at: Set(req.created_at.unwrap_or(now)),
-                updated_at: Set(now),
-                ..Default::default()
+            .insert_photo(NewPhotoRecord {
+                user_id,
+                name: metadata.name,
+                size: file_data.len() as i64,
+                width: metadata.width as i32,
+                height: metadata.height as i32,
+                mime_type: metadata.mime_type,
+                md5: md5_hash.clone(),
+                file_id: file_id.clone(),
+                created_at: req.created_at.unwrap_or(now),
+                updated_at: now,
             })
             .timed(metrics_name!("db_insert"))
             .await

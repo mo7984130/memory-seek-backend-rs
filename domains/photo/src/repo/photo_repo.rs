@@ -15,7 +15,7 @@ use types::photo::dto::{
     photo::{PageDirection, PhotoCursorParam},
     timeline_stat::MonthStat,
 };
-use types::photo::photo::{ActiveModel, Model, PhotoId, PhotoRecord};
+use types::photo::photo::{ActiveModel, Model, NewPhotoRecord, PhotoId, PhotoRecord};
 
 #[cfg(feature = "face")]
 use types::photo::person::PersonId;
@@ -206,7 +206,8 @@ impl PhotoRepo {
         let _ = self.cache_photo_cursor_ids.invalidate_batch(&keys).await;
     }
 
-    pub async fn insert_photo(&self, photo: ActiveModel) -> Result<Model> {
+    pub async fn insert_photo(&self, photo: NewPhotoRecord) -> Result<Model> {
+        let photo: ActiveModel = photo.into();
         photo.insert(&self.db).await.map_err(Into::into)
     }
 
