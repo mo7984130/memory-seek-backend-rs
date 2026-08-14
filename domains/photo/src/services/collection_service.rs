@@ -1,11 +1,10 @@
-use crate::mappers::collection_mapper::CollectionMapper;
-use crate::mappers::collection_photo_mapper::CollectionPhotoMapper;
+use crate::mappers::{
+    collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
+};
 use crate::state::PhotoState;
 use common::Result;
-use common::error::AppError;
-use common::ext::{OkExt, UintExt};
+use common::ext::OkExt;
 use common::utils::token_cipher;
-use common::{db_transaction, metrics_name, utils::MetricsTimerExt};
 use types::auth::user::UserId;
 use types::photo::collection::CollectionId;
 use types::photo::dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView};
@@ -21,9 +20,7 @@ impl CollectionService {
         user_id: UserId,
     ) -> Result<Vec<CollectionView>> {
         // 获取用户收藏夹
-        let collections = CollectionMapper::query_by_user_id(&state.db, user_id)
-            .timed(metrics_name!("query_by_user_id"))
-            .await?;
+        let collections = state.repo.query_collections(user_id).await?;
 
         // 组装结果
         let result = collections
@@ -44,10 +41,7 @@ impl CollectionService {
         user_id: UserId,
         req: CollectionCreateParam,
     ) -> Result<CollectionView> {
-        let CollectionCreateParam { name, description } = req;
-        let collection = CollectionMapper::insert(&state.db, user_id, name, description)
-            .timed(metrics_name!("db_insert"))
-            .await?;
+        let collection = state.repo.create_collection(user_id, req).await?;
 
         CollectionView::from(collection).to_ok()
     }
@@ -67,14 +61,10 @@ impl CollectionService {
         req: CollectionUpdateParam,
     ) -> Result<()> {
         // 修改时鉴权
-        CollectionMapper::update_info(&state.db, collection_id, user_id, req.name, req.description)
-            .timed(metrics_name!("db_update"))
-            .await?
-            .no_zero_or_warn(
-                "collection_update_info_fail",
-                "修改收藏夹信息失败",
-                AppError::bad_request("修改收藏夹信息失败"),
-            )?;
+        state
+            .repo
+            .update_collection(user_id, collection_id, req)
+            .await?;
 
         Ok(())
     }
@@ -93,22 +83,7 @@ impl CollectionService {
         collection_id: CollectionId,
     ) -> Result<()> {
         // 删除收藏夹 和 收藏夹照片
-        db_transaction!(&state.db, |txn| {
-            // 删除收藏夹本身
-            CollectionMapper::delete_by_id(txn, collection_id, user_id)
-                .await?
-                .no_zero_or_warn(
-                    "delete_collection_fail",
-                    "删除收藏夹失败",
-                    AppError::bad_request("删除收藏夹失败"),
-                )?;
-
-            // 删除收藏夹里面的照片
-            CollectionPhotoMapper::delete_by_collection_id(txn, collection_id, user_id).await?;
-            Ok(())
-        })
-        .timed(metrics_name!("db_transaction"))
-        .await?;
+        state.repo.delete_collection(user_id, collection_id).await?;
 
         Ok(())
     }
@@ -116,8 +91,8 @@ impl CollectionService {
 
 // 照片删除步骤:收藏夹清理
 #[step_derive::declare_step(
-    ctx = crate::services::photo_service::PhotoDeleteContext,
-    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    ctx = crate::repo::photo_repo::PhotoDeleteContext,
+    slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
     name = "collection_cleanup",
     owns = ["CollectionPhotoMapper", "CollectionMapper"],
 )]
@@ -125,7 +100,7 @@ impl CollectionService {
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
-        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+        ctx: &mut crate::repo::photo_repo::PhotoDeleteContext,
     ) -> common::Result<()> {
         let photo_ids = ctx.photo_ids();
         let affected = CollectionPhotoMapper::delete_by_photo_ids(txn, &photo_ids).await?;

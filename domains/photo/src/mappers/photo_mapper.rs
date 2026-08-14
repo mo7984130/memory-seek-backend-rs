@@ -178,6 +178,7 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    #[cfg(feature = "face")]
     pub async fn query_id_and_file_id_by_ids(
         db: &impl ConnectionTrait,
         ids: &[PhotoId],

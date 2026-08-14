@@ -1,14 +1,5 @@
-use crate::{
-    mappers::{
-        collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
-        photo_mapper::PhotoMapper,
-    },
-    services::photo_service::PhotoService,
-    state::PhotoState,
-};
-use common::{
-    Result, db_transaction, ext::OkExt, metrics_name, models::CursorPage, utils::MetricsTimerExt,
-};
+use crate::{services::photo_service::PhotoService, state::PhotoState};
+use common::{Result, ext::OkExt, metrics_name, models::CursorPage, utils::MetricsTimerExt};
 use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
@@ -39,15 +30,18 @@ impl CollectionPhotoService {
         user_id: UserId,
         photo_id: PhotoId,
     ) -> Result<Vec<CollectionBriefView>> {
-        let collection_ids =
-            CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.db, user_id, photo_id)
-                .await?;
+        let collection_ids = state
+            .repo
+            .query_collection_ids_by_photo(user_id, photo_id)
+            .await?;
 
         if collection_ids.is_empty() {
             return Ok(vec![]);
         }
 
-        let collections = CollectionMapper::query_id_and_name_by_ids(&state.db, &collection_ids)
+        let collections = state
+            .repo
+            .query_collection_briefs(&collection_ids)
             .await?
             .into_iter()
             .map(|(id, name)| CollectionBriefView { id, name })
@@ -68,15 +62,11 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         req: CollectionPhotoCursorPageParam,
     ) -> Result<CursorPage<PhotoView, String>> {
-        let photo_ids = CollectionPhotoMapper::query_photo_id_by_collection_id(
-            &state.db,
-            user_id,
-            collection_id,
-            req.cursor.as_ref(),
-            req.size,
-        )
-        .timed(metrics_name!("query_photo_ids"))
-        .await?;
+        let photo_ids = state
+            .repo
+            .query_collection_photo_ids(user_id, collection_id, &req)
+            .timed(metrics_name!("query_photo_ids"))
+            .await?;
 
         let CursorPage {
             records: photo_ids,
@@ -122,27 +112,10 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoAddBatchResult> {
-        // 插入前, 需要鉴权
-        CollectionMapper::ensure_belong(&state.db, user_id, collection_id)
-            .timed(metrics_name!("auth_check"))
+        let photo_count = state
+            .repo
+            .add_collection_photos(user_id, collection_id, &photo_ids)
             .await?;
-
-        // 插入
-        let photo_count = db_transaction!(&state.db, |txn| {
-            let new_photo_count =
-                CollectionMapper::add_photos_batch(txn, user_id, collection_id, &photo_ids).await?;
-
-            // 将新添加的第一张照片设为封面
-            if let Some(photo_id) = photo_ids.first() {
-                let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
-                CollectionMapper::update_cover_photo(txn, collection_id, Some(*photo_id), file_id)
-                    .await?;
-            }
-
-            Ok(new_photo_count)
-        })
-        .timed(metrics_name!("db_transaction"))
-        .await?;
 
         Ok(CollectionPhotoAddBatchResult {
             new_photo_count: photo_count,
@@ -164,56 +137,10 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoRemoveBatchResult> {
-        let remove_count = db_transaction!(&state.db, |txn| {
-            let collection =
-                CollectionMapper::ensure_belong_with_return(txn, user_id, collection_id).await?;
-
-            // 先检查封面是否需要更新
-            let need_update_cover = collection
-                .cover_photo_id
-                .map(|cover_pid| photo_ids.contains(&cover_pid))
-                .unwrap_or(false);
-
-            let rows = CollectionPhotoMapper::delete_by_collection_id_and_photo_ids(
-                txn,
-                user_id,
-                collection_id,
-                &photo_ids,
-            )
+        let remove_count = state
+            .repo
+            .remove_collection_photos(user_id, collection_id, &photo_ids)
             .await?;
-
-            // 如果封面照片被删除，更新封面
-            if need_update_cover {
-                // 获取剩余的第一张照片作为新封面
-                let remaining_photo_ids = CollectionPhotoMapper::query_photo_id_by_collection_id(
-                    txn,
-                    user_id,
-                    collection_id,
-                    None,
-                    1,
-                )
-                .await?;
-
-                if let Some(photo_id) = remaining_photo_ids.first() {
-                    let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
-
-                    CollectionMapper::update_cover_photo(
-                        txn,
-                        collection_id,
-                        Some(*photo_id),
-                        file_id,
-                    )
-                    .await?;
-                }
-            }
-
-            // 更新收藏夹照片数量
-            CollectionMapper::update_photo_count_delta(txn, collection_id, -(rows as i64)).await?;
-
-            Ok(rows)
-        })
-        .timed(metrics_name!("db_transaction"))
-        .await?;
 
         CollectionPhotoRemoveBatchResult {
             removed_photo_count: remove_count,

@@ -1,20 +1,11 @@
 use std::collections::HashMap;
 
-use common::{
-    Result, db_transaction,
-    error::AppError,
-    ext::{ToErr, log_warn},
-    metrics_name,
-    models::CursorPage,
-    timed,
-    utils::MetricsTimerExt,
-};
+use common::{Result, metrics_name, models::CursorPage, utils::MetricsTimerExt};
 use sea_orm::entity::prelude::DateTimeUtc;
 use types::{auth::user::UserId, cursor::TimeIdCursor, photo::photo::PhotoId};
 
 use crate::{
-    mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper},
-    services::photo_service::PhotoService,
+    mappers::photo_like_mapper::PhotoLikeMapper, services::photo_service::PhotoService,
     state::PhotoState,
 };
 use types::photo::dto::photo::PhotoView;
@@ -31,27 +22,7 @@ impl PhotoLikeService {
         fields(user_id = %user_id, photo_id = %photo_id)
     )]
     pub async fn like(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
-        timed!("db_transaction", {
-            db_transaction!(&state.db, |txn| {
-                PhotoMapper::ensure_exist(txn, photo_id).await?;
-
-                let inserted = PhotoLikeMapper::insert(txn, user_id, photo_id).await?;
-
-                if !inserted {
-                    return log_warn(
-                        "photo_like_already_exist",
-                        "用户尝试点赞一个已经点赞过的照片",
-                        AppError::bad_request("已经点赞过"),
-                    )
-                    .to_err();
-                }
-
-                // 增加点赞总数
-                PhotoMapper::update_like_count_delta(txn, photo_id, 1).await?;
-                Ok(())
-            })
-            .await
-        })?;
+        state.repo.like_photo(user_id, photo_id).await?;
 
         Ok(())
     }
@@ -68,10 +39,11 @@ impl PhotoLikeService {
         req: LikedPhotosQuery,
     ) -> Result<CursorPage<PhotoView, String>> {
         // 查询用户点赞的照片ID列表和点赞时间（mapper 内部多查 1 条用于判断 has_more）
-        let photo_ids_with_like_time =
-            PhotoLikeMapper::query_user_liked_photo_ids(&state.db, user_id, &req.cursor, req.size)
-                .timed(metrics_name!("query_ids"))
-                .await?;
+        let photo_ids_with_like_time = state
+            .repo
+            .query_liked_photo_ids(user_id, &req)
+            .timed(metrics_name!("query_ids"))
+            .await?;
 
         // 构建 CursorPage（只提取 photo_id 用于分页判断）
         let photo_ids: Vec<PhotoId> = photo_ids_with_like_time.iter().map(|(id, _)| *id).collect();
@@ -127,25 +99,7 @@ impl PhotoLikeService {
         fields(user_id = %user_id, photo_id = %photo_id)
     )]
     pub async fn unlike(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
-        timed!("db_transaction", {
-            db_transaction!(&state.db, |txn| {
-                let deleted = PhotoLikeMapper::delete(txn, user_id, photo_id).await?;
-
-                if !deleted {
-                    return log_warn(
-                        "photo_like_not_exist",
-                        "用户尝试取消点赞一个未点赞过的照片",
-                        AppError::bad_request("还未点赞"),
-                    )
-                    .to_err();
-                }
-
-                // 减少点赞总数
-                PhotoMapper::update_like_count_delta(txn, photo_id, -1).await?;
-                Ok(())
-            })
-            .await
-        })?;
+        state.repo.unlike_photo(user_id, photo_id).await?;
 
         Ok(())
     }
@@ -153,8 +107,8 @@ impl PhotoLikeService {
 
 // 照片删除步骤:照片点赞清理
 #[step_derive::declare_step(
-    ctx = crate::services::photo_service::PhotoDeleteContext,
-    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    ctx = crate::repo::photo_repo::PhotoDeleteContext,
+    slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
     name = "photo_like_cleanup",
     owns = ["PhotoLikeMapper"],
 )]
@@ -162,7 +116,7 @@ impl PhotoLikeService {
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
-        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+        ctx: &mut crate::repo::photo_repo::PhotoDeleteContext,
     ) -> common::Result<()> {
         let photo_ids = ctx.photo_ids();
         PhotoLikeMapper::delete_all_by_photo_ids(txn, &photo_ids).await?;

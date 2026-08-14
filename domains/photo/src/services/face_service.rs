@@ -1,9 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use backup::storage::BackupType;
 use common::{
-    Result, db_transaction,
+    Result,
     error::{AppError, ContextualError, contextual},
     ext::{ContextResultExt, IntoContextualExt, OptionExt, ToOk, UintExt},
     inc_counter, inc_error, metrics_name,
@@ -11,14 +10,9 @@ use common::{
     set_gauge,
     utils::{DbUtils, GaugeGuard, MetricsTimer, MetricsTimerExt},
 };
-use constants::RedisKeys;
 use image::{ImageBuffer, Rgb};
 use insight_face_rs::Face;
-use sea_orm::{
-    ColumnTrait, Condition, DatabaseTransaction, EntityName, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect,
-    sea_query::{Expr, Query},
-};
+use sea_orm::{DatabaseTransaction, EntityTrait};
 use tokio::{spawn, task::spawn_blocking};
 use tracing::{debug, info};
 use types::{
@@ -31,7 +25,7 @@ use types::{
         face::{self, FaceId, FaceRecord},
         models::FaceIds,
         person::{self, PersonId, PersonRecord},
-        photo::{self, PhotoId},
+        photo::PhotoId,
     },
 };
 
@@ -176,27 +170,28 @@ impl FaceService {
 
     async fn backup_tables(state: &PhotoState) -> Result<()> {
         state
-            .backup_storage
-            .backup_tables(
-                &state.db,
-                &[face::Entity.table_name(), person::Entity.table_name()],
-                BackupType::Manual,
-            )
+            .repo
+            .backup_face_tables(&state.backup_storage)
             .timed(metrics_name!("cleanup:backup"))
             .await?;
 
-        db_transaction!(&state.db, |txn| {
-            face::Entity::delete_many()
-                .exec(txn)
-                .await
-                .into_contextual()?;
-            person::Entity::delete_many()
-                .exec(txn)
-                .await
-                .into_contextual()?;
-            Ok(())
-        })
-        .await
+        state
+            .repo
+            .transaction(|txn| {
+                Box::pin(async move {
+                    face::Entity::delete_many()
+                        .exec(txn)
+                        .await
+                        .into_contextual()?;
+                    person::Entity::delete_many()
+                        .exec(txn)
+                        .await
+                        .into_contextual()?;
+                    Ok(())
+                })
+            })
+            .await
+            .map_err(|error| error.emit())
     }
 
     async fn query_photos(
@@ -207,37 +202,10 @@ impl FaceService {
     ) -> Result<Vec<(PhotoId, String)>> {
         debug!("开始查询照片");
 
-        let condition = if full {
-            Condition::all().add(photo::Column::Id.gt(previous_id))
-        } else {
-            // 增量:仅处理还没有人脸记录的照片
-            let subquery = Query::select()
-                .expr(Expr::val(1))
-                .from(face::Entity)
-                .and_where(
-                    Expr::col((face::Entity, face::Column::PhotoId))
-                        .equals((photo::Entity, photo::Column::Id)),
-                )
-                .to_owned();
-
-            Condition::all()
-                .add(photo::Column::Id.gt(previous_id))
-                .add(Expr::exists(subquery).not())
-        };
-
-        let photos: Vec<(PhotoId, String)> = photo::Entity::find()
-            .select_only()
-            .column(photo::Column::Id)
-            .column(photo::Column::FileId)
-            .filter(condition)
-            .order_by(photo::Column::Id, sea_orm::Order::Asc)
-            .limit(size)
-            .into_tuple::<(PhotoId, String)>()
-            .all(&state.db)
-            .await
-            .into_contextual()?
-            .into_iter()
-            .collect();
+        let photos = state
+            .repo
+            .query_face_compute_photos(full, size, previous_id)
+            .await?;
 
         debug!("查询成功");
         Ok(photos)
@@ -306,8 +274,9 @@ impl FaceService {
         if faces.is_empty() {
             debug!("faces为空, 跳过");
         } else {
-            face::Entity::insert_many(faces.into_iter().map(face::ActiveModel::from))
-                .exec_without_returning(&state.db)
+            state
+                .repo
+                .insert_faces(faces)
                 .await
                 .inspect_err(|_| inc_error!("insert"))
                 .into_contextual()?;
@@ -337,116 +306,116 @@ impl FaceService {
         face_id: FaceId,
         person_id: Option<PersonId>,
     ) -> Result<()> {
-        let affected_person_ids: Vec<PersonId> = db_transaction!(&state.db, |txn| {
-            // 加行锁读取人脸(读-改-写流程, 避免并发转移丢更新)
-            let face = FaceMapper::lock_by_id(txn, face_id).await?.ok_or_error(
-                "face_not_found",
-                "人脸不存在",
-                AppError::not_found("人脸不存在"),
-            )?;
+        let affected_person_ids: Vec<PersonId> = state
+            .repo
+            .transaction(|txn| {
+                Box::pin(async move {
+                    // 加行锁读取人脸(读-改-写流程, 避免并发转移丢更新)
+                    let face = FaceMapper::lock_by_id(txn, face_id).await?.ok_or_error(
+                        "face_not_found",
+                        "人脸不存在",
+                        AppError::not_found("人脸不存在"),
+                    )?;
 
-            // 归属未变化(均为 None 或同一人物), 直接返回
-            let old_person_id = face.person_id;
-            if person_id == old_person_id {
-                return Ok(Vec::new());
-            }
+                    // 归属未变化(均为 None 或同一人物), 直接返回
+                    let old_person_id = face.person_id;
+                    if person_id == old_person_id {
+                        return Ok(Vec::new());
+                    }
 
-            match person_id {
-                Some(new_person_id) => {
-                    // 按 id 升序加锁涉及的两个人物行, 避免并发操作互相死锁(旧人物可能不存在)
-                    let (new_person, old_person) = DbUtils::ensure_lock_two_optional_ordered(
-                        txn,
-                        new_person_id,
-                        old_person_id,
-                        |db, id| async move { Ok(PersonMapper::lock_by_id(db, id).await?) },
-                        |person| {
-                            person.ok_or_error(
+                    match person_id {
+                        Some(new_person_id) => {
+                            // 按 id 升序加锁涉及的两个人物行, 避免并发操作互相死锁(旧人物可能不存在)
+                            let (new_person, old_person) =
+                                    DbUtils::ensure_lock_two_optional_ordered(
+                                        txn,
+                                        new_person_id,
+                                        old_person_id,
+                                        |db, id| async move {
+                                            Ok(PersonMapper::lock_by_id(db, id).await?)
+                                        },
+                                        |person| {
+                                            person.ok_or_error(
+                                                "person_not_found",
+                                                "人物不存在",
+                                                AppError::not_found("人物不存在"),
+                                            )
+                                        },
+                                    )
+                                    .await?;
+
+                            // 移动人脸归属
+                            FaceMapper::update_face_person_id(txn, face_id, new_person_id)
+                                .await?
+                                .no_zero_or_warn(
+                                    "face_belonging_change_fail",
+                                    "修改人脸归属失败",
+                                    AppError::bad_request("修改人脸归属失败"),
+                                )?;
+
+                            // 新人物: 数量/权重/质心增量, 封面按 score 规则可能替换
+                            let new_cover =
+                                Self::resolve_cover_after_add(txn, &new_person, &face).await?;
+                            PersonMapper::update_stats(
+                                txn,
+                                new_person_id,
+                                new_person.face_count + 1,
+                                new_person.weight + face.score as f64,
+                                new_person.centroid.add_scaled(&face.embedding, face.score),
+                                new_cover,
+                            )
+                            .await?;
+
+                            // 旧人物: 减量维护(无人脸则删除)
+                            if let Some(old_person) = old_person {
+                                Self::remove_face_from_person(txn, &old_person, &face).await?;
+                            }
+                        }
+                        // 取消归属: 仅需处理旧人物减量维护
+                        None => {
+                            let old_person = PersonMapper::lock_by_id(
+                                txn,
+                                old_person_id.ok_or_error(
+                                    "face_belonging_change_fail",
+                                    "取消人脸归属失败",
+                                    AppError::InternalServerError,
+                                )?,
+                            )
+                            .await?
+                            .ok_or_error(
                                 "person_not_found",
                                 "人物不存在",
                                 AppError::not_found("人物不存在"),
-                            )
-                        },
-                    )
-                    .await?;
+                            )?;
 
-                    // 移动人脸归属
-                    FaceMapper::update_face_person_id(txn, face_id, new_person_id)
-                        .await?
-                        .no_zero_or_warn(
-                            "face_belonging_change_fail",
-                            "修改人脸归属失败",
-                            AppError::bad_request("修改人脸归属失败"),
-                        )?;
+                            FaceMapper::clear_face_person_id(txn, face_id)
+                                .await?
+                                .no_zero_or_warn(
+                                    "face_belonging_change_fail",
+                                    "取消人脸归属失败",
+                                    AppError::bad_request("取消人脸归属失败"),
+                                )?;
 
-                    // 新人物: 数量/权重/质心增量, 封面按 score 规则可能替换
-                    let new_cover = Self::resolve_cover_after_add(txn, &new_person, &face).await?;
-                    PersonMapper::update_stats(
-                        txn,
-                        new_person_id,
-                        new_person.face_count + 1,
-                        new_person.weight + face.score as f64,
-                        new_person.centroid.add_scaled(&face.embedding, face.score),
-                        new_cover,
-                    )
-                    .await?;
-
-                    // 旧人物: 减量维护(无人脸则删除)
-                    if let Some(old_person) = old_person {
-                        Self::remove_face_from_person(txn, &old_person, &face).await?;
+                            Self::remove_face_from_person(txn, &old_person, &face).await?;
+                        }
                     }
-                }
-                // 取消归属: 仅需处理旧人物减量维护
-                None => {
-                    let old_person = PersonMapper::lock_by_id(
-                        txn,
-                        old_person_id.ok_or_error(
-                            "face_belonging_change_fail",
-                            "取消人脸归属失败",
-                            AppError::InternalServerError,
-                        )?,
-                    )
-                    .await?
-                    .ok_or_error(
-                        "person_not_found",
-                        "人物不存在",
-                        AppError::not_found("人物不存在"),
-                    )?;
 
-                    FaceMapper::clear_face_person_id(txn, face_id)
-                        .await?
-                        .no_zero_or_warn(
-                            "face_belonging_change_fail",
-                            "取消人脸归属失败",
-                            AppError::bad_request("取消人脸归属失败"),
-                        )?;
-
-                    Self::remove_face_from_person(txn, &old_person, &face).await?;
-                }
-            }
-
-            // 返回受影响人物 ID（新旧人物）, 事务提交后用于失效人物缓存
-            let mut affected = Vec::with_capacity(2);
-            if let Some(pid) = old_person_id {
-                affected.push(pid);
-            }
-            if let Some(pid) = person_id {
-                affected.push(pid);
-            }
-            Ok(affected)
-        })
-        .await?;
+                    // 返回受影响人物 ID（新旧人物）, 事务提交后用于失效人物缓存
+                    let mut affected = Vec::with_capacity(2);
+                    if let Some(pid) = old_person_id {
+                        affected.push(pid);
+                    }
+                    if let Some(pid) = person_id {
+                        affected.push(pid);
+                    }
+                    Ok(affected)
+                })
+            })
+            .await?;
 
         // 失效受影响人物缓存（L1 + L2）：新旧人物 face_count/封面/质心均已变化
         // 错误不返回
-        let cache_keys = affected_person_ids
-            .iter()
-            .map(|&pid| RedisKeys::photo::person::person_info(pid))
-            .collect::<Vec<_>>();
-        let _ = state
-            .cache_person
-            .invalidate_batch(&cache_keys)
-            .timed(metrics_name!("cache_invalidate"))
-            .await;
+        state.repo.invalidate_persons(&affected_person_ids).await;
 
         Ok(())
     }
@@ -583,17 +552,10 @@ impl FaceService {
         state: &PhotoState,
         photo_id: PhotoId,
     ) -> Result<Vec<FaceView>> {
-        let faces = FaceMapper::query_by_photo_id(&state.db, photo_id).await?;
+        let (faces, person_names) = state.repo.query_faces_with_person_names(photo_id).await?;
 
         // 批量加载归属人物名称
-        let person_ids: HashSet<PersonId> = faces.iter().filter_map(|f| f.person_id).collect();
-        let person_names: HashMap<PersonId, String> = PersonMapper::query_id_and_name_by_ids(
-            &state.db,
-            &person_ids.iter().copied().collect::<Vec<_>>(),
-        )
-        .await?
-        .into_iter()
-        .collect();
+        let person_names: HashMap<PersonId, String> = person_names.into_iter().collect();
 
         let views = faces
             .into_iter()
@@ -616,11 +578,11 @@ impl FaceService {
         user_id: UserId,
         req: UnassignedFacePhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
-        let photo_ids = FaceMapper::query_unassigned_face_photo_ids_cursor_page(
-            &state.db, req.cursor, req.size,
-        )
-        .timed(metrics_name!("query_unassigned_face_photo_ids"))
-        .await?;
+        let photo_ids = state
+            .repo
+            .query_unassigned_face_photo_ids(&req)
+            .timed(metrics_name!("query_unassigned_face_photo_ids"))
+            .await?;
         if photo_ids.is_empty() {
             return Ok(CursorPage::empty());
         }
@@ -647,31 +609,35 @@ impl FaceService {
     #[common::metered]
     #[tracing::instrument(skip_all, fields(face_id = %face_id))]
     pub async fn delete_face(state: &PhotoState, face_id: FaceId) -> Result<()> {
-        db_transaction!(&state.db, |txn| {
-            // 加行锁读取人脸(读-改-写流程, 防止并发转移归属后误删)
-            let face = FaceMapper::lock_by_id(txn, face_id).await?.ok_or_error(
-                "face_not_found",
-                "人脸不存在",
-                AppError::not_found("人脸不存在"),
-            )?;
+        state
+            .repo
+            .transaction(|txn| {
+                Box::pin(async move {
+                    // 加行锁读取人脸(读-改-写流程, 防止并发转移归属后误删)
+                    let face = FaceMapper::lock_by_id(txn, face_id).await?.ok_or_error(
+                        "face_not_found",
+                        "人脸不存在",
+                        AppError::not_found("人脸不存在"),
+                    )?;
 
-            // 已归属人物的人脸禁止直接删除(需先取消归属), 防止人物统计悬空
-            if face.person_id.is_some() {
-                return inc_error!("conflict" => AppError::bad_request(
-                    "人脸已归属人物, 请先取消归属后再删除",
-                ));
-            }
+                    // 已归属人物的人脸禁止直接删除(需先取消归属), 防止人物统计悬空
+                    if face.person_id.is_some() {
+                        return inc_error!("conflict" => AppError::bad_request(
+                            "人脸已归属人物, 请先取消归属后再删除",
+                        ));
+                    }
 
-            FaceMapper::delete_by_id(txn, face_id)
-                .await?
-                .no_zero_or_warn(
-                    "face_delete_fail",
-                    "删除人脸失败",
-                    AppError::bad_request("删除人脸失败"),
-                )?;
-            Ok(())
-        })
-        .await?;
+                    FaceMapper::delete_by_id(txn, face_id)
+                        .await?
+                        .no_zero_or_warn(
+                            "face_delete_fail",
+                            "删除人脸失败",
+                            AppError::bad_request("删除人脸失败"),
+                        )?;
+                    Ok(())
+                })
+            })
+            .await?;
 
         Ok(())
     }
@@ -686,7 +652,7 @@ impl FaceService {
         state: &PhotoState,
         face_ids: &FaceIds,
     ) -> Result<FaceDeleteBatchResult> {
-        let deleted_face_count = FaceMapper::delete_unassigned_by_ids(&state.db, face_ids).await?;
+        let deleted_face_count = state.repo.delete_unassigned_faces(face_ids).await?;
 
         Ok(FaceDeleteBatchResult { deleted_face_count })
     }
@@ -694,8 +660,8 @@ impl FaceService {
 
 // 照片删除步骤:人脸清理
 #[step_derive::declare_step(
-    ctx = crate::services::photo_service::PhotoDeleteContext,
-    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    ctx = crate::repo::photo_repo::PhotoDeleteContext,
+    slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
     name = "face_cleanup",
     owns = ["FaceMapper", "PersonMapper"],
 )]
@@ -709,7 +675,7 @@ impl FaceService {
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
-        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+        ctx: &mut crate::repo::photo_repo::PhotoDeleteContext,
     ) -> common::Result<()> {
         let photo_ids = ctx.photo_ids();
 

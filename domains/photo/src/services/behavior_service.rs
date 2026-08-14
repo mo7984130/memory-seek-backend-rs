@@ -9,7 +9,6 @@ use types::photo::dto::behavior::{
     BehaviorTopQuery,
 };
 
-use crate::mappers::{behavior_mapper::BehaviorMapper, photo_mapper::PhotoMapper};
 use crate::state::PhotoState;
 use common::models::CursorPage;
 use common::{
@@ -74,16 +73,17 @@ impl BehaviorService {
     )]
     pub async fn record(state: &PhotoState, req: BehaviorRecordReq) {
         metrics_group!();
-        if let Err(e) = BehaviorMapper::insert(
-            &state.db,
-            req.user_id,
-            req.action,
-            req.target_type,
-            req.target_id,
-            req.detail,
-            req.ip.as_deref(),
-        )
-        .await
+        if let Err(e) = state
+            .repo
+            .record_behavior(
+                req.user_id,
+                req.action,
+                req.target_type,
+                req.target_id,
+                req.detail,
+                req.ip.as_deref(),
+            )
+            .await
         {
             inc_error!("db");
             common::caller_warn!(error = ?e, action = %req.action.as_str(), "record_behavior_failed");
@@ -102,42 +102,7 @@ impl BehaviorService {
         file_id: String,
         ip: Option<String>,
     ) {
-        let db = state.db.clone();
-        tokio::spawn(async move {
-            // spawn 内 span 上下文丢失，显式指定操作名
-            metrics_group!("record_view_async");
-
-            let photo_id = match PhotoMapper::query_photo_id_by_file_id(&db, &file_id).await {
-                Ok(Some(photo_id)) => photo_id,
-                Ok(None) => return,
-                Err(e) => {
-                    inc_error!("record_view_async", "db");
-                    common::caller_warn!(error = ?e, file_id = %file_id, "query_photo_id_for_view_failed");
-                    return;
-                }
-            };
-
-            let req = BehaviorRecordReq::new(viewer_id, UserBehaviorAction::View)
-                .with_photo(photo_id.0)
-                .with_ip(ip);
-
-            if let Err(e) = BehaviorMapper::insert(
-                &db,
-                req.user_id,
-                req.action,
-                req.target_type,
-                req.target_id,
-                req.detail,
-                req.ip.as_deref(),
-            )
-            .await
-            {
-                inc_error!("record_view_async", "db");
-                common::caller_warn!(error = ?e, action = "view", "record_behavior_failed");
-            } else {
-                metrics_success!("record_view_async");
-            }
-        });
+        state.repo.record_photo_view_async(viewer_id, file_id, ip);
     }
 }
 
@@ -150,16 +115,11 @@ impl BehaviorService {
         admin: AdminId,
         req: BehaviorStatsQuery,
     ) -> Result<Vec<BehaviorStatsItem>> {
-        let rows = BehaviorMapper::query_stats(
-            &state.db,
-            req.action,
-            req.target_type,
-            req.start,
-            req.end,
-            req.granularity.as_trunc(),
-        )
-        .timed(metrics_name!("query_stats"))
-        .await?;
+        let rows = state
+            .repo
+            .query_behavior_stats(&req)
+            .timed(metrics_name!("query_stats"))
+            .await?;
 
         Ok(rows
             .into_iter()
@@ -174,10 +134,11 @@ impl BehaviorService {
         admin: AdminId,
         req: BehaviorTopQuery,
     ) -> Result<Vec<BehaviorTopItem>> {
-        let rows =
-            BehaviorMapper::query_top_targets(&state.db, req.action, req.target_type, req.limit)
-                .timed(metrics_name!("query_top"))
-                .await?;
+        let rows = state
+            .repo
+            .query_behavior_top(&req)
+            .timed(metrics_name!("query_top"))
+            .await?;
 
         Ok(rows
             .into_iter()
@@ -192,17 +153,11 @@ impl BehaviorService {
         admin: AdminId,
         req: BehaviorAuditQuery,
     ) -> Result<CursorPage<BehaviorAuditItem, String>> {
-        let records = BehaviorMapper::query_audit_page(
-            &state.db,
-            req.action,
-            req.target_type,
-            req.target_id,
-            req.user_id,
-            &req.cursor,
-            req.size,
-        )
-        .timed(metrics_name!("query_audit"))
-        .await?;
+        let records = state
+            .repo
+            .query_behavior_audit(&req)
+            .timed(metrics_name!("query_audit"))
+            .await?;
 
         let size = req.size;
         let page = CursorPage::from_oversize_fn(records, size, |record: &BehaviorRecord| {

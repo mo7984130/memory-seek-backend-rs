@@ -1,4 +1,4 @@
-use types::photo::photo::PhotoId;
+use types::{auth::user::UserId, photo::photo::PhotoId};
 
 /// 生成照片信息的 Redis 缓存键
 ///
@@ -46,6 +46,18 @@ pub fn photo_md5(md5: &str) -> String {
     format!("p:p:m:{}", md5)
 }
 
+/// 生成用户对照片点赞状态的 Redis 缓存键。
+///
+/// 点赞状态取决于浏览者，因此键同时包含用户和照片 ID。
+///
+/// # 返回
+/// 格式为 `p:p:l:{user_id}:{photo_id}` 的缓存键
+#[inline]
+pub fn photo_is_liked(user_id: UserId, photo_id: PhotoId) -> String {
+    //photo:photo:is_liked
+    format!("p:p:l:{}:{}", user_id, photo_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,5 +85,11 @@ mod tests {
     fn photo_md5_returns_correct_format() {
         let key = photo_md5("d41d8cd98f00b204e9800998ecf8427e");
         assert_eq!(key, "p:p:m:d41d8cd98f00b204e9800998ecf8427e");
+    }
+
+    #[test]
+    fn photo_is_liked_returns_correct_format() {
+        let key = photo_is_liked(UserId(7), PhotoId(42));
+        assert_eq!(key, "p:p:l:7:42");
     }
 }

@@ -1,32 +1,23 @@
 use std::pin::Pin;
-use std::time::Duration;
 
 use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{
-        ContextOptionExt, ContextualResultExt, IntoContextualExt, OptionExt, ResultInspectErrAsync,
-        log_warn,
-    },
+    ext::{ContextualResultExt, IntoContextualExt, OptionExt, ResultInspectErrAsync, log_warn},
     inc_error, metrics_name,
     models::CursorPage,
     timed,
     utils::{FileValidator, MetricsTimerExt, token_cipher},
 };
-use constants::RedisKeys;
 use futures::Stream;
 use oss::OssError;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set};
+use sea_orm::ActiveValue::Set;
 use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
-    mappers::{
-        photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper,
-        timeline_stat_mapper::TimelineStatMapper,
-    },
-    state::PhotoState,
+    mappers::photo_mapper::PhotoMapper, repo::photo_repo::PhotoDeleteContext, state::PhotoState,
 };
 use common::Result;
 use types::photo::{
@@ -35,8 +26,6 @@ use types::photo::{
     models::{DeletePhotosParam, ExistsByMd5BatchParam, UploadPhotoParam},
 };
 
-#[cfg(feature = "face")]
-use types::photo::person::PersonId;
 use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
@@ -56,18 +45,7 @@ impl PhotoService {
         user_id: UserId,
         photo_ids: &[PhotoId],
     ) -> Result<Vec<PhotoView>> {
-        let (photos_result, liked_photo_ids_result) = tokio::join!(
-            state.cache_photo_info.get_or_load_batch(
-                photo_ids,
-                |id| RedisKeys::photo::photo::photo_info(*id),
-                Duration::from_secs(24 * 60 * 60),
-                |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
-                |photo| photo.id,
-            ),
-            PhotoLikeMapper::query_is_like_by_photo_ids(&state.db, user_id, photo_ids)
-        );
-        let photos = photos_result?;
-        let liked_photo_ids = liked_photo_ids_result?;
+        let (photos, liked_photo_ids) = state.repo.load_photo_records(user_id, photo_ids).await?;
         let views = photos
             .into_iter()
             .flatten()
@@ -90,15 +68,12 @@ impl PhotoService {
         req: PhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, String>> {
         // 获取photo_ids
-        let photo_ids = PhotoMapper::query_cursor_page_ids(
-            &state.db,
-            req.cursor,
-            req.size,
-            req.direction,
-            req.anchor_time,
-        )
-        .timed(metrics_name!("find_cursor_page_ids"))
-        .await?;
+        let size = req.size;
+        let photo_ids = state
+            .repo
+            .query_photo_cursor_ids(req)
+            .timed(metrics_name!("find_cursor_page_ids"))
+            .await?;
         if photo_ids.is_empty() {
             return Ok(CursorPage::empty());
         }
@@ -107,7 +82,7 @@ impl PhotoService {
             records: photo_ids,
             has_more,
             ..
-        } = CursorPage::from_oversize(photo_ids, req.size);
+        } = CursorPage::from_oversize(photo_ids, size);
 
         let photo_vos = Self::load_photos_info(state, user_id, &photo_ids)
             .timed(metrics_name!("load_photos_info"))
@@ -168,17 +143,7 @@ impl PhotoService {
             )
         };
         // 带三级缓存的 MD5 去重校验
-        let md5_cache_key = RedisKeys::photo::photo::photo_md5(&md5_hash);
-        let md5_hash_for_check = md5_hash.clone();
-        let exists = state
-            .cache_photo_md5
-            .get_or_load(
-                md5_cache_key.as_str(),
-                Duration::from_secs(24 * 60 * 60),
-                || async move { PhotoMapper::exists_by_md5(&state.db, &md5_hash_for_check).await },
-            )
-            .timed(metrics_name!("cache_get_or_load"))
-            .await?;
+        let exists = state.repo.exists_by_md5(&md5_hash).await?;
         if exists {
             return inc_error!("conflict" => log_warn(
                 "upload_photo:img_exist",
@@ -201,50 +166,40 @@ impl PhotoService {
 
         // 更新数据库
         let now = Utc::now();
-        let photo = ActiveModel {
-            user_id: Set(user_id),
-            name: Set(metadata.name),
-            size: Set(file_data.len() as i64),
-            width: Set(metadata.width as i32),
-            height: Set(metadata.height as i32),
-            mime_type: Set(metadata.mime_type),
-            md5: Set(md5_hash),
-            file_id: Set(file_id.clone()),
-            created_at: Set(req.created_at.unwrap_or(now)),
-            updated_at: Set(now),
-            ..Default::default()
-        }
-        .insert(&state.db)
-        .timed(metrics_name!("db_insert"))
-        .await
-        .inspect_err_async(|_| async {
-            state
-                .s3_client
-                .delete(&file_id)
-                .await
-                .into_contextual()
-                .emit_if_err();
-        })
-        .await
-        .inspect_err(|_| inc_error!("db"))
-        .into_contextual()?;
+        let photo = state
+            .repo
+            .insert_photo(ActiveModel {
+                user_id: Set(user_id),
+                name: Set(metadata.name),
+                size: Set(file_data.len() as i64),
+                width: Set(metadata.width as i32),
+                height: Set(metadata.height as i32),
+                mime_type: Set(metadata.mime_type),
+                md5: Set(md5_hash.clone()),
+                file_id: Set(file_id.clone()),
+                created_at: Set(req.created_at.unwrap_or(now)),
+                updated_at: Set(now),
+                ..Default::default()
+            })
+            .timed(metrics_name!("db_insert"))
+            .await
+            .inspect_err_async(|_| async {
+                state
+                    .s3_client
+                    .delete(&file_id)
+                    .await
+                    .into_contextual()
+                    .emit_if_err();
+            })
+            .await
+            .inspect_err(|_| inc_error!("db"))
+            .into_contextual()?;
 
-        // 增加时间线统计
-        // 错误不返回
-        let _ = TimelineStatMapper::incr_stat(&state.db, photo.created_at).await;
-
-        // 上传成功: 覆盖 MD5 去重缓存, 并失效月度统计缓存
-        // 错误不返回
-        let _ = tokio::join!(
-            state
-                .cache_photo_md5
-                .put(&md5_cache_key, true, Duration::from_secs(24 * 60 * 60))
-                .timed(metrics_name!("cache_put")),
-            state
-                .cache_timeline_stat
-                .invalidate(RedisKeys::photo::timeline_stat::monthly_stats())
-                .timed(metrics_name!("cache_invalidate"))
-        );
+        // 增加时间线统计、覆盖 MD5 缓存并失效月度统计缓存；失败不阻断上传
+        state
+            .repo
+            .record_uploaded_photo(&md5_hash, photo.created_at)
+            .await;
 
         let file_id = photo.file_id.clone();
         Ok(PhotoView::from(PhotoRecord::from(photo)).with_tokens(
@@ -260,14 +215,7 @@ impl PhotoService {
         state: &PhotoState,
         req: ExistsByMd5BatchParam,
     ) -> Result<Vec<bool>> {
-        let existing = PhotoMapper::exists_by_md5_batch(&state.db, &req.md5s).await?;
-        let res = req
-            .md5s
-            .iter()
-            .map(|md5| existing.contains(md5))
-            .collect::<Vec<bool>>();
-
-        Ok(res)
+        Ok(state.repo.exists_by_md5_batch(&req.md5s).await?)
     }
 
     #[common::metered]
@@ -280,18 +228,10 @@ impl PhotoService {
         user_id: UserId,
         req: DeletePhotosParam,
     ) -> Result<()> {
-        // 查询照片信息并鉴权
-        let photos =
-            PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &req.photo_ids).await?;
-
         // 在单个事务内执行删除步骤管道(主表删除恒在最后),任一步失败整体回滚
-        let mut ctx = PhotoDeleteContext {
-            photos,
-            #[cfg(feature = "face")]
-            person_ids: Vec::new(),
-        };
-        DELETE_PIPELINE
-            .run(&state.db, &mut ctx)
+        let ctx = state
+            .repo
+            .delete_photos(user_id, &req.photo_ids)
             .timed(metrics_name!("db_transaction"))
             .await?;
 
@@ -304,86 +244,25 @@ impl PhotoService {
             .await
             .into_contextual()?;
 
-        // 失效照片信息缓存（L1 + L2）
-        // 缓存键按照片拆分, 删除时逐一失效
-        let cache_keys = ctx
-            .photos
-            .iter()
-            .map(|p| RedisKeys::photo::photo::photo_info(p.id))
-            .collect::<Vec<_>>();
-        let dim_keys = ctx
-            .photos
-            .iter()
-            .map(|p| RedisKeys::photo::photo::photo_dimensions(&p.file_id))
-            .collect::<Vec<_>>();
-
         // 失效照片信息、照片尺寸、人物缓存, 并失效月度统计缓存
         // 错误不返回
-        #[cfg(feature = "face")]
-        let person_keys = ctx
-            .person_ids
-            .iter()
-            .map(|&pid| RedisKeys::photo::person::person_info(pid))
-            .collect::<Vec<_>>();
-        #[cfg(feature = "face")]
-        let _ = tokio::join!(
-            state
-                .cache_photo_info
-                .invalidate_batch(&cache_keys)
-                .timed(metrics_name!("cache_invalidate")),
-            state
-                .cache_photo_dimensions
-                .invalidate_batch(&dim_keys)
-                .timed(metrics_name!("cache_invalidate_dimensions")),
-            state
-                .cache_timeline_stat
-                .invalidate(RedisKeys::photo::timeline_stat::monthly_stats())
-                .timed(metrics_name!("cache_invalidate_timeline")),
-            state
-                .cache_person
-                .invalidate_batch(&person_keys)
-                .timed(metrics_name!("cache_invalidate_person"))
-        );
-        #[cfg(not(feature = "face"))]
-        let _ = tokio::join!(
-            state
-                .cache_photo_info
-                .invalidate_batch(&cache_keys)
-                .timed(metrics_name!("cache_invalidate")),
-            state
-                .cache_photo_dimensions
-                .invalidate_batch(&dim_keys)
-                .timed(metrics_name!("cache_invalidate_dimensions")),
-            state
-                .cache_timeline_stat
-                .invalidate(RedisKeys::photo::timeline_stat::monthly_stats())
-                .timed(metrics_name!("cache_invalidate_timeline"))
-        );
+        state
+            .repo
+            .invalidate_deleted_photos(
+                &ctx.photos,
+                #[cfg(feature = "face")]
+                &ctx.person_ids,
+            )
+            .await;
 
         Ok(())
     }
 }
 
-/// 照片删除步骤共享上下文(由 `PhotoService::delete_photos` 提前查询并鉴权后填充)
-pub(crate) struct PhotoDeleteContext {
-    pub photos: Vec<PhotoRecord>,
-    /// 受影响人物 ID（由人脸清理步骤填充, 删除后用于失效人物缓存）
-    #[cfg(feature = "face")]
-    pub person_ids: Vec<PersonId>,
-}
-
-impl PhotoDeleteContext {
-    pub fn photo_ids(&self) -> Vec<PhotoId> {
-        self.photos.iter().map(|p| p.id).collect()
-    }
-}
-
-step_derive::declare_pipeline!(PhotoDeleteContext, PHOTO_DELETE_STEPS, DELETE_PIPELINE);
-
 /// 删除照片主表记录(受外键约束,`is_final` 使其恒在管道最后执行)
 #[step_derive::declare_step(
-    ctx = crate::services::photo_service::PhotoDeleteContext,
-    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+    ctx = crate::repo::photo_repo::PhotoDeleteContext,
+    slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
     name = "photo_record_delete",
     owns = ["PhotoMapper"],
     is_final = true,
@@ -392,7 +271,7 @@ impl PhotoService {
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
-        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+        ctx: &mut PhotoDeleteContext,
     ) -> common::Result<()> {
         PhotoMapper::delete_by_ids(txn, &ctx.photo_ids()).await?;
         Ok(())
@@ -436,28 +315,8 @@ impl PhotoService {
                             "token不包含裁剪信息",
                         )?;
                         let size = 200;
-                        let file_id_for_cache = token.file_id.clone();
-                        let (width, height) = state
-                            .cache_photo_dimensions
-                            .get_or_load(
-                                RedisKeys::photo::photo::photo_dimensions(&file_id_for_cache)
-                                    .as_str(),
-                                Duration::from_secs(24 * 60 * 60),
-                                || async move {
-                                    PhotoMapper::query_dimensions_by_file_id(
-                                        &state.db,
-                                        &file_id_for_cache,
-                                    )
-                                    .await?
-                                    .context_warn_none(
-                                        "photo_not_found",
-                                        "裁剪图片不存在",
-                                        AppError::bad_request("照片不存在"),
-                                    )
-                                },
-                            )
-                            .timed(metrics_name!("cache_get_or_load"))
-                            .await?;
+                        let (width, height) =
+                            state.repo.get_photo_dimensions(&token.file_id).await?;
                         let (x, y, w, h) = bbox.to_pixel_rect(width as u32, height as u32);
                         format!("image/crop,x_{x},y_{y},w_{w},h_{h}/resize,w_{size}/format,webp")
                     }
@@ -513,6 +372,7 @@ impl PhotoService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::repo::photo_repo::PHOTO_DELETE_STEPS;
     use common::pipeline::Step;
 
     /// 验证 `linkme` 定义即注册:全部清理步骤均被收集,且存在唯一的 final 步骤(主表删除)
