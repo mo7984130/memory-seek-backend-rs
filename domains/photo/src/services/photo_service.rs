@@ -8,7 +8,7 @@ use common::{
     inc_error, metrics_name,
     models::CursorPage,
     timed,
-    utils::{FileValidator, MetricsTimerExt, token_cipher},
+    utils::{FileValidator, MetricsTimerExt},
 };
 use futures::Stream;
 use oss::OssError;
@@ -51,10 +51,7 @@ impl PhotoService {
             .flatten()
             .map(|p| {
                 let liked = liked_photo_ids.contains(&p.id);
-                Ok(
-                    PhotoView::from_record_with_tokens(p, user_id, token_cipher())?
-                        .with_liked(liked),
-                )
+                Ok(PhotoView::from_record_with_tokens(p, user_id)?.with_liked(liked))
             })
             .collect::<common::error::contextual::Result<Vec<_>>>()?;
         Ok(views)
@@ -204,7 +201,6 @@ impl PhotoService {
         Ok(PhotoView::from_record_with_tokens(
             PhotoRecord::from(photo),
             user_id,
-            token_cipher(),
         )?)
     }
 

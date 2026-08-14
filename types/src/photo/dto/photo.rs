@@ -9,7 +9,7 @@ use crate::photo::photo::PhotoRecord;
 #[cfg(feature = "orm")]
 use crate::photo::ImageToken;
 #[cfg(feature = "orm")]
-use common::utils::TokenCipher;
+use common::utils::{token_cipher, TokenCipher};
 
 crate::out_dto!(PhotoView, "photo/", rename = "Photo"; {
     pub id: PhotoId,
@@ -62,10 +62,9 @@ impl PhotoView {
     pub fn from_record_with_tokens(
         record: PhotoRecord,
         viewer: UserId,
-        token_cipher: &TokenCipher,
     ) -> common::error::contextual::Result<Self> {
         let file_id = record.file_id.clone();
-        Self::from(record).with_tokens(&file_id, viewer, token_cipher)
+        Self::from(record).with_tokens(&file_id, viewer, token_cipher())
     }
 
     #[cfg(feature = "orm")]
@@ -139,6 +138,14 @@ crate::in_dto!(PhotoCursorParam, "photo/", serde_default, docs = "照片游标�
 mod orm_tests {
     use super::*;
     use crate::photo::ImageTokenType;
+    use common::utils::{init_token_cipher, TokenCipherConfig};
+
+    fn test_cipher() -> &'static TokenCipher {
+        init_token_cipher(&TokenCipherConfig {
+            key: "test-key".to_owned(),
+            salt: "test-salt".to_owned(),
+        })
+    }
 
     fn photo_record() -> PhotoRecord {
         PhotoRecord {
@@ -169,11 +176,11 @@ mod orm_tests {
     #[test]
     fn from_record_with_tokens_preserves_fields_and_generates_tokens() {
         let viewer = UserId(3);
-        let cipher = TokenCipher::new("test-key", "test-salt");
+        let cipher = test_cipher();
         let record = photo_record();
         let expected_created_at = record.created_at;
 
-        let view = PhotoView::from_record_with_tokens(record, viewer, &cipher).unwrap();
+        let view = PhotoView::from_record_with_tokens(record, viewer).unwrap();
 
         assert_eq!(view.id, PhotoId(1));
         assert_eq!(view.user_id, UserId(2));
@@ -181,19 +188,19 @@ mod orm_tests {
         assert_eq!(view.created_at, expected_created_at);
         assert_token(
             view.thumbnail_token.as_ref().unwrap(),
-            &cipher,
+            cipher,
             viewer,
             ImageTokenType::Thumbnail,
         );
         assert_token(
             view.preview_token.as_ref().unwrap(),
-            &cipher,
+            cipher,
             viewer,
             ImageTokenType::Preview,
         );
         assert_token(
             view.original_token.as_ref().unwrap(),
-            &cipher,
+            cipher,
             viewer,
             ImageTokenType::Original,
         );
