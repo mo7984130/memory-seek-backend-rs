@@ -580,28 +580,26 @@ impl FaceService {
         user_id: UserId,
         req: UnassignedFacePhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
-        let photo_ids = state
+        let page = state
             .repo
             .query_unassigned_face_photo_ids(&req)
             .timed(metrics_name!("query_unassigned_face_photo_ids"))
             .await?;
-        if photo_ids.is_empty() {
+        if page.records.is_empty() {
             return Ok(CursorPage::empty());
         }
 
-        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids)
+        let photos = PhotoService::load_photos_info(state, user_id, &page.records)
             .timed(metrics_name!("load_photos_info"))
             .await?;
 
-        let page = CursorPage::from_oversize_fn(photos, req.size, |photo| {
+        page.replace_records(photos).with_next_cursor(|photo| {
             TimeIdCursor {
                 created_at: photo.created_at,
                 id: photo.id,
             }
             .to_ok()
-        })?;
-
-        Ok(page)
+        })
     }
 }
 

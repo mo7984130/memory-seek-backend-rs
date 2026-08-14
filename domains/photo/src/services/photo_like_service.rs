@@ -1,7 +1,4 @@
-use std::collections::HashMap;
-
 use common::{Result, metrics_name, models::CursorPage, utils::MetricsTimerExt};
-use sea_orm::entity::prelude::DateTimeUtc;
 use types::{auth::user::UserId, cursor::TimeIdCursor, photo::photo::PhotoId};
 
 use crate::{
@@ -39,54 +36,23 @@ impl PhotoLikeService {
         req: LikedPhotosQuery,
     ) -> Result<CursorPage<PhotoView, String>> {
         // 查询用户点赞的照片ID列表和点赞时间（mapper 内部多查 1 条用于判断 has_more）
-        let photo_ids_with_like_time = state
+        let page = state
             .repo
             .query_liked_photo_ids(user_id, &req)
             .timed(metrics_name!("query_ids"))
             .await?;
 
-        // 构建 CursorPage（只提取 photo_id 用于分页判断）
-        let photo_ids: Vec<PhotoId> = photo_ids_with_like_time.iter().map(|(id, _)| *id).collect();
-        let CursorPage {
-            records: photo_ids,
-            has_more,
-            ..
-        } = CursorPage::from_oversize(photo_ids, req.size);
-
+        let page = page
+            .with_next_cursor(|&(id, created_at)| Ok(TimeIdCursor { id, created_at }.encode()))?;
+        let photo_ids = page.records.iter().map(|(id, _)| *id).collect::<Vec<_>>();
         if photo_ids.is_empty() {
             return Ok(CursorPage::empty());
         }
 
-        // 构建 photo_id -> like_created_at 的映射
-        let like_time_map: HashMap<PhotoId, DateTimeUtc> = photo_ids_with_like_time
-            .into_iter()
-            .take(photo_ids.len())
-            .collect();
-
         // 加载照片详细信息
         let photos = PhotoService::load_photos_info(state, user_id, &photo_ids).await?;
 
-        // 生成 next_cursor（使用点赞时间而非照片上传时间）
-        let next_cursor = if has_more {
-            photos.last().and_then(|p| {
-                let like_created_at = like_time_map.get(&p.id).copied()?;
-                Some(
-                    TimeIdCursor {
-                        created_at: like_created_at,
-                        id: p.id,
-                    }
-                    .encode(),
-                )
-            })
-        } else {
-            None
-        };
-
-        Ok(CursorPage {
-            records: photos,
-            next_cursor,
-            has_more,
-        })
+        Ok(page.replace_records(photos))
     }
 }
 

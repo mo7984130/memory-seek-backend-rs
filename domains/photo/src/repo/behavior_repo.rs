@@ -1,3 +1,4 @@
+use common::models::CursorPage;
 use sea_orm::entity::prelude::Json;
 use types::auth::user::UserId;
 use types::photo::behavior::{BehaviorRecord, BehaviorTargetType, UserBehaviorAction};
@@ -79,16 +80,19 @@ impl PhotoRepo {
     pub(crate) async fn query_behavior_audit(
         &self,
         req: &BehaviorAuditQuery,
-    ) -> common::error::contextual::Result<Vec<BehaviorRecord>> {
-        BehaviorMapper::query_audit_page(
-            &self.db,
-            req.action,
-            req.target_type,
-            req.target_id,
-            req.user_id,
-            &req.cursor,
+    ) -> common::error::contextual::Result<CursorPage<BehaviorRecord, ()>> {
+        Ok(CursorPage::from_oversize(
+            BehaviorMapper::query_audit_page(
+                &self.db,
+                req.action,
+                req.target_type,
+                req.target_id,
+                req.user_id,
+                &req.cursor,
+                req.size,
+            )
+            .await?,
             req.size,
-        )
-        .await
+        ))
     }
 }

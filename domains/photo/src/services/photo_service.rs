@@ -37,7 +37,6 @@ pub(crate) struct PhotoService;
 pub(crate) struct AfterPhotoUpload {
     pub photo: PhotoRecord,
     /// 保留原始字节，供启用 `face` 后的人脸识别订阅者消费。
-    #[allow(dead_code)]
     pub file_data: Bytes,
 }
 
@@ -79,44 +78,25 @@ impl PhotoService {
         user_id: UserId,
         req: PhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, String>> {
-        // 获取photo_ids
-        let size = req.size;
-        let photo_ids = state
+        let page = state
             .repo
             .query_photo_cursor_ids(req)
             .timed(metrics_name!("find_cursor_page_ids"))
             .await?;
-        if photo_ids.is_empty() {
+        if page.records.is_empty() {
             return Ok(CursorPage::empty());
         }
 
-        let CursorPage {
-            records: photo_ids,
-            has_more,
-            ..
-        } = CursorPage::from_oversize(photo_ids, size);
-
-        let photo_vos = Self::load_photos_info(state, user_id, &photo_ids)
+        let photo_vos = Self::load_photos_info(state, user_id, &page.records)
             .timed(metrics_name!("load_photos_info"))
             .await?;
 
-        // 获取next_cursor
-        let next_cursor = if has_more {
-            photo_vos.last().map(|last_vo| {
-                TimeIdCursor {
-                    id: last_vo.id,
-                    created_at: last_vo.created_at,
-                }
-                .encode()
-            })
-        } else {
-            None
-        };
-
-        Ok(CursorPage {
-            records: photo_vos,
-            next_cursor,
-            has_more,
+        page.replace_records(photo_vos).with_next_cursor(|last_vo| {
+            Ok(TimeIdCursor {
+                id: last_vo.id,
+                created_at: last_vo.created_at,
+            }
+            .encode())
         })
     }
 }

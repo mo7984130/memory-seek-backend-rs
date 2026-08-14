@@ -62,39 +62,22 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         req: CollectionPhotoCursorPageParam,
     ) -> Result<CursorPage<PhotoView, String>> {
-        let photo_ids = state
+        let page = state
             .repo
             .query_collection_photo_ids(user_id, collection_id, &req)
             .timed(metrics_name!("query_photo_ids"))
             .await?;
 
-        let CursorPage {
-            records: photo_ids,
-            has_more,
-            ..
-        } = CursorPage::from_oversize(photo_ids, req.size);
-
-        let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
+        let photo_vos = PhotoService::load_photos_info(state, user_id, &page.records)
             .timed(metrics_name!("load_photos_info"))
             .await?;
-        let next_cursor = if has_more {
-            photo_vos.last().map(|vo| {
-                TimeIdCursor {
-                    created_at: vo.created_at,
-                    id: vo.id,
-                }
-                .encode()
-            })
-        } else {
-            None
-        };
-
-        CursorPage {
-            records: photo_vos,
-            has_more,
-            next_cursor,
-        }
-        .to_ok()
+        page.replace_records(photo_vos).with_next_cursor(|vo| {
+            Ok(TimeIdCursor {
+                created_at: vo.created_at,
+                id: vo.id,
+            }
+            .encode())
+        })
     }
 }
 

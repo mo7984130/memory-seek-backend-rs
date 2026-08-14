@@ -1,4 +1,7 @@
-use common::error::{AppError, contextual::Result};
+use common::{
+    error::{AppError, contextual::Result},
+    models::CursorPage,
+};
 use types::{
     auth::user::UserId,
     photo::{models::LikedPhotosQuery, photo::PhotoId},
@@ -41,8 +44,13 @@ impl PhotoRepo {
         &self,
         user_id: UserId,
         req: &LikedPhotosQuery,
-    ) -> common::error::contextual::Result<Vec<(PhotoId, sea_orm::entity::prelude::DateTimeUtc)>>
-    {
-        PhotoLikeMapper::query_user_liked_photo_ids(&self.db, user_id, &req.cursor, req.size).await
+    ) -> common::error::contextual::Result<
+        CursorPage<(PhotoId, sea_orm::entity::prelude::DateTimeUtc), ()>,
+    > {
+        Ok(CursorPage::from_oversize(
+            PhotoLikeMapper::query_user_liked_photo_ids(&self.db, user_id, &req.cursor, req.size)
+                .await?,
+            req.size,
+        ))
     }
 }

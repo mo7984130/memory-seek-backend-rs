@@ -1,4 +1,7 @@
-use common::error::{AppError, contextual::Result};
+use common::{
+    error::{AppError, contextual::Result},
+    models::CursorPage,
+};
 use types::{
     auth::user::UserId,
     photo::{
@@ -22,7 +25,7 @@ impl PhotoRepo {
         req: &types::photo::dto::comment::CommentCursorPageParam,
     ) -> common::error::contextual::Result<(
         Vec<types::photo::comment::CommentRecord>,
-        Vec<types::photo::comment::CommentRecord>,
+        CursorPage<types::photo::comment::CommentRecord, ()>,
         std::collections::HashSet<CommentId>,
     )> {
         let hot_comments = if req.cursor.is_none() {
@@ -40,20 +43,23 @@ impl PhotoRepo {
             .iter()
             .map(|comment| comment.id)
             .collect::<Vec<_>>();
-        let comments = CommentMapper::query_by_photo_id(
-            &self.db,
-            photo_id,
-            &exclude_ids,
-            req.cursor.as_ref(),
+        let comments = CursorPage::from_oversize(
+            CommentMapper::query_by_photo_id(
+                &self.db,
+                photo_id,
+                &exclude_ids,
+                req.cursor.as_ref(),
+                req.size,
+            )
+            .await?,
             req.size,
-        )
-        .await?;
+        );
         let liked = CommentLikeMapper::query_is_like_by_comment_ids(
             &self.db,
             user_id,
             hot_comments
                 .iter()
-                .chain(&comments)
+                .chain(&comments.records)
                 .map(|comment| comment.id)
                 .collect(),
         )

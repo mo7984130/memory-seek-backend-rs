@@ -202,7 +202,7 @@ impl FaceMapper {
     /// 不区分照片归属者, 全局扫描未分配人脸。
     /// 用 `EXISTS` 子查询过滤, 保证同一照片多张未分配人脸不产生重复行。
     /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-    /// 由 service 层用 CursorPage::from_oversize_fn 截断消费。
+    /// 由 repository 层构造 CursorPage 并截断消费。
     pub async fn query_unassigned_face_photo_ids_cursor_page(
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<PhotoId>>,
@@ -245,7 +245,7 @@ impl FaceMapper {
     /// 用 `EXISTS` 子查询过滤该人物的人脸, 保证同一照片多张人脸不产生重复行;
     /// 排序与游标均基于 photo 表, 与 `next_cursor` 的编码维度一致。
     /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-    /// 由 service 层用 CursorPage::from_oversize_fn 截断消费。
+    /// 由 repository 层构造 CursorPage 并截断消费。
     pub async fn query_photo_ids_cursor_page(
         db: &impl ConnectionTrait,
         person_id: PersonId,

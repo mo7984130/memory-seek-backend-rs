@@ -153,14 +153,13 @@ impl BehaviorService {
         admin: AdminId,
         req: BehaviorAuditQuery,
     ) -> Result<CursorPage<BehaviorAuditItem, String>> {
-        let records = state
+        let page = state
             .repo
             .query_behavior_audit(&req)
             .timed(metrics_name!("query_audit"))
             .await?;
 
-        let size = req.size;
-        let page = CursorPage::from_oversize_fn(records, size, |record: &BehaviorRecord| {
+        let page = page.with_next_cursor(|record: &BehaviorRecord| {
             Ok(TimeIdCursor::<UserBehaviorId> {
                 created_at: record.created_at,
                 id: record.id,
@@ -168,15 +167,7 @@ impl BehaviorService {
             .encode())
         })?;
 
-        Ok(CursorPage {
-            records: page
-                .records
-                .into_iter()
-                .map(to_audit_item)
-                .collect::<Vec<_>>(),
-            next_cursor: page.next_cursor,
-            has_more: page.has_more,
-        })
+        Ok(page.map_records(|records| records.into_iter().map(to_audit_item).collect()))
     }
 }
 

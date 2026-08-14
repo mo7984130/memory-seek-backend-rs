@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::{Result, ext::ToOk};
+use crate::Result;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,6 +20,46 @@ impl<T, C> CursorPage<T, C> {
             has_more: false,
         }
     }
+
+    pub fn replace_records<U>(self, records: Vec<U>) -> CursorPage<U, C> {
+        CursorPage {
+            records,
+            next_cursor: self.next_cursor,
+            has_more: self.has_more,
+        }
+    }
+
+    pub fn map_records<U, F>(self, map_records: F) -> CursorPage<U, C>
+    where
+        F: FnOnce(Vec<T>) -> Vec<U>,
+    {
+        let CursorPage {
+            records,
+            next_cursor,
+            has_more,
+        } = self;
+        CursorPage {
+            records: map_records(records),
+            next_cursor,
+            has_more,
+        }
+    }
+
+    pub fn with_next_cursor<C2, F>(self, get_cursor: F) -> Result<CursorPage<T, C2>>
+    where
+        F: FnOnce(&T) -> Result<C2>,
+    {
+        let next_cursor = if self.has_more {
+            self.records.last().map(get_cursor).transpose()?
+        } else {
+            None
+        };
+        Ok(CursorPage {
+            records: self.records,
+            next_cursor,
+            has_more: self.has_more,
+        })
+    }
 }
 
 impl<T> CursorPage<T, ()> {
@@ -34,32 +74,6 @@ impl<T> CursorPage<T, ()> {
             next_cursor: None,
             has_more,
         }
-    }
-}
-
-impl<T, C> CursorPage<T, C> {
-    pub fn from_oversize_fn<F>(mut records: Vec<T>, size: u64, get_cursor: F) -> Result<Self>
-    where
-        F: FnOnce(&T) -> Result<C>,
-    {
-        if records.len() > size as usize {
-            records.pop();
-
-            let next_cursor = records.last().map(get_cursor).transpose()?;
-
-            Self {
-                records,
-                next_cursor,
-                has_more: true,
-            }
-        } else {
-            Self {
-                records,
-                next_cursor: None,
-                has_more: false,
-            }
-        }
-        .to_ok()
     }
 }
 
@@ -115,5 +129,39 @@ mod tests {
         assert!(page.records.is_empty());
         assert!(!page.has_more);
         assert!(page.next_cursor.is_none());
+    }
+
+    #[test]
+    fn replace_records_preserves_pagination_metadata() {
+        let page = CursorPage::from_oversize(vec![1, 2, 3], 2)
+            .with_next_cursor(|last| Ok(last.to_string()))
+            .unwrap();
+        let page = page.replace_records(vec!["one", "two"]);
+
+        assert_eq!(page.records, vec!["one", "two"]);
+        assert_eq!(page.next_cursor.as_deref(), Some("2"));
+        assert!(page.has_more);
+    }
+
+    #[test]
+    fn with_next_cursor_skips_callback_without_more_records() {
+        let page = CursorPage::from_oversize(vec![1, 2], 2)
+            .with_next_cursor(|_| -> Result<String> { panic!("must not generate cursor") })
+            .unwrap();
+
+        assert!(page.next_cursor.is_none());
+        assert!(!page.has_more);
+    }
+
+    #[test]
+    fn map_records_preserves_pagination_metadata() {
+        let page = CursorPage::from_oversize(vec![1, 2, 3], 2)
+            .with_next_cursor(|last| Ok(last.to_string()))
+            .unwrap()
+            .map_records(|records| records.into_iter().map(|id| id * 10).collect());
+
+        assert_eq!(page.records, vec![10, 20]);
+        assert_eq!(page.next_cursor.as_deref(), Some("2"));
+        assert!(page.has_more);
     }
 }

@@ -3,6 +3,7 @@ use std::time::Duration;
 use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::ContextOptionExt;
 use common::metrics_name;
+use common::models::CursorPage;
 use common::utils::MetricsTimerExt;
 use constants::RedisKeys;
 use deadpool_redis::Pool;
@@ -160,7 +161,10 @@ impl PhotoRepo {
             .await;
     }
 
-    pub async fn query_photo_cursor_ids(&self, req: PhotoCursorParam) -> Result<Vec<PhotoId>> {
+    pub async fn query_photo_cursor_ids(
+        &self,
+        req: PhotoCursorParam,
+    ) -> Result<CursorPage<PhotoId, ()>> {
         if req.cursor.is_none() && req.anchor_time.is_none() {
             let key = RedisKeys::photo::photo::photo_cursor_page_ids(req.direction);
             let photo_ids = self
@@ -176,20 +180,26 @@ impl PhotoRepo {
                     .await
                 })
                 .await?;
-            return Ok(photo_ids
-                .into_iter()
-                .take((req.size + 1) as usize)
-                .collect());
+            return Ok(CursorPage::from_oversize(
+                photo_ids
+                    .into_iter()
+                    .take((req.size + 1) as usize)
+                    .collect(),
+                req.size,
+            ));
         }
 
-        PhotoMapper::query_cursor_page_ids(
-            &self.db,
-            req.cursor,
+        Ok(CursorPage::from_oversize(
+            PhotoMapper::query_cursor_page_ids(
+                &self.db,
+                req.cursor,
+                req.size,
+                req.direction,
+                req.anchor_time,
+            )
+            .await?,
             req.size,
-            req.direction,
-            req.anchor_time,
-        )
-        .await
+        ))
     }
 
     async fn invalidate_photo_cursor_ids(&self) {

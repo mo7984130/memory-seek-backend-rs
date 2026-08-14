@@ -1,6 +1,7 @@
 use common::{
     error::{AppError, contextual::Result},
     ext::UintExt,
+    models::CursorPage,
 };
 use types::photo::dto::collection::{CollectionCreateParam, CollectionUpdateParam};
 use types::{auth::user::UserId, photo::collection::CollectionId};
@@ -29,15 +30,18 @@ impl PhotoRepo {
         user_id: UserId,
         collection_id: CollectionId,
         req: &types::photo::dto::collection::CollectionPhotoCursorPageParam,
-    ) -> common::error::contextual::Result<Vec<types::photo::photo::PhotoId>> {
-        CollectionPhotoMapper::query_photo_id_by_collection_id(
-            &self.db,
-            user_id,
-            collection_id,
-            req.cursor.as_ref(),
+    ) -> common::error::contextual::Result<CursorPage<types::photo::photo::PhotoId, ()>> {
+        Ok(CursorPage::from_oversize(
+            CollectionPhotoMapper::query_photo_id_by_collection_id(
+                &self.db,
+                user_id,
+                collection_id,
+                req.cursor.as_ref(),
+                req.size,
+            )
+            .await?,
             req.size,
-        )
-        .await
+        ))
     }
     pub(crate) async fn add_collection_photos(
         &self,

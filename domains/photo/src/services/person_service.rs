@@ -508,10 +508,10 @@ impl PersonService {
         user_id: UserId,
         req: PersonCursorParam,
     ) -> Result<CursorPage<PersonView, FaceCountIdCursor<PersonId>>> {
-        let persons = state.repo.query_person_page(req.cursor, req.size).await?;
+        let page = state.repo.query_person_page(req.cursor, req.size).await?;
 
         // 提取本页人物 ID, 通过三级缓存批量加载轻量摘要
-        let person_ids = persons.iter().map(|p| p.id).collect::<Vec<_>>();
+        let person_ids = page.records.iter().map(|p| p.id).collect::<Vec<_>>();
         let briefs = state.repo.get_person_briefs(&person_ids).await?;
 
         let views = briefs
@@ -519,14 +519,13 @@ impl PersonService {
             .flatten()
             .map(|person| Self::to_view(user_id, person))
             .collect::<Result<Vec<_>>>()?;
-        let page = CursorPage::from_oversize_fn(views, req.size, |person| {
+        page.replace_records(views).with_next_cursor(|person| {
             FaceCountIdCursor {
                 face_count: person.face_count,
                 id: person.id,
             }
             .to_ok()
-        })?;
-        Ok(page)
+        })
     }
 
     /// 按关键词前缀搜索人物(匹配完整名字或姓名首字母)
@@ -542,13 +541,13 @@ impl PersonService {
             cursor,
             size,
         } = req;
-        let persons = state
+        let page = state
             .repo
             .search_person_page(&keyword, cursor, size)
             .await?;
 
         // 提取本页人物 ID, 通过三级缓存批量加载轻量摘要
-        let person_ids = persons.iter().map(|p| p.id).collect::<Vec<_>>();
+        let person_ids = page.records.iter().map(|p| p.id).collect::<Vec<_>>();
         let briefs = state.repo.get_person_briefs(&person_ids).await?;
 
         let views = briefs
@@ -556,8 +555,8 @@ impl PersonService {
             .flatten()
             .map(|person| Self::to_view(user_id, person))
             .collect::<Result<Vec<_>>>()?;
-        let page = CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))?;
-        Ok(page)
+        page.replace_records(views)
+            .with_next_cursor(|person| Ok(person.id))
     }
 
     /// 计算姓名首字母(大写, 如 张三 -> ZS, Alice Wang -> AW)
@@ -627,28 +626,26 @@ impl PersonService {
         person_id: PersonId,
         req: PersonPhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
-        let photo_ids = state
+        let page = state
             .repo
             .query_person_photo_ids(person_id, &req)
             .timed(metrics_name!("query_photo_ids"))
             .await?;
-        if photo_ids.is_empty() {
+        if page.records.is_empty() {
             return Ok(CursorPage::empty());
         }
 
-        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids)
+        let photos = PhotoService::load_photos_info(state, user_id, &page.records)
             .timed(metrics_name!("load_photos_info"))
             .await?;
 
-        let page = CursorPage::from_oversize_fn(photos, req.size, |photo| {
+        page.replace_records(photos).with_next_cursor(|photo| {
             TimeIdCursor {
                 created_at: photo.created_at,
                 id: photo.id,
             }
             .to_ok()
-        })?;
-
-        Ok(page)
+        })
     }
 }
 

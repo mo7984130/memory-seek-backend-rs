@@ -52,43 +52,26 @@ impl CommentService {
         photo_id: PhotoId,
         req: CommentCursorPageParam,
     ) -> Result<CursorPage<CommentView, String>> {
-        let size = req.size;
-        let (hot_comments, time_comments, is_like) =
+        let (hot_comments, page, is_like) =
             state.repo.query_comments(user_id, photo_id, &req).await?;
-
-        let CursorPage {
-            records: time_comments,
-            has_more,
-            ..
-        } = CursorPage::from_oversize(time_comments, size);
-        let mut comments = hot_comments;
-        comments.extend(time_comments);
-
-        let next_cursor = if has_more {
-            comments.last().map(|comment| {
-                TimeIdCursor {
-                    created_at: comment.created_at,
-                    id: comment.id,
-                }
-                .encode()
-            })
-        } else {
-            None
-        };
-
-        let records = comments
-            .into_iter()
-            .map(|c| {
-                let is_liked = is_like.contains(&c.id);
-                CommentView::from(c).with_liked(is_liked)
-            })
-            .collect();
-
-        CursorPage {
-            records,
-            has_more,
-            next_cursor,
-        }
+        let page = page.with_next_cursor(|comment| {
+            Ok(TimeIdCursor {
+                created_at: comment.created_at,
+                id: comment.id,
+            }
+            .encode())
+        })?;
+        page.map_records(|time_comments| {
+            let mut comments = hot_comments;
+            comments.extend(time_comments);
+            comments
+                .into_iter()
+                .map(|c| {
+                    let is_liked = is_like.contains(&c.id);
+                    CommentView::from(c).with_liked(is_liked)
+                })
+                .collect()
+        })
         .to_ok()
     }
 }

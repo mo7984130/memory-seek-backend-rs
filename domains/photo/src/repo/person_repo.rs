@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use common::{error::contextual::Result, metrics_name, utils::MetricsTimerExt};
+use common::{error::contextual::Result, metrics_name, models::CursorPage, utils::MetricsTimerExt};
 use constants::RedisKeys;
 use types::photo::person::PersonId;
 
@@ -68,16 +68,22 @@ impl PhotoRepo {
         &self,
         cursor: Option<types::cursor::FaceCountIdCursor<PersonId>>,
         size: u64,
-    ) -> common::error::contextual::Result<Vec<types::photo::person::PersonRecord>> {
-        PersonMapper::query(&self.db, cursor, size).await
+    ) -> common::error::contextual::Result<CursorPage<types::photo::person::PersonRecord, ()>> {
+        Ok(CursorPage::from_oversize(
+            PersonMapper::query(&self.db, cursor, size).await?,
+            size,
+        ))
     }
     pub(crate) async fn search_person_page(
         &self,
         keyword: &str,
         cursor: Option<PersonId>,
         size: u64,
-    ) -> common::error::contextual::Result<Vec<types::photo::person::PersonRecord>> {
-        PersonMapper::query_search(&self.db, keyword, cursor, size).await
+    ) -> common::error::contextual::Result<CursorPage<types::photo::person::PersonRecord, ()>> {
+        Ok(CursorPage::from_oversize(
+            PersonMapper::query_search(&self.db, keyword, cursor, size).await?,
+            size,
+        ))
     }
     pub(crate) async fn get_person_briefs(
         &self,

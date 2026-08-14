@@ -71,7 +71,7 @@ impl PhotoLikeMapper {
     ///
     /// 返回 `(PhotoId, DateTimeUtc)` 元组，其中 DateTimeUtc 为点赞时间。
     /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-    /// 由 service 层用 CursorPage::from_oversize 截断消费。
+    /// 由 repository 层构造 CursorPage 并截断消费。
     pub async fn query_user_liked_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,

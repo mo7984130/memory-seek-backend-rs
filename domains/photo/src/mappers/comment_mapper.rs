@@ -99,7 +99,7 @@ impl CommentMapper {
         size: u64,
     ) -> Result<Vec<CommentRecord>> {
         // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-        // 由 service 层用 CursorPage::from_oversize 截断消费
+        // 由 repository 层构造 CursorPage 并截断消费
         let mut query = Entity::find()
             .filter(Column::PhotoId.eq(photo_id))
             .order_by_desc(Column::CreatedAt)

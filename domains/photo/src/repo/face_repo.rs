@@ -2,8 +2,11 @@ use types::photo::{face::FaceRecord, models::FaceIds, person::PersonId, photo::P
 
 use super::PhotoRepo;
 use crate::mappers::{face_mapper::FaceMapper, person_mapper::PersonMapper};
-use common::error::contextual::Result;
-use common::error::{AppError, ContextualError};
+use common::{
+    error::contextual::Result,
+    error::{AppError, ContextualError},
+    models::CursorPage,
+};
 
 impl PhotoRepo {
     pub(crate) async fn query_face_compute_photos(
@@ -102,13 +105,16 @@ impl PhotoRepo {
     pub(crate) async fn query_unassigned_face_photo_ids(
         &self,
         req: &types::photo::dto::face::UnassignedFacePhotoCursorParam,
-    ) -> common::error::contextual::Result<Vec<PhotoId>> {
-        FaceMapper::query_unassigned_face_photo_ids_cursor_page(
-            &self.db,
-            req.cursor.clone(),
+    ) -> common::error::contextual::Result<CursorPage<PhotoId, ()>> {
+        Ok(CursorPage::from_oversize(
+            FaceMapper::query_unassigned_face_photo_ids_cursor_page(
+                &self.db,
+                req.cursor.clone(),
+                req.size,
+            )
+            .await?,
             req.size,
-        )
-        .await
+        ))
     }
     pub(crate) async fn delete_unassigned_faces(
         &self,
@@ -120,8 +126,16 @@ impl PhotoRepo {
         &self,
         person_id: PersonId,
         req: &types::photo::dto::person::PersonPhotoCursorParam,
-    ) -> common::error::contextual::Result<Vec<PhotoId>> {
-        FaceMapper::query_photo_ids_cursor_page(&self.db, person_id, req.cursor.clone(), req.size)
-            .await
+    ) -> common::error::contextual::Result<CursorPage<PhotoId, ()>> {
+        Ok(CursorPage::from_oversize(
+            FaceMapper::query_photo_ids_cursor_page(
+                &self.db,
+                person_id,
+                req.cursor.clone(),
+                req.size,
+            )
+            .await?,
+            req.size,
+        ))
     }
 }
