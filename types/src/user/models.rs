@@ -45,14 +45,10 @@ crate::in_dto!(ChangePasswordParam, "user/", serialize; {
 
     #[validate(
         custom(function = "validate_password"),
-        must_match(other = "new_password")
+        must_match(other = "confirm_password")
     )]
     pub new_password: String,
 
-    #[validate(
-        custom(function = "validate_password"),
-        must_match(other = "new_password")
-    )]
     pub confirm_password: String,
 });
 
