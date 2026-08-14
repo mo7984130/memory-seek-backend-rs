@@ -21,6 +21,7 @@ impl Default for Config {
     }
 }
 
+/// 返回 Redis 默认连接地址.
 fn default_url() -> String {
     "redis://127.0.0.1:6379".to_string()
 }
@@ -28,6 +29,7 @@ const fn default_max_connections() -> u32 {
     16
 }
 
+/// 根据配置创建 Redis 连接池.
 pub fn init(cfg: &Config) -> Result<Pool> {
     info!("初始化 Redis");
     let mut redis_cfg = DeadpoolConfig::from_url(&cfg.url);

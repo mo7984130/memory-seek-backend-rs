@@ -9,6 +9,7 @@ use common::{
 };
 
 impl PhotoRepo {
+    /// 分页查询需要进行人脸计算的照片.
     pub(crate) async fn query_face_compute_photos(
         &self,
         full: bool,
@@ -49,6 +50,7 @@ impl PhotoRepo {
             .await
             .map_err(Into::into)
     }
+    /// 在事务中批量插入检测到的人脸.
     pub(crate) async fn insert_faces(
         &self,
         faces: Vec<types::photo::face::NewFaceRecord>,
@@ -63,6 +65,7 @@ impl PhotoRepo {
         }
         Ok(())
     }
+    /// 备份并清理人脸相关表, 用于全量重算.
     pub(crate) async fn backup_face_tables(
         &self,
         storage: &backup::storage::BackupStorage,
@@ -88,6 +91,7 @@ impl PhotoRepo {
             })?;
         Ok(())
     }
+    /// 查询人脸及其人物名称, 用于人物视图展示.
     pub(crate) async fn query_faces_with_person_names(
         &self,
         photo_id: PhotoId,
@@ -102,6 +106,7 @@ impl PhotoRepo {
                 .await?;
         Ok((faces, names))
     }
+    /// 分页查询包含未分配人脸的照片 ID.
     pub(crate) async fn query_unassigned_face_photo_ids(
         &self,
         req: &types::photo::dto::face::UnassignedFacePhotoCursorParam,
@@ -116,12 +121,14 @@ impl PhotoRepo {
             req.size,
         ))
     }
+    /// 原子删除未分配的人脸记录.
     pub(crate) async fn delete_unassigned_faces(
         &self,
         ids: &FaceIds,
     ) -> common::error::contextual::Result<u64> {
         FaceMapper::delete_unassigned_by_ids(&self.db, ids).await
     }
+    /// 查询人物关联的照片 ID.
     pub(crate) async fn query_person_photo_ids(
         &self,
         person_id: PersonId,

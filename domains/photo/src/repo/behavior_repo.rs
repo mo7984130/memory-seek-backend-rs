@@ -8,6 +8,7 @@ use super::PhotoRepo;
 use crate::mappers::{behavior_mapper::BehaviorMapper, photo_mapper::PhotoMapper};
 
 impl PhotoRepo {
+    /// 持久化行为审计记录, 写入失败由调用方决定是否忽略.
     pub(crate) async fn record_behavior(
         &self,
         user_id: UserId,
@@ -29,6 +30,7 @@ impl PhotoRepo {
         .await
     }
 
+    /// 异步记录公开图片访问行为, 不阻塞图片响应.
     pub(crate) fn record_photo_view_async(
         &self,
         viewer_id: UserId,
@@ -55,6 +57,7 @@ impl PhotoRepo {
         });
     }
 
+    /// 查询按时间桶聚合的行为统计.
     pub(crate) async fn query_behavior_stats(
         &self,
         req: &BehaviorStatsQuery,
@@ -70,6 +73,7 @@ impl PhotoRepo {
         .await
     }
 
+    /// 查询行为目标访问排名.
     pub(crate) async fn query_behavior_top(
         &self,
         req: &BehaviorTopQuery,
@@ -77,6 +81,7 @@ impl PhotoRepo {
         BehaviorMapper::query_top_targets(&self.db, req.action, req.target_type, req.limit).await
     }
 
+    /// 按游标查询行为审计明细.
     pub(crate) async fn query_behavior_audit(
         &self,
         req: &BehaviorAuditQuery,

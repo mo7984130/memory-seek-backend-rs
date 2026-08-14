@@ -51,6 +51,7 @@ impl ControllerRouter for PhotoLikeController {
 
 // 创建
 impl PhotoLikeController {
+    /// 为照片点赞.
     async fn like(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -74,6 +75,7 @@ impl PhotoLikeController {
 
 // 删除
 impl PhotoLikeController {
+    /// 取消照片点赞.
     async fn unlike(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -97,6 +99,7 @@ impl PhotoLikeController {
 
 // 查询
 impl PhotoLikeController {
+    /// 返回当前用户点赞过的照片分页.
     async fn get_user_liked_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

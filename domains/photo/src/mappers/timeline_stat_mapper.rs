@@ -14,6 +14,7 @@ use types::photo::{dto::timeline_stat::MonthStat, timeline_stat::*};
 pub(crate) struct TimelineStatMapper;
 
 impl TimelineStatMapper {
+    /// 将指定月份的照片统计增加一个单位.
     pub async fn incr_stat(db: &impl ConnectionTrait, created_at: DateTimeUtc) -> Result<()> {
         let date_str = created_at.format("%Y-%m").to_string();
         let now = Utc::now();
@@ -40,6 +41,7 @@ impl TimelineStatMapper {
         Ok(())
     }
 
+    /// 按照片创建时间批量扣减月份统计.
     pub async fn decr_stat_by_created_ats(
         db: &impl ConnectionTrait,
         created_ats: &[&DateTimeUtc],
@@ -85,6 +87,7 @@ impl TimelineStatMapper {
         Ok(())
     }
 
+    /// 查询全部月份统计并按月份排序.
     pub async fn query_monthly_stats(db: &impl ConnectionTrait) -> Result<Vec<MonthStat>> {
         let result = Entity::find()
             .select_only()

@@ -14,6 +14,7 @@ pub struct CommentMapper;
 
 // 创建
 impl CommentMapper {
+    /// 插入评论记录并返回持久化结果.
     pub async fn insert(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -35,6 +36,7 @@ impl CommentMapper {
 
 // 修改
 impl CommentMapper {
+    /// 检查评论记录是否存在.
     pub async fn exists(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<bool> {
         let count = Entity::find()
             .filter(Column::Id.eq(comment_id))
@@ -44,6 +46,7 @@ impl CommentMapper {
         Ok(count > 0)
     }
 
+    /// 检查评论存在, 不存在时返回领域错误.
     pub async fn ensure_exist(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<()> {
         if !Self::exists(db, comment_id).await? {
             return Err(ContextualError::warn_without_source(
@@ -55,6 +58,7 @@ impl CommentMapper {
         Ok(())
     }
 
+    /// 按增量更新评论点赞数.
     pub async fn update_like_count_delta(
         db: &impl ConnectionTrait,
         comment_id: CommentId,
@@ -72,6 +76,7 @@ impl CommentMapper {
 
 // 查询
 impl CommentMapper {
+    /// 查询照片的热门评论.
     pub async fn query_hot_comments(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -91,6 +96,7 @@ impl CommentMapper {
             .to_ok()
     }
 
+    /// 分页查询照片评论.
     pub async fn query_by_photo_id(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -123,6 +129,7 @@ impl CommentMapper {
             .to_ok()
     }
 
+    /// 根据评论 ID 查询所属照片 ID.
     pub async fn query_photo_id_by_id(
         db: &impl ConnectionTrait,
         comment_id: CommentId,
@@ -144,6 +151,7 @@ impl CommentMapper {
 
 // 删除
 impl CommentMapper {
+    /// 删除单条评论, 并返回其所属照片 ID.
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -157,6 +165,7 @@ impl CommentMapper {
         Ok(ret.rows_affected == 1)
     }
 
+    /// 删除指定照片的全部评论并返回评论 ID.
     pub async fn delete_by_photo_ids(
         db: &impl ConnectionTrait,
         photo_ids: &[PhotoId],

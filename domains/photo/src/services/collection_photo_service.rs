@@ -50,6 +50,7 @@ impl CollectionPhotoService {
         Ok(collections)
     }
 
+    /// 按游标查询相册中的照片, 并补充照片视图信息.
     #[common::metered(name = "get_collection_photos")]
     #[tracing::instrument(
         name = "get_collection_photos",
@@ -82,6 +83,7 @@ impl CollectionPhotoService {
 
 // 添加
 impl CollectionPhotoService {
+    /// 批量将照片加入相册, 并返回实际新增数量.
     #[common::metered(name = "add_collection_photos")]
     #[tracing::instrument(
         name = "add_collection_photos",
@@ -107,6 +109,7 @@ impl CollectionPhotoService {
 
 // 删除
 impl CollectionPhotoService {
+    /// 批量从相册移除照片, 并返回实际移除数量.
     #[common::metered(name = "remove_collection_photos")]
     #[tracing::instrument(
         name = "remove_collection_photos",

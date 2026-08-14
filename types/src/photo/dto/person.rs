@@ -50,6 +50,7 @@ crate::out_dto!(PersonView, "photo/", rename = "Person"; {
 
 pub const PERSON_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 
+/// 返回人物照片分页的默认页大小.
 fn person_photo_cursor_page_default_size() -> u64 {
     PERSON_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }
@@ -69,6 +70,7 @@ crate::in_dto!(RenamePersonParam, "photo/", docs = "重命名人物参数"; {
     pub new_name: PersonName,
 });
 
+/// 返回二次人物聚类的默认相似度阈值.
 fn secondary_cluster_default_threshold() -> f32 {
     0.55
 }

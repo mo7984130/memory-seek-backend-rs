@@ -15,6 +15,7 @@ pub fn log_and_map(
     log_and_map_at(level, reason, context, err, app_err, loc)
 }
 
+/// 在调用点记录错误上下文并映射为应用错误.
 pub(crate) fn log_and_map_at(
     level: Level,
     reason: &'static str,

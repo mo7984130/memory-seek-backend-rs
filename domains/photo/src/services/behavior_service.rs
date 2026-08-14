@@ -27,6 +27,7 @@ pub(crate) struct BehaviorRecordReq {
 }
 
 impl BehaviorRecordReq {
+    /// 创建一条仅包含用户和行为类型的审计请求.
     pub(crate) fn new(user_id: UserId, action: UserBehaviorAction) -> Self {
         Self {
             user_id,
@@ -38,23 +39,27 @@ impl BehaviorRecordReq {
         }
     }
 
+    /// 将照片设为行为目标.
     pub(crate) fn with_photo(mut self, photo_id: i64) -> Self {
         self.target_type = Some(BehaviorTargetType::Photo);
         self.target_id = Some(photo_id);
         self
     }
 
+    /// 设置行为目标类型和目标 ID.
     pub(crate) fn with_target(mut self, target_type: BehaviorTargetType, target_id: i64) -> Self {
         self.target_type = Some(target_type);
         self.target_id = Some(target_id);
         self
     }
 
+    /// 附加结构化行为详情.
     pub(crate) fn with_detail(mut self, detail: Json) -> Self {
         self.detail = Some(detail);
         self
     }
 
+    /// 附加可选的客户端 IP.
     pub(crate) fn with_ip(mut self, ip: Option<String>) -> Self {
         self.ip = ip;
         self
@@ -108,6 +113,7 @@ impl BehaviorService {
 
 // 管理端统计
 impl BehaviorService {
+    /// 查询指定时间范围内的行为统计.
     #[common::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn get_stats(
@@ -127,6 +133,7 @@ impl BehaviorService {
             .collect())
     }
 
+    /// 查询行为目标的访问排名.
     #[common::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn get_top(
@@ -146,6 +153,7 @@ impl BehaviorService {
             .collect())
     }
 
+    /// 按游标查询可审计的行为明细.
     #[common::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn get_audit(
@@ -170,6 +178,7 @@ impl BehaviorService {
     }
 }
 
+/// 将持久化行为记录转换为审计响应项.
 fn to_audit_item(record: BehaviorRecord) -> BehaviorAuditItem {
     BehaviorAuditItem {
         id: record.id,

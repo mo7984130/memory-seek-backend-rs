@@ -38,6 +38,7 @@ pub struct PersonCoverUpdate {
 
 // 创建
 impl PersonMapper {
+    /// 插入人物记录并返回持久化结果.
     pub async fn insert(db: &impl ConnectionTrait, person: NewPerson) -> Result<PersonRecord> {
         let model = Entity::insert(ActiveModel::from(person))
             .exec_with_returning(db)

@@ -3,6 +3,7 @@ use common::ext::ContextOptionExt;
 
 /// 用户领域中必须存在用户的查询结果扩展。
 pub(crate) trait UserOptionExt<T> {
+    /// 将空查询结果转换为用户域的用户不存在错误.
     fn user_not_found(self) -> Result<T>;
 }
 

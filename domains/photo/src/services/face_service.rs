@@ -44,6 +44,7 @@ pub(crate) struct FaceService;
 type Img = ImageBuffer<Rgb<u8>, Vec<u8>>;
 // 创建
 impl FaceService {
+    /// 异步启动人脸计算任务; 任务失败通过后台日志记录, 不阻塞请求返回.
     #[tracing::instrument(
         skip_all,
         fields(
@@ -56,6 +57,7 @@ impl FaceService {
         Ok(())
     }
 
+    /// 批量下载照片, 检测人脸并写入人脸记录.
     #[common::metered(name = "face_compute")]
     #[tracing::instrument(
         name = "face_compute",
@@ -168,6 +170,7 @@ impl FaceService {
         Ok(())
     }
 
+    /// 备份并清空人脸相关表, 为全量重算准备一致的起始状态.
     async fn backup_tables(state: &PhotoState) -> Result<()> {
         state
             .repo
@@ -194,6 +197,7 @@ impl FaceService {
             .map_err(|error| error.emit())
     }
 
+    /// 按 ID 游标批量查询待处理照片.
     async fn query_photos(
         state: &PhotoState,
         full: bool,
@@ -211,6 +215,7 @@ impl FaceService {
         Ok(photos)
     }
 
+    /// 从对象存储下载照片并解码为图像缓冲区.
     async fn download_photo(state: &PhotoState, file_id: &String) -> Result<Img> {
         debug!("下载照片{}", file_id);
         let bytes = state
@@ -226,6 +231,7 @@ impl FaceService {
         Ok(img)
     }
 
+    /// 在阻塞线程中解码图片字节, 避免占用异步执行器.
     async fn decode_photo(bytes: bytes::Bytes) -> Result<Img> {
         let _decode_timer = MetricsTimer::start(metrics_name!("photo_decode"));
         let decode_result = tokio::task::spawn_blocking(move || -> contextual::Result<Img> {
@@ -243,6 +249,7 @@ impl FaceService {
         Ok(decode_result.inspect_err(|_| inc_error!("decode"))?)
     }
 
+    /// 在阻塞线程中执行人脸检测并返回检测结果.
     async fn detect_photo(state: &PhotoState, img: Img) -> Result<Vec<Face>> {
         debug!("检测照片中");
         let face_engine_clone = Arc::clone(&state.face_engine);
@@ -271,6 +278,7 @@ impl FaceService {
         Ok(detect_result.inspect_err(|_| inc_error!("detect"))?)
     }
 
+    /// 批量写入检测到的人脸记录.
     async fn insert_faces(state: &PhotoState, faces: Vec<face::NewFaceRecord>) -> Result<()> {
         debug!("插入人脸到数据库中");
         if faces.is_empty() {
@@ -303,6 +311,7 @@ impl FaceService {
         skip_all,
         fields(face_id = %face_id, person_id = ?person_id)
     )]
+    /// 将人脸转移到指定人物或取消其人物归属, 并维护双方统计和封面.
     pub async fn change_face_belonging(
         state: &PhotoState,
         face_id: FaceId,
@@ -548,6 +557,7 @@ impl FaceService {
 
 // 查询
 impl FaceService {
+    /// 查询指定照片的人脸视图.
     #[common::metered]
     #[tracing::instrument(skip_all, fields(photo_id = %photo_id))]
     pub async fn get_faces_by_photo_id(
@@ -575,6 +585,7 @@ impl FaceService {
     /// 获取"包含未分配人脸"的照片列表(游标分页, 不区分照片归属者)
     #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
+    /// 分页查询包含未分配人脸的照片.
     pub async fn get_unassigned_face_photos(
         state: &PhotoState,
         user_id: UserId,
@@ -608,6 +619,7 @@ impl FaceService {
     /// 删除单张人脸(仅限未归属人物的人脸, 避免破坏人物统计不变量)
     #[common::metered]
     #[tracing::instrument(skip_all, fields(face_id = %face_id))]
+    /// 删除一张未归属人物的人脸.
     pub async fn delete_face(state: &PhotoState, face_id: FaceId) -> Result<()> {
         state
             .repo
@@ -648,6 +660,7 @@ impl FaceService {
     /// 通过 SQL 条件 `person_id IS NULL` 原子过滤, 无需逐张加锁。
     #[common::metered]
     #[tracing::instrument(skip_all, fields(count = %face_ids.len()))]
+    /// 批量删除未归属人物的人脸, 并返回实际删除数量.
     pub async fn delete_faces_batch(
         state: &PhotoState,
         face_ids: &FaceIds,

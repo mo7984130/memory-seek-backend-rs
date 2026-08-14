@@ -77,6 +77,7 @@ impl CollectionMapper {
         })
     }
 
+    /// 创建相册记录.
     pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -103,6 +104,7 @@ impl CollectionMapper {
 
 // 修改
 impl CollectionMapper {
+    /// 更新相册封面照片及裁剪信息.
     pub async fn update_cover_photo(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -120,6 +122,7 @@ impl CollectionMapper {
         Ok(())
     }
 
+    /// 批量更新多个相册的照片数量.
     pub async fn update_photo_count_delta_batch(
         db: &impl ConnectionTrait,
         deltas: &HashMap<CollectionId, i64>,
@@ -155,6 +158,7 @@ impl CollectionMapper {
         Ok(())
     }
 
+    /// 按增量更新单个相册的照片数量.
     pub async fn update_photo_count_delta(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -168,6 +172,7 @@ impl CollectionMapper {
         Ok(())
     }
 
+    /// 更新相册基本信息, 并按用户 ID 校验归属.
     pub async fn update_info(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -199,6 +204,7 @@ impl CollectionMapper {
 // 查询
 impl CollectionMapper {
     #[expect(dead_code)]
+    /// 按相册 ID 查询相册记录.
     pub async fn query_by_id(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -230,6 +236,7 @@ impl CollectionMapper {
             .to_ok()
     }
 
+    /// 查询用户的全部相册.
     pub async fn query_by_user_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -245,6 +252,7 @@ impl CollectionMapper {
             .to_ok()
     }
 
+    /// 检查相册是否属于指定用户.
     pub async fn is_belong(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -259,6 +267,7 @@ impl CollectionMapper {
         Ok(count > 0)
     }
 
+    /// 校验相册归属, 失败时返回权限领域错误.
     pub async fn ensure_belong(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -274,6 +283,7 @@ impl CollectionMapper {
         Ok(())
     }
 
+    /// 校验相册归属并返回相册记录.
     pub async fn ensure_belong_with_return(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -295,6 +305,7 @@ impl CollectionMapper {
 
 // 删除
 impl CollectionMapper {
+    /// 删除相册记录并返回受影响行数.
     pub async fn delete_by_id(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,

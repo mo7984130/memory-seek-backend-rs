@@ -54,6 +54,7 @@ impl Default for ServerConfig {
         }
     }
 }
+/// 返回默认监听地址.
 fn default_host() -> String {
     "127.0.0.1".to_string()
 }
@@ -83,6 +84,7 @@ impl AppConfig {
         cfg.try_deserialize()
     }
 
+    /// 返回服务器绑定地址和端口.
     pub fn server_addr(&self) -> String {
         format!("{}:{}", self.server.host, self.server.port)
     }

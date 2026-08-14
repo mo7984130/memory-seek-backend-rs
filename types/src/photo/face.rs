@@ -96,6 +96,7 @@ mod entity {
     }
 
     impl NewFaceRecord {
+        /// 将人脸检测结果转换为待持久化的人脸记录.
         pub fn from_detected(photo_id: PhotoId, face: Face) -> Self {
             Self {
                 photo_id,

@@ -4,6 +4,7 @@ use common::ext::OptionExt;
 
 /// 认证领域中必须存在用户的查询结果扩展。
 pub(crate) trait AuthOptionExt<T> {
+    /// 将空查询结果转换为认证域的用户不存在错误.
     fn user_not_found(self) -> Result<T>;
 }
 

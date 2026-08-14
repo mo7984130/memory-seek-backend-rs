@@ -10,6 +10,7 @@ pub struct FaceMapper;
 
 // 创建
 impl FaceMapper {
+    /// 查询照片关联的人脸记录.
     pub async fn query_by_photo_id(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -26,6 +27,7 @@ impl FaceMapper {
 
 // 修改
 impl FaceMapper {
+    /// 更新人脸的人物归属.
     pub async fn update_person_id(
         db: &impl ConnectionTrait,
         person_id: PersonId,
@@ -108,6 +110,7 @@ impl FaceMapper {
 
 // 查询
 impl FaceMapper {
+    /// 按人脸 ID 查询单条人脸记录.
     pub async fn query_by_id(db: &impl ConnectionTrait, id: FaceId) -> Result<Option<FaceRecord>> {
         Entity::find()
             .filter(Column::Id.eq(id))
@@ -117,6 +120,7 @@ impl FaceMapper {
             .transpose()
     }
 
+    /// 按 ID 批量查询人脸记录.
     pub async fn query_by_ids(
         db: &impl ConnectionTrait,
         ids: &[FaceId],
@@ -177,6 +181,7 @@ impl FaceMapper {
             .transpose()
     }
 
+    /// 查询全部人脸记录, 供全量人物计算使用.
     pub async fn query_all(db: &impl ConnectionTrait) -> Result<Vec<FaceRecord>> {
         Entity::find()
             .all(db)

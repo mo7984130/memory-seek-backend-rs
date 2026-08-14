@@ -10,6 +10,7 @@ pub struct Config {
     pub recognize_model_path: String,
 }
 
+/// 根据配置初始化人脸识别引擎.
 pub fn init(cfg: &Config) -> Arc<Mutex<FaceEngine>> {
     info!("初始化人脸识别模型");
     let engine = FaceEngine::new(&cfg.detect_model_path, &cfg.recognize_model_path)

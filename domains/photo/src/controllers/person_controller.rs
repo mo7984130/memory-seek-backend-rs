@@ -61,6 +61,7 @@ impl ControllerRouter for PersonController {
 
 // 创建
 impl PersonController {
+    /// 启动全量人物扫描任务.
     pub async fn full_scan(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -81,6 +82,7 @@ impl PersonController {
     }
 
     /// 二次聚类: 将未分配人脸按 centroid 余弦相似度指派到已有人物
+    /// 启动未分配人脸的二次聚类任务.
     pub async fn secondary_cluster(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -105,6 +107,7 @@ impl PersonController {
 // 修改
 impl PersonController {
     /// 重命名人物
+    /// 修改人物名称.
     async fn rename(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -133,6 +136,7 @@ impl PersonController {
     }
 
     /// 合并人物（高危操作，仅管理员）
+    /// 合并两个​​人物, 将源人物的人脸转移到目标人物.
     async fn merge(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -175,6 +179,7 @@ impl PersonController {
 
 // 查询
 impl PersonController {
+    /// 查询人物列表.
     pub async fn get_persons(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -186,6 +191,7 @@ impl PersonController {
     }
 
     /// 按关键词前缀搜索人物(完整名字或姓名首字母)
+    /// 按名称或姓名首字母搜索人物.
     pub async fn search_persons(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -197,6 +203,7 @@ impl PersonController {
     }
 
     /// 获取人物的照片列表(游标分页)
+    /// 查询人物关联的照片.
     pub async fn get_person_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -212,6 +219,7 @@ impl PersonController {
 // 删除
 impl PersonController {
     /// 删除人物（高危操作，仅管理员）
+    /// 删除人物及其关联数据.
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

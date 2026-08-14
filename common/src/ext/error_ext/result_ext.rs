@@ -3,6 +3,7 @@ use serde::Serialize;
 use crate::r::R;
 
 pub trait ResultRExt<T: Serialize, E> {
+    /// 将成功值包装为统一响应结构.
     fn to_r_ok(self) -> Result<R<T>, E>;
 }
 
@@ -17,10 +18,12 @@ impl<T: Serialize, E> ResultRExt<T, E> for Result<T, E> {
 }
 
 pub trait ToOk<T, E> {
+    /// 将值包装为 Ok 结果.
     fn to_ok(self) -> std::result::Result<T, E>;
 }
 
 pub trait ToErr<T, E> {
+    /// 将值包装为 Err 结果.
     fn to_err(self) -> std::result::Result<T, E>;
 }
 

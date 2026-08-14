@@ -84,6 +84,7 @@ crate::in_dto!(DeletePhotosParam, "photo/", serialize; {
     pub photo_ids: PhotoIds,
 });
 
+/// 返回点赞照片分页的默认页大小.
 fn liked_photos_default_size() -> u64 {
     32
 }

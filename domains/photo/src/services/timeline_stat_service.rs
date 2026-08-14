@@ -10,6 +10,7 @@ use types::photo::dto::timeline_stat::MonthStat;
 pub(crate) struct TimelineStatService;
 
 impl TimelineStatService {
+    /// 查询按月份聚合的照片时间线统计.
     #[common::metered]
     #[tracing::instrument(skip_all)]
     pub async fn get_monthly_stats(state: &PhotoState) -> Result<Vec<MonthStat>> {
@@ -28,6 +29,7 @@ impl TimelineStatService {
     owns = ["TimelineStatMapper"],
 )]
 impl TimelineStatService {
+    /// 删除照片后扣减对应月份的时间线统计.
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
@@ -46,6 +48,7 @@ impl TimelineStatService {
     name = "timeline_stat_create",
 )]
 impl TimelineStatService {
+    /// 上传照片后增加对应月份的时间线统计.
     async fn on_after_photo_upload(
         &self,
         state: Arc<PhotoState>,

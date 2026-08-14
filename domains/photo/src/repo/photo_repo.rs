@@ -69,6 +69,7 @@ impl PhotoRepo {
                 )
             })
     }
+    /// 创建照片仓储并初始化数据库, Redis 和缓存配置.
     pub fn new(db: DatabaseConnection, redis: Pool, cache_config: CacheConfig) -> Self {
         Self {
             db,
@@ -102,6 +103,7 @@ impl PhotoRepo {
         }
     }
 
+    /// 批量加载用户照片记录及其点赞状态.
     pub async fn load_photo_records(
         &self,
         user_id: UserId,
@@ -144,6 +146,7 @@ impl PhotoRepo {
         Ok((photos?, liked_photo_ids))
     }
 
+    /// 将照片点赞状态写入本地和远端缓存.
     pub(super) async fn cache_photo_like_status(
         &self,
         user_id: UserId,
@@ -161,6 +164,7 @@ impl PhotoRepo {
             .await;
     }
 
+    /// 查询用户照片的游标分页 ID.
     pub async fn query_photo_cursor_ids(
         &self,
         req: PhotoCursorParam,
@@ -202,6 +206,7 @@ impl PhotoRepo {
         ))
     }
 
+    /// 失效照片游标 ID 缓存.
     async fn invalidate_photo_cursor_ids(&self) {
         let keys = [
             RedisKeys::photo::photo::photo_cursor_page_ids(PageDirection::Next).to_owned(),
@@ -210,16 +215,19 @@ impl PhotoRepo {
         let _ = self.cache_photo_cursor_ids.invalidate_batch(&keys).await;
     }
 
+    /// 插入照片主记录.
     pub async fn insert_photo(&self, photo: NewPhotoRecord) -> Result<Model> {
         let photo: ActiveModel = photo.into();
         photo.insert(&self.db).await.map_err(Into::into)
     }
 
+    /// 批量查询图片 MD5 是否存在.
     pub async fn exists_by_md5_batch(&self, md5s: &[String]) -> Result<Vec<bool>> {
         let existing = PhotoMapper::exists_by_md5_batch(&self.db, md5s).await?;
         Ok(md5s.iter().map(|md5| existing.contains(md5)).collect())
     }
 
+    /// 在单个事务中执行照片删除管道.
     pub(crate) async fn delete_photos(
         &self,
         user_id: UserId,
@@ -245,10 +253,12 @@ impl PhotoRepo {
         Ok(ctx)
     }
 
+    /// 查询单个图片 MD5 是否存在.
     pub async fn exists_by_md5(&self, md5: &str) -> Result<bool> {
         PhotoMapper::exists_by_md5(&self.db, md5).await
     }
 
+    /// 记录新上传照片对应月份的时间线统计.
     pub async fn record_uploaded_photo(
         &self,
         created_at: chrono::DateTime<chrono::Utc>,
@@ -262,12 +272,14 @@ impl PhotoRepo {
         Ok(())
     }
 
+    /// 失效照片上传后受影响的游标缓存.
     pub async fn invalidate_uploaded_photo_cursor(&self) {
         self.invalidate_photo_cursor_ids()
             .timed(metrics_name!("cache_invalidate"))
             .await;
     }
 
+    /// 查询对象存储文件对应的图片尺寸.
     pub async fn get_photo_dimensions(&self, file_id: &str) -> Result<(i32, i32)> {
         let key = RedisKeys::photo::photo::photo_dimensions(file_id);
         self.cache_photo_dimensions
@@ -284,6 +296,7 @@ impl PhotoRepo {
             .await
     }
 
+    /// 获取带缓存的月度照片统计.
     pub async fn get_monthly_stats(&self) -> Result<Vec<MonthStat>> {
         self.cache_timeline_stat
             .get_or_load(
@@ -295,6 +308,7 @@ impl PhotoRepo {
             .await
     }
 
+    /// 失效照片删除后受影响的照片, 人物和统计缓存.
     pub async fn invalidate_deleted_photos(
         &self,
         photos: &[PhotoRecord],
@@ -346,6 +360,7 @@ pub(crate) struct PhotoDeleteContext {
 }
 
 impl PhotoDeleteContext {
+    /// 返回当前删除管道中的照片 ID.
     pub fn photo_ids(&self) -> Vec<PhotoId> {
         self.photos.iter().map(|photo| photo.id).collect()
     }

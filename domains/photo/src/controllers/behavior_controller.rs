@@ -35,6 +35,7 @@ impl ControllerRouter for BehaviorController {
 // 管理端统计
 impl BehaviorController {
     /// 行为量时序统计（按日/周/月聚合）
+    /// 返回行为统计数据.
     async fn stats(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -47,6 +48,7 @@ impl BehaviorController {
     }
 
     /// 热门目标排行（如浏览量 Top N 照片）
+    /// 返回行为目标访问排名.
     async fn top(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -57,6 +59,7 @@ impl BehaviorController {
     }
 
     /// 审计流水（可按照片/人物/动作追溯，含 IP 与详情）
+    /// 返回可分页查询的行为审计明细.
     async fn audit(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

@@ -7,6 +7,7 @@ pub(crate) struct CommentLikeService;
 
 // 创建
 impl CommentLikeService {
+    /// 为评论点赞; 重复点赞和不存在评论由仓储层处理.
     #[common::metered(name = "like_comment")]
     #[tracing::instrument(
         name = "like_comment",
@@ -29,6 +30,7 @@ impl CommentLikeService {}
 
 // 删除
 impl CommentLikeService {
+    /// 取消用户对评论的点赞.
     #[common::metered(name = "unlike_comment")]
     #[tracing::instrument(
         name = "unlike_comment",

@@ -53,6 +53,7 @@ impl From<PhotoRecord> for PhotoView {
 }
 
 impl PhotoView {
+    /// 写入当前用户对照片的点赞状态.
     pub fn with_liked(mut self, is_liked: bool) -> Self {
         self.is_liked = Some(is_liked);
         self

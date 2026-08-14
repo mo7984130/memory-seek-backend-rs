@@ -84,6 +84,7 @@ impl ContextualError {
         self.0.emit()
     }
 
+    /// 创建带 ERROR 日志级别和原始错误来源的上下文错误.
     pub fn error(
         reason: &'static str,
         context: &'static str,
@@ -93,6 +94,7 @@ impl ContextualError {
         Self::with_source(Level::ERROR, reason, context, source, app_error)
     }
 
+    /// 创建带 WARN 日志级别和原始错误来源的上下文错误.
     pub fn warn(
         reason: &'static str,
         context: &'static str,
@@ -102,6 +104,7 @@ impl ContextualError {
         Self::with_source(Level::WARN, reason, context, source, app_error)
     }
 
+    /// 创建不携带原始错误来源的 ERROR 上下文错误.
     pub fn error_without_source(
         reason: &'static str,
         context: &'static str,
@@ -110,6 +113,7 @@ impl ContextualError {
         Self::without_source(Level::ERROR, reason, context, app_error)
     }
 
+    /// 创建不携带原始错误来源的 WARN 上下文错误.
     pub fn warn_without_source(
         reason: &'static str,
         context: &'static str,
@@ -137,6 +141,7 @@ impl ContextualError {
         }))
     }
 
+    /// 构造不携带原始错误来源的延迟上下文.
     fn without_source(
         level: Level,
         reason: &'static str,

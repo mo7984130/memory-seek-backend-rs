@@ -4,6 +4,7 @@ use crate::error::{AppError, ContextualError, contextual::Result};
 
 /// 使用按 feature 开启的 `From<E> for ContextualError` 显式延迟错误。
 pub trait IntoContextualExt<T> {
+    /// 将基础错误延迟转换为上下文错误.
     fn into_contextual(self) -> Result<T>;
 }
 
@@ -17,6 +18,7 @@ where
 }
 
 pub trait ContextResultExt<T> {
+    /// 为错误附加 ERROR 级别的上下文.
     fn context_error(
         self,
         reason: &'static str,
@@ -24,6 +26,7 @@ pub trait ContextResultExt<T> {
         app_error: AppError,
     ) -> Result<T>;
 
+    /// 为错误附加 WARN 级别的上下文.
     fn context_warn(
         self,
         reason: &'static str,
@@ -56,6 +59,7 @@ where
 }
 
 pub trait ContextOptionExt<T> {
+    /// 将 None 转换为带 WARN 上下文的错误.
     fn context_warn_none(
         self,
         reason: &'static str,
@@ -63,6 +67,7 @@ pub trait ContextOptionExt<T> {
         app_error: AppError,
     ) -> Result<T>;
 
+    /// 将 None 转换为带 ERROR 上下文的错误.
     fn context_error_none(
         self,
         reason: &'static str,
@@ -75,6 +80,7 @@ pub trait ContextOptionExt<T> {
 ///
 /// 适用于补偿或清理操作失败时只需记录、不能覆盖原始错误的场景。
 pub trait ContextualResultExt<T> {
+    /// 记录错误上下文并丢弃错误结果.
     fn emit_if_err(self);
 }
 

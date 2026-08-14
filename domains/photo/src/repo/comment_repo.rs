@@ -18,6 +18,7 @@ use crate::mappers::{
 };
 
 impl PhotoRepo {
+    /// 查询热门评论和游标分页评论, 同时加载当前用户点赞状态.
     pub(crate) async fn query_comments(
         &self,
         user_id: UserId,
@@ -67,6 +68,7 @@ impl PhotoRepo {
         Ok((hot_comments, comments, liked))
     }
 
+    /// 校验照片存在后发布评论.
     pub(crate) async fn publish_comment(
         &self,
         user_id: UserId,
@@ -85,6 +87,7 @@ impl PhotoRepo {
         .await
     }
 
+    /// 删除评论并同步维护照片评论计数.
     pub(crate) async fn delete_comment(
         &self,
         user_id: UserId,
@@ -104,6 +107,7 @@ impl PhotoRepo {
         .await
     }
 
+    /// 校验评论存在后创建评论点赞.
     pub(crate) async fn like_comment(&self, user_id: UserId, comment_id: CommentId) -> Result<()> {
         self.transaction(|txn| {
             Box::pin(async move {
@@ -118,6 +122,7 @@ impl PhotoRepo {
         .await
     }
 
+    /// 删除用户对评论的点赞并更新计数.
     pub(crate) async fn unlike_comment(
         &self,
         user_id: UserId,

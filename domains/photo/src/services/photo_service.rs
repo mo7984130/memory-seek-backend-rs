@@ -51,6 +51,7 @@ step_derive::declare_event!(
 
 // 查询
 impl PhotoService {
+    /// 查询用户照片, 并生成包含访问令牌和点赞状态的视图.
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, count = %photo_ids.len())
@@ -72,6 +73,7 @@ impl PhotoService {
         Ok(views)
     }
 
+    /// 按时间与 ID 游标分页查询用户照片.
     #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_photo_cursor_page(
@@ -102,6 +104,7 @@ impl PhotoService {
 }
 
 impl PhotoService {
+    /// 校验图片, 计算 MD5, 上传文件并写入照片主记录.
     #[common::metered]
     #[instrument(
         skip_all,
@@ -198,6 +201,7 @@ impl PhotoService {
         Ok(PhotoView::from_record_with_tokens(photo_record, user_id)?)
     }
 
+    /// 批量查询图片 MD5 是否已存在.
     #[common::metered]
     #[tracing::instrument(skip_all, fields(count = %req.md5s.len()))]
     pub async fn exists_by_md5_batch(
@@ -207,6 +211,7 @@ impl PhotoService {
         Ok(state.repo.exists_by_md5_batch(&req.md5s).await?)
     }
 
+    /// 删除用户照片及其关联资源, 并记录删除行为.
     #[common::metered]
     #[tracing::instrument(
         skip_all,
@@ -257,6 +262,7 @@ impl PhotoService {
     is_final = true,
 )]
 impl PhotoService {
+    /// 执行照片删除管道的最后一步, 删除照片主表记录.
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
@@ -274,6 +280,7 @@ impl PhotoService {
     name = "photo_cursor_cache_invalidation",
 )]
 impl PhotoService {
+    /// 发布照片上传后的缓存失效事件.
     async fn on_after_photo_upload(
         &self,
         state: Arc<PhotoState>,

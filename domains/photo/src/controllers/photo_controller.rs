@@ -55,6 +55,7 @@ impl ControllerRouter for PhotoController {
 }
 
 impl PhotoController {
+    /// 接收 multipart 图片, 完成校验, 存储并记录上传行为.
     async fn upload(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -98,6 +99,7 @@ impl PhotoController {
         Ok(photo).to_r_ok()
     }
 
+    /// 返回当前用户的照片游标分页.
     async fn get_photos_cursor(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -108,6 +110,7 @@ impl PhotoController {
             .to_r_ok()
     }
 
+    /// 批量检查图片 MD5 是否已存在.
     async fn md5s_exist(
         State(state): State<Arc<PhotoState>>,
         ValidatedJson(req): ValidatedJson<ExistsByMd5BatchParam>,
@@ -117,6 +120,7 @@ impl PhotoController {
             .to_r_ok()
     }
 
+    /// 解密图片访问令牌并返回原图或处理后的图片流.
     async fn get_image(
         State(state): State<Arc<PhotoState>>,
         OptionalClientIp(ip): OptionalClientIp,
@@ -165,6 +169,7 @@ impl PhotoController {
         Ok(resp)
     }
 
+    /// 删除当前用户指定的照片及其对象存储文件.
     async fn delete_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

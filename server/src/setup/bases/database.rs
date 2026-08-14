@@ -14,6 +14,7 @@ const fn default_max_connections() -> u32 {
     64
 }
 
+/// 根据配置建立数据库连接并执行基础初始化.
 pub async fn init(cfg: &Config) -> Result<DatabaseConnection> {
     info!("初始化数据库");
     let mut opt = ConnectOptions::new(&cfg.url);

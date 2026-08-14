@@ -15,6 +15,7 @@ pub struct AdminId(UserId);
 impl AdminId {
     pub const ADMIN_ID: AdminId = AdminId(UserId(1));
 
+    /// 判断该身份是否为系统管理员.
     pub fn is_admin(&self) -> bool {
         *self == Self::ADMIN_ID
     }
@@ -119,6 +120,7 @@ mod entity {
     }
 
     impl UserInfo {
+        /// 为头像文件 ID 生成加密访问令牌.
         pub fn with_avatar_token(mut self) -> common::error::contextual::Result<Self> {
             self.avatar_token = self
                 .avatar_token
@@ -128,6 +130,7 @@ mod entity {
             Ok(self)
         }
 
+        /// 将用户记录转换为包含头像访问令牌的用户信息.
         pub fn from_with_token(user: UserRecord) -> common::error::contextual::Result<Self> {
             UserInfo::from(user).with_avatar_token()
         }

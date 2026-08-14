@@ -17,6 +17,7 @@ pub struct AppSetup {
 
 impl AppSetup {
     #[allow(unused_variables)]
+    /// 初始化基础设施, 外部库, 业务域和应用路由.
     pub async fn init(cfg: &AppConfig) -> Result<Self> {
         // 1. 初始化基础设施
         let bases = bases::AppBasesInit::init(cfg).await?;

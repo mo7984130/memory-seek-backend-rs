@@ -35,6 +35,7 @@ pub struct BackupStorage {
 }
 
 impl BackupStorage {
+    /// 创建本地与对象存储备份的统一存储入口.
     pub fn new(local_path: PathBuf, s3_client: Arc<S3Client>, s3_prefix: String) -> Self {
         Self {
             local_path,
@@ -224,6 +225,7 @@ impl BackupStorage {
         keys
     }
 
+    /// 递归收集目录下的 CSV 文件对应的对象存储路径.
     fn collect_csv_keys(&self, dir: &std::path::Path, keys: &mut Vec<String>) {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
@@ -247,6 +249,7 @@ pub struct CleanupReport {
 }
 
 impl CleanupReport {
+    /// 合并一次子目录清理结果.
     fn append(&mut self, mut other: Self) {
         self.removed += other.removed;
         self.issues.append(&mut other.issues);

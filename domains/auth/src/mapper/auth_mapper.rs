@@ -24,6 +24,7 @@ pub struct RefreshTokenValidation {
 }
 // 创建
 impl AuthMapper {
+    /// 插入用户及其认证记录.
     pub async fn insert(db: &impl ConnectionTrait, param: AuthInsertParam) -> Result<UserRecord> {
         let model = ActiveModel {
             username: Set(param.username),
@@ -66,6 +67,7 @@ impl AuthMapper {
         )
     }
 
+    /// 查询用户保存的 refresh token 及其过期时间.
     pub async fn query_refresh_token(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -84,6 +86,7 @@ impl AuthMapper {
 
 // 修改
 impl AuthMapper {
+    /// 更新用户密码哈希.
     pub async fn update_password(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -98,6 +101,7 @@ impl AuthMapper {
             .to_ok()
     }
 
+    /// 更新用户 refresh token 及其过期时间.
     pub async fn update_refresh_token(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -123,6 +127,7 @@ pub struct UserPasswordId {
 }
 // 查询
 impl AuthMapper {
+    /// 按账号查询用户认证记录.
     pub async fn query_by_account(
         db: &impl ConnectionTrait,
         account: &str,

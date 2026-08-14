@@ -50,6 +50,7 @@ impl From<FaceRecord> for FaceView {
     }
 }
 
+/// 返回未分配人脸照片分页的默认页大小.
 fn unassigned_face_photo_cursor_page_default_size() -> u64 {
     32
 }

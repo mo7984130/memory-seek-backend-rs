@@ -15,6 +15,7 @@ pub struct BackupState {
 }
 
 impl BackupState {
+    /// 创建备份领域状态并初始化存储组件.
     pub fn new(db: DatabaseConnection, s3_client: Arc<S3Client>, config: BackupConfig) -> Self {
         let temp_dir = PathBuf::from(&config.local_path).join(".tmp");
         let storage = BackupStorage::new(

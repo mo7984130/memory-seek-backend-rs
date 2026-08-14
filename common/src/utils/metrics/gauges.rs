@@ -4,6 +4,7 @@ pub struct GaugeGuard {
 }
 
 impl GaugeGuard {
+    /// 创建指标守卫并将对应运行中计数加一.
     pub fn start(name: impl Into<String>) -> Self {
         let name = name.into();
         #[cfg(feature = "metrics")]

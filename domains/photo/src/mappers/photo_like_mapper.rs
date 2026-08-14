@@ -15,6 +15,7 @@ pub struct PhotoLikeMapper;
 
 // 创建
 impl PhotoLikeMapper {
+    /// 插入照片点赞记录; 重复记录由数据库约束处理.
     pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -45,6 +46,7 @@ impl PhotoLikeMapper {
 // 查询
 impl PhotoLikeMapper {
     /// 批量查询用户对一组照片的点赞状态
+    /// 查询用户对一批照片的点赞状态.
     pub async fn query_is_like_by_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -72,6 +74,7 @@ impl PhotoLikeMapper {
     /// 返回 `(PhotoId, DateTimeUtc)` 元组，其中 DateTimeUtc 为点赞时间。
     /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
     /// 由 repository 层构造 CursorPage 并截断消费。
+    /// 分页查询用户点赞过的照片 ID, 并返回点赞时间游标.
     pub async fn query_user_liked_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -101,6 +104,7 @@ impl PhotoLikeMapper {
 
 // 删除
 impl PhotoLikeMapper {
+    /// 删除用户对指定照片的点赞记录.
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -115,6 +119,7 @@ impl PhotoLikeMapper {
         Ok(res.rows_affected != 0)
     }
 
+    /// 删除指定照片的全部点赞记录.
     pub async fn delete_all_by_photo_ids(
         db: &impl ConnectionTrait,
         photo_ids: &[PhotoId],

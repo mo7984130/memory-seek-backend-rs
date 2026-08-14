@@ -11,6 +11,7 @@ use types::photo::{collection::CollectionId, photo::PhotoId};
 pub(crate) struct CollectionPhotoMapper;
 
 impl CollectionPhotoMapper {
+    /// 删除指定相册中的指定照片关联, 并返回受影响的照片数量.
     pub async fn delete_by_collection_id_and_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -33,6 +34,7 @@ impl CollectionPhotoMapper {
 
     /// 根据photo_ids 删除收藏夹照片
     /// 返回HashMap<受影响的收藏夹id, 该收藏夹删除的照片个数(为负)>
+    /// 删除照片对应的全部相册关联, 并返回受影响的相册计数.
     pub async fn delete_by_photo_ids(
         db: &impl ConnectionTrait,
         photo_ids: &[PhotoId],
@@ -64,6 +66,7 @@ impl CollectionPhotoMapper {
 
     /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
     /// 由 repository 层构造 CursorPage 并截断消费。
+    /// 查询相册中的照片 ID.
     pub async fn query_photo_id_by_collection_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -91,6 +94,7 @@ impl CollectionPhotoMapper {
             .to_ok()
     }
 
+    /// 删除相册下的全部照片关联.
     pub async fn delete_by_collection_id(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -106,6 +110,7 @@ impl CollectionPhotoMapper {
     }
 
     /// 查询包含指定照片的所有收藏夹 ID
+    /// 查询照片所属的相册 ID, 并按用户权限过滤.
     pub async fn query_collection_ids_by_photo_id(
         db: &impl ConnectionTrait,
         user_id: UserId,

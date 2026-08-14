@@ -128,6 +128,7 @@ pub(crate) fn format_validation_errors(errors: &ValidationErrors) -> String {
     }
 }
 
+/// 递归收集验证错误对应的字段路径.
 fn collect_field_paths(errors: &ValidationErrors, prefix: &str, out: &mut Vec<String>) {
     for (field, kind) in errors.errors() {
         let path = if prefix.is_empty() {

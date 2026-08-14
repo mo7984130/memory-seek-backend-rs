@@ -13,6 +13,7 @@ pub struct CursorPage<T, C> {
 }
 
 impl<T, C> CursorPage<T, C> {
+    /// 创建空分页结果, 并标记为没有下一页.
     pub fn empty() -> Self {
         Self {
             records: vec![],
@@ -21,6 +22,7 @@ impl<T, C> CursorPage<T, C> {
         }
     }
 
+    /// 替换分页记录类型, 保留游标和分页状态.
     pub fn replace_records<U>(self, records: Vec<U>) -> CursorPage<U, C> {
         CursorPage {
             records,
@@ -29,6 +31,7 @@ impl<T, C> CursorPage<T, C> {
         }
     }
 
+    /// 映射分页记录, 保留游标和分页状态.
     pub fn map_records<U, F>(self, map_records: F) -> CursorPage<U, C>
     where
         F: FnOnce(Vec<T>) -> Vec<U>,
@@ -45,6 +48,7 @@ impl<T, C> CursorPage<T, C> {
         }
     }
 
+    /// 仅在存在下一页时从最后一条记录生成下一页游标.
     pub fn with_next_cursor<C2, F>(self, get_cursor: F) -> Result<CursorPage<T, C2>>
     where
         F: FnOnce(&T) -> Result<C2>,
@@ -63,6 +67,7 @@ impl<T, C> CursorPage<T, C> {
 }
 
 impl<T> CursorPage<T, ()> {
+    /// 从多取一条的查询结果构造分页, 并截断超出页大小的记录.
     pub fn from_oversize(mut records: Vec<T>, size: u64) -> Self {
         let size = size as usize;
         let has_more = records.len() > size;

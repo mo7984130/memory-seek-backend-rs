@@ -61,6 +61,7 @@ impl ControllerRouter for CollectionPhotoController {
 
 // 查询照片所属收藏夹
 impl CollectionPhotoController {
+    /// 查询指定照片所属的相册.
     async fn get_collections_by_photo(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -74,6 +75,7 @@ impl CollectionPhotoController {
 
 // 创建
 impl CollectionPhotoController {
+    /// 批量将照片加入相册.
     async fn add_batch(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -108,6 +110,7 @@ impl CollectionPhotoController {
 
 // 查询
 impl CollectionPhotoController {
+    /// 按游标返回相册中的照片.
     async fn get_cursor_page(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -125,6 +128,7 @@ impl CollectionPhotoController {}
 
 // 删除
 impl CollectionPhotoController {
+    /// 从相册移除单张照片.
     async fn remove(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -152,6 +156,7 @@ impl CollectionPhotoController {
         Ok(()).to_r_ok()
     }
 
+    /// 批量从相册移除照片.
     async fn remove_batch(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

@@ -42,6 +42,7 @@ impl From<CollectionRecord> for CollectionView {
 
 #[cfg(feature = "orm")]
 impl CollectionView {
+    /// 为相册封面生成当前查看者可用的裁剪访问令牌.
     pub fn with_generate_cover_token(
         mut self,
         viewer: UserId,
@@ -90,6 +91,7 @@ crate::in_dto!(CollectionUpdateParam, "photo/"; {
 
 pub const COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 
+/// 返回相册照片分页的默认页大小.
 fn collection_photo_cursor_page_default_size() -> u64 {
     COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }

@@ -279,6 +279,7 @@ impl S3Client {
         result
     }
 
+    /// 获取对象存储的流式下载响应.
     pub async fn get_download_stream_response(
         &self,
         key: &str,
@@ -301,6 +302,7 @@ impl S3Client {
         result
     }
 
+    /// 下载对象并应用指定的图片处理参数.
     pub async fn download_with_process(&self, key: &str, process: &str) -> Result<Bytes, OssError> {
         let url = self
             .get_signed_url_with_params(key, Duration::from_secs(3600), Some(process.to_string()))
@@ -322,6 +324,7 @@ impl S3Client {
         result
     }
 
+    /// 获取应用图片处理参数后的流式下载响应.
     pub async fn download_stream_with_process(
         &self,
         key: &str,

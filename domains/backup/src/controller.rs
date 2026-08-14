@@ -22,6 +22,7 @@ impl ControllerRouter for BackupController {
 }
 
 impl BackupController {
+    /// 触发一次异步的定时备份流程.
     async fn trigger(
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,
@@ -38,6 +39,7 @@ impl BackupController {
         })))
     }
 
+    /// 触发一次管理员手动备份流程.
     async fn manual(
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,

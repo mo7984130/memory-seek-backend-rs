@@ -40,6 +40,7 @@ impl ControllerRouter for CollectionController {
 
 // 创建
 impl CollectionController {
+    /// 创建一个新的相册.
     async fn create(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -53,6 +54,7 @@ impl CollectionController {
 
 // 查询
 impl CollectionController {
+    /// 返回当前用户的相册列表.
     async fn get_list(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -65,6 +67,7 @@ impl CollectionController {
 
 // 修改
 impl CollectionController {
+    /// 更新相册信息并校验相册归属.
     async fn update_info(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -79,6 +82,7 @@ impl CollectionController {
 
 // 删除
 impl CollectionController {
+    /// 删除相册及其照片关联.
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

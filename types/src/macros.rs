@@ -221,6 +221,7 @@ macro_rules! validated_newtype {
                 Ok(Self(v))
             }
 
+            /// 取出强类型包装器中的原始值.
             pub fn into_inner(self) -> $inner {
                 self.0
             }

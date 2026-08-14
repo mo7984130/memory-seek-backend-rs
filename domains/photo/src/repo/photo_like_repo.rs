@@ -11,6 +11,7 @@ use super::PhotoRepo;
 use crate::mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper};
 
 impl PhotoRepo {
+    /// 校验照片存在后创建照片点赞.
     pub(crate) async fn like_photo(&self, user_id: UserId, photo_id: PhotoId) -> Result<()> {
         self.transaction(|txn| {
             Box::pin(async move {
@@ -26,6 +27,7 @@ impl PhotoRepo {
         self.cache_photo_like_status(user_id, photo_id, true).await;
         Ok(())
     }
+    /// 删除用户对照片的点赞并维护点赞计数.
     pub(crate) async fn unlike_photo(&self, user_id: UserId, photo_id: PhotoId) -> Result<()> {
         self.transaction(|txn| {
             Box::pin(async move {
@@ -40,6 +42,7 @@ impl PhotoRepo {
         self.cache_photo_like_status(user_id, photo_id, false).await;
         Ok(())
     }
+    /// 按游标查询用户点赞过的照片 ID.
     pub(crate) async fn query_liked_photo_ids(
         &self,
         user_id: UserId,

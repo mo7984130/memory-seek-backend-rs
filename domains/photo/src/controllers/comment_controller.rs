@@ -58,6 +58,7 @@ impl ControllerRouter for CommentController {
 
 // 创建
 impl CommentController {
+    /// 发布一条照片评论.
     async fn publish(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -86,6 +87,7 @@ impl CommentController {}
 
 // 查询
 impl CommentController {
+    /// 按游标查询照片评论, 并返回当前用户的点赞状态.
     async fn get_cursor_page(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -100,6 +102,7 @@ impl CommentController {
 
 // 删除
 impl CommentController {
+    /// 删除当前用户有权删除的评论.
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -124,6 +127,7 @@ impl CommentController {
 
 // 点赞
 impl CommentController {
+    /// 为评论点赞.
     async fn like(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -145,6 +149,7 @@ impl CommentController {
         Ok(()).to_r_ok()
     }
 
+    /// 取消评论点赞.
     async fn unlike(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

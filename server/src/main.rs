@@ -29,6 +29,7 @@ struct Cli {
 }
 
 #[tokio::main]
+/// 加载配置, 初始化应用并启动 HTTP 服务.
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 

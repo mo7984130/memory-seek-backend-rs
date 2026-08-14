@@ -48,6 +48,7 @@ pub struct PersonService;
 
 // 创建
 impl PersonService {
+    /// 异步启动全量人物扫描任务.
     #[instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
         spawn(async move { Self::inner_full_scan(state, admin).await });
@@ -60,6 +61,7 @@ impl PersonService {
         skip_all,
         fields(admin_user_id = %admin)
     )]
+    /// 执行全量扫描, 重建人物聚类和人脸归属.
     pub async fn inner_full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
         let user_id = admin.into_inner();
         info!(user_id = %user_id, "管理员触发人物全量聚类");
@@ -191,6 +193,7 @@ impl PersonService {
         skip_all,
         fields(admin_user_id = %admin)
     )]
+    /// 执行未分配人脸与人物质心的匹配和归属更新.
     async fn inner_assign_unassigned_faces(
         state: Arc<PhotoState>,
         admin: AdminId,
@@ -503,6 +506,7 @@ impl PersonService {
 
     #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
+    /// 查询当前用户可见的人物列表.
     pub async fn get_persons(
         state: &PhotoState,
         user_id: UserId,
@@ -620,6 +624,7 @@ impl PersonService {
         skip_all,
         fields(user_id = %user_id, person_id = %person_id)
     )]
+    /// 查询人物关联的照片并生成照片视图.
     pub async fn get_person_photos(
         state: &PhotoState,
         user_id: UserId,
@@ -656,6 +661,7 @@ impl PersonService {
         skip_all,
         fields(admin_user_id = %admin, person_id = %person_id)
     )]
+    /// 删除人物并清理其人脸归属及相关缓存.
     pub async fn delete_person(
         state: &PhotoState,
         admin: AdminId,

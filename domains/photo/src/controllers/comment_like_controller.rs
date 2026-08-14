@@ -24,6 +24,7 @@ impl ControllerRouter for CommentLikeController {
 
 // 创建
 impl CommentLikeController {
+    /// 为评论点赞.
     async fn like(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -43,6 +44,7 @@ impl CommentLikeController {}
 
 // 删除
 impl CommentLikeController {
+    /// 取消评论点赞.
     async fn unlike(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

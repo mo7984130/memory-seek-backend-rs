@@ -12,6 +12,7 @@ use crate::mappers::{
 };
 
 impl PhotoRepo {
+    /// 查询用户可见的照片所属相册 ID.
     pub(crate) async fn query_collection_ids_by_photo(
         &self,
         user_id: UserId,
@@ -19,12 +20,14 @@ impl PhotoRepo {
     ) -> common::error::contextual::Result<Vec<CollectionId>> {
         CollectionPhotoMapper::query_collection_ids_by_photo_id(&self.db, user_id, photo_id).await
     }
+    /// 批量查询相册的 ID 和名称摘要.
     pub(crate) async fn query_collection_briefs(
         &self,
         ids: &[CollectionId],
     ) -> common::error::contextual::Result<Vec<(CollectionId, String)>> {
         CollectionMapper::query_id_and_name_by_ids(&self.db, ids).await
     }
+    /// 按游标查询相册中的照片 ID.
     pub(crate) async fn query_collection_photo_ids(
         &self,
         user_id: UserId,
@@ -43,6 +46,7 @@ impl PhotoRepo {
             req.size,
         ))
     }
+    /// 校验归属后批量添加照片到相册.
     pub(crate) async fn add_collection_photos(
         &self,
         user_id: UserId,
@@ -74,6 +78,7 @@ impl PhotoRepo {
         })
         .await
     }
+    /// 校验归属后批量移除相册中的照片.
     pub(crate) async fn remove_collection_photos(
         &self,
         user_id: UserId,
@@ -128,6 +133,7 @@ impl PhotoRepo {
         })
         .await
     }
+    /// 查询用户的相册列表.
     pub(crate) async fn query_collections(
         &self,
         user_id: UserId,
@@ -135,6 +141,7 @@ impl PhotoRepo {
         CollectionMapper::query_by_user_id(&self.db, user_id).await
     }
 
+    /// 创建用户相册.
     pub(crate) async fn create_collection(
         &self,
         user_id: UserId,
@@ -143,6 +150,7 @@ impl PhotoRepo {
         CollectionMapper::insert(&self.db, user_id, req.name, req.description).await
     }
 
+    /// 校验归属后更新相册信息.
     pub(crate) async fn update_collection(
         &self,
         user_id: UserId,
@@ -161,6 +169,7 @@ impl PhotoRepo {
         Ok(())
     }
 
+    /// 校验归属后删除相册及其照片关联.
     pub(crate) async fn delete_collection(&self, user_id: UserId, id: CollectionId) -> Result<()> {
         self.transaction(|txn| {
             Box::pin(async move {

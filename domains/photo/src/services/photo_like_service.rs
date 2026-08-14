@@ -12,6 +12,7 @@ pub(crate) struct PhotoLikeService;
 
 // 创建
 impl PhotoLikeService {
+    /// 为照片点赞; 重复点赞由仓储层保证幂等.
     #[common::metered(name = "like_photo")]
     #[tracing::instrument(
         name = "like_photo",
@@ -58,6 +59,7 @@ impl PhotoLikeService {
 
 // 删除
 impl PhotoLikeService {
+    /// 取消用户对照片的点赞.
     #[common::metered(name = "unlike_photo")]
     #[tracing::instrument(
         name = "unlike_photo",
@@ -79,6 +81,7 @@ impl PhotoLikeService {
     owns = ["PhotoLikeMapper"],
 )]
 impl PhotoLikeService {
+    /// 清理照片删除后失效的点赞记录.
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,

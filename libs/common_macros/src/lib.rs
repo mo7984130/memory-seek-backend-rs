@@ -45,6 +45,7 @@ impl Parse for MeteredArgs {
     }
 }
 
+/// 为异步 Result 函数注入指标计数逻辑.
 fn expand_metered(
     args: MeteredArgs,
     mut function: ItemFn,
@@ -82,6 +83,7 @@ fn expand_metered(
     Ok(quote!(#function))
 }
 
+/// 判断函数返回类型的末段是否为 Result.
 fn returns_result(output: &ReturnType) -> bool {
     let ReturnType::Type(_, ty) = output else {
         return false;

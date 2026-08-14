@@ -2,6 +2,7 @@ use metrics::gauge;
 use std::path::PathBuf;
 use sysinfo::{Disks, System};
 
+/// 采集并更新系统资源指标.
 pub fn collect_system_metrics(sys: &mut System) {
     sys.refresh_all();
 

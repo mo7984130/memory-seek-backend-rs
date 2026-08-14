@@ -62,6 +62,7 @@ impl ControllerRouter for FaceController {
 
 // 创建
 impl FaceController {
+    /// 启动全量人脸计算任务.
     async fn full_compute(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -82,6 +83,7 @@ impl FaceController {
         Ok(()).to_r_ok()
     }
 
+    /// 启动增量人脸计算任务.
     async fn incremental_compute(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -106,6 +108,7 @@ impl FaceController {
 // 修改
 impl FaceController {
     /// 修改人脸归属: 将单张人脸移动到指定人物
+    /// 修改人脸所属人物, 或取消人物归属.
     async fn change_belonging(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -128,6 +131,7 @@ impl FaceController {
     }
 
     /// 取消人脸归属(路径不带 person_id 段)
+    /// 取消单张人脸的人物归属.
     async fn unassign_face(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -151,6 +155,7 @@ impl FaceController {
 
 // 查询
 impl FaceController {
+    /// 查询照片中的人脸列表.
     async fn get_faces_by_photo_id(
         State(state): State<Arc<PhotoState>>,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
@@ -161,6 +166,7 @@ impl FaceController {
     }
 
     /// 获取"包含未分配人脸"的照片列表(游标分页, 不区分照片归属者)
+    /// 分页查询包含未分配人脸的照片.
     async fn get_unassigned_face_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -175,6 +181,7 @@ impl FaceController {
 // 删除
 impl FaceController {
     /// 删除人脸(仅限未归属人物的人脸)
+    /// 删除一张未归属人物的人脸.
     async fn delete_face(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -196,6 +203,7 @@ impl FaceController {
     }
 
     /// 批量删除人脸(仅限未归属人物的人脸, 已归属人脸会被跳过)
+    /// 批量删除未归属人物的人脸.
     async fn delete_faces_batch(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

@@ -15,6 +15,7 @@ pub struct Config {
     pub force_path_style: bool,
 }
 
+/// 根据配置初始化对象存储客户端.
 pub fn init(cfg: &Config) -> Arc<S3Client> {
     info!("初始化 S3 客户端");
     let client = S3Client::new(&cfg.to_oss_config());
@@ -23,6 +24,7 @@ pub fn init(cfg: &Config) -> Arc<S3Client> {
 }
 
 impl Config {
+    /// 将应用配置转换为对象存储客户端配置.
     pub fn to_oss_config(&self) -> oss::S3Config {
         oss::S3Config {
             endpoint: self.endpoint.clone(),

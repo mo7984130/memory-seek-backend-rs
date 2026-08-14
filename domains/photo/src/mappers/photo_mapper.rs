@@ -19,6 +19,7 @@ impl PhotoMapper {}
 
 // 修改
 impl PhotoMapper {
+    /// 按增量更新照片的评论数量.
     pub async fn update_comment_count_delta(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -37,6 +38,7 @@ impl PhotoMapper {
     }
 
     /// 更新照片点赞数（增量）
+    /// 按增量更新照片的点赞数量.
     pub async fn update_like_count_delta(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -54,6 +56,7 @@ impl PhotoMapper {
 
 // 查询
 impl PhotoMapper {
+    /// 检查照片主记录是否存在.
     pub async fn exists(db: &impl ConnectionTrait, photo_id: PhotoId) -> Result<bool> {
         let count = Entity::find()
             .filter(Column::Id.eq(photo_id))
@@ -62,6 +65,7 @@ impl PhotoMapper {
         Ok(count > 0)
     }
 
+    /// 检查照片存在, 否则返回领域错误.
     pub async fn ensure_exist(db: &impl ConnectionTrait, photo_id: PhotoId) -> Result<()> {
         if !Self::exists(db, photo_id).await? {
             return Err(ContextualError::warn_without_source(
@@ -73,6 +77,7 @@ impl PhotoMapper {
         Ok(())
     }
 
+    /// 批量检查图片 MD5, 并按输入顺序返回存在状态.
     pub async fn exists_by_md5_batch(
         db: &impl ConnectionTrait,
         md5s: &[impl AsRef<str>],
@@ -92,11 +97,13 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    /// 检查指定 MD5 是否已被照片使用.
     pub async fn exists_by_md5(db: &impl ConnectionTrait, md5: impl AsRef<str>) -> Result<bool> {
         let results = Self::exists_by_md5_batch(db, &[md5.as_ref()]).await?;
         Ok(!results.is_empty())
     }
 
+    /// 构建照片游标查询, 并统一处理时间与 ID 的排序边界.
     fn build_cursor_query(
         cursor: Option<&TimeIdCursor<PhotoId>>,
         size: u64,
@@ -145,6 +152,7 @@ impl PhotoMapper {
         query
     }
 
+    /// 查询照片游标页中的 ID, 额外读取一条记录判断是否还有下一页.
     pub async fn query_cursor_page_ids(
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<PhotoId>>,
@@ -161,6 +169,7 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    /// 按照片 ID 批量查询照片记录.
     pub async fn query_by_ids(
         db: &impl ConnectionTrait,
         ids: &[PhotoId],
@@ -179,6 +188,7 @@ impl PhotoMapper {
     }
 
     #[cfg(feature = "face")]
+    /// 批量查询照片 ID 与对象存储文件 ID 的映射.
     pub async fn query_id_and_file_id_by_ids(
         db: &impl ConnectionTrait,
         ids: &[PhotoId],
@@ -194,6 +204,7 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    /// 查询指定用户拥有的照片, 并保留请求 ID 的对应关系.
     pub async fn query_by_user_id_and_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -212,6 +223,7 @@ impl PhotoMapper {
 
     /// 根据文件 ID 查询图片宽高（裁剪 token 归一化坐标换算用）
     // todo delete
+    /// 根据文件 ID 查询图片尺寸.
     pub async fn query_dimensions_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,
@@ -227,6 +239,7 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    /// 根据照片 ID 查询对象存储文件 ID.
     pub async fn query_file_id_by_id(
         db: &impl ConnectionTrait,
         id: PhotoId,
@@ -242,6 +255,7 @@ impl PhotoMapper {
     }
 
     /// 根据文件 ID 查询照片 ID（浏览埋点用）
+    /// 根据对象存储文件 ID 反查照片 ID.
     pub async fn query_photo_id_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,
@@ -259,6 +273,7 @@ impl PhotoMapper {
 
 // 删除
 impl PhotoMapper {
+    /// 在当前事务中删除指定照片主记录.
     pub async fn delete_by_ids(db: &impl ConnectionTrait, ids: &[PhotoId]) -> Result<()> {
         if ids.is_empty() {
             return Ok(());

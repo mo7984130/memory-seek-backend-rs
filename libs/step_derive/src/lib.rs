@@ -294,6 +294,7 @@ impl Parse for Args {
     }
 }
 
+/// 将步骤 impl 展开为 Step 实现和分布式注册项.
 fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
     let Args {
         name,
@@ -379,6 +380,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
     })
 }
 
+/// 将事件处理器 impl 展开为 EventHandler 实现和注册项.
 fn expand_event_handler(args: EventHandlerArgs, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
     let EventHandlerArgs {
         name,
@@ -444,6 +446,7 @@ fn expand_event_handler(args: EventHandlerArgs, item_impl: ItemImpl) -> syn::Res
     })
 }
 
+/// 从路径类型中提取最后一个标识符.
 fn type_last_ident(ty: &Type, error_message: &str) -> syn::Result<Ident> {
     match ty {
         Type::Path(type_path) => type_path

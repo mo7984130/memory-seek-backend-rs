@@ -19,6 +19,7 @@ pub struct AppDomains;
 
 impl AppDomains {
     #[allow(unused_mut)]
+    /// 注册启用的业务域路由并返回公共和受保护路由.
     pub fn init(
         _state: &Arc<AppState>,
         _cfg: &AppConfig,

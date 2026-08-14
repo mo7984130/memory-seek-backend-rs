@@ -17,6 +17,7 @@ pub(crate) struct CommentService;
 
 // 创建
 impl CommentService {
+    /// 发布照片评论, 并由仓储层维护评论关联数据.
     #[common::metered(name = "publish_comment")]
     #[tracing::instrument(
         name = "publish_comment",
@@ -40,6 +41,7 @@ impl CommentService {}
 
 // 查询
 impl CommentService {
+    /// 合并热门评论与时间分页结果, 并标记当前用户的点赞状态.
     #[common::metered(name = "get_comment_cursor_page")]
     #[tracing::instrument(
         name = "get_comment_cursor_page",
@@ -77,6 +79,7 @@ impl CommentService {
 
 // 删除
 impl CommentService {
+    /// 删除评论及其点赞关系.
     #[common::metered(name = "delete_comment")]
     #[tracing::instrument(
         name = "delete_comment",
@@ -98,6 +101,7 @@ impl CommentService {
     owns = ["CommentMapper", "CommentLikeMapper"],
 )]
 impl CommentService {
+    /// 清理照片删除后失效的评论及评论点赞数据.
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
