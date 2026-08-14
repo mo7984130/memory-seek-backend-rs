@@ -189,11 +189,8 @@ impl PhotoService {
             .inspect_err(|_| inc_error!("db"))
             .into_contextual()?;
 
-        // 增加时间线统计、覆盖 MD5 缓存并失效月度统计缓存；失败不阻断上传
-        state
-            .repo
-            .record_uploaded_photo(&md5_hash, photo.created_at)
-            .await;
+        // 增加时间线统计并失效相关缓存；失败不阻断上传
+        state.repo.record_uploaded_photo(photo.created_at).await;
 
         Ok(PhotoView::from_record_with_tokens(
             PhotoRecord::from(photo),

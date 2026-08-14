@@ -34,21 +34,6 @@ pub fn photo_dimensions(file_id: &str) -> String {
     format!("p:p:d:{}", file_id)
 }
 
-/// 生成照片 MD5 去重缓存的 Redis 缓存键
-///
-/// 缓存内容为布尔值（该 MD5 是否已存在），用于上传时快速去重。
-///
-/// # 参数
-/// - `md5`: 照片文件 MD5 哈希
-///
-/// # 返回
-/// 格式为 `p:p:m:{md5}` 的缓存键
-#[inline]
-pub fn photo_md5(md5: &str) -> String {
-    //photo:photo:md5
-    format!("p:p:m:{}", md5)
-}
-
 /// 生成用户对照片点赞状态的 Redis 缓存键。
 ///
 /// 点赞状态取决于浏览者，因此键同时包含用户和照片 ID。
@@ -94,12 +79,6 @@ mod tests {
     fn photo_dimensions_returns_correct_format() {
         let key = photo_dimensions("photos/2024/01/01/abc.jpg");
         assert_eq!(key, "p:p:d:photos/2024/01/01/abc.jpg");
-    }
-
-    #[test]
-    fn photo_md5_returns_correct_format() {
-        let key = photo_md5("d41d8cd98f00b204e9800998ecf8427e");
-        assert_eq!(key, "p:p:m:d41d8cd98f00b204e9800998ecf8427e");
     }
 
     #[test]

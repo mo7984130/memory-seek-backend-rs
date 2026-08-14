@@ -45,7 +45,6 @@ pub struct PhotoRepo {
     cache_photo_cursor_ids: MultiLevelCache<Vec<PhotoId>, ContextualError>,
     cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     cache_photo_dimensions: MultiLevelCache<(i32, i32), ContextualError>,
-    cache_photo_md5: MultiLevelCache<bool, ContextualError>,
     #[cfg(feature = "face")]
     pub(super) cache_person: MultiLevelCache<PersonBriefRow, ContextualError>,
 }
@@ -94,11 +93,6 @@ impl PhotoRepo {
             ),
             cache_photo_dimensions: MultiLevelCache::new_with_name(
                 "photo_dimensions",
-                redis.clone(),
-                cache_config,
-            ),
-            cache_photo_md5: MultiLevelCache::new_with_name(
-                "photo_md5",
                 redis.clone(),
                 cache_config,
             ),
@@ -242,26 +236,12 @@ impl PhotoRepo {
     }
 
     pub async fn exists_by_md5(&self, md5: &str) -> Result<bool> {
-        let key = RedisKeys::photo::photo::photo_md5(md5);
-        self.cache_photo_md5
-            .get_or_load(key.as_str(), PHOTO_CACHE_TTL, || async move {
-                PhotoMapper::exists_by_md5(&self.db, md5).await
-            })
-            .timed(metrics_name!("cache_get_or_load"))
-            .await
+        PhotoMapper::exists_by_md5(&self.db, md5).await
     }
 
-    pub async fn record_uploaded_photo(
-        &self,
-        md5: &str,
-        created_at: chrono::DateTime<chrono::Utc>,
-    ) {
-        let md5_key = RedisKeys::photo::photo::photo_md5(md5);
+    pub async fn record_uploaded_photo(&self, created_at: chrono::DateTime<chrono::Utc>) {
         let _ = TimelineStatMapper::incr_stat(&self.db, created_at).await;
         let _ = tokio::join!(
-            self.cache_photo_md5
-                .put(&md5_key, true, PHOTO_CACHE_TTL)
-                .timed(metrics_name!("cache_put")),
             self.cache_timeline_stat
                 .invalidate(RedisKeys::photo::timeline_stat::monthly_stats())
                 .timed(metrics_name!("cache_invalidate")),
