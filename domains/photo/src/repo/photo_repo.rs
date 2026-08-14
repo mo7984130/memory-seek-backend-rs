@@ -11,7 +11,10 @@ use multi_level_cache::{CacheConfig, MultiLevelCache};
 use sea_orm::{ActiveModelTrait, DatabaseConnection};
 use serde::{Deserialize, Serialize};
 use types::auth::user::UserId;
-use types::photo::dto::{photo::PhotoCursorParam, timeline_stat::MonthStat};
+use types::photo::dto::{
+    photo::{PageDirection, PhotoCursorParam},
+    timeline_stat::MonthStat,
+};
 use types::photo::photo::{ActiveModel, Model, PhotoId, PhotoRecord};
 
 #[cfg(feature = "face")]
@@ -26,6 +29,7 @@ use crate::models::PersonBriefRow;
 
 const PHOTO_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 const TIMELINE_STAT_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
+const PHOTO_CURSOR_CACHE_MAX_SIZE: u64 = 1024;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub(super) struct CachedPhotoLike {
@@ -38,6 +42,7 @@ pub struct PhotoRepo {
     pub(super) db: DatabaseConnection,
     cache_photo_info: MultiLevelCache<PhotoRecord, ContextualError>,
     cache_photo_like: MultiLevelCache<CachedPhotoLike, ContextualError>,
+    cache_photo_cursor_ids: MultiLevelCache<Vec<PhotoId>, ContextualError>,
     cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     cache_photo_dimensions: MultiLevelCache<(i32, i32), ContextualError>,
     cache_photo_md5: MultiLevelCache<bool, ContextualError>,
@@ -74,6 +79,11 @@ impl PhotoRepo {
             ),
             cache_photo_like: MultiLevelCache::new_with_name(
                 "photo_like",
+                redis.clone(),
+                cache_config,
+            ),
+            cache_photo_cursor_ids: MultiLevelCache::new_with_name(
+                "photo_cursor_ids",
                 redis.clone(),
                 cache_config,
             ),
@@ -157,6 +167,27 @@ impl PhotoRepo {
     }
 
     pub async fn query_photo_cursor_ids(&self, req: PhotoCursorParam) -> Result<Vec<PhotoId>> {
+        if req.cursor.is_none() && req.anchor_time.is_none() {
+            let key = RedisKeys::photo::photo::photo_cursor_page_ids(req.direction);
+            let photo_ids = self
+                .cache_photo_cursor_ids
+                .get_or_load(key, PHOTO_CACHE_TTL, || async move {
+                    PhotoMapper::query_cursor_page_ids(
+                        &self.db,
+                        None,
+                        PHOTO_CURSOR_CACHE_MAX_SIZE,
+                        req.direction,
+                        None,
+                    )
+                    .await
+                })
+                .await?;
+            return Ok(photo_ids
+                .into_iter()
+                .take((req.size + 1) as usize)
+                .collect());
+        }
+
         PhotoMapper::query_cursor_page_ids(
             &self.db,
             req.cursor,
@@ -165,6 +196,14 @@ impl PhotoRepo {
             req.anchor_time,
         )
         .await
+    }
+
+    async fn invalidate_photo_cursor_ids(&self) {
+        let keys = [
+            RedisKeys::photo::photo::photo_cursor_page_ids(PageDirection::Next).to_owned(),
+            RedisKeys::photo::photo::photo_cursor_page_ids(PageDirection::Prev).to_owned(),
+        ];
+        let _ = self.cache_photo_cursor_ids.invalidate_batch(&keys).await;
     }
 
     pub async fn insert_photo(&self, photo: ActiveModel) -> Result<Model> {
@@ -225,6 +264,8 @@ impl PhotoRepo {
             self.cache_timeline_stat
                 .invalidate(RedisKeys::photo::timeline_stat::monthly_stats())
                 .timed(metrics_name!("cache_invalidate")),
+            self.invalidate_photo_cursor_ids()
+                .timed(metrics_name!("cache_invalidate")),
         );
     }
 
@@ -282,6 +323,7 @@ impl PhotoRepo {
                 .invalidate_batch(&dimension_keys),
             self.cache_timeline_stat
                 .invalidate(RedisKeys::photo::timeline_stat::monthly_stats()),
+            self.invalidate_photo_cursor_ids(),
             self.cache_person.invalidate_batch(&person_keys),
         );
         #[cfg(not(feature = "face"))]
@@ -291,6 +333,7 @@ impl PhotoRepo {
                 .invalidate_batch(&dimension_keys),
             self.cache_timeline_stat
                 .invalidate(RedisKeys::photo::timeline_stat::monthly_stats()),
+            self.invalidate_photo_cursor_ids(),
         );
     }
 }

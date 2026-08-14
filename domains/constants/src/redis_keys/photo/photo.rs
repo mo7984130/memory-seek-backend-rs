@@ -1,4 +1,7 @@
-use types::{auth::user::UserId, photo::photo::PhotoId};
+use types::{
+    auth::user::UserId,
+    photo::{dto::photo::PageDirection, photo::PhotoId},
+};
 
 /// 生成照片信息的 Redis 缓存键
 ///
@@ -58,6 +61,18 @@ pub fn photo_is_liked(user_id: UserId, photo_id: PhotoId) -> String {
     format!("p:p:l:{}:{}", user_id, photo_id)
 }
 
+/// 生成照片首屏 ID 列表的 Redis 缓存键。
+///
+/// 缓存按排序方向拆分，供无游标、无锚点时间的首屏分页共用。
+#[inline]
+pub fn photo_cursor_page_ids(direction: PageDirection) -> &'static str {
+    //photo:photo:cursor_page_ids
+    match direction {
+        PageDirection::Next => "p:p:c:n",
+        PageDirection::Prev => "p:p:c:p",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,5 +106,11 @@ mod tests {
     fn photo_is_liked_returns_correct_format() {
         let key = photo_is_liked(UserId(7), PhotoId(42));
         assert_eq!(key, "p:p:l:7:42");
+    }
+
+    #[test]
+    fn photo_cursor_page_ids_returns_correct_format() {
+        assert_eq!(photo_cursor_page_ids(PageDirection::Next), "p:p:c:n");
+        assert_eq!(photo_cursor_page_ids(PageDirection::Prev), "p:p:c:p");
     }
 }
