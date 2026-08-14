@@ -219,7 +219,7 @@ impl PhotoRepo {
         let mut ctx = PhotoDeleteContext {
             photos,
             #[cfg(feature = "face")]
-            person_ids: Vec::new(),
+            affected_person_ids: Vec::new(),
         };
         PHOTO_DELETE_PIPELINE
             .run(&self.db, &mut ctx)
@@ -239,15 +239,23 @@ impl PhotoRepo {
         PhotoMapper::exists_by_md5(&self.db, md5).await
     }
 
-    pub async fn record_uploaded_photo(&self, created_at: chrono::DateTime<chrono::Utc>) {
-        let _ = TimelineStatMapper::incr_stat(&self.db, created_at).await;
-        let _ = tokio::join!(
-            self.cache_timeline_stat
-                .invalidate(RedisKeys::photo::timeline_stat::monthly_stats())
-                .timed(metrics_name!("cache_invalidate")),
-            self.invalidate_photo_cursor_ids()
-                .timed(metrics_name!("cache_invalidate")),
-        );
+    pub async fn record_uploaded_photo(
+        &self,
+        created_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        TimelineStatMapper::incr_stat(&self.db, created_at).await?;
+        let _ = self
+            .cache_timeline_stat
+            .invalidate(RedisKeys::photo::timeline_stat::monthly_stats())
+            .timed(metrics_name!("cache_invalidate"))
+            .await;
+        Ok(())
+    }
+
+    pub async fn invalidate_uploaded_photo_cursor(&self) {
+        self.invalidate_photo_cursor_ids()
+            .timed(metrics_name!("cache_invalidate"))
+            .await;
     }
 
     pub async fn get_photo_dimensions(&self, file_id: &str) -> Result<(i32, i32)> {
@@ -280,7 +288,7 @@ impl PhotoRepo {
     pub async fn invalidate_deleted_photos(
         &self,
         photos: &[PhotoRecord],
-        #[cfg(feature = "face")] person_ids: &[PersonId],
+        #[cfg(feature = "face")] affected_person_ids: &[PersonId],
     ) {
         let photo_keys = photos
             .iter()
@@ -292,7 +300,7 @@ impl PhotoRepo {
             .collect::<Vec<_>>();
 
         #[cfg(feature = "face")]
-        let person_keys = person_ids
+        let person_keys = affected_person_ids
             .iter()
             .map(|&id| RedisKeys::photo::person::person_info(id))
             .collect::<Vec<_>>();
@@ -323,7 +331,8 @@ impl PhotoRepo {
 pub(crate) struct PhotoDeleteContext {
     pub photos: Vec<PhotoRecord>,
     #[cfg(feature = "face")]
-    pub person_ids: Vec<PersonId>,
+    /// 删除人脸步骤更新过统计的人物 ID，供事务提交后失效缓存。
+    pub affected_person_ids: Vec<PersonId>,
 }
 
 impl PhotoDeleteContext {

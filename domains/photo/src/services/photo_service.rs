@@ -1,4 +1,4 @@
-use std::pin::Pin;
+use std::{pin::Pin, sync::Arc};
 
 use bytes::Bytes;
 use chrono::Utc;
@@ -32,6 +32,22 @@ use types::{
 };
 
 pub(crate) struct PhotoService;
+
+/// 照片主记录落库后发布的事件，供时间线、人脸等后续服务消费。
+pub(crate) struct AfterPhotoUpload {
+    pub photo: PhotoRecord,
+    /// 保留原始字节，供启用 `face` 后的人脸识别订阅者消费。
+    #[allow(dead_code)]
+    pub file_data: Bytes,
+}
+
+step_derive::declare_event!(
+    crate::state::PhotoState,
+    AfterPhotoUpload,
+    AFTER_PHOTO_UPLOAD_HANDLERS,
+    dispatch_after_photo_upload,
+    "after_photo_upload",
+);
 
 // 查询
 impl PhotoService {
@@ -112,7 +128,7 @@ impl PhotoService {
         fields(user_id = %user_id, file_name = %req.file_name)
     )]
     pub async fn upload_photo(
-        state: &PhotoState,
+        state: Arc<PhotoState>,
         user_id: UserId,
         file_data: Bytes,
         req: UploadPhotoParam,
@@ -189,13 +205,16 @@ impl PhotoService {
             .inspect_err(|_| inc_error!("db"))
             .into_contextual()?;
 
-        // 增加时间线统计并失效相关缓存；失败不阻断上传
-        state.repo.record_uploaded_photo(photo.created_at).await;
+        let photo_record = PhotoRecord::from(photo);
+        dispatch_after_photo_upload(
+            Arc::clone(&state),
+            AfterPhotoUpload {
+                photo: photo_record.clone(),
+                file_data,
+            },
+        );
 
-        Ok(PhotoView::from_record_with_tokens(
-            PhotoRecord::from(photo),
-            user_id,
-        )?)
+        Ok(PhotoView::from_record_with_tokens(photo_record, user_id)?)
     }
 
     #[common::metered]
@@ -240,7 +259,7 @@ impl PhotoService {
             .invalidate_deleted_photos(
                 &ctx.photos,
                 #[cfg(feature = "face")]
-                &ctx.person_ids,
+                &ctx.affected_person_ids,
             )
             .await;
 
@@ -263,6 +282,23 @@ impl PhotoService {
         ctx: &mut PhotoDeleteContext,
     ) -> common::Result<()> {
         PhotoMapper::delete_by_ids(txn, &ctx.photo_ids()).await?;
+        Ok(())
+    }
+}
+
+#[step_derive::declare_event_handler(
+    state = crate::state::PhotoState,
+    event = crate::services::photo_service::AfterPhotoUpload,
+    slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_HANDLERS,
+    name = "photo_cursor_cache_invalidation",
+)]
+impl PhotoService {
+    async fn on_after_photo_upload(
+        &self,
+        state: Arc<PhotoState>,
+        _event: Arc<AfterPhotoUpload>,
+    ) -> common::Result<()> {
+        state.repo.invalidate_uploaded_photo_cursor().await;
         Ok(())
     }
 }
@@ -361,7 +397,9 @@ impl PhotoService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::photo_repo::PHOTO_DELETE_STEPS;
+    use crate::{
+        repo::photo_repo::PHOTO_DELETE_STEPS, services::photo_service::AFTER_PHOTO_UPLOAD_HANDLERS,
+    };
     use common::pipeline::Step;
 
     /// 验证 `linkme` 定义即注册:全部清理步骤均被收集,且存在唯一的 final 步骤(主表删除)
@@ -376,5 +414,26 @@ mod tests {
 
         let finals: Vec<_> = steps.iter().filter(|step| step.is_final()).collect();
         assert_eq!(finals.len(), 1);
+    }
+
+    #[test]
+    fn after_upload_registry_collects_all_handlers() {
+        let handlers = AFTER_PHOTO_UPLOAD_HANDLERS.to_vec();
+
+        #[cfg(feature = "face")]
+        assert_eq!(handlers.len(), 3);
+        #[cfg(not(feature = "face"))]
+        assert_eq!(handlers.len(), 2);
+        assert!(
+            handlers
+                .iter()
+                .any(|handler| handler.name() == "photo_cursor_cache_invalidation")
+        );
+        #[cfg(feature = "face")]
+        assert!(
+            handlers
+                .iter()
+                .any(|handler| handler.name() == "face_recognition")
+        );
     }
 }

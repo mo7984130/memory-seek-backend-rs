@@ -1,6 +1,6 @@
 [package]
 name = "photo"
-version = "0.1.18"
+version = "0.1.19"
 edition = "2024"
 
 [features]
@@ -21,6 +21,7 @@ common = { path = "../../common", features = [
     "contextual-cache",
     "contextual-serde",
     "contextual-tokio",
+    "event",
 ] }
 async-trait = { workspace = true }
 step_derive = { path = "../../libs/step_derive" }

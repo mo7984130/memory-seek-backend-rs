@@ -15,6 +15,8 @@ pub mod r;
 pub mod traits;
 pub mod utils;
 
+#[cfg(feature = "event")]
+pub mod event;
 pub mod ext;
 pub mod macros;
 pub mod pipeline;

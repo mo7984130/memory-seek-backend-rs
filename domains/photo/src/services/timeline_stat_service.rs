@@ -1,5 +1,9 @@
-use crate::mappers::timeline_stat_mapper::TimelineStatMapper;
-use crate::state::PhotoState;
+use std::sync::Arc;
+
+use crate::{
+    mappers::timeline_stat_mapper::TimelineStatMapper, services::photo_service::AfterPhotoUpload,
+    state::PhotoState,
+};
 use common::Result;
 use types::photo::dto::timeline_stat::MonthStat;
 
@@ -31,6 +35,26 @@ impl TimelineStatService {
     ) -> common::Result<()> {
         let created_ats = ctx.photos.iter().map(|p| &p.created_at).collect::<Vec<_>>();
         TimelineStatMapper::decr_stat_by_created_ats(txn, &created_ats).await?;
+        Ok(())
+    }
+}
+
+#[step_derive::declare_event_handler(
+    state = crate::state::PhotoState,
+    event = crate::services::photo_service::AfterPhotoUpload,
+    slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_HANDLERS,
+    name = "timeline_stat_create",
+)]
+impl TimelineStatService {
+    async fn on_after_photo_upload(
+        &self,
+        state: Arc<PhotoState>,
+        event: Arc<AfterPhotoUpload>,
+    ) -> common::Result<()> {
+        state
+            .repo
+            .record_uploaded_photo(event.photo.created_at)
+            .await?;
         Ok(())
     }
 }

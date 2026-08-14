@@ -83,7 +83,7 @@ impl PhotoController {
             content_type,
             created_at: None,
         };
-        let photo = PhotoService::upload_photo(&state, user_id, file_data, req).await?;
+        let photo = PhotoService::upload_photo(Arc::clone(&state), user_id, file_data, req).await?;
 
         // 行为审计：上传
         BehaviorService::record(

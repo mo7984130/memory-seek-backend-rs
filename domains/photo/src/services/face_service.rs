@@ -36,7 +36,7 @@ use crate::{
         person_mapper::{PersonCoverUpdate, PersonMapper},
         photo_mapper::PhotoMapper,
     },
-    services::photo_service::PhotoService,
+    services::photo_service::{AfterPhotoUpload, PhotoService},
 };
 
 pub(crate) struct FaceService;
@@ -220,25 +220,27 @@ impl FaceService {
             .inspect_err(|_| inc_error!("download"))
             .into_contextual()?;
 
-        let img = {
-            let _decode_timer = MetricsTimer::start(metrics_name!("photo_decode"));
-            let decode_result = tokio::task::spawn_blocking(move || -> contextual::Result<Img> {
-                image::load_from_memory(&bytes)
-                    .map(|img| img.into_rgb8())
-                    .context_error(
-                        "decode_image_error",
-                        "解码图片失败",
-                        AppError::InternalServerError,
-                    )
-            })
-            .await
-            .inspect_err(|_| inc_error!("decode"))
-            .into_contextual()?;
-            decode_result.inspect_err(|_| inc_error!("decode"))?
-        };
+        let img = Self::decode_photo(bytes).await?;
 
         debug!("下载完成");
         Ok(img)
+    }
+
+    async fn decode_photo(bytes: bytes::Bytes) -> Result<Img> {
+        let _decode_timer = MetricsTimer::start(metrics_name!("photo_decode"));
+        let decode_result = tokio::task::spawn_blocking(move || -> contextual::Result<Img> {
+            image::load_from_memory(&bytes)
+                .map(|img| img.into_rgb8())
+                .context_error(
+                    "decode_image_error",
+                    "解码图片失败",
+                    AppError::InternalServerError,
+                )
+        })
+        .await
+        .inspect_err(|_| inc_error!("decode"))
+        .into_contextual()?;
+        Ok(decode_result.inspect_err(|_| inc_error!("decode"))?)
     }
 
     async fn detect_photo(state: &PhotoState, img: Img) -> Result<Vec<Face>> {
@@ -658,6 +660,34 @@ impl FaceService {
     }
 }
 
+/// 新上传照片的人脸检测。事件在后台分发，检测或写入失败只记录日志，不影响上传结果。
+#[step_derive::declare_event_handler(
+    state = crate::state::PhotoState,
+    event = crate::services::photo_service::AfterPhotoUpload,
+    slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_HANDLERS,
+    name = "face_recognition",
+)]
+impl FaceService {
+    async fn on_after_photo_upload(
+        &self,
+        state: Arc<PhotoState>,
+        event: Arc<AfterPhotoUpload>,
+    ) -> common::Result<()> {
+        let image = Self::decode_photo(event.file_data.clone()).await?;
+        let faces = Self::detect_photo(&state, image)
+            .timed(metrics_name!("photo_detect"))
+            .await?;
+        let faces = faces
+            .into_iter()
+            .map(|face| face::NewFaceRecord::from_detected(event.photo.id, face))
+            .collect();
+        Self::insert_faces(&state, faces)
+            .timed(metrics_name!("insert"))
+            .await?;
+        Ok(())
+    }
+}
+
 // 照片删除步骤:人脸清理
 #[step_derive::declare_step(
     ctx = crate::repo::photo_repo::PhotoDeleteContext,
@@ -712,7 +742,7 @@ impl FaceService {
         }
 
         // 记录受影响人物 ID, 供 delete_photos 在事务提交后失效人物缓存
-        ctx.person_ids = by_person.keys().copied().collect();
+        ctx.affected_person_ids = by_person.keys().copied().collect();
 
         Ok(())
     }

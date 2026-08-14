@@ -50,6 +50,46 @@ pub fn declare_step(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
+/// `declare_event!(<状态类型>, <事件类型>, <切片名>, <发布函数名>, <事件名>)` — 声明后台事件。
+///
+/// 展开为一个 `linkme` 分布式切片和调用 `common::event::dispatch_background` 的发布函数。
+#[proc_macro]
+pub fn declare_event(input: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(input as EventArgs);
+    let EventArgs {
+        state,
+        event,
+        slice,
+        dispatch,
+        name,
+    } = args;
+    quote! {
+        #[::linkme::distributed_slice]
+        pub(crate) static #slice: [&'static dyn ::common::event::EventHandler<#state, #event>] = [..];
+
+        pub(crate) fn #dispatch(
+            state: ::std::sync::Arc<#state>,
+            event: #event,
+        ) {
+            ::common::event::dispatch_background(#name, state, event, &#slice);
+        }
+    }
+    .into()
+}
+
+/// `#[declare_event_handler(...)]` — 声明并注册一个后台事件订阅者。
+///
+/// 标记的 impl 必须且只能包含一个异步回调方法；宏将其作为事件处理器。
+#[proc_macro_attribute]
+pub fn declare_event_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(attr as EventHandlerArgs);
+    let item_impl = parse_macro_input!(item as ItemImpl);
+    match expand_event_handler(args, item_impl) {
+        Ok(ts) => ts.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
+}
+
 /// `declare_pipeline!(<ctx 类型>, <切片名>, <管道名>)` — 声明一个步骤管道
 ///
 /// 展开为「一个 `linkme` 分布式切片 + 一个惰性 `StepPipeline`」,供 `#[declare_step]`
@@ -91,6 +131,38 @@ struct PipelineArgs {
     pipeline: Ident,
 }
 
+struct EventArgs {
+    state: Type,
+    event: Type,
+    slice: Ident,
+    dispatch: Ident,
+    name: LitStr,
+}
+
+impl Parse for EventArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let state = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let event = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let slice = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let dispatch = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let name = input.parse()?;
+        if input.peek(Token![,]) {
+            input.parse::<Token![,]>()?;
+        }
+        Ok(Self {
+            state,
+            event,
+            slice,
+            dispatch,
+            name,
+        })
+    }
+}
+
 impl Parse for PipelineArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let ctx: Type = input.parse()?;
@@ -112,6 +184,55 @@ struct Args {
     is_final: Option<bool>,
     ctx: Option<Type>,
     slice: Option<Type>,
+}
+
+struct EventHandlerArgs {
+    name: LitStr,
+    state: Option<Type>,
+    event: Option<Type>,
+    slice: Option<Type>,
+}
+
+impl Parse for EventHandlerArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut name = None;
+        let mut state = None;
+        let mut event = None;
+        let mut slice = None;
+
+        while !input.is_empty() {
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+                continue;
+            }
+            let key: Ident = input.parse()?;
+            input.parse::<Token![=]>()?;
+            if key == "name" {
+                name = Some(input.parse()?);
+            } else if key == "state" {
+                state = Some(input.parse()?);
+            } else if key == "event" {
+                event = Some(input.parse()?);
+            } else if key == "slice" {
+                slice = Some(input.parse()?);
+            } else {
+                return Err(syn::Error::new(
+                    key.span(),
+                    format!("期望 `name` / `state` / `event` / `slice`,发现 `{key}`"),
+                ));
+            }
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(Self {
+            name: name.ok_or_else(|| input.error("缺少 `name = \"...\"` 参数"))?,
+            state,
+            event,
+            slice,
+        })
+    }
 }
 
 impl Parse for Args {
@@ -256,4 +377,81 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
         #item_impl
         #generated
     })
+}
+
+fn expand_event_handler(args: EventHandlerArgs, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
+    let EventHandlerArgs {
+        name,
+        state,
+        event,
+        slice,
+    } = args;
+    let state =
+        state.ok_or_else(|| syn::Error::new(item_impl.span(), "缺少 `state = <Type>` 参数"))?;
+    let event =
+        event.ok_or_else(|| syn::Error::new(item_impl.span(), "缺少 `event = <Type>` 参数"))?;
+    let slice =
+        slice.ok_or_else(|| syn::Error::new(item_impl.span(), "缺少 `slice = <path>` 参数"))?;
+    let self_ty = item_impl.self_ty.clone();
+
+    let handlers = item_impl
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            ImplItem::Fn(method) if method.sig.asyncness.is_some() => {
+                Some(method.sig.ident.clone())
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let [handler] = handlers.as_slice() else {
+        return Err(syn::Error::new(
+            item_impl.span(),
+            "带 `#[declare_event_handler]` 的 impl 必须且只能包含一个 `async fn` 方法",
+        ));
+    };
+    let handler = handler.clone();
+
+    let self_ty_ident = type_last_ident(
+        &self_ty,
+        "`#[declare_event_handler]` 仅支持路径类型的 impl 目标",
+    )?;
+    let event_ident = type_last_ident(&event, "`event` 必须是路径类型")?;
+    let registration = format_ident!("__event_handler_{}_{}", self_ty_ident, event_ident);
+
+    Ok(quote! {
+        #item_impl
+
+        #[::async_trait::async_trait]
+        impl ::common::event::EventHandler<#state, #event> for #self_ty {
+            fn name(&self) -> &'static str {
+                #name
+            }
+
+            async fn on_event(
+                &self,
+                state: ::std::sync::Arc<#state>,
+                event: ::std::sync::Arc<#event>,
+            ) -> ::common::Result<()> {
+                <#self_ty>::#handler(self, state, event).await
+            }
+        }
+
+        #[allow(non_upper_case_globals)]
+        #[::linkme::distributed_slice(#slice)]
+        static #registration: &'static dyn ::common::event::EventHandler<#state, #event> =
+            &#self_ty as &dyn ::common::event::EventHandler<#state, #event>;
+    })
+}
+
+fn type_last_ident(ty: &Type, error_message: &str) -> syn::Result<Ident> {
+    match ty {
+        Type::Path(type_path) => type_path
+            .path
+            .segments
+            .last()
+            .map(|segment| segment.ident.clone())
+            .ok_or_else(|| syn::Error::new(ty.span(), error_message)),
+        _ => Err(syn::Error::new(ty.span(), error_message)),
+    }
 }
