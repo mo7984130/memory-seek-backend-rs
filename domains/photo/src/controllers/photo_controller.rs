@@ -16,13 +16,14 @@ use common::{
     traits::controller::ControllerRouter,
 };
 use common::{ext::OptionExt, r::R, utils::token_cipher};
-use types::auth::user::UserId;
 use types::photo::{
     ImageToken, ImageTokenType,
     behavior::UserBehaviorAction,
     dto::photo::{PhotoCursorParam, PhotoView},
     models::{DeletePhotosParam, ExistsByMd5BatchParam},
+    photo::PhotoId,
 };
+use types::{auth::user::UserId, cursor::TimeIdCursor};
 
 use crate::{
     services::{
@@ -101,7 +102,7 @@ impl PhotoController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<PhotoCursorParam>,
-    ) -> Result<R<CursorPage<PhotoView, String>>> {
+    ) -> Result<R<CursorPage<PhotoView, TimeIdCursor<PhotoId>>>> {
         PhotoService::get_photo_cursor_page(&state, user_id, req)
             .await
             .to_r_ok()

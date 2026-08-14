@@ -6,6 +6,8 @@ use common::{
     traits::controller::ControllerRouter,
 };
 use types::auth::user::{AdminId, UserId};
+use types::cursor::TimeIdCursor;
+use types::photo::behavior::UserBehaviorId;
 use types::photo::dto::behavior::{
     BehaviorAuditItem, BehaviorAuditQuery, BehaviorStatsItem, BehaviorStatsQuery, BehaviorTopItem,
     BehaviorTopQuery,
@@ -59,7 +61,7 @@ impl BehaviorController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<BehaviorAuditQuery>,
-    ) -> Result<R<CursorPage<BehaviorAuditItem, String>>> {
+    ) -> Result<R<CursorPage<BehaviorAuditItem, TimeIdCursor<UserBehaviorId>>>> {
         let admin = AdminId::new(user_id)?;
         BehaviorService::get_audit(&state, admin, req)
             .await

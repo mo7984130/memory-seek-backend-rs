@@ -34,7 +34,7 @@ impl PhotoLikeService {
         state: &PhotoState,
         user_id: UserId,
         req: LikedPhotosQuery,
-    ) -> Result<CursorPage<PhotoView, String>> {
+    ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
         // 查询用户点赞的照片ID列表和点赞时间（mapper 内部多查 1 条用于判断 has_more）
         let page = state
             .repo
@@ -42,8 +42,8 @@ impl PhotoLikeService {
             .timed(metrics_name!("query_ids"))
             .await?;
 
-        let page = page
-            .with_next_cursor(|&(id, created_at)| Ok(TimeIdCursor { id, created_at }.encode()))?;
+        let page =
+            page.with_next_cursor(|&(id, created_at)| Ok(TimeIdCursor { id, created_at }))?;
         let photo_ids = page.records.iter().map(|(id, _)| *id).collect::<Vec<_>>();
         if photo_ids.is_empty() {
             return Ok(CursorPage::empty());

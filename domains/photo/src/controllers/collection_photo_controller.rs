@@ -22,6 +22,7 @@ use common::{
 };
 use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::{
         behavior::UserBehaviorAction,
         collection::CollectionId,
@@ -112,7 +113,7 @@ impl CollectionPhotoController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedQuery(req): ValidatedQuery<CollectionPhotoCursorPageParam>,
-    ) -> Result<R<CursorPage<PhotoView, String>>> {
+    ) -> Result<R<CursorPage<PhotoView, TimeIdCursor<PhotoId>>>> {
         CollectionPhotoService::get_photos(&state, user_id, collection_id, req)
             .await
             .to_r_ok()

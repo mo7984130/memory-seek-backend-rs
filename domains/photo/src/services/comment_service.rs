@@ -51,15 +51,14 @@ impl CommentService {
         user_id: UserId,
         photo_id: PhotoId,
         req: CommentCursorPageParam,
-    ) -> Result<CursorPage<CommentView, String>> {
+    ) -> Result<CursorPage<CommentView, TimeIdCursor<CommentId>>> {
         let (hot_comments, page, is_like) =
             state.repo.query_comments(user_id, photo_id, &req).await?;
         let page = page.with_next_cursor(|comment| {
             Ok(TimeIdCursor {
                 created_at: comment.created_at,
                 id: comment.id,
-            }
-            .encode())
+            })
         })?;
         page.map_records(|time_comments| {
             let mut comments = hot_comments;

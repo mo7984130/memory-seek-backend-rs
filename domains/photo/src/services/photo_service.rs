@@ -37,6 +37,7 @@ pub(crate) struct PhotoService;
 pub(crate) struct AfterPhotoUpload {
     pub photo: PhotoRecord,
     /// 保留原始字节，供启用 `face` 后的人脸识别订阅者消费。
+    #[cfg(feature = "face")]
     pub file_data: Bytes,
 }
 
@@ -77,7 +78,7 @@ impl PhotoService {
         state: &PhotoState,
         user_id: UserId,
         req: PhotoCursorParam,
-    ) -> Result<CursorPage<PhotoView, String>> {
+    ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
         let page = state
             .repo
             .query_photo_cursor_ids(req)
@@ -95,8 +96,7 @@ impl PhotoService {
             Ok(TimeIdCursor {
                 id: last_vo.id,
                 created_at: last_vo.created_at,
-            }
-            .encode())
+            })
         })
     }
 }
@@ -190,6 +190,7 @@ impl PhotoService {
             Arc::clone(&state),
             AfterPhotoUpload {
                 photo: photo_record.clone(),
+                #[cfg(feature = "face")]
                 file_data,
             },
         );

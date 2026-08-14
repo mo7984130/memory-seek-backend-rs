@@ -152,7 +152,7 @@ impl BehaviorService {
         state: &PhotoState,
         admin: AdminId,
         req: BehaviorAuditQuery,
-    ) -> Result<CursorPage<BehaviorAuditItem, String>> {
+    ) -> Result<CursorPage<BehaviorAuditItem, TimeIdCursor<UserBehaviorId>>> {
         let page = state
             .repo
             .query_behavior_audit(&req)
@@ -163,8 +163,7 @@ impl BehaviorService {
             Ok(TimeIdCursor::<UserBehaviorId> {
                 created_at: record.created_at,
                 id: record.id,
-            }
-            .encode())
+            })
         })?;
 
         Ok(page.map_records(|records| records.into_iter().map(to_audit_item).collect()))

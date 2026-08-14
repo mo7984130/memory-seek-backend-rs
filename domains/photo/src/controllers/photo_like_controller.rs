@@ -14,6 +14,7 @@ use common::{
 };
 use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::{
         behavior::UserBehaviorAction, dto::photo::PhotoView, models::LikedPhotosQuery,
         photo::PhotoId,
@@ -100,7 +101,7 @@ impl PhotoLikeController {
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<LikedPhotosQuery>,
-    ) -> Result<R<CursorPage<PhotoView, String>>> {
+    ) -> Result<R<CursorPage<PhotoView, TimeIdCursor<PhotoId>>>> {
         PhotoLikeService::get_user_liked_photos(&state, user_id, req)
             .await
             .to_r_ok()

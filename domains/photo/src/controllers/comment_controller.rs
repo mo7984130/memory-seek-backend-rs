@@ -15,6 +15,7 @@ use common::{
 };
 use types::{
     auth::user::UserId,
+    cursor::TimeIdCursor,
     photo::{
         behavior::{BehaviorTargetType, UserBehaviorAction},
         comment::CommentId,
@@ -90,7 +91,7 @@ impl CommentController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
         ValidatedQuery(req): ValidatedQuery<CommentCursorPageParam>,
-    ) -> Result<R<CursorPage<CommentView, String>>> {
+    ) -> Result<R<CursorPage<CommentView, TimeIdCursor<CommentId>>>> {
         CommentService::get_cursor_page(&state, user_id, photo_id, req)
             .await
             .to_r_ok()

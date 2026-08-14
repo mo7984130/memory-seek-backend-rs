@@ -61,7 +61,7 @@ impl CollectionPhotoService {
         user_id: UserId,
         collection_id: CollectionId,
         req: CollectionPhotoCursorPageParam,
-    ) -> Result<CursorPage<PhotoView, String>> {
+    ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
         let page = state
             .repo
             .query_collection_photo_ids(user_id, collection_id, &req)
@@ -75,8 +75,7 @@ impl CollectionPhotoService {
             Ok(TimeIdCursor {
                 created_at: vo.created_at,
                 id: vo.id,
-            }
-            .encode())
+            })
         })
     }
 }
