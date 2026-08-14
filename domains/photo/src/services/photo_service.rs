@@ -5,7 +5,10 @@ use bytes::Bytes;
 use chrono::Utc;
 use common::{
     error::AppError,
-    ext::{ContextOptionExt, IntoContextualExt, OptionExt, ResultInspectErrAsync, log_warn},
+    ext::{
+        ContextOptionExt, ContextualResultExt, IntoContextualExt, OptionExt, ResultInspectErrAsync,
+        log_warn,
+    },
     inc_error, metrics_name,
     models::CursorPage,
     timed,
@@ -193,7 +196,8 @@ impl PhotoService {
             .upload(&file_id, &file_data, &metadata.mime_type)
             .timed(metrics_name!("s3_upload"))
             .await
-            .inspect_err(|_| inc_error!("s3"))?;
+            .inspect_err(|_| inc_error!("s3"))
+            .into_contextual()?;
 
         // 更新数据库
         let now = Utc::now();
@@ -214,11 +218,12 @@ impl PhotoService {
         .timed(metrics_name!("db_insert"))
         .await
         .inspect_err_async(|_| async {
-            let _ = state
+            state
                 .s3_client
                 .delete(&file_id)
                 .await
-                .map_err(AppError::from);
+                .into_contextual()
+                .emit_if_err();
         })
         .await
         .inspect_err(|_| inc_error!("db"))
@@ -296,7 +301,8 @@ impl PhotoService {
             .s3_client
             .delete_batch(file_ids)
             .timed(metrics_name!("s3_delete_batch"))
-            .await?;
+            .await
+            .into_contextual()?;
 
         // 失效照片信息缓存（L1 + L2）
         // 缓存键按照片拆分, 删除时逐一失效
@@ -461,7 +467,8 @@ impl PhotoService {
                     .s3_client
                     .download_with_process(&token.file_id, &process_param)
                     .timed(metrics_name!("s3_download_process"))
-                    .await?;
+                    .await
+                    .into_contextual()?;
 
                 Ok(ImageDownloadData::Processed(bytes))
             }
@@ -470,7 +477,8 @@ impl PhotoService {
                     .s3_client
                     .get_download_stream_response(&token.file_id)
                     .timed(metrics_name!("s3_download_stream"))
-                    .await?;
+                    .await
+                    .into_contextual()?;
 
                 let stream: Pin<
                     Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>,

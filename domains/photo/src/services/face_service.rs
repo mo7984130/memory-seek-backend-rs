@@ -249,7 +249,8 @@ impl FaceService {
             .s3_client
             .download_with_process(file_id, "image/resize,m_lfit,w_1920,h_1920")
             .await
-            .inspect_err(|_| inc_error!("download"))?;
+            .inspect_err(|_| inc_error!("download"))
+            .into_contextual()?;
 
         let img = {
             let _decode_timer = MetricsTimer::start(metrics_name!("photo_decode"));

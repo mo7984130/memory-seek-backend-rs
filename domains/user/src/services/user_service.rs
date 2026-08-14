@@ -1,6 +1,8 @@
 use bytes::Bytes;
 use chrono::{Duration, Utc};
-use common::ext::{BoolExt, IntoContextualExt, RedisExt, ResultInspectErrAsync, ToOk, log_err};
+use common::ext::{
+    BoolExt, ContextualResultExt, IntoContextualExt, RedisExt, ResultInspectErrAsync, ToOk, log_err,
+};
 use common::utils::{FileValidator, MetricsTimerExt, rand_utils};
 use common::{Result, error::AppError, metrics_name, timed};
 use constants::{PasswordHasher, RedisKeys};
@@ -156,7 +158,8 @@ pub async fn update_avatar(
         .s3_client
         .upload(&new_key, file_data, &img_metadata.mime_type)
         .timed(metrics_name!("s3_upload"))
-        .await?;
+        .await
+        .into_contextual()?;
 
     // 更新数据库（事务内查旧头像并更新），失败时删除刚上传的文件
     let old_key = state
@@ -164,23 +167,25 @@ pub async fn update_avatar(
         .update_avatar(user_id, new_key.clone())
         .await
         .inspect_err_async(|_| async {
-            let _ = state
+            state
                 .s3_client
                 .delete(&new_key)
                 .await
-                .map_err(AppError::from);
+                .into_contextual()
+                .emit_if_err();
         })
         .await?;
 
     // 删除旧头像
     // 删除失败, 不返回错误
     if let Some(old_key) = old_key {
-        let _ = state
+        state
             .s3_client
             .delete(&old_key)
             .timed(metrics_name!("s3_delete"))
             .await
-            .map_err(AppError::from);
+            .into_contextual()
+            .emit_if_err();
     }
 
     // 生成头像Token
