@@ -51,10 +51,10 @@ impl PhotoService {
             .flatten()
             .map(|p| {
                 let liked = liked_photo_ids.contains(&p.id);
-                let file_id = p.file_id.clone();
-                PhotoView::from(p)
-                    .with_liked(liked)
-                    .with_tokens(&file_id, user_id, token_cipher())
+                Ok(
+                    PhotoView::from_record_with_tokens(p, user_id, token_cipher())?
+                        .with_liked(liked),
+                )
             })
             .collect::<common::error::contextual::Result<Vec<_>>>()?;
         Ok(views)
@@ -201,9 +201,8 @@ impl PhotoService {
             .record_uploaded_photo(&md5_hash, photo.created_at)
             .await;
 
-        let file_id = photo.file_id.clone();
-        Ok(PhotoView::from(PhotoRecord::from(photo)).with_tokens(
-            &file_id,
+        Ok(PhotoView::from_record_with_tokens(
+            PhotoRecord::from(photo),
             user_id,
             token_cipher(),
         )?)

@@ -59,6 +59,16 @@ impl PhotoView {
     }
 
     #[cfg(feature = "orm")]
+    pub fn from_record_with_tokens(
+        record: PhotoRecord,
+        viewer: UserId,
+        token_cipher: &TokenCipher,
+    ) -> common::error::contextual::Result<Self> {
+        let file_id = record.file_id.clone();
+        Self::from(record).with_tokens(&file_id, viewer, token_cipher)
+    }
+
+    #[cfg(feature = "orm")]
     pub fn with_tokens(
         mut self,
         file_id: &str,
@@ -124,6 +134,71 @@ crate::in_dto!(PhotoCursorParam, "photo/", serde_default, docs = "照片游标�
     pub direction: PageDirection,
     pub anchor_time: Option<DateTime<Utc>>,
 });
+
+#[cfg(all(test, feature = "orm"))]
+mod orm_tests {
+    use super::*;
+    use crate::photo::ImageTokenType;
+
+    fn photo_record() -> PhotoRecord {
+        PhotoRecord {
+            id: PhotoId(1),
+            user_id: UserId(2),
+            name: "photo.jpg".to_owned(),
+            size: 1024,
+            width: 640,
+            height: 480,
+            mime_type: "image/jpeg".to_owned(),
+            md5: "md5".to_owned(),
+            file_id: "file-id".to_owned(),
+            comment_count: 0,
+            like_count: 0,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    fn assert_token(token: &str, cipher: &TokenCipher, viewer: UserId, token_type: ImageTokenType) {
+        let token = cipher.decrypt::<ImageToken>(token).unwrap();
+        assert_eq!(token.file_id, "file-id");
+        assert_eq!(token.viewer_id, viewer);
+        assert_eq!(token.token_type, token_type);
+        assert!(token.bbox.is_none());
+    }
+
+    #[test]
+    fn from_record_with_tokens_preserves_fields_and_generates_tokens() {
+        let viewer = UserId(3);
+        let cipher = TokenCipher::new("test-key", "test-salt");
+        let record = photo_record();
+        let expected_created_at = record.created_at;
+
+        let view = PhotoView::from_record_with_tokens(record, viewer, &cipher).unwrap();
+
+        assert_eq!(view.id, PhotoId(1));
+        assert_eq!(view.user_id, UserId(2));
+        assert_eq!(view.name, "photo.jpg");
+        assert_eq!(view.created_at, expected_created_at);
+        assert_token(
+            view.thumbnail_token.as_ref().unwrap(),
+            &cipher,
+            viewer,
+            ImageTokenType::Thumbnail,
+        );
+        assert_token(
+            view.preview_token.as_ref().unwrap(),
+            &cipher,
+            viewer,
+            ImageTokenType::Preview,
+        );
+        assert_token(
+            view.original_token.as_ref().unwrap(),
+            &cipher,
+            viewer,
+            ImageTokenType::Original,
+        );
+    }
+}
 
 impl Default for PhotoCursorParam {
     fn default() -> Self {
