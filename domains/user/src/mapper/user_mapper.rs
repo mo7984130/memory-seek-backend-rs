@@ -8,7 +8,7 @@ use sea_orm::{
 use types::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
 use crate::error_ext::UserOptionExt;
-use crate::models::UserInfoRow;
+use crate::models::UserBriefRow;
 
 /// 用户表数据访问，向 repo 层提供统一的数据库访问入口
 pub struct UserMapper;
@@ -106,14 +106,14 @@ impl UserMapper {
     pub async fn query_info_rows(
         db: &impl ConnectionTrait,
         user_ids: &[UserId],
-    ) -> Result<Vec<UserInfoRow>> {
+    ) -> Result<Vec<UserBriefRow>> {
         Entity::find()
             .filter(Column::Id.is_in(user_ids.iter().copied()))
             .select_only()
             .column_as(Column::Id, "user_id")
             .column(Column::Nickname)
             .column(Column::AvatarFileId)
-            .into_model::<UserInfoRow>()
+            .into_model::<UserBriefRow>()
             .all(db)
             .await?
             .to_ok()

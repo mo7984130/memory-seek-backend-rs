@@ -8,13 +8,13 @@ use types::user::UserBriefView;
 /// 用户信息数据库查询结果（后端内部使用）
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserInfoRow {
+pub struct UserBriefRow {
     pub user_id: UserId,
     pub nickname: String,
     pub avatar_file_id: Option<String>,
 }
 
-impl UserInfoRow {
+impl UserBriefRow {
     /// 转换为 API 响应类型，对头像文件 ID 进行加密（内嵌浏览者身份）
     pub fn into_brief_view(self, viewer: UserId) -> Result<UserBriefView> {
         let avatar_token = self
@@ -46,7 +46,7 @@ mod tests {
     #[test]
     fn test_from_dto_with_avatar() {
         init_test_cipher();
-        let dto = UserInfoRow {
+        let dto = UserBriefRow {
             user_id: UserId(42),
             nickname: "Alice".to_string(),
             avatar_file_id: Some("file123".to_string()),
@@ -60,7 +60,7 @@ mod tests {
     #[test]
     fn test_from_dto_without_avatar() {
         init_test_cipher();
-        let dto = UserInfoRow {
+        let dto = UserBriefRow {
             user_id: UserId(1),
             nickname: "Bob".to_string(),
             avatar_file_id: None,

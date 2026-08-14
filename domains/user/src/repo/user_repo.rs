@@ -12,13 +12,13 @@ use types::user::UserInfo;
 use crate::config::USER_INFO_CACHE_TTL;
 use crate::error_ext::UserOptionExt;
 use crate::mapper::UserMapper;
-use crate::models::UserInfoRow;
+use crate::models::UserBriefRow;
 
 /// 用户数据访问仓储，封装数据库与缓存，向 service 层提供统一的数据访问入口
 pub struct UserRepo {
     db: DatabaseConnection,
     redis: Pool,
-    cache_user_info: MultiLevelCache<UserInfoRow, ContextualError>,
+    cache_user_info: MultiLevelCache<UserBriefRow, ContextualError>,
     cache_user_info_single: MultiLevelCache<UserInfo, ContextualError>,
 }
 
@@ -66,8 +66,8 @@ impl UserRepo {
     pub async fn get_user_info_batch(
         &self,
         user_ids: &[UserId],
-    ) -> Result<Vec<Option<UserInfoRow>>> {
-        let result: Vec<Option<UserInfoRow>> = self
+    ) -> Result<Vec<Option<UserBriefRow>>> {
+        let result: Vec<Option<UserBriefRow>> = self
             .cache_user_info
             .get_or_load_batch(
                 user_ids,
