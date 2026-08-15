@@ -330,9 +330,12 @@ impl PhotoService {
                             "token不包含裁剪信息",
                         )?;
                         let size = 200;
-                        let (width, height) =
-                            state.repo.get_photo_dimensions(&token.file_id).await?;
-                        let (x, y, w, h) = bbox.to_pixel_rect(width as u32, height as u32);
+                        let dimensions = token.source_dimensions.ok_or_warn_bad_request(
+                            "image_token_dimensions_not_found",
+                            "裁剪 token 中没有包含原图尺寸",
+                            "裁剪 token 缺少原图尺寸",
+                        )?;
+                        let (x, y, w, h) = bbox.to_pixel_rect(dimensions.width, dimensions.height);
                         format!("image/crop,x_{x},y_{y},w_{w},h_{h}/resize,w_{size}/format,webp")
                     }
                     _ => unreachable!(),

@@ -239,6 +239,24 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    #[cfg(feature = "face")]
+    /// 按照片 ID 批量查询图片尺寸.
+    pub async fn query_dimensions_by_ids(
+        db: &impl ConnectionTrait,
+        ids: &[PhotoId],
+    ) -> Result<Vec<(PhotoId, i32, i32)>> {
+        Entity::find()
+            .filter(Column::Id.is_in(ids.iter().copied()))
+            .select_only()
+            .column(Column::Id)
+            .column(Column::Width)
+            .column(Column::Height)
+            .into_tuple::<(PhotoId, i32, i32)>()
+            .all(db)
+            .await?
+            .to_ok()
+    }
+
     /// 根据照片 ID 查询对象存储文件 ID.
     pub async fn query_file_id_by_id(
         db: &impl ConnectionTrait,

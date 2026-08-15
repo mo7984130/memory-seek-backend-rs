@@ -491,7 +491,36 @@ impl PersonService {
             .invalidate_persons(&[source_person_id, target_person_id])
             .await;
 
-        Self::to_view(admin.into_inner(), person.into())
+        let (width, height) = state
+            .repo
+            .get_photo_dimensions(&person.cover_file_id)
+            .await?;
+        Self::to_view(
+            admin.into_inner(),
+            PersonBriefRow {
+                id: person.id,
+                name: person.name,
+                cover_file_id: person.cover_file_id,
+                cover_bbox: person.cover_bbox,
+                source_dimensions: types::photo::ImageDimensions {
+                    width: u32::try_from(width).map_err(|_| {
+                        common::error::ContextualError::warn_without_source(
+                            "invalid_photo_dimensions",
+                            "照片尺寸无效",
+                            AppError::InternalServerError,
+                        )
+                    })?,
+                    height: u32::try_from(height).map_err(|_| {
+                        common::error::ContextualError::warn_without_source(
+                            "invalid_photo_dimensions",
+                            "照片尺寸无效",
+                            AppError::InternalServerError,
+                        )
+                    })?,
+                },
+                face_count: person.face_count as i64,
+            },
+        )
     }
 }
 
@@ -611,7 +640,12 @@ impl PersonService {
             id: person.id,
             name: person.name,
             cover_token: Some(token_cipher().encrypt(
-                &ImageToken::crop(viewer, person.cover_file_id, person.cover_bbox),
+                &ImageToken::crop(
+                    viewer,
+                    person.cover_file_id,
+                    person.cover_bbox,
+                    person.source_dimensions,
+                ),
                 Some(&format!("{}:{}", person.id, viewer)),
             )?),
             face_count: person.face_count as u64,

@@ -1,5 +1,5 @@
 use common::{
-    error::contextual::Result,
+    error::{AppError, contextual::Result},
     ext::{IntoContextualExt, ToOk},
 };
 use insight_face_rs::FaceEmbedding;
@@ -9,22 +9,10 @@ use sea_orm::{
 };
 use types::{
     cursor::FaceCountIdCursor,
-    photo::{FaceBBox, face::FaceId, person::*, photo::PhotoId},
+    photo::{FaceBBox, ImageDimensions, face::FaceId, person::*, photo::PhotoId},
 };
 
-use crate::models::PersonBriefRow;
-
-impl From<PersonRecord> for PersonBriefRow {
-    fn from(value: PersonRecord) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            cover_file_id: value.cover_file_id,
-            cover_bbox: value.cover_bbox,
-            face_count: value.face_count as i64,
-        }
-    }
-}
+use crate::{mappers::photo_mapper::PhotoMapper, models::PersonBriefRow};
 
 pub struct PersonMapper;
 
@@ -229,6 +217,7 @@ impl PersonMapper {
         struct BriefRow {
             id: PersonId,
             name: String,
+            cover_photo_id: PhotoId,
             cover_file_id: String,
             cover_bbox: sea_orm::JsonValue,
             face_count: i64,
@@ -238,6 +227,7 @@ impl PersonMapper {
             .select_only()
             .column(Column::Id)
             .column(Column::Name)
+            .column(Column::CoverPhotoId)
             .column(Column::CoverFileId)
             .column(Column::CoverBbox)
             .column(Column::FaceCount)
@@ -245,14 +235,51 @@ impl PersonMapper {
             .all(db)
             .await?;
 
+        let photo_ids = rows
+            .iter()
+            .map(|row| row.cover_photo_id)
+            .collect::<Vec<_>>();
+        let dimensions = PhotoMapper::query_dimensions_by_ids(db, &photo_ids)
+            .await?
+            .into_iter()
+            .map(|(id, width, height)| {
+                if width <= 0 || height <= 0 {
+                    return Err(common::error::ContextualError::warn_without_source(
+                        "invalid_photo_dimensions",
+                        "照片尺寸无效",
+                        AppError::InternalServerError,
+                    ));
+                }
+                Ok((
+                    id,
+                    ImageDimensions {
+                        width: width as u32,
+                        height: height as u32,
+                    },
+                ))
+            })
+            .collect::<Result<std::collections::HashMap<_, _>>>()?;
+
         rows.into_iter()
             .map(|row| {
                 let cover_bbox = serde_json::from_value(row.cover_bbox).into_contextual()?;
+                let source_dimensions =
+                    dimensions
+                        .get(&row.cover_photo_id)
+                        .copied()
+                        .ok_or_else(|| {
+                            common::error::ContextualError::warn_without_source(
+                                "person_cover_photo_not_found",
+                                "人物封面照片不存在",
+                                AppError::InternalServerError,
+                            )
+                        })?;
                 Ok(PersonBriefRow {
                     id: row.id,
                     name: row.name,
                     cover_file_id: row.cover_file_id,
                     cover_bbox,
+                    source_dimensions,
                     face_count: row.face_count,
                 })
             })
