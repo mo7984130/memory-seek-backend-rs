@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use crate::{
-    mappers::timeline_stat_mapper::TimelineStatMapper, services::photo_service::AfterPhotoUpload,
-    state::PhotoState,
-};
+use crate::{services::photo_service::AfterPhotoUpload, state::PhotoState};
 use common::Result;
 use types::photo::dto::timeline_stat::MonthStat;
 
@@ -15,7 +12,7 @@ impl TimelineStatService {
     #[tracing::instrument(skip_all)]
     pub async fn get_monthly_stats(state: &PhotoState) -> Result<Vec<MonthStat>> {
         // 带三级缓存的月度统计（整表一条聚合）
-        let stats = state.repo.get_monthly_stats().await?;
+        let stats = state.timeline_stat_repo.get_monthly_stats().await?;
 
         Ok(stats)
     }
@@ -36,7 +33,7 @@ impl TimelineStatService {
         ctx: &mut crate::repo::photo_repo::PhotoDeleteContext,
     ) -> common::Result<()> {
         let created_ats = ctx.photos.iter().map(|p| &p.created_at).collect::<Vec<_>>();
-        TimelineStatMapper::decr_stat_by_created_ats(txn, &created_ats).await?;
+        crate::repo::TimelineStatRepo::decrement_by_created_ats(txn, &created_ats).await?;
         Ok(())
     }
 }
@@ -55,7 +52,7 @@ impl TimelineStatService {
         event: Arc<AfterPhotoUpload>,
     ) -> common::Result<()> {
         state
-            .repo
+            .timeline_stat_repo
             .record_uploaded_photo(event.photo.created_at)
             .await?;
         Ok(())

@@ -10,11 +10,13 @@ use sea_orm::DatabaseConnection;
 #[cfg(feature = "face")]
 use backup::storage::BackupStorage;
 
-use crate::repo::PhotoRepo;
+use crate::repo::{PhotoRepo, TimelineStatRepo};
 
 pub struct PhotoState {
     /// 照片领域数据访问仓储，封装数据库与多级缓存
     pub repo: PhotoRepo,
+    /// 时间线统计仓储，封装统计表与月度统计缓存
+    pub timeline_stat_repo: TimelineStatRepo,
     pub redis: Pool,
     pub s3_client: Arc<S3Client>,
     #[cfg(feature = "face")]
@@ -34,7 +36,8 @@ impl PhotoState {
         #[cfg(feature = "face")] backup_storage: BackupStorage,
     ) -> Self {
         Self {
-            repo: PhotoRepo::new(db, redis.clone(), cache_config),
+            repo: PhotoRepo::new(db.clone(), redis.clone(), cache_config.clone()),
+            timeline_stat_repo: TimelineStatRepo::new(db, redis.clone(), cache_config),
             redis,
             s3_client,
             #[cfg(feature = "face")]

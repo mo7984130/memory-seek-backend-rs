@@ -249,6 +249,8 @@ impl PhotoService {
             )
             .await;
 
+        state.timeline_stat_repo.invalidate_cache().await;
+
         Ok(())
     }
 }
@@ -286,7 +288,7 @@ impl PhotoService {
         state: Arc<PhotoState>,
         _event: Arc<AfterPhotoUpload>,
     ) -> common::Result<()> {
-        state.repo.invalidate_uploaded_photo_cursor().await;
+        state.repo.after_photo_upload().await;
         Ok(())
     }
 }

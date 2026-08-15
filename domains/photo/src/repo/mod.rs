@@ -7,5 +7,7 @@ mod face_repo;
 mod person_repo;
 mod photo_like_repo;
 pub(crate) mod photo_repo;
+mod timeline_stat_repo;
 
 pub use photo_repo::PhotoRepo;
+pub use timeline_stat_repo::TimelineStatRepo;

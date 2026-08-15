@@ -12,24 +12,17 @@ use multi_level_cache::{CacheConfig, MultiLevelCache};
 use sea_orm::{ActiveModelTrait, DatabaseConnection};
 use serde::{Deserialize, Serialize};
 use types::auth::user::UserId;
-use types::photo::dto::{
-    photo::{PageDirection, PhotoCursorParam},
-    timeline_stat::MonthStat,
-};
+use types::photo::dto::photo::{PageDirection, PhotoCursorParam};
 use types::photo::photo::{ActiveModel, Model, NewPhotoRecord, PhotoId, PhotoRecord};
 
 #[cfg(feature = "face")]
 use types::photo::person::PersonId;
 
-use crate::mappers::{
-    photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper,
-    timeline_stat_mapper::TimelineStatMapper,
-};
+use crate::mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper};
 #[cfg(feature = "face")]
 use crate::models::PersonBriefRow;
 
 const PHOTO_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
-const TIMELINE_STAT_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
 const PHOTO_CURSOR_CACHE_MAX_SIZE: u64 = 1024;
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -44,7 +37,6 @@ pub struct PhotoRepo {
     cache_photo_info: MultiLevelCache<PhotoRecord, ContextualError>,
     cache_photo_like: MultiLevelCache<CachedPhotoLike, ContextualError>,
     cache_photo_cursor_ids: MultiLevelCache<Vec<PhotoId>, ContextualError>,
-    cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     cache_photo_dimensions: MultiLevelCache<(i32, i32), ContextualError>,
     #[cfg(feature = "face")]
     pub(super) cache_person: MultiLevelCache<PersonBriefRow, ContextualError>,
@@ -85,11 +77,6 @@ impl PhotoRepo {
             ),
             cache_photo_cursor_ids: MultiLevelCache::new_with_name(
                 "photo_cursor_ids",
-                redis.clone(),
-                cache_config,
-            ),
-            cache_timeline_stat: MultiLevelCache::new_with_name(
-                "timeline_stat",
                 redis.clone(),
                 cache_config,
             ),
@@ -258,22 +245,8 @@ impl PhotoRepo {
         PhotoMapper::exists_by_md5(&self.db, md5).await
     }
 
-    /// 记录新上传照片对应月份的时间线统计.
-    pub async fn record_uploaded_photo(
-        &self,
-        created_at: chrono::DateTime<chrono::Utc>,
-    ) -> Result<()> {
-        TimelineStatMapper::incr_stat(&self.db, created_at).await?;
-        let _ = self
-            .cache_timeline_stat
-            .invalidate(RedisKeys::photo::timeline_stat::monthly_stats())
-            .timed(metrics_name!("cache_invalidate"))
-            .await;
-        Ok(())
-    }
-
-    /// 失效照片上传后受影响的游标缓存.
-    pub async fn invalidate_uploaded_photo_cursor(&self) {
+    /// 处理照片上传完成后的照片域缓存更新.
+    pub async fn after_photo_upload(&self) {
         self.invalidate_photo_cursor_ids()
             .timed(metrics_name!("cache_invalidate"))
             .await;
@@ -296,19 +269,7 @@ impl PhotoRepo {
             .await
     }
 
-    /// 获取带缓存的月度照片统计.
-    pub async fn get_monthly_stats(&self) -> Result<Vec<MonthStat>> {
-        self.cache_timeline_stat
-            .get_or_load(
-                RedisKeys::photo::timeline_stat::monthly_stats(),
-                TIMELINE_STAT_CACHE_TTL,
-                || async move { TimelineStatMapper::query_monthly_stats(&self.db).await },
-            )
-            .timed(metrics_name!("cache_get_or_load"))
-            .await
-    }
-
-    /// 失效照片删除后受影响的照片, 人物和统计缓存.
+    /// 失效照片删除后受影响的照片和人物缓存.
     pub async fn invalidate_deleted_photos(
         &self,
         photos: &[PhotoRecord],
@@ -334,8 +295,6 @@ impl PhotoRepo {
             self.cache_photo_info.invalidate_batch(&photo_keys),
             self.cache_photo_dimensions
                 .invalidate_batch(&dimension_keys),
-            self.cache_timeline_stat
-                .invalidate(RedisKeys::photo::timeline_stat::monthly_stats()),
             self.invalidate_photo_cursor_ids(),
             self.cache_person.invalidate_batch(&person_keys),
         );
@@ -344,8 +303,6 @@ impl PhotoRepo {
             self.cache_photo_info.invalidate_batch(&photo_keys),
             self.cache_photo_dimensions
                 .invalidate_batch(&dimension_keys),
-            self.cache_timeline_stat
-                .invalidate(RedisKeys::photo::timeline_stat::monthly_stats()),
             self.invalidate_photo_cursor_ids(),
         );
     }
