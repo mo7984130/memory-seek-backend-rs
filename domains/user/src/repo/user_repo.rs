@@ -1,4 +1,5 @@
-use common::error::{ContextualError, contextual::Result};
+use audit::{AuditEvent, AuditService};
+use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::RedisExt;
 use common::utils::MetricsTimerExt;
 use common::{db_transaction, metrics_name};
@@ -20,6 +21,15 @@ pub struct UserRepo {
     redis: Pool,
     cache_user_info: MultiLevelCache<UserBriefRow, ContextualError>,
     cache_user_info_single: MultiLevelCache<UserInfo, ContextualError>,
+}
+
+fn audit_failure(error: AppError) -> ContextualError {
+    ContextualError::error(
+        "user_audit_append",
+        "用户审计事件写入失败",
+        error,
+        AppError::InternalServerError,
+    )
 }
 
 impl UserRepo {
@@ -87,9 +97,22 @@ impl UserRepo {
 
     /// 修改用户昵称，并失效用户信息缓存（L1 + L2）
     pub async fn change_nickname(&self, user_id: UserId, new_nickname: String) -> Result<String> {
-        UserMapper::update_nickname(&self.db, user_id, &new_nickname)
-            .timed(metrics_name!("db_update"))
-            .await?;
+        let nickname_for_update = new_nickname.clone();
+        db_transaction!(contextual & self.db, |txn| {
+            UserMapper::update_nickname(txn, user_id, &nickname_for_update)
+                .timed(metrics_name!("db_update"))
+                .await?;
+            AuditService::append(
+                txn,
+                AuditEvent::new("user.nickname_changed")
+                    .with_actor(user_id.0)
+                    .with_target("user", user_id.0),
+            )
+            .await
+            .map_err(audit_failure)
+        })
+        .timed(metrics_name!("db_transaction"))
+        .await?;
 
         self.invalidate_user_info(user_id).await;
 
@@ -99,7 +122,16 @@ impl UserRepo {
     /// 在事务内更新头像，返回旧头像 key（由调用方决定是否删除旧文件）
     pub async fn update_avatar(&self, user_id: UserId, new_key: String) -> Result<Option<String>> {
         let old_key = db_transaction!(contextual & self.db, |txn| {
-            UserMapper::update_avatar(txn, user_id, new_key).await
+            let old_key = UserMapper::update_avatar(txn, user_id, new_key).await?;
+            AuditService::append(
+                txn,
+                AuditEvent::new("user.avatar_updated")
+                    .with_actor(user_id.0)
+                    .with_target("user", user_id.0),
+            )
+            .await
+            .map_err(audit_failure)?;
+            Ok(old_key)
         })
         .timed(metrics_name!("db_transaction"))
         .await?;
@@ -118,21 +150,45 @@ impl UserRepo {
 
     /// 更新用户密码哈希
     pub async fn update_password(&self, user_id: UserId, new_password_hash: String) -> Result<()> {
-        UserMapper::update_password(&self.db, user_id, new_password_hash)
-            .timed(metrics_name!("db_update"))
+        db_transaction!(contextual & self.db, |txn| {
+            UserMapper::update_password(txn, user_id, new_password_hash).await?;
+            AuditService::append(
+                txn,
+                AuditEvent::new("user.password_changed")
+                    .with_actor(user_id.0)
+                    .with_target("user", user_id.0),
+            )
             .await
+            .map_err(audit_failure)
+        })
+        .timed(metrics_name!("db_transaction"))
+        .await
+    }
+
+    /// 清除 refresh_token，并在同一事务中追加登出审计事件
+    pub async fn clear_refresh_token(&self, user_id: UserId) -> Result<()> {
+        db_transaction!(contextual & self.db, |txn| {
+            UserMapper::clear_refresh_token(txn, user_id).await?;
+            AuditService::append(
+                txn,
+                AuditEvent::new("user.logged_out")
+                    .with_actor(user_id.0)
+                    .with_target("user", user_id.0),
+            )
+            .await
+            .map_err(audit_failure)
+        })
+        .timed(metrics_name!("db_transaction"))
+        .await
     }
 
     /// 登出：清除 refresh_token 与 access_token，并失效用户信息缓存
     pub async fn logout(&self, user_id: UserId) -> Result<()> {
-        let (refresh_token_result, access_token_result) = tokio::join!(
-            UserMapper::clear_refresh_token(&self.db, user_id).timed(metrics_name!("db_update")),
-            self.redis
-                .del(RedisKeys::auth::user_access_token(user_id))
-                .timed(metrics_name!("redis_delete"))
-        );
-        refresh_token_result?;
-        access_token_result?;
+        self.clear_refresh_token(user_id).await?;
+        self.redis
+            .del(RedisKeys::auth::user_access_token(user_id))
+            .timed(metrics_name!("redis_delete"))
+            .await?;
 
         self.invalidate_user_info(user_id).await;
 

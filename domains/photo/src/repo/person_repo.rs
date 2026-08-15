@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use audit::{AuditEvent, AuditService};
 use common::{error::contextual::Result, metrics_name, models::CursorPage, utils::MetricsTimerExt};
 use constants::RedisKeys;
 use types::photo::person::PersonId;
@@ -50,14 +51,31 @@ impl PhotoRepo {
         initials: Option<String>,
     ) -> Result<()> {
         use common::error::AppError;
-        let rows = PersonMapper::rename(&self.db, id, name, initials).await?;
-        if rows == 0 {
-            return Err(common::error::ContextualError::warn_without_source(
-                "person_rename_fail",
-                "重命名人物失败",
-                AppError::bad_request("重命名人物失败"),
-            ));
-        }
+        common::db_transaction!(contextual & self.db, |txn| {
+            let rows = PersonMapper::rename(txn, id, name, initials).await?;
+            if rows == 0 {
+                return Err(common::error::ContextualError::warn_without_source(
+                    "person_rename_fail",
+                    "重命名人物失败",
+                    AppError::bad_request("重命名人物失败"),
+                ));
+            }
+            AuditService::append(
+                txn,
+                AuditEvent::new("photo.person_renamed").with_target("person", id.0),
+            )
+            .await
+            .map_err(|error| {
+                common::error::ContextualError::error(
+                    "photo_audit_append",
+                    "人物重命名审计事件写入失败",
+                    error,
+                    AppError::InternalServerError,
+                )
+            })?;
+            Ok(())
+        })
+        .await?;
         self.invalidate_persons(&[id]).await;
         Ok(())
     }

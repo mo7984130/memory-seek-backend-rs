@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use audit::{AuditEvent, AuditService};
 use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::ContextOptionExt;
 use common::metrics_name;
@@ -205,7 +206,26 @@ impl PhotoRepo {
     /// 插入照片主记录.
     pub async fn insert_photo(&self, photo: NewPhotoRecord) -> Result<Model> {
         let photo: ActiveModel = photo.into();
-        photo.insert(&self.db).await.map_err(Into::into)
+        common::db_transaction!(contextual & self.db, |txn| {
+            let photo = photo.insert(txn).await?;
+            AuditService::append(
+                txn,
+                AuditEvent::new("photo.uploaded")
+                    .with_actor(photo.user_id.0)
+                    .with_target("photo", photo.id.0),
+            )
+            .await
+            .map_err(|error| {
+                ContextualError::error(
+                    "photo_audit_append",
+                    "照片上传审计事件写入失败",
+                    error,
+                    AppError::InternalServerError,
+                )
+            })?;
+            Ok(photo)
+        })
+        .await
     }
 
     /// 批量查询图片 MD5 是否存在.
@@ -222,6 +242,7 @@ impl PhotoRepo {
     ) -> Result<PhotoDeleteContext> {
         let photos = PhotoMapper::query_by_user_id_and_ids(&self.db, user_id, photo_ids).await?;
         let mut ctx = PhotoDeleteContext {
+            user_id,
             photos,
             #[cfg(feature = "face")]
             affected_person_ids: Vec::new(),
@@ -310,6 +331,7 @@ impl PhotoRepo {
 
 /// 照片删除步骤共享上下文，由 repo 查询并鉴权后在单个事务管道内消费。
 pub(crate) struct PhotoDeleteContext {
+    pub user_id: UserId,
     pub photos: Vec<PhotoRecord>,
     #[cfg(feature = "face")]
     /// 删除人脸步骤更新过统计的人物 ID，供事务提交后失效缓存。

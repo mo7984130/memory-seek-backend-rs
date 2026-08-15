@@ -544,8 +544,9 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
+ "audit",
  "axum",
  "chrono",
  "common",
@@ -3545,9 +3546,10 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.1.20"
+version = "0.1.21"
 dependencies = [
  "async-trait",
+ "audit",
  "axum",
  "backup",
  "base64 0.22.1",
@@ -5993,8 +5995,9 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
+ "audit",
  "axum",
  "bytes",
  "chrono",

@@ -1,12 +1,13 @@
 [package]
 name = "photo"
-version = "0.1.20"
+version = "0.1.21"
 edition = "2024"
 
 [features]
 default = []
 metrics = ["common/metrics", "dep:metrics", "oss/metrics", "multi-level-cache/metrics"]
 controller = ["dep:axum"]
+audit = ["audit/persistence"]
 file_validator = ["common/file_validator"]
 face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]
 # TypeScript 类型导出
@@ -23,6 +24,7 @@ common = { path = "../../common", features = [
     "contextual-tokio",
     "event",
 ] }
+audit = { path = "../audit" }
 async-trait = { workspace = true }
 step_derive = { path = "../../libs/step_derive" }
 linkme = { workspace = true }

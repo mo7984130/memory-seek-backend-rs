@@ -11,13 +11,13 @@ path = "src/main.rs"
 default = []
 token_cipher = []
 auth = ["dep:auth", "auth/audit", "email", "token_cipher"]
-user = ["dep:user", "s3", "token_cipher"]
-photo = ["dep:photo", "s3", "token_cipher"]
+user = ["dep:user", "user/audit", "s3", "token_cipher"]
+photo = ["dep:photo", "photo/audit", "s3", "token_cipher"]
 
 email = ["dep:email"]
 metrics = ["common/metrics", "dep:metrics", "photo?/metrics", "user?/metrics", "auth?/metrics", "email?/metrics", "oss?/metrics", "backup?/metrics"]
 s3 = ["dep:oss"]
-backup = ["dep:backup"]
+backup = ["dep:backup", "backup/audit"]
 face-engine = ["dep:insight-face-rs", "photo/face", "backup"]
 
 [dependencies]

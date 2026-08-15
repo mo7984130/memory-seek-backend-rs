@@ -1,3 +1,4 @@
+use audit::{AuditEvent, AuditService};
 use common::{
     error::{AppError, contextual::Result},
     models::CursorPage,
@@ -81,6 +82,13 @@ impl PhotoRepo {
                 let comment =
                     CommentMapper::insert(txn, photo_id, user_id, req.content.into_inner()).await?;
                 PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.comment_published")
+                        .with_actor(user_id.0)
+                        .with_target("comment", comment.id.0),
+                )
+                .await?;
                 Ok(comment)
             })
         })
@@ -101,6 +109,13 @@ impl PhotoRepo {
                 }
                 PhotoMapper::update_comment_count_delta(txn, photo_id, -1).await?;
                 let _ = CommentLikeMapper::delete_all_by_comment_id(txn, comment_id).await;
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.comment_deleted")
+                        .with_actor(user_id.0)
+                        .with_target("comment", comment_id.0),
+                )
+                .await?;
                 Ok(())
             })
         })
@@ -116,6 +131,13 @@ impl PhotoRepo {
                     return Err(AppError::bad_request("已经点赞过"));
                 }
                 CommentMapper::update_like_count_delta(txn, comment_id, 1).await?;
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.comment_liked")
+                        .with_actor(user_id.0)
+                        .with_target("comment", comment_id.0),
+                )
+                .await?;
                 Ok(())
             })
         })
@@ -134,6 +156,13 @@ impl PhotoRepo {
                     return Err(AppError::bad_request("还未点赞"));
                 }
                 CommentMapper::update_like_count_delta(txn, comment_id, -1).await?;
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.comment_unliked")
+                        .with_actor(user_id.0)
+                        .with_target("comment", comment_id.0),
+                )
+                .await?;
                 Ok(())
             })
         })

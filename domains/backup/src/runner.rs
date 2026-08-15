@@ -4,7 +4,9 @@ use crate::hasher::TableHasher;
 use crate::state::BackupState;
 use crate::storage::BackupType;
 use crate::storage::CleanupIssueSeverity;
+use audit::{AuditEvent, AuditService};
 use common::{Result, caller_error, caller_warn, inc_counter, inc_error};
+use serde_json::json;
 use std::sync::Arc;
 use types::auth::user::AdminId;
 
@@ -90,6 +92,8 @@ impl BackupRunner {
         }
 
         result.duration = start.elapsed();
+        Self::record_run_audit(&state, "backup.scheduled_completed", None, &run_id, &result)
+            .await?;
         inc_counter!("scheduled", "tables_exported", result.exported as u64);
         inc_counter!("scheduled", "tables_failed", result.failed as u64);
         inc_counter!("scheduled", "cleaned", result.cleaned as u64);
@@ -109,10 +113,11 @@ impl BackupRunner {
     pub async fn execute_manual(state: Arc<BackupState>, admin: AdminId) -> Result<BackupResult> {
         let start = std::time::Instant::now();
         let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+        let admin_id = admin.into_inner();
 
         tracing::info!(
             run_id = %run_id,
-            user_id = %admin,
+            user_id = %admin_id,
             "Starting manual backup"
         );
 
@@ -150,6 +155,14 @@ impl BackupRunner {
         }
 
         result.duration = start.elapsed();
+        Self::record_run_audit(
+            &state,
+            "backup.manual_completed",
+            Some(admin_id),
+            &run_id,
+            &result,
+        )
+        .await?;
         inc_counter!("manual", "tables_exported", result.exported as u64);
         inc_counter!("manual", "tables_failed", result.failed as u64);
         tracing::info!(
@@ -169,6 +182,29 @@ impl BackupRunner {
     ) -> std::result::Result<std::path::PathBuf, BackupError> {
         let (csv_path, _) = CsvExporter::export(&state.db, table_name, &state.temp_dir).await?;
         Ok(csv_path)
+    }
+
+    /// 在短事务中记录一次备份运行结果；不把文件导出和 S3 操作放进数据库事务。
+    async fn record_run_audit(
+        state: &BackupState,
+        event_type: &str,
+        actor_id: Option<types::auth::user::UserId>,
+        run_id: &str,
+        result: &BackupResult,
+    ) -> Result<()> {
+        let event = AuditEvent::new(event_type).with_detail(json!({
+            "run_id": run_id,
+            "exported": result.exported,
+            "failed": result.failed,
+            "cleaned": result.cleaned,
+            "duration_ms": result.duration.as_millis(),
+        }));
+        let event = actor_id.map_or(event.clone(), |actor_id| event.with_actor(actor_id.0));
+
+        common::db_transaction!(scoped & state.db, |txn| {
+            AuditService::append(txn, event).await
+        })
+        .await
     }
 }
 

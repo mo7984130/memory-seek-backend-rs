@@ -1,3 +1,4 @@
+use audit::{AuditEvent, AuditService};
 use common::{
     error::{AppError, contextual::Result},
     ext::UintExt,
@@ -73,6 +74,13 @@ impl PhotoRepo {
                     )
                     .await?;
                 }
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.collection_photos_added")
+                        .with_actor(user_id.0)
+                        .with_target("collection", collection_id.0),
+                )
+                .await?;
                 Ok(count)
             })
         })
@@ -128,6 +136,13 @@ impl PhotoRepo {
                 }
                 CollectionMapper::update_photo_count_delta(txn, collection_id, -(rows as i64))
                     .await?;
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.collection_photos_removed")
+                        .with_actor(user_id.0)
+                        .with_target("collection", collection_id.0),
+                )
+                .await?;
                 Ok(rows)
             })
         })
@@ -147,7 +162,29 @@ impl PhotoRepo {
         user_id: UserId,
         req: CollectionCreateParam,
     ) -> common::error::contextual::Result<types::photo::collection::CollectionRecord> {
-        CollectionMapper::insert(&self.db, user_id, req.name, req.description).await
+        self.transaction(|txn| {
+            Box::pin(async move {
+                let collection =
+                    CollectionMapper::insert(txn, user_id, req.name, req.description).await?;
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.collection_created")
+                        .with_actor(user_id.0)
+                        .with_target("collection", collection.id.0),
+                )
+                .await
+                .map_err(|error| {
+                    common::error::ContextualError::error(
+                        "photo_audit_append",
+                        "相册审计事件写入失败",
+                        error,
+                        AppError::InternalServerError,
+                    )
+                })?;
+                Ok(collection)
+            })
+        })
+        .await
     }
 
     /// 校验归属后更新相册信息.
@@ -157,8 +194,33 @@ impl PhotoRepo {
         id: CollectionId,
         req: CollectionUpdateParam,
     ) -> Result<()> {
-        let rows =
-            CollectionMapper::update_info(&self.db, id, user_id, req.name, req.description).await?;
+        let rows = self
+            .transaction(|txn| {
+                Box::pin(async move {
+                    let rows =
+                        CollectionMapper::update_info(txn, id, user_id, req.name, req.description)
+                            .await?;
+                    if rows > 0 {
+                        AuditService::append(
+                            txn,
+                            AuditEvent::new("photo.collection_updated")
+                                .with_actor(user_id.0)
+                                .with_target("collection", id.0),
+                        )
+                        .await
+                        .map_err(|error| {
+                            common::error::ContextualError::error(
+                                "photo_audit_append",
+                                "相册审计事件写入失败",
+                                error,
+                                AppError::InternalServerError,
+                            )
+                        })?;
+                    }
+                    Ok(rows)
+                })
+            })
+            .await?;
         if rows == 0 {
             return Err(common::error::ContextualError::warn_without_source(
                 "collection_update_info_fail",
@@ -181,6 +243,13 @@ impl PhotoRepo {
                         AppError::bad_request("删除收藏夹失败"),
                     )?;
                 CollectionPhotoMapper::delete_by_collection_id(txn, id, user_id).await?;
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.collection_deleted")
+                        .with_actor(user_id.0)
+                        .with_target("collection", id.0),
+                )
+                .await?;
                 Ok(())
             })
         })

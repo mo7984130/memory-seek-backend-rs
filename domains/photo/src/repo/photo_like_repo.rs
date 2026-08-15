@@ -1,3 +1,4 @@
+use audit::{AuditEvent, AuditService};
 use common::{
     error::{AppError, contextual::Result},
     models::CursorPage,
@@ -20,6 +21,13 @@ impl PhotoRepo {
                     return Err(AppError::bad_request("已经点赞过"));
                 }
                 PhotoMapper::update_like_count_delta(txn, photo_id, 1).await?;
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.liked")
+                        .with_actor(user_id.0)
+                        .with_target("photo", photo_id.0),
+                )
+                .await?;
                 Ok(())
             })
         })
@@ -35,6 +43,13 @@ impl PhotoRepo {
                     return Err(AppError::bad_request("还未点赞"));
                 }
                 PhotoMapper::update_like_count_delta(txn, photo_id, -1).await?;
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("photo.unliked")
+                        .with_actor(user_id.0)
+                        .with_target("photo", photo_id.0),
+                )
+                .await?;
                 Ok(())
             })
         })

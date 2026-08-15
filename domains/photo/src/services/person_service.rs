@@ -1,3 +1,4 @@
+use audit::{AuditEvent, AuditService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -164,6 +165,11 @@ impl PersonService {
                     }
                     info!("插入人物完成");
                     info!("人脸聚类完成");
+                    AuditService::append(
+                        txn,
+                        AuditEvent::new("photo.person_full_scan").with_actor(user_id.0),
+                    )
+                    .await?;
                     Ok(())
                 })
             })
@@ -322,6 +328,11 @@ impl PersonService {
                         )
                         .await?;
                     }
+                    AuditService::append(
+                        txn,
+                        AuditEvent::new("photo.person_secondary_cluster").with_actor(user_id.0),
+                    )
+                    .await?;
                     Ok(())
                 })
             })
@@ -386,6 +397,7 @@ impl PersonService {
             source_person_id,
             target_person_id,
         } = req;
+        let admin_id = admin.into_inner();
 
         state
             .repo
@@ -468,6 +480,13 @@ impl PersonService {
 
                     // 删除源人物
                     PersonMapper::delete_by_id(txn, source_person_id).await?;
+                    AuditService::append(
+                        txn,
+                        AuditEvent::new("photo.person_merged")
+                            .with_actor(admin_id.0)
+                            .with_target("person", target_person_id.0),
+                    )
+                    .await?;
                     Ok(())
                 })
             })
@@ -496,7 +515,7 @@ impl PersonService {
             .get_photo_dimensions(&person.cover_file_id)
             .await?;
         Self::to_view(
-            admin.into_inner(),
+            admin_id,
             PersonBriefRow {
                 id: person.id,
                 name: person.name,
@@ -701,6 +720,7 @@ impl PersonService {
         admin: AdminId,
         person_id: PersonId,
     ) -> Result<()> {
+        let admin_id = admin.into_inner();
         state
             .repo
             .transaction(|txn| {
@@ -715,6 +735,13 @@ impl PersonService {
                             "删除人物失败",
                             AppError::not_found("人物不存在"),
                         )?;
+                    AuditService::append(
+                        txn,
+                        AuditEvent::new("photo.person_deleted")
+                            .with_actor(admin_id.0)
+                            .with_target("person", person_id.0),
+                    )
+                    .await?;
                     Ok(())
                 })
             })

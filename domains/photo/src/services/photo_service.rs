@@ -18,6 +18,7 @@ use uuid::Uuid;
 use crate::{
     mappers::photo_mapper::PhotoMapper, repo::photo_repo::PhotoDeleteContext, state::PhotoState,
 };
+use audit::{AuditEvent, AuditService};
 use common::Result;
 use types::photo::{
     ImageToken, ImageTokenType,
@@ -270,7 +271,17 @@ impl PhotoService {
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut PhotoDeleteContext,
     ) -> common::Result<()> {
-        PhotoMapper::delete_by_ids(txn, &ctx.photo_ids()).await?;
+        let photo_ids = ctx.photo_ids();
+        PhotoMapper::delete_by_ids(txn, &photo_ids).await?;
+        for photo_id in photo_ids {
+            AuditService::append(
+                txn,
+                AuditEvent::new("photo.deleted")
+                    .with_actor(ctx.user_id.0)
+                    .with_target("photo", photo_id.0),
+            )
+            .await?;
+        }
         Ok(())
     }
 }
