@@ -1,0 +1,14 @@
+[package]
+name = "audit"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+persistence = []
+
+[dependencies]
+common = { path = "../../common", features = ["contextual-sea-orm"] }
+chrono = { workspace = true }
+sea-orm = { workspace = true }
+serde_json = { workspace = true }

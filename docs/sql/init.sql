@@ -249,6 +249,22 @@ COMMENT ON COLUMN photo_user_behavior.detail IS '审计详情JSON(改名前后/�
 COMMENT ON COLUMN photo_user_behavior.ip IS '客户端IP';
 COMMENT ON COLUMN photo_user_behavior.created_at IS '发生时间';
 
+CREATE TABLE IF NOT EXISTS audit_event
+(
+    event_id     BIGINT PRIMARY KEY,
+    event_type   VARCHAR(120) NOT NULL,
+    actor_id     BIGINT NULL,
+    target_type  VARCHAR(64) NULL,
+    target_id    BIGINT NULL,
+    detail       JSONB NULL,
+    occurred_at  TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_event_type_occurred
+    ON audit_event (event_type, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_event_actor_occurred
+    ON audit_event (actor_id, occurred_at DESC);
+
 -- 向量扩展（幂等）
 CREATE EXTENSION IF NOT EXISTS vector;
 

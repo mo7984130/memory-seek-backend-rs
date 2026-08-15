@@ -10,7 +10,7 @@ path = "src/main.rs"
 [features]
 default = []
 token_cipher = []
-auth = ["dep:auth", "email", "token_cipher"]
+auth = ["dep:auth", "auth/audit", "email", "token_cipher"]
 user = ["dep:user", "s3", "token_cipher"]
 photo = ["dep:photo", "s3", "token_cipher"]
 

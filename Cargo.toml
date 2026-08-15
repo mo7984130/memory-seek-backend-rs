@@ -9,6 +9,7 @@ members = [
     "libs/oss",
     "libs/step_derive",
     "domains/constants",
+    "domains/audit",
     "domains/auth",
     "domains/user",
     "domains/photo",

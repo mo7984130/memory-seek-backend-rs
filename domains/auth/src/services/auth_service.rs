@@ -2,6 +2,7 @@ use crate::AuthState;
 use crate::config::{ACCESS_TOKEN_EXPIRE_SECONDS, REFRESH_TOKEN_EXPIRE_DAYS};
 use crate::error_ext::AuthOptionExt;
 use crate::mapper::{AuthInsertParam, AuthMapper};
+use audit::{AuditEvent, AuditService};
 use chrono::{Duration, Utc};
 use common::Result;
 use common::error::AppError;
@@ -213,18 +214,30 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
         .await
         .into_contextual()??;
 
-    // 插入用户
-    let user_model = AuthMapper::insert(
-        &state.db,
-        AuthInsertParam {
-            username: req.username,
-            email: req.email,
-            password: hashed_pw,
-            nickname: req.nickname,
-            inviter: inviter_id,
-        },
-    )
-    .timed(metrics_name!("db_insert"))
+    let insert_param = AuthInsertParam {
+        username: req.username,
+        email: req.email,
+        password: hashed_pw,
+        nickname: req.nickname,
+        inviter: inviter_id,
+    };
+
+    // 用户写入与审计事件必须在同一个数据库事务中提交.
+    let user_model = common::db_transaction!(scoped & state.db, |txn| {
+        let user_model = AuthMapper::insert(txn, insert_param)
+            .timed(metrics_name!("db_insert"))
+            .await?;
+
+        AuditService::append(
+            txn,
+            AuditEvent::new("auth.user_registered")
+                .with_actor(user_model.id.0)
+                .with_target("user", user_model.id.0),
+        )
+        .await?;
+
+        Ok(user_model)
+    })
     .await?;
 
     // 删除已使用的邮箱验证码，防止重放

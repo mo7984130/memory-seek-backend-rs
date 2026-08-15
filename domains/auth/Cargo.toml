@@ -7,8 +7,10 @@ edition = "2024"
 default = []
 metrics = ["common/metrics", "dep:metrics", "email/metrics"]
 controller = ["dep:axum", "dep:serde_json"]
+audit = ["audit/persistence"]
 
 [dependencies]
+audit = { path = "../audit" }
 types = { workspace = true, features = ["orm"] }
 common = { path = "../../common", features = [
     "validators",
