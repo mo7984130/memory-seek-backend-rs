@@ -1,6 +1,6 @@
 //! `step_boundary_check` — 静态检查 `common::pipeline::Step` 的表归属白名单约束
 //!
-//! 规则(作用于所有 `impl ... Step for Xxx` 以及 `#[step_derive::declare_step(...)]`
+//! 规则(作用于所有 `impl ... Step for Xxx` 以及 `#[step_derive::declare_transaction_step(...)]`
 //! 标记的 impl 块的 `on_photo_delete` 方法体):
 //!
 //! 1. 调用路径倒数第二个 segment 以 `Mapper` 结尾时,类型名必须在 `owns()` 白名单内;
@@ -37,7 +37,7 @@ impl Violation {
     }
 }
 
-/// 检查一份 Rust 源码中所有 `impl Step` 与 `#[declare_step]` 的边界约束
+/// 检查一份 Rust 源码中所有 `impl Step` 与 `#[declare_transaction_step]` 的边界约束
 pub fn check_source(source: &str, file: &str) -> Vec<Violation> {
     let Ok(ast) = syn::parse_file(source) else {
         // 语法错误交由 rustc 报告,此处不重复
@@ -55,7 +55,7 @@ pub fn check_source(source: &str, file: &str) -> Vec<Violation> {
             }
         }
     });
-    collect_declare_step_impls(&ast.items, file, &mut violations);
+    collect_declare_transaction_step_impls(&ast.items, file, &mut violations);
     check_error_boundaries(&ast, file, &mut violations);
     violations
 }
@@ -287,12 +287,12 @@ fn collect_step_impls<'a>(items: &'a [Item], f: &mut impl FnMut(&'a ItemImpl)) {
     }
 }
 
-/// 递归收集所有带 `#[declare_step(...)]` 属性的 impl 块,检查其 `on_photo_delete` 方法体
-fn collect_declare_step_impls(items: &[Item], file: &str, violations: &mut Vec<Violation>) {
+/// 递归收集所有带 `#[declare_transaction_step(...)]` 属性的 impl 块,检查其 `on_photo_delete` 方法体
+fn collect_declare_transaction_step_impls(items: &[Item], file: &str, violations: &mut Vec<Violation>) {
     for item in items {
         match item {
             Item::Impl(item_impl) => {
-                if let Some(owns) = parse_declare_step_attr(&item_impl.attrs) {
+                if let Some(owns) = parse_declare_transaction_step_attr(&item_impl.attrs) {
                     for impl_item in &item_impl.items {
                         if let ImplItem::Fn(method) = impl_item {
                             if method.sig.ident == "on_photo_delete" {
@@ -304,7 +304,7 @@ fn collect_declare_step_impls(items: &[Item], file: &str, violations: &mut Vec<V
             }
             Item::Mod(item_mod) => {
                 if let Some((_, items)) = &item_mod.content {
-                    collect_declare_step_impls(items, file, violations);
+                    collect_declare_transaction_step_impls(items, file, violations);
                 }
             }
             _ => {}
@@ -312,16 +312,16 @@ fn collect_declare_step_impls(items: &[Item], file: &str, violations: &mut Vec<V
     }
 }
 
-/// 从 impl 块的属性中提取 `#[declare_step(...)]` 的 `owns` 白名单数组
-fn parse_declare_step_attr(attrs: &[syn::Attribute]) -> Option<Vec<String>> {
+/// 从 impl 块的属性中提取 `#[declare_transaction_step(...)]` 的 `owns` 白名单数组
+fn parse_declare_transaction_step_attr(attrs: &[syn::Attribute]) -> Option<Vec<String>> {
     for attr in attrs {
-        let is_declare_step = attr
+        let is_declare_transaction_step = attr
             .path()
             .segments
             .last()
-            .map(|seg| seg.ident == "declare_step")
+            .map(|seg| seg.ident == "declare_transaction_step")
             .unwrap_or(false);
-        if !is_declare_step {
+        if !is_declare_transaction_step {
             continue;
         }
         if let syn::Meta::List(list) = &attr.meta {
@@ -649,9 +649,9 @@ mod a {
     }
 
     #[test]
-    fn allows_owned_mapper_in_declare_step() {
+    fn allows_owned_mapper_in_declare_transaction_step() {
         let src = r#"
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     ctx = crate::services::photo_service::PhotoDeleteContext,
     name = "foo",
     owns = ["CollectionPhotoMapper", "CollectionMapper"],
@@ -669,9 +669,9 @@ impl FooService {
     }
 
     #[test]
-    fn rejects_unowned_mapper_in_declare_step() {
+    fn rejects_unowned_mapper_in_declare_transaction_step() {
         let src = r#"
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     ctx = PhotoDeleteContext,
     name = "foo",
     owns = ["CollectionMapper"],
@@ -689,9 +689,9 @@ impl FooService {
     }
 
     #[test]
-    fn rejects_direct_entity_in_declare_step() {
+    fn rejects_direct_entity_in_declare_transaction_step() {
         let src = r#"
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     name = "foo",
     owns = [],
     ctx = PhotoDeleteContext,
@@ -709,10 +709,10 @@ impl FooService {
     }
 
     #[test]
-    fn rejects_declare_step_in_nested_module() {
+    fn rejects_declare_transaction_step_in_nested_module() {
         let src = r#"
 mod a {
-    #[step_derive::declare_step(
+    #[step_derive::declare_transaction_step(
         ctx = PhotoDeleteContext,
         name = "foo",
         owns = ["A"],

@@ -1,10 +1,10 @@
-//! `declare_step` — 通用 `common::pipeline::Step` 声明宏(attribute 宏)
+//! `declare_transaction_step` — 事务内 `common::pipeline::Step` 声明宏(attribute 宏)
 //!
 //! 作用于一个 `impl` 块,从其中提取目标类型并声明一个清理/变更步骤,同时
 //! **定义即注册**:通过 `linkme` 分布式切片将步骤注册进调用方声明的步骤集合。
 //!
 //! ```ignore
-//! #[step_derive::declare_step(
+//! #[step_derive::declare_transaction_step(
 //!     ctx = crate::services::photo_service::PhotoDeleteContext,
 //!     slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
 //!     name = "foo_cleanup",
@@ -39,9 +39,9 @@ use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{bracketed, parse_macro_input, Ident, ImplItem, ItemImpl, LitBool, LitStr, Token, Type};
 
-/// `#[declare_step(...)]` 属性宏入口
+/// `#[declare_transaction_step(...)]` 属性宏入口
 #[proc_macro_attribute]
-pub fn declare_step(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn declare_transaction_step(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as Args);
     let item_impl = parse_macro_input!(item as ItemImpl);
     match expand(args, item_impl) {
@@ -50,11 +50,11 @@ pub fn declare_step(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-/// `declare_event!(<状态类型>, <事件类型>, <切片名>, <发布函数名>, <事件名>)` — 声明后台事件。
+/// `declare_async_event!(<状态类型>, <事件类型>, <切片名>, <发布函数名>, <事件名>)` — 声明提交后的异步事件。
 ///
-/// 展开为一个 `linkme` 分布式切片和调用 `common::event::dispatch_background` 的发布函数。
+/// 展开为一个 `linkme` 分布式切片和调用 `common::event::dispatch_async_event` 的发布函数。
 #[proc_macro]
-pub fn declare_event(input: TokenStream) -> TokenStream {
+pub fn declare_async_event(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as EventArgs);
     let EventArgs {
         state,
@@ -65,26 +65,26 @@ pub fn declare_event(input: TokenStream) -> TokenStream {
     } = args;
     quote! {
         #[::linkme::distributed_slice]
-        pub(crate) static #slice: [&'static dyn ::common::event::EventHandler<#state, #event>] = [..];
+        pub(crate) static #slice: [&'static dyn ::common::event::EventConsumer<#state, #event>] = [..];
 
         pub(crate) fn #dispatch(
             state: ::std::sync::Arc<#state>,
             event: #event,
         ) {
-            ::common::event::dispatch_background(#name, state, event, &#slice);
+            ::common::event::dispatch_async_event(#name, state, event, &#slice);
         }
     }
     .into()
 }
 
-/// `#[declare_event_handler(...)]` — 声明并注册一个后台事件订阅者。
+/// `#[declare_event_consumer(...)]` — 声明并注册一个提交后异步事件消费者。
 ///
-/// 标记的 impl 必须且只能包含一个异步回调方法；宏将其作为事件处理器。
+/// 标记的 impl 必须且只能包含一个异步回调方法；宏将其作为事件消费者。
 #[proc_macro_attribute]
-pub fn declare_event_handler(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr as EventHandlerArgs);
+pub fn declare_event_consumer(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(attr as EventConsumerArgs);
     let item_impl = parse_macro_input!(item as ItemImpl);
-    match expand_event_handler(args, item_impl) {
+    match expand_event_consumer(args, item_impl) {
         Ok(ts) => ts.into(),
         Err(e) => e.into_compile_error().into(),
     }
@@ -92,7 +92,7 @@ pub fn declare_event_handler(attr: TokenStream, item: TokenStream) -> TokenStrea
 
 /// `declare_pipeline!(<ctx 类型>, <切片名>, <管道名>)` — 声明一个步骤管道
 ///
-/// 展开为「一个 `linkme` 分布式切片 + 一个惰性 `StepPipeline`」,供 `#[declare_step]`
+/// 展开为「一个 `linkme` 分布式切片 + 一个惰性 `StepPipeline`」,供 `#[declare_transaction_step]`
 /// 注册步骤(定义即注册)与直接执行(`<管道名>.run(...)`)使用:
 ///
 /// ```ignore
@@ -186,14 +186,14 @@ struct Args {
     slice: Option<Type>,
 }
 
-struct EventHandlerArgs {
+struct EventConsumerArgs {
     name: LitStr,
     state: Option<Type>,
     event: Option<Type>,
     slice: Option<Type>,
 }
 
-impl Parse for EventHandlerArgs {
+impl Parse for EventConsumerArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut name = None;
         let mut state = None;
@@ -326,7 +326,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
         quote!(false)
     };
 
-    // 由 impl 目标类型生成唯一的注册元素名(同一模块多个 `#[declare_step]` 也不冲突)
+    // 由 impl 目标类型生成唯一的注册元素名(同一模块多个事务步骤也不冲突)
     let self_ty_ident: Ident = match &*item_impl.self_ty {
         Type::Path(type_path) => type_path
             .path
@@ -337,7 +337,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
         _ => {
             return Err(syn::Error::new(
                 item_impl.span(),
-                "`#[declare_step]` 仅支持路径类型的 impl 目标",
+                "`#[declare_transaction_step]` 仅支持路径类型的 impl 目标",
             ))
         }
     };
@@ -380,9 +380,12 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
     })
 }
 
-/// 将事件处理器 impl 展开为 EventHandler 实现和注册项.
-fn expand_event_handler(args: EventHandlerArgs, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
-    let EventHandlerArgs {
+/// 将事件消费者 impl 展开为 EventConsumer 实现和注册项.
+fn expand_event_consumer(
+    args: EventConsumerArgs,
+    item_impl: ItemImpl,
+) -> syn::Result<TokenStream2> {
+    let EventConsumerArgs {
         name,
         state,
         event,
@@ -396,7 +399,7 @@ fn expand_event_handler(args: EventHandlerArgs, item_impl: ItemImpl) -> syn::Res
         slice.ok_or_else(|| syn::Error::new(item_impl.span(), "缺少 `slice = <path>` 参数"))?;
     let self_ty = item_impl.self_ty.clone();
 
-    let handlers = item_impl
+    let consumer_methods = item_impl
         .items
         .iter()
         .filter_map(|item| match item {
@@ -406,43 +409,43 @@ fn expand_event_handler(args: EventHandlerArgs, item_impl: ItemImpl) -> syn::Res
             _ => None,
         })
         .collect::<Vec<_>>();
-    let [handler] = handlers.as_slice() else {
+    let [consumer_method] = consumer_methods.as_slice() else {
         return Err(syn::Error::new(
             item_impl.span(),
-            "带 `#[declare_event_handler]` 的 impl 必须且只能包含一个 `async fn` 方法",
+            "带 `#[declare_event_consumer]` 的 impl 必须且只能包含一个 `async fn` 方法",
         ));
     };
-    let handler = handler.clone();
+    let consumer_method = consumer_method.clone();
 
     let self_ty_ident = type_last_ident(
         &self_ty,
-        "`#[declare_event_handler]` 仅支持路径类型的 impl 目标",
+        "`#[declare_event_consumer]` 仅支持路径类型的 impl 目标",
     )?;
     let event_ident = type_last_ident(&event, "`event` 必须是路径类型")?;
-    let registration = format_ident!("__event_handler_{}_{}", self_ty_ident, event_ident);
+    let registration = format_ident!("__event_consumer_{}_{}", self_ty_ident, event_ident);
 
     Ok(quote! {
         #item_impl
 
         #[::async_trait::async_trait]
-        impl ::common::event::EventHandler<#state, #event> for #self_ty {
+        impl ::common::event::EventConsumer<#state, #event> for #self_ty {
             fn name(&self) -> &'static str {
                 #name
             }
 
-            async fn on_event(
+            async fn consume(
                 &self,
                 state: ::std::sync::Arc<#state>,
                 event: ::std::sync::Arc<#event>,
             ) -> ::common::Result<()> {
-                <#self_ty>::#handler(self, state, event).await
+                <#self_ty>::#consumer_method(self, state, event).await
             }
         }
 
         #[allow(non_upper_case_globals)]
         #[::linkme::distributed_slice(#slice)]
-        static #registration: &'static dyn ::common::event::EventHandler<#state, #event> =
-            &#self_ty as &dyn ::common::event::EventHandler<#state, #event>;
+        static #registration: &'static dyn ::common::event::EventConsumer<#state, #event> =
+            &#self_ty as &dyn ::common::event::EventConsumer<#state, #event>;
     })
 }
 

@@ -41,11 +41,11 @@ pub(crate) struct AfterPhotoUpload {
     pub file_data: Bytes,
 }
 
-step_derive::declare_event!(
+step_derive::declare_async_event!(
     crate::state::PhotoState,
     AfterPhotoUpload,
-    AFTER_PHOTO_UPLOAD_HANDLERS,
-    dispatch_after_photo_upload,
+    AFTER_PHOTO_UPLOAD_CONSUMERS,
+    publish_after_photo_upload,
     "after_photo_upload",
 );
 
@@ -189,7 +189,7 @@ impl PhotoService {
             .into_contextual()?;
 
         let photo_record = PhotoRecord::from(photo);
-        dispatch_after_photo_upload(
+        publish_after_photo_upload(
             Arc::clone(&state),
             AfterPhotoUpload {
                 photo: photo_record.clone(),
@@ -256,7 +256,7 @@ impl PhotoService {
 }
 
 /// 删除照片主表记录(受外键约束,`is_final` 使其恒在管道最后执行)
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     ctx = crate::repo::photo_repo::PhotoDeleteContext,
     slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
     name = "photo_record_delete",
@@ -275,10 +275,10 @@ impl PhotoService {
     }
 }
 
-#[step_derive::declare_event_handler(
+#[step_derive::declare_event_consumer(
     state = crate::state::PhotoState,
     event = crate::services::photo_service::AfterPhotoUpload,
-    slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_HANDLERS,
+    slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_CONSUMERS,
     name = "photo_cursor_cache_invalidation",
 )]
 impl PhotoService {
@@ -391,7 +391,7 @@ impl PhotoService {
 mod tests {
     use super::*;
     use crate::{
-        repo::photo_repo::PHOTO_DELETE_STEPS, services::photo_service::AFTER_PHOTO_UPLOAD_HANDLERS,
+        repo::photo_repo::PHOTO_DELETE_STEPS, services::photo_service::AFTER_PHOTO_UPLOAD_CONSUMERS,
     };
     use common::pipeline::Step;
 
@@ -410,23 +410,23 @@ mod tests {
     }
 
     #[test]
-    fn after_upload_registry_collects_all_handlers() {
-        let handlers = AFTER_PHOTO_UPLOAD_HANDLERS.to_vec();
+    fn after_upload_registry_collects_all_consumers() {
+        let consumers = AFTER_PHOTO_UPLOAD_CONSUMERS.to_vec();
 
         #[cfg(feature = "face")]
-        assert_eq!(handlers.len(), 3);
+        assert_eq!(consumers.len(), 3);
         #[cfg(not(feature = "face"))]
-        assert_eq!(handlers.len(), 2);
+        assert_eq!(consumers.len(), 2);
         assert!(
-            handlers
+            consumers
                 .iter()
-                .any(|handler| handler.name() == "photo_cursor_cache_invalidation")
+                .any(|consumer| consumer.name() == "photo_cursor_cache_invalidation")
         );
         #[cfg(feature = "face")]
         assert!(
-            handlers
+            consumers
                 .iter()
-                .any(|handler| handler.name() == "face_recognition")
+                .any(|consumer| consumer.name() == "face_recognition")
         );
     }
 }

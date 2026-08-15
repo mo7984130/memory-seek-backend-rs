@@ -19,7 +19,7 @@ impl TimelineStatService {
 }
 
 // 照片删除步骤:时间线统计清理
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     ctx = crate::repo::photo_repo::PhotoDeleteContext,
     slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
     name = "timeline_stat_cleanup",
@@ -38,10 +38,10 @@ impl TimelineStatService {
     }
 }
 
-#[step_derive::declare_event_handler(
+#[step_derive::declare_event_consumer(
     state = crate::state::PhotoState,
     event = crate::services::photo_service::AfterPhotoUpload,
-    slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_HANDLERS,
+    slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_CONSUMERS,
     name = "timeline_stat_create",
 )]
 impl TimelineStatService {

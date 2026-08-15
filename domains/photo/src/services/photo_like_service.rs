@@ -74,7 +74,7 @@ impl PhotoLikeService {
 }
 
 // 照片删除步骤:照片点赞清理
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     ctx = crate::repo::photo_repo::PhotoDeleteContext,
     slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
     name = "photo_like_cleanup",

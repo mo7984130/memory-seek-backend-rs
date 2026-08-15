@@ -94,7 +94,7 @@ impl CommentService {
 }
 
 // 照片删除步骤:评论清理
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     ctx = crate::repo::photo_repo::PhotoDeleteContext,
     slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
     name = "comment_cleanup",

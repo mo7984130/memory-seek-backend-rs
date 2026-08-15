@@ -672,10 +672,10 @@ impl FaceService {
 }
 
 /// 新上传照片的人脸检测。事件在后台分发，检测或写入失败只记录日志，不影响上传结果。
-#[step_derive::declare_event_handler(
+#[step_derive::declare_event_consumer(
     state = crate::state::PhotoState,
     event = crate::services::photo_service::AfterPhotoUpload,
-    slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_HANDLERS,
+    slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_CONSUMERS,
     name = "face_recognition",
 )]
 impl FaceService {
@@ -700,7 +700,7 @@ impl FaceService {
 }
 
 // 照片删除步骤:人脸清理
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     ctx = crate::repo::photo_repo::PhotoDeleteContext,
     slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
     name = "face_cleanup",
