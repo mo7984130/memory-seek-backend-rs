@@ -334,10 +334,12 @@ dependencies = [
 name = "audit"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "chrono",
  "common",
  "sea-orm",
  "serde_json",
+ "types",
 ]
 
 [[package]]
@@ -4842,6 +4844,7 @@ dependencies = [
 name = "server"
 version = "0.1.12"
 dependencies = [
+ "audit",
  "auth",
  "axum",
  "backup",

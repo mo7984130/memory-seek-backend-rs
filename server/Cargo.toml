@@ -12,12 +12,13 @@ default = []
 token_cipher = []
 auth = ["dep:auth", "auth/audit", "email", "token_cipher"]
 user = ["dep:user", "user/audit", "s3", "token_cipher"]
-photo = ["dep:photo", "photo/audit", "s3", "token_cipher"]
+photo = ["dep:photo", "photo/audit", "audit", "s3", "token_cipher"]
 
 email = ["dep:email"]
 metrics = ["common/metrics", "dep:metrics", "photo?/metrics", "user?/metrics", "auth?/metrics", "email?/metrics", "oss?/metrics", "backup?/metrics"]
 s3 = ["dep:oss"]
 backup = ["dep:backup", "backup/audit"]
+audit = ["dep:audit", "audit/controller", "audit/persistence"]
 face-engine = ["dep:insight-face-rs", "photo/face", "backup"]
 
 [dependencies]
@@ -35,6 +36,7 @@ auth = { path = "../domains/auth", features = ["controller"], optional = true }
 user = { path = "../domains/user", features = ["controller"], optional = true }
 photo = { path = "../domains/photo", features = ["controller"], optional = true }
 backup = { path = "../domains/backup", optional = true }
+audit = { path = "../domains/audit", optional = true }
 
 # 基础设施
 common = { path = "../common", features = ["contextual-redis"] }

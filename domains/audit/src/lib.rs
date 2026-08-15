@@ -11,7 +11,20 @@ use sea_orm::DatabaseTransaction;
 use sea_orm::{ActiveValue::Set, EntityTrait};
 use serde_json::Value;
 
+mod behavior;
 mod snowflake;
+
+pub use behavior::{BehaviorRecord, BehaviorRecordReq};
+#[cfg(feature = "controller")]
+pub mod controller;
+#[cfg(feature = "controller")]
+pub use controller::AuditController;
+
+#[derive(Clone)]
+#[cfg(feature = "controller")]
+pub struct AuditState {
+    pub db: sea_orm::DatabaseConnection,
+}
 
 #[cfg(feature = "persistence")]
 mod mapper {

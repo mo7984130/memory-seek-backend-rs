@@ -1,3 +1,4 @@
+use audit::{AuditService, BehaviorRecordReq};
 use std::sync::Arc;
 
 use axum::{
@@ -29,13 +30,7 @@ use types::{
     },
 };
 
-use crate::{
-    PhotoState,
-    services::{
-        behavior_service::{BehaviorRecordReq, BehaviorService},
-        person_service::PersonService,
-    },
-};
+use crate::{PhotoState, services::person_service::PersonService};
 
 pub struct PersonController;
 
@@ -71,8 +66,8 @@ impl PersonController {
         PersonService::full_scan(state.clone(), admin).await?;
 
         // 行为审计：人物全量扫描
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::PersonFullScan)
                 .with_ip(ip.map(|ip| ip.to_string())),
         )
@@ -93,8 +88,8 @@ impl PersonController {
         PersonService::assign_unassigned_faces(state.clone(), admin, req).await?;
 
         // 行为审计：人物二次聚类
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::PersonSecondaryCluster)
                 .with_ip(ip.map(|ip| ip.to_string())),
         )
@@ -123,8 +118,8 @@ impl PersonController {
         PersonService::rename_person(&state, person_id, req).await?;
 
         // 行为审计：重命名人物（记录改名前后）
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::PersonRename)
                 .with_target(BehaviorTargetType::Person, person_id.0)
                 .with_detail(serde_json::json!({ "oldName": old_name, "newName": new_name }))
@@ -161,8 +156,8 @@ impl PersonController {
         .await?;
 
         // 行为审计：合并人物（source 并入 target）
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::PersonMerge)
                 .with_target(BehaviorTargetType::Person, target_person_id.0)
                 .with_detail(serde_json::json!({
@@ -231,8 +226,8 @@ impl PersonController {
         PersonService::delete_person(&state, admin, person_id).await?;
 
         // 行为审计：删除人物（记录保留，人物删除后仍可追溯）
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::PersonDelete)
                 .with_target(BehaviorTargetType::Person, person_id.0)
                 .with_ip(ip.map(|ip| ip.to_string())),

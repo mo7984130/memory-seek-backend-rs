@@ -1,12 +1,7 @@
+use audit::{AuditService, BehaviorRecordReq};
 use std::sync::Arc;
 
-use crate::{
-    services::{
-        behavior_service::{BehaviorRecordReq, BehaviorService},
-        collection_photo_service::CollectionPhotoService,
-    },
-    state::PhotoState,
-};
+use crate::{services::collection_photo_service::CollectionPhotoService, state::PhotoState};
 use axum::{
     Extension, Router,
     extract::State,
@@ -94,8 +89,8 @@ impl CollectionPhotoController {
         // 行为审计：收藏照片（按批量传入的 photo_id 逐条记录）
         let ip_str = ip.map(|ip| ip.to_string());
         for pid in req.photo_ids.iter() {
-            BehaviorService::record(
-                &state,
+            AuditService::record_behavior_best_effort(
+                state.repo.database(),
                 BehaviorRecordReq::new(user_id, UserBehaviorAction::Collect)
                     .with_photo(pid.0)
                     .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
@@ -144,8 +139,8 @@ impl CollectionPhotoController {
         .await?;
 
         // 行为审计：取消收藏照片
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::Uncollect)
                 .with_photo(photo_id.0)
                 .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
@@ -175,8 +170,8 @@ impl CollectionPhotoController {
         // 行为审计：取消收藏照片（按批量传入的 photo_id 逐条记录）
         let ip_str = ip.map(|ip| ip.to_string());
         for pid in req.photo_ids.iter() {
-            BehaviorService::record(
-                &state,
+            AuditService::record_behavior_best_effort(
+                state.repo.database(),
                 BehaviorRecordReq::new(user_id, UserBehaviorAction::Uncollect)
                     .with_photo(pid.0)
                     .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))

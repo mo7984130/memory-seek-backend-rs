@@ -1,4 +1,3 @@
-mod behavior_repo;
 mod collection_repo;
 mod comment_repo;
 #[cfg(feature = "face")]

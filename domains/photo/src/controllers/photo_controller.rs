@@ -1,3 +1,4 @@
+use audit::{AuditService, BehaviorRecordReq};
 use std::sync::Arc;
 
 use axum::{
@@ -26,10 +27,7 @@ use types::photo::{
 use types::{auth::user::UserId, cursor::TimeIdCursor};
 
 use crate::{
-    services::{
-        behavior_service::{BehaviorRecordReq, BehaviorService},
-        photo_service::{ImageDownloadData, PhotoService},
-    },
+    services::photo_service::{ImageDownloadData, PhotoService},
     state::PhotoState,
 };
 
@@ -88,8 +86,8 @@ impl PhotoController {
         let photo = PhotoService::upload_photo(Arc::clone(&state), user_id, file_data, req).await?;
 
         // 行为审计：上传
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::Upload)
                 .with_photo(photo.id.0)
                 .with_ip(ip.map(|ip| ip.to_string())),
@@ -138,8 +136,7 @@ impl PhotoController {
             ImageTokenType::Preview | ImageTokenType::Original
         ) {
             let ip_str = ip.map(|ip| ip.to_string());
-            BehaviorService::record_view_async(
-                &state,
+            state.repo.record_photo_view_async(
                 image_token.viewer_id,
                 image_token.file_id.clone(),
                 ip_str,
@@ -183,8 +180,8 @@ impl PhotoController {
             .to_r_ok()?;
 
         // 行为审计：批量删除照片（记录保留，照片删除后仍可追溯）
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::DeletePhotos)
                 .with_detail(serde_json::json!({ "photoIds": photo_ids }))
                 .with_ip(ip.map(|ip| ip.to_string())),

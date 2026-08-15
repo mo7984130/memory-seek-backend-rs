@@ -44,6 +44,38 @@ pub struct PhotoRepo {
 }
 
 impl PhotoRepo {
+    /// 提供给审计服务使用的数据库连接；审计持久化由 audit domain 负责。
+    pub(crate) fn database(&self) -> &DatabaseConnection {
+        &self.db
+    }
+
+    /// 异步解析图片并把浏览行为交给 audit domain 记录。
+    pub(crate) fn record_photo_view_async(
+        &self,
+        viewer_id: UserId,
+        file_id: String,
+        ip: Option<String>,
+    ) {
+        let db = self.db.clone();
+        tokio::spawn(async move {
+            let photo_id = match PhotoMapper::query_photo_id_by_file_id(&db, &file_id).await {
+                Ok(Some(photo_id)) => photo_id,
+                Ok(None) => return,
+                Err(_) => return,
+            };
+            AuditService::record_behavior_best_effort(
+                &db,
+                audit::BehaviorRecordReq::new(
+                    viewer_id,
+                    types::photo::behavior::UserBehaviorAction::View,
+                )
+                .with_photo(photo_id.0)
+                .with_ip(ip),
+            )
+            .await;
+        });
+    }
+
     /// 为保留在 service 的领域不变量编排提供事务边界；连接本身不向外暴露。
     pub(crate) async fn transaction<T>(
         &self,

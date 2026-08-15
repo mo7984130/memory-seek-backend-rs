@@ -4,6 +4,9 @@ pub mod auth;
 #[cfg(feature = "backup")]
 pub mod backup;
 
+#[cfg(feature = "audit")]
+pub mod audit;
+
 #[cfg(feature = "user")]
 pub mod user;
 
@@ -26,6 +29,13 @@ impl AppDomains {
     ) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
         let mut public_router = Router::new();
         let mut protected_router = Router::new();
+
+        #[cfg(feature = "audit")]
+        {
+            let (pub_r, prot_r) = audit::register(_state, _cfg);
+            public_router = public_router.merge(pub_r);
+            protected_router = protected_router.merge(prot_r);
+        }
 
         #[cfg(feature = "auth")]
         {

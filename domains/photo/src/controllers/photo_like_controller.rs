@@ -1,3 +1,4 @@
+use audit::{AuditService, BehaviorRecordReq};
 use std::sync::Arc;
 
 use axum::{
@@ -21,13 +22,7 @@ use types::{
     },
 };
 
-use crate::{
-    services::{
-        behavior_service::{BehaviorRecordReq, BehaviorService},
-        photo_like_service::PhotoLikeService,
-    },
-    state::PhotoState,
-};
+use crate::{services::photo_like_service::PhotoLikeService, state::PhotoState};
 use common::traits::controller::ControllerRouter;
 
 pub struct PhotoLikeController;
@@ -61,8 +56,8 @@ impl PhotoLikeController {
         PhotoLikeService::like(&state, user_id, photo_id).await?;
 
         // 行为审计：点赞照片
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::Like)
                 .with_photo(photo_id.0)
                 .with_ip(ip.map(|ip| ip.to_string())),
@@ -85,8 +80,8 @@ impl PhotoLikeController {
         PhotoLikeService::unlike(&state, user_id, photo_id).await?;
 
         // 行为审计：取消点赞照片
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::Unlike)
                 .with_photo(photo_id.0)
                 .with_ip(ip.map(|ip| ip.to_string())),

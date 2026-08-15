@@ -1,3 +1,4 @@
+use audit::{AuditService, BehaviorRecordReq};
 use std::sync::Arc;
 
 use axum::{
@@ -27,13 +28,7 @@ use types::{
     },
 };
 
-use crate::{
-    PhotoState,
-    services::{
-        behavior_service::{BehaviorRecordReq, BehaviorService},
-        face_service::FaceService,
-    },
-};
+use crate::{PhotoState, services::face_service::FaceService};
 
 pub struct FaceController;
 
@@ -72,8 +67,8 @@ impl FaceController {
         FaceService::compute(state.clone(), admin, true).await?;
 
         // 行为审计：全量人脸计算
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceCompute)
                 .with_detail(serde_json::json!({ "full": true }))
                 .with_ip(ip.map(|ip| ip.to_string())),
@@ -93,8 +88,8 @@ impl FaceController {
         FaceService::compute(state.clone(), admin, false).await?;
 
         // 行为审计：增量人脸计算
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceCompute)
                 .with_detail(serde_json::json!({ "full": false }))
                 .with_ip(ip.map(|ip| ip.to_string())),
@@ -118,8 +113,8 @@ impl FaceController {
         FaceService::change_face_belonging(&state, face_id, Some(person_id)).await?;
 
         // 行为审计：修改人脸归属
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceChangeBelonging)
                 .with_target(BehaviorTargetType::Face, face_id.0)
                 .with_detail(serde_json::json!({ "toPersonId": person_id.0 }))
@@ -141,8 +136,8 @@ impl FaceController {
         FaceService::change_face_belonging(&state, face_id, None).await?;
 
         // 行为审计：取消人脸归属
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceUnassign)
                 .with_target(BehaviorTargetType::Face, face_id.0)
                 .with_ip(ip.map(|ip| ip.to_string())),
@@ -191,8 +186,8 @@ impl FaceController {
         FaceService::delete_face(&state, face_id).await?;
 
         // 行为审计：删除人脸（记录保留，人脸删除后仍可追溯）
-        BehaviorService::record(
-            &state,
+        AuditService::record_behavior_best_effort(
+            state.repo.database(),
             BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceDelete)
                 .with_target(BehaviorTargetType::Face, face_id.0)
                 .with_ip(ip.map(|ip| ip.to_string())),
@@ -215,8 +210,8 @@ impl FaceController {
         // 行为审计：批量删除人脸（按批量传入的 face_id 逐条记录）
         let ip_str = ip.map(|ip| ip.to_string());
         for face_id in req.face_ids.iter() {
-            BehaviorService::record(
-                &state,
+            AuditService::record_behavior_best_effort(
+                state.repo.database(),
                 BehaviorRecordReq::new(user_id, UserBehaviorAction::FaceDelete)
                     .with_target(BehaviorTargetType::Face, face_id.0)
                     .with_ip(ip_str.clone()),
