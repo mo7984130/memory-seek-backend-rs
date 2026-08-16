@@ -42,18 +42,14 @@ impl AuthMapper {
 
     /// 将 SeaORM 插入用户时的 DbErr 转换为 AppError
     fn handle_user_insert_err(e: DbErr) -> ContextualError {
-        // 解析 PostgreSQL 唯一约束冲突 (23505)
-        if let DbErr::Query(RuntimeErr::SqlxError(ref sqlx_err)) = e
-            && let Some(pg_err) = sqlx_err.as_database_error()
-            && pg_err.code() == Some("23505".into())
+        if let DbErr::Query(RuntimeErr::SqlxError(sqlx_err)) = &e
+            && let Some(db_err) = sqlx_err.as_database_error()
+            && db_err.code().as_deref() == Some("23505")
         {
-            let detail = pg_err.to_string().to_lowercase();
-            let (reason, msg) = if detail.contains("username") {
-                ("username_existed", "该用户名已被占用")
-            } else if detail.contains("email") {
-                ("email_existed", "该邮箱已被注册")
-            } else {
-                ("row_existed", "记录已存在")
+            let (reason, msg) = match db_err.constraint() {
+                Some("user_username_index") => ("username_existed", "该用户名已被占用"),
+                Some("user_email_index") => ("email_existed", "该邮箱已被注册"),
+                _ => ("row_existed", "记录已存在"),
             };
 
             return ContextualError::warn(reason, "注册失败", e, AppError::bad_request(msg));

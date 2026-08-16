@@ -7,7 +7,7 @@ use sea_orm::{
 };
 use types::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
-use crate::error_ext::UserOptionExt;
+use crate::error_ext::ContextualErrorExt;
 use crate::models::UserBriefRow;
 
 /// 用户表数据访问，向 repo 层提供统一的数据库访问入口

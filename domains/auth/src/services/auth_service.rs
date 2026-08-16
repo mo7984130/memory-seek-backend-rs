@@ -1,9 +1,9 @@
 use crate::AuthState;
-use crate::config::{ACCESS_TOKEN_EXPIRE_SECONDS, REFRESH_TOKEN_EXPIRE_DAYS};
+use crate::config::{ACCESS_TOKEN_EXPIRE, EMAIL_CODE_EXPIRE, REFRESH_TOKEN_EXPIRE};
 use crate::error_ext::AuthOptionExt;
 use crate::mapper::{AuthInsertParam, AuthMapper};
 use audit::{AuditEvent, AuditService};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use common::Result;
 use common::error::AppError;
 use common::ext::{
@@ -59,9 +59,8 @@ static EMAIL_SEND_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(16)
     )
 )]
 pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse> {
-    // 获取用户Id, 密码, 头像FileId
+    // 获取用户Id, 密码
     // username 或者 email 等于 account都可以
-
     let user_result = AuthMapper::query_by_account(&state.db, &req.account)
         .timed(metrics_name!("db_query"))
         .await?;
@@ -70,7 +69,10 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     let user = match user_result {
         Some(u) => u,
         None => {
-            let _ = task::spawn_blocking(HashAlgorithm::dummy_verify).await;
+            task::spawn_blocking(HashAlgorithm::dummy_verify)
+                .await
+                .into_contextual()
+                .emit_if_err();
             return inc_error!("auth" => log_warn(
                 "account_not_found",
                 "用户登陆时账号不存在",
@@ -109,7 +111,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         verify_result.1
     };
 
-    // 检查是否需要迁移哈希算法（bcrypt -> argon2id）
+    // 检查是否需要迁移哈希算法（xxx -> argon2id）
     // 登录成功后异步迁移，不影响登录响应时间
     if constants::PasswordHasher != old_alg {
         let password_for_migration = req.password.clone();
@@ -125,14 +127,14 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     // 更新access_token和refresh_token（顺序执行，确保一致性）
     let new_access_token = rand_utils::generate_random_str(32);
     let new_refresh_token = rand_utils::generate_random_str(32);
-    let new_refresh_token_expires_at = Utc::now() + Duration::days(REFRESH_TOKEN_EXPIRE_DAYS);
+    let new_refresh_token_expires_at = Utc::now() + REFRESH_TOKEN_EXPIRE;
 
     state
         .redis
         .set_ex(
             RedisKeys::auth::user_access_token(user.id),
             &new_access_token,
-            ACCESS_TOKEN_EXPIRE_SECONDS as u64,
+            ACCESS_TOKEN_EXPIRE.as_secs(),
         )
         .timed(metrics_name!("redis_set"))
         .await
@@ -155,14 +157,12 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     })
     .await?;
 
-    // 加密头像file_id
-
     // 返回 LoginResult（包含用户信息和令牌）
     let user_info = UserInfo::from_with_token(updated_user)?;
     Ok(LoginResponse {
         user: user_info,
         access_token: new_access_token,
-        access_token_expire_at: Utc::now() + Duration::seconds(ACCESS_TOKEN_EXPIRE_SECONDS),
+        access_token_expire_at: Utc::now() + ACCESS_TOKEN_EXPIRE,
         refresh_token: new_refresh_token,
         refresh_token_expire_at: new_refresh_token_expires_at,
     })
@@ -208,7 +208,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
         .inspect_err(|_| inc_error!("validation"))?;
 
     // 加密密码
-    let password = req.password.clone();
+    let password = req.password;
     let hashed_pw = task::spawn_blocking(move || constants::PasswordHasher.hash(&password))
         .timed(metrics_name!("hash_password"))
         .await
@@ -222,7 +222,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
         inviter: inviter_id,
     };
 
-    // 用户写入与审计事件必须在同一个数据库事务中提交.
+    // 写入用户
     let user_model = common::db_transaction!(scoped & state.db, |txn| {
         let user_model = AuthMapper::insert(txn, insert_param)
             .timed(metrics_name!("db_insert"))
@@ -281,19 +281,20 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
         .set_ex(
             &redis_keys::auth::email_verify_code(&req.email),
             &code,
-            10 * 60,
+            EMAIL_CODE_EXPIRE.as_secs(),
         )
         .timed(metrics_name!("redis_set"))
         .await
         .into_contextual()?;
 
-    // 在独立作用域内获取信号量并发送邮件，发送完成后立即释放信号量
+    // 发送邮件
     {
         let _permit = EMAIL_SEND_SEM.acquire().await.into_contextual()?;
 
         let html_body = format!(
-            "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 10 分钟。</p>",
-            code
+            "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 {} 分钟。</p>",
+            code,
+            EMAIL_CODE_EXPIRE.as_secs() / 60
         );
 
         state
@@ -301,7 +302,7 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
             .send_message(&req.email, "寻忆邮箱验证码", html_body)
             .timed(metrics_name!("send_message"))
             .await?;
-    } // _permit 在此释放，其他并发请求可继续发送
+    }
 
     Ok(())
 }
@@ -340,7 +341,7 @@ pub async fn refresh_access_token(
         .set_ex(
             &RedisKeys::auth::user_access_token(user_id),
             &new_access_token,
-            ACCESS_TOKEN_EXPIRE_SECONDS as u64,
+            ACCESS_TOKEN_EXPIRE.as_secs(),
         )
         .timed(metrics_name!("set_token"))
         .await
@@ -348,22 +349,31 @@ pub async fn refresh_access_token(
 
     Ok(RefreshAccessTokenResponse {
         access_token: new_access_token,
-        access_token_expire_at: Utc::now() + chrono::Duration::seconds(ACCESS_TOKEN_EXPIRE_SECONDS),
+        access_token_expire_at: Utc::now() + ACCESS_TOKEN_EXPIRE,
     })
 }
 
 // 校验邮箱验证码（大小写不敏感），从 Redis 中比对存储的验证码
 async fn verify_email_verify_code(state: &AuthState, email: &str, code: &str) -> Result<()> {
-    let stored_code: Option<String> = state
+    let stored_code = state
         .redis
-        .get_as(&RedisKeys::auth::email_verify_code(email))
+        .get_as::<String>(&RedisKeys::auth::email_verify_code(email))
         .await
-        .into_contextual()?;
+        .into_contextual()?
+        .ok_or_warn(
+            "auth:email_verify_code_not_exist",
+            "用户注册时邮箱验证码不存在",
+            AppError::bad_request("邮箱验证码错误"),
+        )?;
+
     let code_upper = code.to_uppercase();
-    match stored_code {
-        Some(v) if v == code_upper => Ok(()),
-        _ => Err(AppError::bad_request("邮箱验证码错误")),
-    }
+    (code_upper == stored_code).true_or_warn(
+        "auth:email_verify_code_not_match",
+        "用户注册时邮箱验证码错误与",
+        AppError::bad_request("邮箱验证码错误"),
+    )?;
+
+    Ok(())
 }
 
 // 校验邀请码（大小写不敏感），从 Redis 中查找邀请码对应的用户 ID
@@ -396,11 +406,7 @@ async fn verify_refresh_token(
     let res = AuthMapper::query_refresh_token(&state.db, user_id)
         .await?
         .user_not_found()?;
-    (res.refresh_token.as_deref() == Some(refresh_token)).true_or_warn(
-        "refresh_token_mismatch",
-        "刷新 access_token 时，refresh token 不匹配",
-        AppError::Unauthorized,
-    )?;
+
     let expire_at = res.refresh_token_expire_at.ok_or_error(
         "refresh_token_expiry_missing",
         "刷新 access_token 时，refresh token 过期时间不存在",
@@ -409,6 +415,12 @@ async fn verify_refresh_token(
     (Utc::now() <= expire_at).true_or_warn(
         "refresh_token_expired",
         "刷新 access_token 时，refresh token 已过期",
+        AppError::Unauthorized,
+    )?;
+
+    (res.refresh_token.as_deref() == Some(refresh_token)).true_or_warn(
+        "refresh_token_mismatch",
+        "刷新 access_token 时，refresh token 不匹配",
         AppError::Unauthorized,
     )?;
 

@@ -11,7 +11,7 @@ use types::auth::user::UserId;
 use types::user::UserInfo;
 
 use crate::config::USER_INFO_CACHE_TTL;
-use crate::error_ext::UserOptionExt;
+use crate::error_ext::ContextualErrorExt;
 use crate::mapper::UserMapper;
 use crate::models::UserBriefRow;
 
