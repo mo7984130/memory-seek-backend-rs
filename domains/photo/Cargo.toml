@@ -7,7 +7,7 @@ edition = "2024"
 default = []
 metrics = ["common/metrics", "dep:metrics", "oss/metrics", "multi-level-cache/metrics"]
 controller = ["dep:axum"]
-audit = ["audit/persistence"]
+audit = ["audit/enable"]
 file_validator = ["common/file_validator"]
 face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]
 # TypeScript 类型导出

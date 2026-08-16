@@ -1,3 +1,4 @@
+use audit::{AuditEvent, AuditService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -53,6 +54,19 @@ impl FaceService {
         )
     )]
     pub async fn compute(state: Arc<PhotoState>, admin: AdminId, full: bool) -> Result<()> {
+        let user_id = admin.into_inner();
+        let admin = AdminId::new(user_id)?;
+        common::db_transaction!(scoped state.repo.database(), |txn| {
+            AuditService::append(
+                txn,
+                AuditEvent::new("face_compute")
+                    .with_actor(user_id.0)
+                    .with_detail(serde_json::json!({ "full": full })),
+            )
+            .await?;
+            Ok(())
+        })
+        .await?;
         spawn(async move { Self::compute_inner(state, admin, full).await });
         Ok(())
     }
@@ -316,6 +330,7 @@ impl FaceService {
         state: &PhotoState,
         face_id: FaceId,
         person_id: Option<PersonId>,
+        user_id: UserId,
     ) -> Result<()> {
         let affected_person_ids: Vec<PersonId> = state
             .repo
@@ -419,6 +434,17 @@ impl FaceService {
                     if let Some(pid) = person_id {
                         affected.push(pid);
                     }
+                    let event = AuditEvent::new(if person_id.is_some() {
+                        "face_change_belonging"
+                    } else {
+                        "face_unassign"
+                    })
+                    .with_actor(user_id.0)
+                    .with_target("face", face_id.0);
+                    let event = person_id.map_or(event.clone(), |id| {
+                        event.with_detail(serde_json::json!({ "toPersonId": id.0 }))
+                    });
+                    AuditService::append(txn, event).await?;
                     Ok(affected)
                 })
             })
@@ -620,7 +646,7 @@ impl FaceService {
     #[common::metered]
     #[tracing::instrument(skip_all, fields(face_id = %face_id))]
     /// 删除一张未归属人物的人脸.
-    pub async fn delete_face(state: &PhotoState, face_id: FaceId) -> Result<()> {
+    pub async fn delete_face(state: &PhotoState, face_id: FaceId, user_id: UserId) -> Result<()> {
         state
             .repo
             .transaction(|txn| {
@@ -646,6 +672,13 @@ impl FaceService {
                             "删除人脸失败",
                             AppError::bad_request("删除人脸失败"),
                         )?;
+                    AuditService::append(
+                        txn,
+                        AuditEvent::new("face_delete")
+                            .with_actor(user_id.0)
+                            .with_target("face", face_id.0),
+                    )
+                    .await?;
                     Ok(())
                 })
             })
@@ -664,8 +697,12 @@ impl FaceService {
     pub async fn delete_faces_batch(
         state: &PhotoState,
         face_ids: &FaceIds,
+        user_id: UserId,
     ) -> Result<FaceDeleteBatchResult> {
-        let deleted_face_count = state.repo.delete_unassigned_faces(face_ids).await?;
+        let deleted_face_count = state
+            .repo
+            .delete_unassigned_faces(face_ids, user_id)
+            .await?;
 
         Ok(FaceDeleteBatchResult { deleted_face_count })
     }

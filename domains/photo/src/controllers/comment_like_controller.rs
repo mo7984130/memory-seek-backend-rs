@@ -30,7 +30,7 @@ impl CommentLikeController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(comment_id): ValidatedPath<CommentId>,
     ) -> Result<R<()>> {
-        CommentLikeService::like(&state, user_id, comment_id)
+        CommentLikeService::like(&state, user_id, None, comment_id)
             .await
             .to_r_ok()
     }
@@ -50,7 +50,7 @@ impl CommentLikeController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(comment_id): ValidatedPath<CommentId>,
     ) -> Result<R<()>> {
-        CommentLikeService::unlike(&state, user_id, comment_id)
+        CommentLikeService::unlike(&state, user_id, None, comment_id)
             .await
             .to_r_ok()
     }

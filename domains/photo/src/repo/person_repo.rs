@@ -3,7 +3,7 @@ use std::time::Duration;
 use audit::{AuditEvent, AuditService};
 use common::{error::contextual::Result, metrics_name, models::CursorPage, utils::MetricsTimerExt};
 use constants::RedisKeys;
-use types::photo::person::PersonId;
+use types::{auth::user::UserId, photo::person::PersonId};
 
 use super::PhotoRepo;
 use crate::{
@@ -49,6 +49,7 @@ impl PhotoRepo {
         id: PersonId,
         name: String,
         initials: Option<String>,
+        user_id: UserId,
     ) -> Result<()> {
         use common::error::AppError;
         common::db_transaction!(contextual & self.db, |txn| {
@@ -62,7 +63,9 @@ impl PhotoRepo {
             }
             AuditService::append(
                 txn,
-                AuditEvent::new("photo.person_renamed").with_target("person", id.0),
+                AuditEvent::new("person_rename")
+                    .with_actor(user_id.0)
+                    .with_target("person", id.0),
             )
             .await
             .map_err(|error| {

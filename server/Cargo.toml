@@ -18,7 +18,7 @@ email = ["dep:email"]
 metrics = ["common/metrics", "dep:metrics", "photo?/metrics", "user?/metrics", "auth?/metrics", "email?/metrics", "oss?/metrics", "backup?/metrics"]
 s3 = ["dep:oss"]
 backup = ["dep:backup", "backup/audit"]
-audit = ["dep:audit", "audit/controller", "audit/persistence"]
+audit = ["dep:audit", "audit/controller", "audit/enable"]
 face-engine = ["dep:insight-face-rs", "photo/face", "backup"]
 
 [dependencies]

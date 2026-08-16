@@ -23,7 +23,7 @@ impl PhotoRepo {
                 PhotoMapper::update_like_count_delta(txn, photo_id, 1).await?;
                 AuditService::append(
                     txn,
-                    AuditEvent::new("photo.liked")
+                    AuditEvent::new("like")
                         .with_actor(user_id.0)
                         .with_target("photo", photo_id.0),
                 )
@@ -45,7 +45,7 @@ impl PhotoRepo {
                 PhotoMapper::update_like_count_delta(txn, photo_id, -1).await?;
                 AuditService::append(
                     txn,
-                    AuditEvent::new("photo.unliked")
+                    AuditEvent::new("unlike")
                         .with_actor(user_id.0)
                         .with_target("photo", photo_id.0),
                 )

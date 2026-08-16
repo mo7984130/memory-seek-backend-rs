@@ -10,6 +10,7 @@ validators = ["dep:validator"]
 file_validator = ["dep:image"]
 tokio = ["dep:tokio"]
 event = ["tokio"]
+snowflake = ["dep:snowflaked"]
 contextual-sea-orm = []
 contextual-redis = []
 contextual-cache = []
@@ -46,6 +47,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 tokio = { workspace = true, optional = true }
 ts-rs = { workspace = true, optional = true }
+snowflaked = { workspace = true, optional = true }
 async-trait = { workspace = true }
 multi-level-cache.workspace = true
 

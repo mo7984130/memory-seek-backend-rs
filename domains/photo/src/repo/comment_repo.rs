@@ -84,9 +84,10 @@ impl PhotoRepo {
                 PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
                 AuditService::append(
                     txn,
-                    AuditEvent::new("photo.comment_published")
+                    AuditEvent::new("comment_publish")
                         .with_actor(user_id.0)
-                        .with_target("comment", comment.id.0),
+                        .with_target("photo", photo_id.0)
+                        .with_detail(serde_json::json!({ "commentId": comment.id.0 })),
                 )
                 .await?;
                 Ok(comment)
@@ -111,9 +112,10 @@ impl PhotoRepo {
                 let _ = CommentLikeMapper::delete_all_by_comment_id(txn, comment_id).await;
                 AuditService::append(
                     txn,
-                    AuditEvent::new("photo.comment_deleted")
+                    AuditEvent::new("comment_delete")
                         .with_actor(user_id.0)
-                        .with_target("comment", comment_id.0),
+                        .with_target("photo", photo_id.0)
+                        .with_detail(serde_json::json!({ "commentId": comment_id.0 })),
                 )
                 .await?;
                 Ok(())
@@ -123,7 +125,12 @@ impl PhotoRepo {
     }
 
     /// 校验评论存在后创建评论点赞.
-    pub(crate) async fn like_comment(&self, user_id: UserId, comment_id: CommentId) -> Result<()> {
+    pub(crate) async fn like_comment(
+        &self,
+        user_id: UserId,
+        photo_id: Option<PhotoId>,
+        comment_id: CommentId,
+    ) -> Result<()> {
         self.transaction(|txn| {
             Box::pin(async move {
                 CommentMapper::ensure_exist(txn, comment_id).await?;
@@ -131,13 +138,13 @@ impl PhotoRepo {
                     return Err(AppError::bad_request("已经点赞过"));
                 }
                 CommentMapper::update_like_count_delta(txn, comment_id, 1).await?;
-                AuditService::append(
-                    txn,
-                    AuditEvent::new("photo.comment_liked")
-                        .with_actor(user_id.0)
-                        .with_target("comment", comment_id.0),
-                )
-                .await?;
+                let event = AuditEvent::new("comment_like")
+                    .with_actor(user_id.0)
+                    .with_target("comment", comment_id.0);
+                let event = photo_id.map_or(event.clone(), |photo_id| {
+                    event.with_detail(serde_json::json!({ "photoId": photo_id.0 }))
+                });
+                AuditService::append(txn, event).await?;
                 Ok(())
             })
         })
@@ -148,6 +155,7 @@ impl PhotoRepo {
     pub(crate) async fn unlike_comment(
         &self,
         user_id: UserId,
+        photo_id: Option<PhotoId>,
         comment_id: CommentId,
     ) -> Result<()> {
         self.transaction(|txn| {
@@ -156,13 +164,13 @@ impl PhotoRepo {
                     return Err(AppError::bad_request("还未点赞"));
                 }
                 CommentMapper::update_like_count_delta(txn, comment_id, -1).await?;
-                AuditService::append(
-                    txn,
-                    AuditEvent::new("photo.comment_unliked")
-                        .with_actor(user_id.0)
-                        .with_target("comment", comment_id.0),
-                )
-                .await?;
+                let event = AuditEvent::new("comment_unlike")
+                    .with_actor(user_id.0)
+                    .with_target("comment", comment_id.0);
+                let event = photo_id.map_or(event.clone(), |photo_id| {
+                    event.with_detail(serde_json::json!({ "photoId": photo_id.0 }))
+                });
+                AuditService::append(txn, event).await?;
                 Ok(())
             })
         })

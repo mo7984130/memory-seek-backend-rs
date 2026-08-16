@@ -21,6 +21,9 @@ pub mod ext;
 pub mod macros;
 pub mod pipeline;
 
+#[cfg(feature = "snowflake")]
+pub mod snowflake;
+
 pub use common_macros::metered;
 
 #[cfg(feature = "metrics")]

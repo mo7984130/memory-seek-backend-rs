@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::{AuditService, AuditState, BehaviorRecord};
 use axum::{
     Extension, Router,
     extract::{FromRef, State},
@@ -9,15 +10,12 @@ use common::{
     Result, ext::ResultRExt, extractors::ValidatedQuery, models::CursorPage, r::R,
     traits::controller::ControllerRouter,
 };
+use types::audit::{
+    AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem, AuditTopQuery,
+};
 use types::auth::user::{AdminId, UserId};
 use types::cursor::TimeIdCursor;
 use types::photo::behavior::UserBehaviorId;
-use types::photo::dto::behavior::{
-    BehaviorAuditItem, BehaviorAuditQuery, BehaviorStatsItem, BehaviorStatsQuery, BehaviorTopItem,
-    BehaviorTopQuery,
-};
-
-use crate::{AuditService, AuditState, BehaviorRecord};
 
 pub struct AuditController;
 
@@ -46,13 +44,13 @@ impl AuditController {
     async fn stats(
         State(state): State<AuditState>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(req): ValidatedQuery<BehaviorStatsQuery>,
-    ) -> Result<R<Vec<BehaviorStatsItem>>> {
+        ValidatedQuery(req): ValidatedQuery<AuditStatsQuery>,
+    ) -> Result<R<Vec<AuditStatsItem>>> {
         AdminId::new(user_id)?;
         let rows = AuditService::query_behavior_stats(&state.db, &req).await?;
         Ok(rows
             .into_iter()
-            .map(|(bucket, count)| BehaviorStatsItem { bucket, count })
+            .map(|(bucket, count)| AuditStatsItem { bucket, count })
             .collect())
         .to_r_ok()
     }
@@ -60,13 +58,13 @@ impl AuditController {
     async fn top(
         State(state): State<AuditState>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(req): ValidatedQuery<BehaviorTopQuery>,
-    ) -> Result<R<Vec<BehaviorTopItem>>> {
+        ValidatedQuery(req): ValidatedQuery<AuditTopQuery>,
+    ) -> Result<R<Vec<AuditTopItem>>> {
         AdminId::new(user_id)?;
         let rows = AuditService::query_behavior_top(&state.db, &req).await?;
         Ok(rows
             .into_iter()
-            .map(|(target_id, count)| BehaviorTopItem { target_id, count })
+            .map(|(target_id, count)| AuditTopItem { target_id, count })
             .collect())
         .to_r_ok()
     }
@@ -74,8 +72,8 @@ impl AuditController {
     async fn audit(
         State(state): State<AuditState>,
         Extension(user_id): Extension<UserId>,
-        ValidatedQuery(req): ValidatedQuery<BehaviorAuditQuery>,
-    ) -> Result<R<CursorPage<BehaviorAuditItem, TimeIdCursor<UserBehaviorId>>>> {
+        ValidatedQuery(req): ValidatedQuery<AuditQuery>,
+    ) -> Result<R<CursorPage<AuditItem, TimeIdCursor<UserBehaviorId>>>> {
         AdminId::new(user_id)?;
         let records = AuditService::query_behavior_audit(&state.db, &req).await?;
         let page = CursorPage::from_oversize(records, req.size);
@@ -89,15 +87,14 @@ impl AuditController {
     }
 }
 
-fn to_audit_item(record: BehaviorRecord) -> BehaviorAuditItem {
-    BehaviorAuditItem {
+fn to_audit_item(record: BehaviorRecord) -> AuditItem {
+    AuditItem {
         id: record.id,
         user_id: record.user_id,
         action: record.action,
         target_type: record.target_type,
         target_id: record.target_id,
         detail: record.detail,
-        ip: record.ip,
         created_at: record.created_at,
     }
 }

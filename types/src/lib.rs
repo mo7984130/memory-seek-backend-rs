@@ -7,6 +7,7 @@
 //! - `face-engine`: 人脸识别相关实体
 //! - `ts`: TypeScript 类型导出
 
+pub mod audit;
 pub mod auth;
 pub mod cursor;
 pub mod error;

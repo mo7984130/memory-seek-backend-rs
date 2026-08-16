@@ -1,4 +1,3 @@
-use audit::{AuditService, BehaviorRecordReq};
 use std::sync::Arc;
 
 use axum::{
@@ -12,14 +11,13 @@ use axum::{
 use common::{
     Result,
     ext::{ResultLogExt, ResultRExt},
-    extractors::{OptionalClientIp, ValidatedJson, ValidatedQuery},
+    extractors::{ValidatedJson, ValidatedQuery},
     models::CursorPage,
     traits::controller::ControllerRouter,
 };
 use common::{ext::OptionExt, r::R, utils::token_cipher};
 use types::photo::{
     ImageToken, ImageTokenType,
-    behavior::UserBehaviorAction,
     dto::photo::{PhotoCursorParam, PhotoView},
     models::{DeletePhotosParam, ExistsByMd5BatchParam},
     photo::PhotoId,
@@ -57,7 +55,6 @@ impl PhotoController {
     async fn upload(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        OptionalClientIp(ip): OptionalClientIp,
         mut multipart: Multipart,
     ) -> Result<R<PhotoView>> {
         let field = multipart
@@ -84,15 +81,6 @@ impl PhotoController {
             created_at: None,
         };
         let photo = PhotoService::upload_photo(Arc::clone(&state), user_id, file_data, req).await?;
-
-        // 行为审计：上传
-        AuditService::record_behavior_best_effort(
-            state.repo.database(),
-            BehaviorRecordReq::new(user_id, UserBehaviorAction::Upload)
-                .with_photo(photo.id.0)
-                .with_ip(ip.map(|ip| ip.to_string())),
-        )
-        .await;
 
         Ok(photo).to_r_ok()
     }
@@ -121,7 +109,6 @@ impl PhotoController {
     /// 解密图片访问令牌并返回原图或处理后的图片流.
     async fn get_image(
         State(state): State<Arc<PhotoState>>,
-        OptionalClientIp(ip): OptionalClientIp,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
         let image_token: ImageToken = token_cipher().decrypt(&token).log_warn(
@@ -135,11 +122,10 @@ impl PhotoController {
             image_token.token_type,
             ImageTokenType::Preview | ImageTokenType::Original
         ) {
-            let ip_str = ip.map(|ip| ip.to_string());
-            state.repo.record_photo_view_async(
+            PhotoService::record_photo_view_async(
+                &state,
                 image_token.viewer_id,
                 image_token.file_id.clone(),
-                ip_str,
             );
         }
 
@@ -170,23 +156,11 @@ impl PhotoController {
     async fn delete_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        OptionalClientIp(ip): OptionalClientIp,
         ValidatedJson(req): ValidatedJson<DeletePhotosParam>,
     ) -> Result<R<()>> {
-        let photo_ids: Vec<i64> = req.photo_ids.iter().map(|id| id.0).collect();
-
         PhotoService::delete_photos(&state, user_id, req)
             .await
             .to_r_ok()?;
-
-        // 行为审计：批量删除照片（记录保留，照片删除后仍可追溯）
-        AuditService::record_behavior_best_effort(
-            state.repo.database(),
-            BehaviorRecordReq::new(user_id, UserBehaviorAction::DeletePhotos)
-                .with_detail(serde_json::json!({ "photoIds": photo_ids }))
-                .with_ip(ip.map(|ip| ip.to_string())),
-        )
-        .await;
 
         Ok(()).to_r_ok()
     }

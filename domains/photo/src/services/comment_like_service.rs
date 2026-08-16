@@ -1,5 +1,8 @@
 use common::Result;
-use types::{auth::user::UserId, photo::comment::CommentId};
+use types::{
+    auth::user::UserId,
+    photo::{comment::CommentId, photo::PhotoId},
+};
 
 use crate::state::PhotoState;
 
@@ -14,9 +17,17 @@ impl CommentLikeService {
         skip_all,
         fields(user_id = %user_id, comment_id = %comment_id)
     )]
-    pub async fn like(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
+    pub async fn like(
+        state: &PhotoState,
+        user_id: UserId,
+        photo_id: Option<PhotoId>,
+        comment_id: CommentId,
+    ) -> Result<()> {
         // 检查评论是否存在
-        state.repo.like_comment(user_id, comment_id).await?;
+        state
+            .repo
+            .like_comment(user_id, photo_id, comment_id)
+            .await?;
 
         Ok(())
     }
@@ -37,8 +48,16 @@ impl CommentLikeService {
         skip_all,
         fields(user_id = %user_id, comment_id = %comment_id)
     )]
-    pub async fn unlike(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
-        state.repo.unlike_comment(user_id, comment_id).await?;
+    pub async fn unlike(
+        state: &PhotoState,
+        user_id: UserId,
+        photo_id: Option<PhotoId>,
+        comment_id: CommentId,
+    ) -> Result<()> {
+        state
+            .repo
+            .unlike_comment(user_id, photo_id, comment_id)
+            .await?;
 
         Ok(())
     }

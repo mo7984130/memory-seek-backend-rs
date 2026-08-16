@@ -1,3 +1,4 @@
+use audit::{AuditEvent, AuditService};
 use types::photo::{face::FaceRecord, models::FaceIds, person::PersonId, photo::PhotoId};
 
 use super::PhotoRepo;
@@ -125,8 +126,31 @@ impl PhotoRepo {
     pub(crate) async fn delete_unassigned_faces(
         &self,
         ids: &FaceIds,
+        user_id: types::auth::user::UserId,
     ) -> common::error::contextual::Result<u64> {
-        FaceMapper::delete_unassigned_by_ids(&self.db, ids).await
+        let ids = ids.clone();
+        common::db_transaction!(contextual & self.db, |txn| {
+            let count = FaceMapper::delete_unassigned_by_ids(txn, &ids).await?;
+            for face_id in ids.iter() {
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("face_delete")
+                        .with_actor(user_id.0)
+                        .with_target("face", face_id.0),
+                )
+                .await
+                .map_err(|error| {
+                    ContextualError::error(
+                        "photo_audit_append",
+                        "人脸删除审计事件写入失败",
+                        error,
+                        AppError::InternalServerError,
+                    )
+                })?;
+            }
+            Ok(count)
+        })
+        .await
     }
     /// 查询人物关联的照片 ID.
     pub(crate) async fn query_person_photo_ids(

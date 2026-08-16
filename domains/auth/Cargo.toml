@@ -7,7 +7,7 @@ edition = "2024"
 default = []
 metrics = ["common/metrics", "dep:metrics", "email/metrics"]
 controller = ["dep:axum", "dep:serde_json"]
-audit = ["audit/persistence"]
+audit = ["audit/enable"]
 
 [dependencies]
 audit = { path = "../audit" }

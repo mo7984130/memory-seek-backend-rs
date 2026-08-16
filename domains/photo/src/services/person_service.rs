@@ -52,6 +52,8 @@ impl PersonService {
     /// 异步启动全量人物扫描任务.
     #[instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
+        let user_id = admin.into_inner();
+        let admin = AdminId::new(user_id)?;
         spawn(async move { Self::inner_full_scan(state, admin).await });
         Ok(())
     }
@@ -167,7 +169,7 @@ impl PersonService {
                     info!("人脸聚类完成");
                     AuditService::append(
                         txn,
-                        AuditEvent::new("photo.person_full_scan").with_actor(user_id.0),
+                        AuditEvent::new("person_full_scan").with_actor(user_id.0),
                     )
                     .await?;
                     Ok(())
@@ -189,6 +191,8 @@ impl PersonService {
         admin: AdminId,
         req: SecondaryClusterParam,
     ) -> Result<()> {
+        let user_id = admin.into_inner();
+        let admin = AdminId::new(user_id)?;
         spawn(async move { Self::inner_assign_unassigned_faces(state, admin, req).await });
         Ok(())
     }
@@ -330,7 +334,7 @@ impl PersonService {
                     }
                     AuditService::append(
                         txn,
-                        AuditEvent::new("photo.person_secondary_cluster").with_actor(user_id.0),
+                        AuditEvent::new("person_secondary_cluster").with_actor(user_id.0),
                     )
                     .await?;
                     Ok(())
@@ -374,12 +378,13 @@ impl PersonService {
         state: &PhotoState,
         person_id: PersonId,
         req: RenamePersonParam,
+        user_id: UserId,
     ) -> Result<()> {
         let new_name = req.new_name.into_inner();
         let name_initials = Self::compute_name_initials(&new_name);
         state
             .repo
-            .rename_person(person_id, new_name, name_initials)
+            .rename_person(person_id, new_name, name_initials, user_id)
             .await?;
 
         Ok(())
@@ -482,7 +487,7 @@ impl PersonService {
                     PersonMapper::delete_by_id(txn, source_person_id).await?;
                     AuditService::append(
                         txn,
-                        AuditEvent::new("photo.person_merged")
+                        AuditEvent::new("person_merge")
                             .with_actor(admin_id.0)
                             .with_target("person", target_person_id.0),
                     )
@@ -514,6 +519,7 @@ impl PersonService {
             .repo
             .get_photo_dimensions(&person.cover_file_id)
             .await?;
+
         Self::to_view(
             admin_id,
             PersonBriefRow {
@@ -545,13 +551,6 @@ impl PersonService {
 
 // 查询
 impl PersonService {
-    /// 查询人物名称（审计记录改名前后用）
-    #[tracing::instrument(skip_all, fields(person_id = %person_id))]
-    pub async fn query_name(state: &PhotoState, person_id: PersonId) -> Result<Option<String>> {
-        let person = state.repo.query_person(person_id).await?;
-        Ok(person.map(|record| record.name))
-    }
-
     #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     /// 查询当前用户可见的人物列表.
@@ -737,7 +736,7 @@ impl PersonService {
                         )?;
                     AuditService::append(
                         txn,
-                        AuditEvent::new("photo.person_deleted")
+                        AuditEvent::new("person_delete")
                             .with_actor(admin_id.0)
                             .with_target("person", person_id.0),
                     )

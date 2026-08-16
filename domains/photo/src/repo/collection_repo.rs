@@ -74,11 +74,14 @@ impl PhotoRepo {
                     )
                     .await?;
                 }
-                AuditService::append(
+                AuditService::append_many(
                     txn,
-                    AuditEvent::new("photo.collection_photos_added")
-                        .with_actor(user_id.0)
-                        .with_target("collection", collection_id.0),
+                    photo_ids.iter().map(|photo_id| {
+                        AuditEvent::new("collect")
+                            .with_actor(user_id.0)
+                            .with_target("photo", photo_id.0)
+                            .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
+                    }),
                 )
                 .await?;
                 Ok(count)
@@ -136,11 +139,14 @@ impl PhotoRepo {
                 }
                 CollectionMapper::update_photo_count_delta(txn, collection_id, -(rows as i64))
                     .await?;
-                AuditService::append(
+                AuditService::append_many(
                     txn,
-                    AuditEvent::new("photo.collection_photos_removed")
-                        .with_actor(user_id.0)
-                        .with_target("collection", collection_id.0),
+                    photo_ids.iter().map(|photo_id| {
+                        AuditEvent::new("uncollect")
+                            .with_actor(user_id.0)
+                            .with_target("photo", photo_id.0)
+                            .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
+                    }),
                 )
                 .await?;
                 Ok(rows)

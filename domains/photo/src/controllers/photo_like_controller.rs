@@ -1,4 +1,3 @@
-use audit::{AuditService, BehaviorRecordReq};
 use std::sync::Arc;
 
 use axum::{
@@ -9,17 +8,14 @@ use axum::{
 use common::{
     Result,
     ext::ResultRExt,
-    extractors::{OptionalClientIp, ValidatedPath, ValidatedQuery},
+    extractors::{ValidatedPath, ValidatedQuery},
     models::CursorPage,
     r::R,
 };
 use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
-    photo::{
-        behavior::UserBehaviorAction, dto::photo::PhotoView, models::LikedPhotosQuery,
-        photo::PhotoId,
-    },
+    photo::{dto::photo::PhotoView, models::LikedPhotosQuery, photo::PhotoId},
 };
 
 use crate::{services::photo_like_service::PhotoLikeService, state::PhotoState};
@@ -50,19 +46,9 @@ impl PhotoLikeController {
     async fn like(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
     ) -> Result<R<()>> {
         PhotoLikeService::like(&state, user_id, photo_id).await?;
-
-        // 行为审计：点赞照片
-        AuditService::record_behavior_best_effort(
-            state.repo.database(),
-            BehaviorRecordReq::new(user_id, UserBehaviorAction::Like)
-                .with_photo(photo_id.0)
-                .with_ip(ip.map(|ip| ip.to_string())),
-        )
-        .await;
 
         Ok(()).to_r_ok()
     }
@@ -74,19 +60,9 @@ impl PhotoLikeController {
     async fn unlike(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
     ) -> Result<R<()>> {
         PhotoLikeService::unlike(&state, user_id, photo_id).await?;
-
-        // 行为审计：取消点赞照片
-        AuditService::record_behavior_best_effort(
-            state.repo.database(),
-            BehaviorRecordReq::new(user_id, UserBehaviorAction::Unlike)
-                .with_photo(photo_id.0)
-                .with_ip(ip.map(|ip| ip.to_string())),
-        )
-        .await;
 
         Ok(()).to_r_ok()
     }

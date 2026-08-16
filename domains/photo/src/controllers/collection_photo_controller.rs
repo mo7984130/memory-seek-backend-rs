@@ -1,4 +1,3 @@
-use audit::{AuditService, BehaviorRecordReq};
 use std::sync::Arc;
 
 use crate::{services::collection_photo_service::CollectionPhotoService, state::PhotoState};
@@ -10,7 +9,7 @@ use axum::{
 use common::{
     Result,
     ext::ResultRExt,
-    extractors::{OptionalClientIp, ValidatedJson, ValidatedPath, ValidatedQuery},
+    extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
     models::CursorPage,
     r::R,
     traits::controller::ControllerRouter,
@@ -19,7 +18,6 @@ use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
     photo::{
-        behavior::UserBehaviorAction,
         collection::CollectionId,
         dto::collection::{
             CollectionBriefView, CollectionPhotoAddBatchParam, CollectionPhotoAddBatchResult,
@@ -74,7 +72,6 @@ impl CollectionPhotoController {
     async fn add_batch(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedJson(req): ValidatedJson<CollectionPhotoAddBatchParam>,
     ) -> Result<R<CollectionPhotoAddBatchResult>> {
@@ -85,19 +82,6 @@ impl CollectionPhotoController {
             req.photo_ids.clone(),
         )
         .await?;
-
-        // 行为审计：收藏照片（按批量传入的 photo_id 逐条记录）
-        let ip_str = ip.map(|ip| ip.to_string());
-        for pid in req.photo_ids.iter() {
-            AuditService::record_behavior_best_effort(
-                state.repo.database(),
-                BehaviorRecordReq::new(user_id, UserBehaviorAction::Collect)
-                    .with_photo(pid.0)
-                    .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
-                    .with_ip(ip_str.clone()),
-            )
-            .await;
-        }
 
         Ok(result).to_r_ok()
     }
@@ -127,7 +111,6 @@ impl CollectionPhotoController {
     async fn remove(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath((collection_id, photo_id)): ValidatedPath<(CollectionId, PhotoId)>,
     ) -> Result<R<()>> {
         CollectionPhotoService::remove_photos(
@@ -138,16 +121,6 @@ impl CollectionPhotoController {
         )
         .await?;
 
-        // 行为审计：取消收藏照片
-        AuditService::record_behavior_best_effort(
-            state.repo.database(),
-            BehaviorRecordReq::new(user_id, UserBehaviorAction::Uncollect)
-                .with_photo(photo_id.0)
-                .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
-                .with_ip(ip.map(|ip| ip.to_string())),
-        )
-        .await;
-
         Ok(()).to_r_ok()
     }
 
@@ -155,7 +128,6 @@ impl CollectionPhotoController {
     async fn remove_batch(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        OptionalClientIp(ip): OptionalClientIp,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedJson(req): ValidatedJson<CollectionPhotoRemoveBatchParam>,
     ) -> Result<R<CollectionPhotoRemoveBatchResult>> {
@@ -166,19 +138,6 @@ impl CollectionPhotoController {
             req.photo_ids.clone(),
         )
         .await?;
-
-        // 行为审计：取消收藏照片（按批量传入的 photo_id 逐条记录）
-        let ip_str = ip.map(|ip| ip.to_string());
-        for pid in req.photo_ids.iter() {
-            AuditService::record_behavior_best_effort(
-                state.repo.database(),
-                BehaviorRecordReq::new(user_id, UserBehaviorAction::Uncollect)
-                    .with_photo(pid.0)
-                    .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
-                    .with_ip(ip_str.clone()),
-            )
-            .await;
-        }
 
         Ok(result).to_r_ok()
     }

@@ -52,6 +52,27 @@ step_derive::declare_async_event!(
 
 // 查询
 impl PhotoService {
+    pub fn record_photo_view_async(state: &PhotoState, user_id: UserId, file_id: String) {
+        let db = state.repo.database().clone();
+        tokio::spawn(async move {
+            let _ = common::db_transaction!(scoped & db, |txn| {
+                let Some(photo_id) = PhotoMapper::query_photo_id_by_file_id(txn, &file_id).await?
+                else {
+                    return Ok(());
+                };
+                AuditService::append(
+                    txn,
+                    AuditEvent::new("view")
+                        .with_actor(user_id.0)
+                        .with_target("photo", photo_id.0),
+                )
+                .await?;
+                Ok(())
+            })
+            .await;
+        });
+    }
+
     /// 查询用户照片, 并生成包含访问令牌和点赞状态的视图.
     #[tracing::instrument(
         skip_all,
@@ -273,15 +294,15 @@ impl PhotoService {
     ) -> common::Result<()> {
         let photo_ids = ctx.photo_ids();
         PhotoMapper::delete_by_ids(txn, &photo_ids).await?;
-        for photo_id in photo_ids {
-            AuditService::append(
-                txn,
-                AuditEvent::new("photo.deleted")
-                    .with_actor(ctx.user_id.0)
-                    .with_target("photo", photo_id.0),
-            )
-            .await?;
-        }
+        AuditService::append(
+            txn,
+            AuditEvent::new("delete_photos")
+                .with_actor(ctx.user_id.0)
+                .with_detail(serde_json::json!({
+                    "photoIds": photo_ids.iter().map(|id| id.0).collect::<Vec<_>>()
+                })),
+        )
+        .await?;
         Ok(())
     }
 }

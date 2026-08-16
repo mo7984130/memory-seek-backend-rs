@@ -1,27 +1,23 @@
-//! 用户行为审计相关的管理端 DTO
-
-use chrono::{DateTime, Utc};
-use serde::Deserialize;
+//! 审计查询接口的请求与响应 DTO。
 
 use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
-use crate::photo::behavior::UserBehaviorId;
-use crate::photo::behavior::{BehaviorTargetType, UserBehaviorAction};
+use crate::photo::behavior::{BehaviorTargetType, UserBehaviorAction, UserBehaviorId};
+use chrono::{DateTime, Utc};
+use serde::Deserialize;
 
-/// 行为量聚合粒度
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export, export_to = "photo/"))]
-pub enum BehaviorGranularity {
+#[cfg_attr(feature = "ts", ts(export, export_to = "audit/"))]
+pub enum AuditGranularity {
     #[default]
     Day,
     Week,
     Month,
 }
 
-impl BehaviorGranularity {
-    /// 对应 date_trunc 的时间桶单位
+impl AuditGranularity {
     pub const fn as_trunc(self) -> &'static str {
         match self {
             Self::Day => "day",
@@ -31,40 +27,40 @@ impl BehaviorGranularity {
     }
 }
 
-crate::in_dto!(BehaviorStatsQuery, "photo/", serde_default, docs = "行为量聚合查询参数"; {
+crate::in_dto!(AuditStatsQuery, "audit/", serde_default, docs = "审计统计查询参数"; {
     pub action: Option<UserBehaviorAction>,
     pub target_type: Option<BehaviorTargetType>,
     pub start: Option<DateTime<Utc>>,
     pub end: Option<DateTime<Utc>>,
-    pub granularity: BehaviorGranularity,
+    pub granularity: AuditGranularity,
 });
 
-impl Default for BehaviorStatsQuery {
+impl Default for AuditStatsQuery {
     fn default() -> Self {
         Self {
             action: None,
             target_type: None,
             start: None,
             end: None,
-            granularity: BehaviorGranularity::Day,
+            granularity: AuditGranularity::Day,
         }
     }
 }
 
-crate::out_dto!(BehaviorStatsItem, "photo/", docs = "行为量聚合结果项"; {
+crate::out_dto!(AuditStatsItem, "audit/", docs = "审计统计结果项"; {
     pub bucket: DateTime<Utc>,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub count: i64,
 });
 
-crate::out_dto!(BehaviorTopItem, "photo/", docs = "热门目标排行结果项"; {
+crate::out_dto!(AuditTopItem, "audit/", docs = "审计热门目标结果项"; {
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub target_id: i64,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub count: i64,
 });
 
-crate::in_dto!(BehaviorTopQuery, "photo/", serde_default, docs = "热门目标排行查询参数"; {
+crate::in_dto!(AuditTopQuery, "audit/", serde_default, docs = "审计热门目标查询参数"; {
     pub action: UserBehaviorAction,
     pub target_type: BehaviorTargetType,
     #[validate(range(min = 1, max = 100, message = "limit 在 1 到 100 之间"))]
@@ -73,7 +69,7 @@ crate::in_dto!(BehaviorTopQuery, "photo/", serde_default, docs = "热门目标�
     pub limit: u64,
 });
 
-impl Default for BehaviorTopQuery {
+impl Default for AuditTopQuery {
     fn default() -> Self {
         Self {
             action: UserBehaviorAction::View,
@@ -83,7 +79,7 @@ impl Default for BehaviorTopQuery {
     }
 }
 
-crate::in_dto!(BehaviorAuditQuery, "photo/", serde_default, docs = "审计流水查询参数"; {
+crate::in_dto!(AuditQuery, "audit/", serde_default, docs = "审计流水查询参数"; {
     pub action: Option<UserBehaviorAction>,
     pub target_type: Option<BehaviorTargetType>,
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
@@ -97,7 +93,7 @@ crate::in_dto!(BehaviorAuditQuery, "photo/", serde_default, docs = "审计流水
     pub size: u64,
 });
 
-impl Default for BehaviorAuditQuery {
+impl Default for AuditQuery {
     fn default() -> Self {
         Self {
             action: None,
@@ -110,7 +106,7 @@ impl Default for BehaviorAuditQuery {
     }
 }
 
-crate::out_dto!(BehaviorAuditItem, "photo/", docs = "审计流水响应项"; {
+crate::out_dto!(AuditItem, "audit/", docs = "审计流水响应项"; {
     pub id: UserBehaviorId,
     pub user_id: UserId,
     pub action: UserBehaviorAction,
@@ -119,6 +115,5 @@ crate::out_dto!(BehaviorAuditItem, "photo/", docs = "审计流水响应项"; {
     pub target_id: Option<i64>,
     #[cfg_attr(feature = "ts", ts(type = "Record<string, unknown> | null"))]
     pub detail: Option<serde_json::Value>,
-    pub ip: Option<String>,
     pub created_at: DateTime<Utc>,
 });
