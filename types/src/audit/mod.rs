@@ -7,8 +7,8 @@ use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
 use crate::photo::behavior::{BehaviorTargetType, UserBehaviorAction, UserBehaviorId};
 
-pub mod dto;
-pub use dto::*;
+mod model;
+pub use model::*;
 
 /// 一个必须和业务状态一起提交的审计事实。
 #[derive(Clone, Debug, PartialEq)]

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{AuditService, AuditState, BehaviorRecord};
+use crate::{AuditService, AuditState};
 use axum::{
     Extension, Router,
     extract::{FromRef, State},
@@ -12,6 +12,7 @@ use common::{
 };
 use types::audit::{
     AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem, AuditTopQuery,
+    BehaviorRecord,
 };
 use types::auth::user::{AdminId, UserId};
 use types::cursor::TimeIdCursor;
