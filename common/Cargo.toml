@@ -1,6 +1,6 @@
 [package]
 name = "common"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 
 [features]
@@ -12,6 +12,7 @@ tokio = ["dep:tokio"]
 event = ["tokio"]
 snowflake = ["dep:snowflaked"]
 contextual-sea-orm = []
+orm = []
 contextual-redis = []
 contextual-cache = []
 contextual-serde = []

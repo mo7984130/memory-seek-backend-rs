@@ -105,7 +105,7 @@ impl PersonService {
         info!("聚类完成");
 
         info!("开始保存 person/face 表");
-        state.repo.backup_face_tables(&state.backup_storage).await?;
+        state.repo.backup_face_tables(&state.backup_state).await?;
         info!("保存表完成");
         state
             .repo

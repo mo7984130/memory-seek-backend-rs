@@ -1,4 +1,4 @@
-use crate::runner::BackupRunner;
+use crate::service::BackupService;
 use crate::state::BackupState;
 use axum::{Extension, Router, extract::State, routing::post};
 use common::{Result, r::R, traits::controller::ControllerRouter};
@@ -29,7 +29,7 @@ impl BackupController {
     ) -> Result<R<serde_json::Value>> {
         AdminId::new(user_id)?;
 
-        let result = BackupRunner::execute_scheduled(state).await?;
+        let result = BackupService::execute_scheduled(state).await?;
 
         Ok(R::ok(serde_json::json!({
             "exported": result.exported,
@@ -46,7 +46,7 @@ impl BackupController {
     ) -> Result<R<serde_json::Value>> {
         let admin = AdminId::new(user_id)?;
 
-        let result = BackupRunner::execute_manual(state, admin).await?;
+        let result = BackupService::execute_manual(state, admin).await?;
 
         Ok(R::ok(serde_json::json!({
             "exported": result.exported,

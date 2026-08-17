@@ -20,6 +20,9 @@ pub use file_validator::FileValidator;
 
 pub use db_utils::DbUtils;
 
+#[cfg(feature = "orm")]
+pub mod table_metadata;
+
 pub use password_hash::{Argon2idConfig, BcryptConfig, HashAlgorithm};
 pub use token_cipher::{TokenCipher, TokenCipherConfig, init_token_cipher, token_cipher};
 

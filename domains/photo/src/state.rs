@@ -8,7 +8,7 @@ use oss::S3Client;
 use sea_orm::DatabaseConnection;
 
 #[cfg(feature = "face")]
-use backup::storage::BackupStorage;
+use backup::BackupState;
 
 use crate::repo::{PhotoRepo, TimelineStatRepo};
 
@@ -22,7 +22,7 @@ pub struct PhotoState {
     #[cfg(feature = "face")]
     pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
     #[cfg(feature = "face")]
-    pub backup_storage: BackupStorage,
+    pub backup_state: Arc<BackupState>,
 }
 
 impl PhotoState {
@@ -33,7 +33,7 @@ impl PhotoState {
         cache_config: CacheConfig,
         s3_client: Arc<S3Client>,
         #[cfg(feature = "face")] face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
-        #[cfg(feature = "face")] backup_storage: BackupStorage,
+        #[cfg(feature = "face")] backup_state: Arc<BackupState>,
     ) -> Self {
         Self {
             repo: PhotoRepo::new(db.clone(), redis.clone(), cache_config.clone()),
@@ -43,7 +43,7 @@ impl PhotoState {
             #[cfg(feature = "face")]
             face_engine,
             #[cfg(feature = "face")]
-            backup_storage,
+            backup_state,
         }
     }
 }

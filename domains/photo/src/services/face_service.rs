@@ -188,7 +188,7 @@ impl FaceService {
     async fn backup_tables(state: &PhotoState) -> Result<()> {
         state
             .repo
-            .backup_face_tables(&state.backup_storage)
+            .backup_face_tables(&state.backup_state)
             .timed(metrics_name!("cleanup:backup"))
             .await?;
 

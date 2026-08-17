@@ -1,8 +1,8 @@
 use crate::error::BackupError;
-use crate::hasher::TableHasher;
+use crate::error::Result;
+use common::utils::table_metadata::TableMetadata;
 use csv::Writer;
-use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
-use sha2::{Digest, Sha256};
+use sea_orm::{ConnectionTrait, Statement};
 use std::path::{Path, PathBuf};
 
 /// CSV 导出器
@@ -11,20 +11,19 @@ pub struct CsvExporter;
 impl CsvExporter {
     /// 导出指定表到指定路径的 CSV 文件
     ///
-    /// 返回 (文件路径, 数据哈希)
-    pub async fn export_to_path(
-        db: &DatabaseConnection,
+    /// 返回导出的文件路径
+    pub async fn export_to_dir(
+        db: &impl ConnectionTrait,
         table_name: &str,
-        output_path: &Path,
-    ) -> Result<(PathBuf, String), BackupError> {
-        let columns = TableHasher::get_column_names(db, table_name).await?;
+        output_dir: &Path,
+    ) -> Result<PathBuf> {
+        let output_path = output_dir.join(format!("{}.csv", table_name));
+
+        let columns = TableMetadata::get_column_names(db, table_name).await?;
         if columns.is_empty() {
-            return Err(BackupError::Msg(format!(
-                "Table {} does not exist",
-                table_name
-            )));
+            return Err(BackupError::TableNotExist(table_name.to_string()));
         }
-        let pks = TableHasher::get_primary_key_columns(db, table_name).await?;
+        let pks = TableMetadata::get_primary_key_columns(db, table_name).await?;
         let select_cols = columns
             .iter()
             .map(|c| format!("\"{}\"::text as \"{}\"", c, c))
@@ -47,7 +46,7 @@ impl CsvExporter {
             std::fs::create_dir_all(parent)?;
         }
 
-        let mut wtr = Writer::from_path(output_path)?;
+        let mut wtr = Writer::from_path(&output_path)?;
 
         wtr.write_record(&columns)?;
 
@@ -64,71 +63,6 @@ impl CsvExporter {
 
         wtr.flush()?;
 
-        let file_content = std::fs::read(output_path)?;
-        let hash = compute_hash(&file_content);
-
-        Ok((output_path.to_path_buf(), hash))
-    }
-
-    /// 导出指定表为 CSV，存到 output_dir/{table_name}.csv
-    ///
-    /// 返回 (文件路径, 数据哈希)
-    pub async fn export(
-        db: &DatabaseConnection,
-        table_name: &str,
-        output_dir: &Path,
-    ) -> Result<(PathBuf, String), BackupError> {
-        let output_path = output_dir.join(format!("{}.csv", table_name));
-        Self::export_to_path(db, table_name, &output_path).await
-    }
-}
-
-/// 计算数据的 SHA256 哈希
-pub fn compute_hash(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hex::encode(hasher.finalize())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_compute_hash_deterministic() {
-        let data = b"test data";
-        let hash1 = compute_hash(data);
-        let hash2 = compute_hash(data);
-        assert_eq!(hash1, hash2);
-    }
-
-    #[test]
-    fn test_compute_hash_different_data() {
-        let data1 = b"data1";
-        let data2 = b"data2";
-        let hash1 = compute_hash(data1);
-        let hash2 = compute_hash(data2);
-        assert_ne!(hash1, hash2);
-    }
-
-    #[test]
-    fn test_compute_hash_empty() {
-        let data = b"";
-        let hash = compute_hash(data);
-        assert!(!hash.is_empty());
-        // SHA256 of empty string is a well-known constant
-        assert_eq!(
-            hash,
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        );
-    }
-
-    #[test]
-    fn test_compute_hash_returns_hex_string() {
-        let hash = compute_hash(b"hello");
-        // SHA256 produces 32 bytes = 64 hex characters
-        assert_eq!(hash.len(), 64);
-        // All characters should be valid hex digits
-        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+        Ok(output_path)
     }
 }

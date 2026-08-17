@@ -1,4 +1,5 @@
 use audit::{AuditEvent, AuditService};
+use std::sync::Arc;
 use types::photo::{face::FaceRecord, models::FaceIds, person::PersonId, photo::PhotoId};
 
 use super::PhotoRepo;
@@ -69,27 +70,25 @@ impl PhotoRepo {
     /// 备份并清理人脸相关表, 用于全量重算.
     pub(crate) async fn backup_face_tables(
         &self,
-        storage: &backup::storage::BackupStorage,
+        backup_state: &Arc<backup::BackupState>,
     ) -> Result<()> {
         use sea_orm::EntityName;
-        storage
-            .backup_tables(
-                &self.db,
-                &[
-                    types::photo::face::Entity.table_name(),
-                    types::photo::person::Entity.table_name(),
-                ],
-                backup::storage::BackupType::Manual,
+        backup::BackupService::backup_tables(
+            backup_state.clone(),
+            &[
+                types::photo::face::Entity.table_name(),
+                types::photo::person::Entity.table_name(),
+            ],
+        )
+        .await
+        .map_err(|error| {
+            ContextualError::error(
+                "backup_face_tables",
+                "备份人脸与人物表失败",
+                error.to_string(),
+                AppError::InternalServerError,
             )
-            .await
-            .map_err(|error| {
-                ContextualError::error(
-                    "backup_face_tables",
-                    "备份人脸与人物表失败",
-                    error.to_string(),
-                    AppError::InternalServerError,
-                )
-            })?;
+        })?;
         Ok(())
     }
     /// 查询人脸及其人物名称, 用于人物视图展示.

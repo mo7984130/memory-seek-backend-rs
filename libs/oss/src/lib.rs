@@ -12,6 +12,7 @@ use s3::{Bucket, Region};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 #[cfg(feature = "metrics")]
@@ -122,6 +123,38 @@ impl S3Client {
         .await;
         #[cfg(feature = "metrics")]
         record("put", start, result.is_ok());
+        result
+    }
+
+    /// 以流式方式上传本地文件到 OSS。
+    ///
+    /// 小文件由底层实现直接上传，大文件自动使用 multipart 上传，避免将整个文件读入内存。
+    /// 429 限流重试时会重新打开文件，从文件开头重新上传。
+    pub async fn upload_file(
+        &self,
+        key: &str,
+        path: impl AsRef<Path>,
+        content_type: &str,
+    ) -> Result<(), OssError> {
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+
+        let path = path.as_ref().to_owned();
+        let result = retry_429("put_stream", key, || {
+            let path = path.clone();
+            async move {
+                let mut file = tokio::fs::File::open(path).await?;
+                self.bucket
+                    .put_object_stream_with_content_type(&mut file, key, content_type)
+                    .await
+                    .map(|_| ())
+                    .map_err(OssError::from)
+            }
+        })
+        .await;
+
+        #[cfg(feature = "metrics")]
+        record("put_stream", start, result.is_ok());
         result
     }
 

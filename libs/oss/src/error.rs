@@ -10,6 +10,10 @@ use common::error::{AppError, ContextualError};
 /// 存储服务返回 4xx/5xx 时携带完整的 status + headers + body，日志里可直接看到完整响应。
 #[derive(Debug, Error)]
 pub enum OssError {
+    /// 本地文件操作失败
+    #[error("文件操作失败: {0}")]
+    Io(#[from] std::io::Error),
+
     /// 底层 `rust-s3` 库错误（网络、签名、XML 解析等）
     #[error("s3 客户端错误: {0}")]
     Inner(#[from] s3::error::S3Error),

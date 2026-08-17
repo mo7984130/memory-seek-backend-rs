@@ -546,20 +546,18 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "audit",
  "axum",
  "chrono",
  "common",
  "csv",
- "hex",
  "metrics",
  "oss",
  "sea-orm",
  "serde",
  "serde_json",
- "sha2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-cron-scheduler",
@@ -978,7 +976,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -3374,7 +3372,7 @@ dependencies = [
 
 [[package]]
 name = "oss"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bytes",
  "common",
@@ -3575,7 +3573,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "async-trait",
  "audit",
@@ -4875,7 +4873,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "audit",
  "auth",

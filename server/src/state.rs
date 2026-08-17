@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use oss::S3Client;
 
 #[cfg(feature = "backup")]
-use backup::BackupScheduler;
+use backup::{BackupScheduler, BackupState};
 
 #[cfg(feature = "metrics")]
 use metrics_exporter_prometheus::PrometheusHandle;
@@ -53,6 +53,9 @@ pub struct AppState {
 
     #[cfg(feature = "backup")]
     pub backup_scheduler: Arc<BackupScheduler>,
+
+    #[cfg(feature = "backup")]
+    pub backup_state: Arc<BackupState>,
 
     #[cfg(feature = "metrics")]
     pub metrics_handle: PrometheusHandle,

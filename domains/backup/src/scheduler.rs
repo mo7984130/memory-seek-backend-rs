@@ -1,5 +1,5 @@
 use crate::error::BackupError;
-use crate::runner::BackupRunner;
+use crate::service::BackupService;
 use crate::state::BackupState;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -21,7 +21,9 @@ impl BackupScheduler {
         let job = Job::new(schedule.as_str(), move |_, _| {
             let state = state_clone.clone();
             tokio::spawn(async move {
-                let _ = BackupRunner::execute_scheduled(state).await;
+                if let Err(error) = BackupService::execute_scheduled(state).await {
+                    tracing::error!(error = %error, "定时备份执行失败");
+                }
             });
         })?;
 

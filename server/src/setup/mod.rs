@@ -27,8 +27,7 @@ impl AppSetup {
 
         // 3. 初始化备份调度器
         #[cfg(feature = "backup")]
-        let backup_scheduler =
-            domains::backup::init(&bases.db, &libs.s3_client, &cfg.backup).await?;
+        let backup_runtime = domains::backup::init(&bases.db, &libs.s3_client, &cfg.backup).await?;
 
         // 4. 构建 AppState
         let state = Arc::new(AppState {
@@ -41,7 +40,9 @@ impl AppSetup {
             #[cfg(feature = "s3")]
             s3_client: libs.s3_client,
             #[cfg(feature = "backup")]
-            backup_scheduler,
+            backup_scheduler: backup_runtime.scheduler,
+            #[cfg(feature = "backup")]
+            backup_state: backup_runtime.state,
             #[cfg(feature = "face-engine")]
             face_engine: libs.face_engine,
         });

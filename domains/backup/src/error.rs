@@ -28,10 +28,15 @@ pub enum BackupError {
     #[error("备份调度器操作失败: {0}")]
     Scheduler(#[from] tokio_cron_scheduler::JobSchedulerError),
 
+    #[error("表不存在: {0}")]
+    TableNotExist(String),
+
     /// 业务校验类错误（如目标表不存在）
     #[error("{0}")]
     Msg(String),
 }
+
+pub type Result<T> = std::result::Result<T, BackupError>;
 
 impl From<BackupError> for AppError {
     #[track_caller]
@@ -65,6 +70,12 @@ impl From<BackupError> for AppError {
                 "backup_scheduler_error",
                 "备份调度器操作失败",
                 e,
+                AppError::InternalServerError,
+            ),
+            BackupError::TableNotExist(table_name) => log_err_with_source(
+                "backup_table_not_exist",
+                "备份时表不存在",
+                table_name,
                 AppError::InternalServerError,
             ),
             BackupError::Msg(msg) => log_err_with_source(

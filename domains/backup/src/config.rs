@@ -89,24 +89,5 @@ fn default_local_path() -> String {
 
 /// 返回对象存储备份前缀的默认值.
 fn default_s3_prefix() -> String {
-    "backup/".to_string()
-}
-
-impl BackupConfig {
-    /// 验证配置有效性
-    pub fn validate(&self) -> Result<(), String> {
-        if self.local_path.is_empty() {
-            return Err("backup.local_path cannot be empty".to_string());
-        }
-        if self.scheduled.daily_retention == 0 {
-            return Err("backup.scheduled.daily_retention must be > 0".to_string());
-        }
-        if self.scheduled.weekly_retention == 0 {
-            return Err("backup.scheduled.weekly_retention must be > 0".to_string());
-        }
-        if self.scheduled.monthly_retention == 0 {
-            return Err("backup.scheduled.monthly_retention must be > 0".to_string());
-        }
-        Ok(())
-    }
+    "backup".to_string()
 }
