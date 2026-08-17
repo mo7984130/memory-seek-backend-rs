@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::{services::photo_service::AfterPhotoUpload, state::PhotoState};
+use crate::{
+    services::photo_service::{AfterPhotoDelete, AfterPhotoUpload},
+    state::PhotoState,
+};
 use common::Result;
 use types::photo::dto::timeline_stat::MonthStat;
 
@@ -18,10 +21,28 @@ impl TimelineStatService {
     }
 }
 
+#[step_derive::declare_event_consumer(
+    state = crate::state::PhotoState,
+    event = crate::services::photo_service::AfterPhotoDelete,
+    slice = crate::services::photo_service::AFTER_PHOTO_DELETE_CONSUMERS,
+    name = "timeline_stat_cache_invalidation",
+)]
+impl TimelineStatService {
+    /// 删除照片后失效月度统计缓存。
+    async fn on_after_photo_delete(
+        &self,
+        state: Arc<PhotoState>,
+        _event: Arc<AfterPhotoDelete>,
+    ) -> common::Result<()> {
+        state.timeline_stat_repo.invalidate_cache().await;
+        Ok(())
+    }
+}
+
 // 照片删除步骤:时间线统计清理
 #[step_derive::declare_transaction_step(
-    ctx = crate::repo::photo_repo::PhotoDeleteContext,
-    slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
+    ctx = crate::services::photo_service::PhotoDeleteContext,
+    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
     name = "timeline_stat_cleanup",
     owns = ["TimelineStatMapper"],
 )]
@@ -30,7 +51,7 @@ impl TimelineStatService {
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
-        ctx: &mut crate::repo::photo_repo::PhotoDeleteContext,
+        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
     ) -> common::Result<()> {
         let created_ats = ctx.photos.iter().map(|p| &p.created_at).collect::<Vec<_>>();
         crate::repo::TimelineStatRepo::decrement_by_created_ats(txn, &created_ats).await?;

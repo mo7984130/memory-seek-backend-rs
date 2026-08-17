@@ -1,14 +1,13 @@
 use std::{pin::Pin, sync::Arc};
 
 use bytes::Bytes;
-use chrono::Utc;
 use common::{
-    error::AppError,
+    error::{AppError, ContextualError, contextual},
     ext::{ContextualResultExt, IntoContextualExt, OptionExt, ResultInspectErrAsync, log_warn},
     inc_error, metrics_name,
     models::CursorPage,
     timed,
-    utils::{FileValidator, MetricsTimerExt},
+    utils::{FileValidator, ImageMetaData, MetricsTimerExt},
 };
 use futures::Stream;
 use oss::OssError;
@@ -16,7 +15,12 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
-    mappers::photo_mapper::PhotoMapper, repo::photo_repo::PhotoDeleteContext, state::PhotoState,
+    mappers::photo_mapper::PhotoMapper,
+    services::photo_service::{
+        AfterPhotoDelete, AfterPhotoUpload, PhotoDeleteContext, publish_after_photo_delete,
+        publish_after_photo_upload, run_photo_delete_pipeline,
+    },
+    state::PhotoState,
 };
 use audit::{AuditEvent, AuditService};
 use common::Result;
@@ -32,47 +36,10 @@ use types::{
     photo::photo::{NewPhotoRecord, PhotoId, PhotoRecord},
 };
 
-pub(crate) struct PhotoService;
-
-/// 照片主记录落库后发布的事件，供时间线、人脸等后续服务消费。
-pub(crate) struct AfterPhotoUpload {
-    pub photo: PhotoRecord,
-    /// 保留原始字节，供启用 `face` 后的人脸识别订阅者消费。
-    #[cfg(feature = "face")]
-    pub file_data: Bytes,
-}
-
-step_derive::declare_async_event!(
-    crate::state::PhotoState,
-    AfterPhotoUpload,
-    AFTER_PHOTO_UPLOAD_CONSUMERS,
-    publish_after_photo_upload,
-    "after_photo_upload",
-);
+pub struct PhotoService;
 
 // 查询
 impl PhotoService {
-    pub fn record_photo_view_async(state: &PhotoState, user_id: UserId, file_id: String) {
-        let db = state.repo.database().clone();
-        tokio::spawn(async move {
-            let _ = common::db_transaction!(scoped & db, |txn| {
-                let Some(photo_id) = PhotoMapper::query_photo_id_by_file_id(txn, &file_id).await?
-                else {
-                    return Ok(());
-                };
-                AuditService::append(
-                    txn,
-                    AuditEvent::new("view")
-                        .with_actor(user_id.0)
-                        .with_target("photo", photo_id.0),
-                )
-                .await?;
-                Ok(())
-            })
-            .await;
-        });
-    }
-
     /// 查询用户照片, 并生成包含访问令牌和点赞状态的视图.
     #[tracing::instrument(
         skip_all,
@@ -83,7 +50,10 @@ impl PhotoService {
         user_id: UserId,
         photo_ids: &[PhotoId],
     ) -> Result<Vec<PhotoView>> {
+        // 获取照片记录 和 是否喜欢的id
         let (photos, liked_photo_ids) = state.repo.load_photo_records(user_id, photo_ids).await?;
+
+        // 组装结果
         let views = photos
             .into_iter()
             .flatten()
@@ -91,7 +61,7 @@ impl PhotoService {
                 let liked = liked_photo_ids.contains(&p.id);
                 Ok(PhotoView::from_record_with_tokens(p, user_id)?.with_liked(liked))
             })
-            .collect::<common::error::contextual::Result<Vec<_>>>()?;
+            .collect::<contextual::Result<Vec<_>>>()?;
         Ok(views)
     }
 
@@ -103,6 +73,7 @@ impl PhotoService {
         user_id: UserId,
         req: PhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
+        // 获取photo_id
         let page = state
             .repo
             .query_photo_cursor_ids(req)
@@ -112,10 +83,12 @@ impl PhotoService {
             return Ok(CursorPage::empty());
         }
 
+        // 加载信息
         let photo_vos = Self::load_photos_info(state, user_id, &page.records)
             .timed(metrics_name!("load_photos_info"))
             .await?;
 
+        // 组装结果
         page.replace_records(photo_vos).with_next_cursor(|last_vo| {
             Ok(TimeIdCursor {
                 id: last_vo.id,
@@ -148,7 +121,7 @@ impl PhotoService {
 
         // 计算md5
         let md5_hash = {
-            let file_data_clone = file_data.clone();
+            let file_data_clone = Bytes::clone(&file_data);
             timed!(
                 "md5_hash",
                 tokio::task::spawn_blocking(move || format!(
@@ -169,9 +142,7 @@ impl PhotoService {
         }
 
         // 上传文件
-        let date_path = chrono::Local::now().format("%Y/%m/%d");
-        let uuid = Uuid::new_v4();
-        let file_id = format!("photos/{}/{}.{}", date_path, uuid, metadata.format);
+        let file_id = Self::get_photo_s3_key(&metadata);
         state
             .s3_client
             .upload(&file_id, &file_data, &metadata.mime_type)
@@ -181,7 +152,6 @@ impl PhotoService {
             .into_contextual()?;
 
         // 更新数据库
-        let now = Utc::now();
         let photo = state
             .repo
             .insert_photo(NewPhotoRecord {
@@ -193,8 +163,6 @@ impl PhotoService {
                 mime_type: metadata.mime_type,
                 md5: md5_hash.clone(),
                 file_id: file_id.clone(),
-                created_at: req.created_at.unwrap_or(now),
-                updated_at: now,
             })
             .timed(metrics_name!("db_insert"))
             .await
@@ -210,6 +178,7 @@ impl PhotoService {
             .inspect_err(|_| inc_error!("db"))
             .into_contextual()?;
 
+        // 发布事件
         let photo_record = PhotoRecord::from(photo);
         publish_after_photo_upload(
             Arc::clone(&state),
@@ -233,45 +202,47 @@ impl PhotoService {
         Ok(state.repo.exists_by_md5_batch(&req.md5s).await?)
     }
 
-    /// 删除用户照片及其关联资源, 并记录删除行为.
+    /// 删除照片.
     #[common::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, count = %req.photo_ids.len())
     )]
     pub async fn delete_photos(
-        state: &PhotoState,
+        state: Arc<PhotoState>,
         user_id: UserId,
         req: DeletePhotosParam,
     ) -> Result<()> {
-        // 在单个事务内执行删除步骤管道(主表删除恒在最后),任一步失败整体回滚
-        let ctx = state
-            .repo
-            .delete_photos(user_id, &req.photo_ids)
-            .timed(metrics_name!("db_transaction"))
-            .await?;
-
-        // 删除照片文件
-        let file_ids = ctx.photos.iter().map(|p| &p.file_id).collect::<Vec<_>>();
-        state
-            .s3_client
-            .delete_batch(file_ids)
-            .timed(metrics_name!("s3_delete_batch"))
+        // 查询属于用户的照片
+        let photos =
+            PhotoMapper::query_by_user_id_and_ids(state.repo.database(), user_id, &req.photo_ids)
+                .await?;
+        let mut ctx = PhotoDeleteContext {
+            user_id,
+            photos,
+            #[cfg(feature = "face")]
+            affected_person_ids: Vec::new(),
+        };
+        run_photo_delete_pipeline(state.repo.database(), &mut ctx)
             .await
-            .into_contextual()?;
+            .map_err(|error| {
+                ContextualError::error(
+                    "photo_delete_pipeline",
+                    "执行照片删除事务失败",
+                    error.to_string(),
+                    error,
+                )
+            })?;
 
-        // 失效照片信息、照片尺寸、人物缓存, 并失效月度统计缓存
-        // 错误不返回
-        state
-            .repo
-            .invalidate_deleted_photos(
-                &ctx.photos,
+        // 发布删除后事件，缓存失效等后续操作不影响删除结果。
+        publish_after_photo_delete(
+            Arc::clone(&state),
+            AfterPhotoDelete {
+                photos: ctx.photos,
                 #[cfg(feature = "face")]
-                &ctx.affected_person_ids,
-            )
-            .await;
-
-        state.timeline_stat_repo.invalidate_cache().await;
+                affected_person_ids: ctx.affected_person_ids,
+            },
+        );
 
         Ok(())
     }
@@ -279,8 +250,8 @@ impl PhotoService {
 
 /// 删除照片主表记录(受外键约束,`is_final` 使其恒在管道最后执行)
 #[step_derive::declare_transaction_step(
-    ctx = crate::repo::photo_repo::PhotoDeleteContext,
-    slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
+    ctx = crate::services::photo_service::PhotoDeleteContext,
+    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
     name = "photo_record_delete",
     owns = ["PhotoMapper"],
     is_final = true,
@@ -309,6 +280,44 @@ impl PhotoService {
 
 #[step_derive::declare_event_consumer(
     state = crate::state::PhotoState,
+    event = crate::services::photo_service::AfterPhotoDelete,
+    slice = crate::services::photo_service::AFTER_PHOTO_DELETE_CONSUMERS,
+    name = "photo_delete_cache_invalidation",
+)]
+impl PhotoService {
+    /// 删除照片后。
+    async fn on_after_photo_delete(
+        &self,
+        state: Arc<PhotoState>,
+        event: Arc<AfterPhotoDelete>,
+    ) -> common::Result<()> {
+        // 删除照片文件
+        let file_ids = event
+            .photos
+            .iter()
+            .map(|photo| &photo.file_id)
+            .collect::<Vec<_>>();
+        state
+            .s3_client
+            .delete_batch(file_ids)
+            .timed(metrics_name!("s3_delete_batch"))
+            .await
+            .into_contextual()?;
+
+        state
+            .repo
+            .invalidate_deleted_photos(
+                &event.photos,
+                #[cfg(feature = "face")]
+                &event.affected_person_ids,
+            )
+            .await;
+        Ok(())
+    }
+}
+
+#[step_derive::declare_event_consumer(
+    state = crate::state::PhotoState,
     event = crate::services::photo_service::AfterPhotoUpload,
     slice = crate::services::photo_service::AFTER_PHOTO_UPLOAD_CONSUMERS,
     name = "photo_cursor_cache_invalidation",
@@ -326,14 +335,14 @@ impl PhotoService {
 }
 
 /// 图片下载结果，Controller 根据此类型构建 HTTP 响应
-pub(crate) enum ImageDownloadData {
+pub enum ImageDownloadData {
     /// 处理后的图片（缩略图/预览/裁剪），始终为 webp 格式
     Processed(Bytes),
     /// 原始图片，以流式返回，动态内容类型
     Original {
         /// 图片字节流
         stream: Pin<Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>>,
-        /// 根据文件扩展名推断的 MIME 类型
+        /// 根据已验证文件格式推断的 MIME 类型
         content_type: &'static str,
     },
 }
@@ -350,6 +359,33 @@ impl PhotoService {
         state: &PhotoState,
         token: ImageToken,
     ) -> Result<ImageDownloadData> {
+        // 浏览埋点：仅预览/原图访问计入，缩略图/裁剪不计入
+        if matches!(
+            token.token_type,
+            ImageTokenType::Preview | ImageTokenType::Original
+        ) {
+            let db = state.repo.database().clone();
+            let token = token.clone();
+            tokio::spawn(async move {
+                common::db_transaction!(contextual & db, |txn| {
+                    let Some(photo_id) =
+                        PhotoMapper::query_photo_id_by_file_id(txn, &token.file_id).await?
+                    else {
+                        return Ok(());
+                    };
+                    AuditService::append(
+                        txn,
+                        AuditEvent::new("view")
+                            .with_actor(token.viewer_id.0)
+                            .with_target("photo", photo_id.0),
+                    )
+                    .await?;
+                    Ok(())
+                })
+                .await
+            });
+        }
+
         match token.token_type {
             ImageTokenType::Thumbnail | ImageTokenType::Preview | ImageTokenType::Crop => {
                 let process_param: String = match token.token_type {
@@ -393,7 +429,8 @@ impl PhotoService {
                     Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>,
                 > = Box::pin(stream_resp);
 
-                let content_type = Self::get_image_content_type(&token.file_id);
+                let content_type =
+                    FileValidator::image_content_type(&token.file_id).unwrap_or("image/jpeg");
                 Ok(ImageDownloadData::Original {
                     stream,
                     content_type,
@@ -402,28 +439,19 @@ impl PhotoService {
         }
     }
 
-    /// 根据文件扩展名获取图片 MIME 类型
-    fn get_image_content_type(file_id: &str) -> &'static str {
-        let ext = file_id
-            .split('.')
-            .next_back()
-            .unwrap_or("jpg")
-            .to_lowercase();
-        match ext.as_str() {
-            "png" => "image/png",
-            "gif" => "image/gif",
-            "webp" => "image/webp",
-            "bmp" => "image/bmp",
-            _ => "image/jpeg",
-        }
+    #[inline]
+    fn get_photo_s3_key(metadata: &ImageMetaData) -> String {
+        let date_path = chrono::Utc::now().format("%Y/%m/%d");
+        let uuid = Uuid::new_v4();
+        format!("photos/{}/{}.{}", date_path, uuid, metadata.format)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        repo::photo_repo::PHOTO_DELETE_STEPS, services::photo_service::AFTER_PHOTO_UPLOAD_CONSUMERS,
+    use crate::services::photo_service::{
+        AFTER_PHOTO_DELETE_CONSUMERS, AFTER_PHOTO_UPLOAD_CONSUMERS, PHOTO_DELETE_STEPS,
     };
     use common::pipeline::Step;
 
@@ -459,6 +487,23 @@ mod tests {
             consumers
                 .iter()
                 .any(|consumer| consumer.name() == "face_recognition")
+        );
+    }
+
+    #[test]
+    fn after_delete_registry_collects_cache_consumers() {
+        let consumers = AFTER_PHOTO_DELETE_CONSUMERS.to_vec();
+
+        assert_eq!(consumers.len(), 2);
+        assert!(
+            consumers
+                .iter()
+                .any(|consumer| consumer.name() == "photo_delete_cache_invalidation")
+        );
+        assert!(
+            consumers
+                .iter()
+                .any(|consumer| consumer.name() == "timeline_stat_cache_invalidation")
         );
     }
 }

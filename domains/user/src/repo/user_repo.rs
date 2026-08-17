@@ -1,5 +1,5 @@
 use audit::{AuditEvent, AuditService};
-use common::error::{AppError, ContextualError, contextual::Result};
+use common::error::{ContextualError, contextual::Result};
 use common::ext::RedisExt;
 use common::utils::MetricsTimerExt;
 use common::{db_transaction, metrics_name};
@@ -21,15 +21,6 @@ pub struct UserRepo {
     redis: Pool,
     cache_user_info: MultiLevelCache<UserBriefRow, ContextualError>,
     cache_user_info_single: MultiLevelCache<UserInfo, ContextualError>,
-}
-
-fn audit_failure(error: AppError) -> ContextualError {
-    ContextualError::error(
-        "user_audit_append",
-        "用户审计事件写入失败",
-        error,
-        AppError::InternalServerError,
-    )
 }
 
 impl UserRepo {
@@ -109,7 +100,6 @@ impl UserRepo {
                     .with_target("user", user_id.0),
             )
             .await
-            .map_err(audit_failure)
         })
         .timed(metrics_name!("db_transaction"))
         .await?;
@@ -129,8 +119,7 @@ impl UserRepo {
                     .with_actor(user_id.0)
                     .with_target("user", user_id.0),
             )
-            .await
-            .map_err(audit_failure)?;
+            .await?;
             Ok(old_key)
         })
         .timed(metrics_name!("db_transaction"))
@@ -159,7 +148,6 @@ impl UserRepo {
                     .with_target("user", user_id.0),
             )
             .await
-            .map_err(audit_failure)
         })
         .timed(metrics_name!("db_transaction"))
         .await
@@ -176,7 +164,6 @@ impl UserRepo {
                     .with_target("user", user_id.0),
             )
             .await
-            .map_err(audit_failure)
         })
         .timed(metrics_name!("db_transaction"))
         .await

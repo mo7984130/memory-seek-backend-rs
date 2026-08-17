@@ -178,15 +178,7 @@ impl PhotoRepo {
                         .with_actor(user_id.0)
                         .with_target("collection", collection.id.0),
                 )
-                .await
-                .map_err(|error| {
-                    common::error::ContextualError::error(
-                        "photo_audit_append",
-                        "相册审计事件写入失败",
-                        error,
-                        AppError::InternalServerError,
-                    )
-                })?;
+                .await?;
                 Ok(collection)
             })
         })
@@ -213,15 +205,7 @@ impl PhotoRepo {
                                 .with_actor(user_id.0)
                                 .with_target("collection", id.0),
                         )
-                        .await
-                        .map_err(|error| {
-                            common::error::ContextualError::error(
-                                "photo_audit_append",
-                                "相册审计事件写入失败",
-                                error,
-                                AppError::InternalServerError,
-                            )
-                        })?;
+                        .await?;
                     }
                     Ok(rows)
                 })

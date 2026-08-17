@@ -17,7 +17,7 @@ use common::{
 };
 use common::{ext::OptionExt, r::R, utils::token_cipher};
 use types::photo::{
-    ImageToken, ImageTokenType,
+    ImageToken,
     dto::photo::{PhotoCursorParam, PhotoView},
     models::{DeletePhotosParam, ExistsByMd5BatchParam},
     photo::PhotoId,
@@ -78,7 +78,6 @@ impl PhotoController {
         let req = types::photo::models::UploadPhotoParam {
             file_name,
             content_type,
-            created_at: None,
         };
         let photo = PhotoService::upload_photo(Arc::clone(&state), user_id, file_data, req).await?;
 
@@ -117,18 +116,6 @@ impl PhotoController {
             common::error::AppError::bad_request("无效的图片 token"),
         )?;
 
-        // 浏览埋点：仅预览/原图访问计入，缩略图/裁剪不计入
-        if matches!(
-            image_token.token_type,
-            ImageTokenType::Preview | ImageTokenType::Original
-        ) {
-            PhotoService::record_photo_view_async(
-                &state,
-                image_token.viewer_id,
-                image_token.file_id.clone(),
-            );
-        }
-
         let data = PhotoService::download_image(&state, image_token).await?;
 
         let resp = match data {
@@ -158,7 +145,7 @@ impl PhotoController {
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<DeletePhotosParam>,
     ) -> Result<R<()>> {
-        PhotoService::delete_photos(&state, user_id, req)
+        PhotoService::delete_photos(state, user_id, req)
             .await
             .to_r_ok()?;
 

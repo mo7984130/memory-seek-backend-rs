@@ -1,4 +1,4 @@
-use common::Result;
+use common::{Result, error::contextual};
 use sea_orm::{ConnectionTrait, DatabaseTransaction};
 use types::audit::{AuditEvent, AuditQuery, AuditStatsQuery, AuditTopQuery, BehaviorRecord};
 
@@ -78,7 +78,7 @@ impl AuditService {
 
 impl AuditService {
     /// 在调用方当前事务中追加审计事实。
-    pub async fn append(txn: &DatabaseTransaction, event: AuditEvent) -> Result<()> {
+    pub async fn append(txn: &DatabaseTransaction, event: AuditEvent) -> contextual::Result<()> {
         Self::append_many(txn, [event]).await
     }
 
@@ -89,7 +89,7 @@ impl AuditService {
     pub async fn append_many(
         txn: &DatabaseTransaction,
         events: impl IntoIterator<Item = AuditEvent>,
-    ) -> Result<()> {
+    ) -> contextual::Result<()> {
         let events = events.into_iter().collect::<Vec<_>>();
 
         #[cfg(not(feature = "enable"))]

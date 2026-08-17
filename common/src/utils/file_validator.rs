@@ -58,7 +58,8 @@ impl FileValidator {
     /// # 参数
     /// - `file_data`: 图片文件的原始字节数据
     /// - `file_name`: 文件名，用于提取扩展名
-    /// - `content_type`: MIME 类型字符串，写入返回的元数据
+    /// - `content_type`: 客户端声明的 MIME 类型，仅为保持调用接口兼容而接收；
+    ///   返回的元数据始终由已验证的文件扩展名生成
     ///
     /// # 返回
     /// 校验通过时返回 `ImageMetaData`，包含格式、宽高、大小等信息
@@ -73,7 +74,7 @@ impl FileValidator {
     pub fn validate_image(
         file_data: &[u8],
         file_name: &str,
-        content_type: &str,
+        _content_type: &str,
     ) -> Result<ImageMetaData, FileValidationError> {
         if file_data.is_empty() {
             return Err(FileValidationError::EmptyFile);
@@ -90,8 +91,9 @@ impl FileValidator {
             return Err(FileValidationError::UnsupportedFileType);
         }
 
-        let expected_header = Self::get_expected_header(&file_type)?;
-        Self::validate_file_header(file_data, expected_header)?;
+        let image_format =
+            Self::image_format(&file_type).ok_or(FileValidationError::UnsupportedFileType)?;
+        Self::validate_file_header(file_data, image_format.expected_header)?;
 
         let (width, height) = Self::extract_image_metadata(file_data)?;
 
@@ -101,8 +103,16 @@ impl FileValidator {
             height,
             size: file_data.len() as u64,
             name: file_name.to_string(),
-            mime_type: content_type.to_string(),
+            mime_type: image_format.mime_type.to_string(),
         })
+    }
+
+    /// 根据文件名扩展名返回受支持图片的规范 MIME 类型。
+    ///
+    /// 此函数与 [`Self::validate_image`] 使用同一份格式定义，供下载响应复用。
+    pub fn image_content_type(file_name: &str) -> Option<&'static str> {
+        let file_type = Self::extract_file_extension(file_name);
+        Self::image_format(&file_type).map(|format| format.mime_type)
     }
 
     // 从文件名中提取小写扩展名，忽略 ".gitignore" 等纯点文件
@@ -114,14 +124,14 @@ impl FileValidator {
             .unwrap_or_default()
     }
 
-    // 根据文件扩展名返回预期的文件头十六进制字符串
-    fn get_expected_header(file_type: &str) -> Result<&'static str, FileValidationError> {
+    /// 根据扩展名取得受支持图片的格式定义。
+    fn image_format(file_type: &str) -> Option<ImageFormat> {
         match file_type {
-            "jpg" | "jpeg" => Ok("FFD8FF"),
-            "png" => Ok("89504E47"),
-            "gif" => Ok("47494638"),
-            "bmp" => Ok("424D"),
-            _ => Err(FileValidationError::UnsupportedFileType),
+            "jpg" | "jpeg" => Some(ImageFormat::JPEG),
+            "png" => Some(ImageFormat::PNG),
+            "gif" => Some(ImageFormat::GIF),
+            "bmp" => Some(ImageFormat::BMP),
+            _ => None,
         }
     }
 
@@ -163,6 +173,32 @@ impl FileValidator {
 
         Ok((dimensions.0, dimensions.1))
     }
+}
+
+/// 受支持图片格式的服务端规范信息。
+#[derive(Clone, Copy)]
+struct ImageFormat {
+    mime_type: &'static str,
+    expected_header: &'static str,
+}
+
+impl ImageFormat {
+    const JPEG: Self = Self {
+        mime_type: "image/jpeg",
+        expected_header: "FFD8FF",
+    };
+    const PNG: Self = Self {
+        mime_type: "image/png",
+        expected_header: "89504E47",
+    };
+    const GIF: Self = Self {
+        mime_type: "image/gif",
+        expected_header: "47494638",
+    };
+    const BMP: Self = Self {
+        mime_type: "image/bmp",
+        expected_header: "424D",
+    };
 }
 
 #[cfg(test)]
@@ -231,13 +267,28 @@ mod tests {
     fn test_valid_image_parsing() {
         let tiny_png = hex::decode("89504E470D0A1A0A0000000D4948445200000001000000010802000000907753DE0000000C4944415408D763F8FF7F0005FE02FE0DC444830000000049454E44AE426082").unwrap();
 
-        let result = FileValidator::validate_image(&tiny_png, "pixel.png", "image/png");
+        let result = FileValidator::validate_image(&tiny_png, "pixel.png", "text/html");
 
         assert!(result.is_ok());
         let meta = result.unwrap();
         assert_eq!(meta.width, 1);
         assert_eq!(meta.height, 1);
         assert_eq!(meta.format, "png");
+        assert_eq!(meta.mime_type, "image/png");
+    }
+
+    #[test]
+    fn image_content_type_uses_the_validation_format_table() {
+        assert_eq!(
+            FileValidator::image_content_type("photos/2026/08/17/photo.JPEG"),
+            Some("image/jpeg")
+        );
+        assert_eq!(
+            FileValidator::image_content_type("photos/2026/08/17/photo.png"),
+            Some("image/png")
+        );
+        assert_eq!(FileValidator::image_content_type("photo.webp"), None);
+        assert_eq!(FileValidator::image_content_type("photo."), None);
     }
 
     #[test]

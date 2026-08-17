@@ -177,7 +177,8 @@ impl BackupService {
         let event = actor_id.map_or(event.clone(), |actor_id| event.with_actor(actor_id.0));
 
         common::db_transaction!(scoped & state.db, |txn| {
-            AuditService::append(txn, event).await
+            AuditService::append(txn, event).await?;
+            Ok(())
         })
         .await
     }

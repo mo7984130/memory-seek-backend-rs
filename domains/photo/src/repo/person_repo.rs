@@ -67,15 +67,7 @@ impl PhotoRepo {
                     .with_actor(user_id.0)
                     .with_target("person", id.0),
             )
-            .await
-            .map_err(|error| {
-                common::error::ContextualError::error(
-                    "photo_audit_append",
-                    "人物重命名审计事件写入失败",
-                    error,
-                    AppError::InternalServerError,
-                )
-            })?;
+            .await?;
             Ok(())
         })
         .await?;

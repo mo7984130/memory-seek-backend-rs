@@ -219,15 +219,7 @@ impl PhotoRepo {
                     .with_actor(photo.user_id.0)
                     .with_target("photo", photo.id.0),
             )
-            .await
-            .map_err(|error| {
-                ContextualError::error(
-                    "photo_audit_append",
-                    "照片上传审计事件写入失败",
-                    error,
-                    AppError::InternalServerError,
-                )
-            })?;
+            .await?;
             Ok(photo)
         })
         .await
@@ -237,33 +229,6 @@ impl PhotoRepo {
     pub async fn exists_by_md5_batch(&self, md5s: &[String]) -> Result<Vec<bool>> {
         let existing = PhotoMapper::exists_by_md5_batch(&self.db, md5s).await?;
         Ok(md5s.iter().map(|md5| existing.contains(md5)).collect())
-    }
-
-    /// 在单个事务中执行照片删除管道.
-    pub(crate) async fn delete_photos(
-        &self,
-        user_id: UserId,
-        photo_ids: &[PhotoId],
-    ) -> Result<PhotoDeleteContext> {
-        let photos = PhotoMapper::query_by_user_id_and_ids(&self.db, user_id, photo_ids).await?;
-        let mut ctx = PhotoDeleteContext {
-            user_id,
-            photos,
-            #[cfg(feature = "face")]
-            affected_person_ids: Vec::new(),
-        };
-        PHOTO_DELETE_PIPELINE
-            .run(&self.db, &mut ctx)
-            .await
-            .map_err(|error| {
-                ContextualError::error(
-                    "photo_delete_pipeline",
-                    "执行照片删除事务失败",
-                    error.to_string(),
-                    error,
-                )
-            })?;
-        Ok(ctx)
     }
 
     /// 查询单个图片 MD5 是否存在.
@@ -333,25 +298,3 @@ impl PhotoRepo {
         );
     }
 }
-
-/// 照片删除步骤共享上下文，由 repo 查询并鉴权后在单个事务管道内消费。
-pub(crate) struct PhotoDeleteContext {
-    pub user_id: UserId,
-    pub photos: Vec<PhotoRecord>,
-    #[cfg(feature = "face")]
-    /// 删除人脸步骤更新过统计的人物 ID，供事务提交后失效缓存。
-    pub affected_person_ids: Vec<PersonId>,
-}
-
-impl PhotoDeleteContext {
-    /// 返回当前删除管道中的照片 ID.
-    pub fn photo_ids(&self) -> Vec<PhotoId> {
-        self.photos.iter().map(|photo| photo.id).collect()
-    }
-}
-
-step_derive::declare_pipeline!(
-    PhotoDeleteContext,
-    PHOTO_DELETE_STEPS,
-    PHOTO_DELETE_PIPELINE
-);

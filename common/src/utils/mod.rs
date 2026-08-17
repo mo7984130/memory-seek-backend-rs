@@ -16,7 +16,7 @@ mod token_cipher;
 #[cfg(feature = "file_validator")]
 mod file_validator;
 #[cfg(feature = "file_validator")]
-pub use file_validator::FileValidator;
+pub use file_validator::*;
 
 pub use db_utils::DbUtils;
 

@@ -1,6 +1,4 @@
 //! 照片相关类型定义
-
-use chrono::{DateTime, Utc};
 use validator::Validate;
 
 use crate::cursor::TimeIdCursor;
@@ -67,9 +65,6 @@ crate::in_dto!(UploadPhotoParam, "photo/", serialize, docs = "上传照片请求
     /// 文件 MIME 类型
     #[validate(length(min = 1, max = 100, message = "文件类型不能为空"))]
     pub content_type: String,
-
-    /// 自定义创建时间（可选）
-    pub created_at: Option<DateTime<Utc>>,
 });
 
 crate::in_dto!(ExistsByMd5BatchParam, "photo/", serialize; {
@@ -248,7 +243,6 @@ mod tests {
         let param = UploadPhotoParam {
             file_name: "photo.jpg".to_string(),
             content_type: "image/jpeg".to_string(),
-            created_at: None,
         };
         assert!(param.validate().is_ok());
     }
@@ -258,7 +252,6 @@ mod tests {
         let param = UploadPhotoParam {
             file_name: "".to_string(),
             content_type: "image/jpeg".to_string(),
-            created_at: None,
         };
         assert!(param.validate().is_err());
     }
@@ -268,7 +261,6 @@ mod tests {
         let param = UploadPhotoParam {
             file_name: "photo.jpg".to_string(),
             content_type: "".to_string(),
-            created_at: None,
         };
         assert!(param.validate().is_err());
     }

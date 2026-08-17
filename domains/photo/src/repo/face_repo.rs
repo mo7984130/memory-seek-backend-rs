@@ -137,15 +137,7 @@ impl PhotoRepo {
                         .with_actor(user_id.0)
                         .with_target("face", face_id.0),
                 )
-                .await
-                .map_err(|error| {
-                    ContextualError::error(
-                        "photo_audit_append",
-                        "人脸删除审计事件写入失败",
-                        error,
-                        AppError::InternalServerError,
-                    )
-                })?;
+                .await?;
             }
             Ok(count)
         })

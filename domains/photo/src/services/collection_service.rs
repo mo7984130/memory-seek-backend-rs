@@ -95,8 +95,8 @@ impl CollectionService {
 
 // 照片删除步骤:收藏夹清理
 #[step_derive::declare_transaction_step(
-    ctx = crate::repo::photo_repo::PhotoDeleteContext,
-    slice = crate::repo::photo_repo::PHOTO_DELETE_STEPS,
+    ctx = crate::services::photo_service::PhotoDeleteContext,
+    slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
     name = "collection_cleanup",
     owns = ["CollectionPhotoMapper", "CollectionMapper"],
 )]
@@ -105,7 +105,7 @@ impl CollectionService {
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
-        ctx: &mut crate::repo::photo_repo::PhotoDeleteContext,
+        ctx: &mut crate::services::photo_service::PhotoDeleteContext,
     ) -> common::Result<()> {
         let photo_ids = ctx.photo_ids();
         let affected = CollectionPhotoMapper::delete_by_photo_ids(txn, &photo_ids).await?;
