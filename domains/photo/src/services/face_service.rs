@@ -57,7 +57,7 @@ impl FaceService {
     pub async fn compute(state: Arc<PhotoState>, admin: AdminId, full: bool) -> Result<()> {
         let user_id = admin.into_inner();
         let admin = AdminId::new(user_id)?;
-        common::db_transaction!(scoped state.repo.database(), |txn| {
+        common::db_transaction!(scoped & state.db, |txn| {
             AuditService::append(
                 txn,
                 AuditEvent::new("face_compute")

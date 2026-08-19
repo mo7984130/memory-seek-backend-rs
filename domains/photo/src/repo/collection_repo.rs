@@ -22,15 +22,14 @@ impl CollectionRepo {
         user_id: UserId,
         photo_id: types::photo::photo::PhotoId,
     ) -> common::error::contextual::Result<Vec<CollectionId>> {
-        CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.repo.db, user_id, photo_id)
-            .await
+        CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.db, user_id, photo_id).await
     }
     /// 批量查询相册的 ID 和名称摘要.
     pub(crate) async fn query_collection_briefs(
         state: &PhotoState,
         ids: &[CollectionId],
     ) -> common::error::contextual::Result<Vec<(CollectionId, String)>> {
-        CollectionMapper::query_id_and_name_by_ids(&state.repo.db, ids).await
+        CollectionMapper::query_id_and_name_by_ids(&state.db, ids).await
     }
     /// 按游标查询相册中的照片 ID.
     pub(crate) async fn query_collection_photo_ids(
@@ -40,7 +39,7 @@ impl CollectionRepo {
         req: &types::photo::dto::collection::CollectionPhotoCursorPageParam,
     ) -> common::error::contextual::Result<CursorPage<types::photo::photo::PhotoId, ()>> {
         CollectionPhotoMapper::query_photo_id_by_collection_id(
-            &state.repo.db,
+            &state.db,
             user_id,
             collection_id,
             req.cursor.as_ref(),
@@ -55,9 +54,9 @@ impl CollectionRepo {
         collection_id: CollectionId,
         photo_ids: &types::photo::models::PhotoIds,
     ) -> Result<u64> {
-        CollectionMapper::ensure_belong(&state.repo.db, user_id, collection_id).await?;
+        CollectionMapper::ensure_belong(&state.db, user_id, collection_id).await?;
         let photo_ids = photo_ids.clone();
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             let count =
                 CollectionMapper::add_photos_batch(txn, user_id, collection_id, &photo_ids).await?;
             if let Some(photo_id) = photo_ids.first() {
@@ -89,7 +88,7 @@ impl CollectionRepo {
         photo_ids: &types::photo::models::PhotoIds,
     ) -> Result<u64> {
         let photo_ids = photo_ids.clone();
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             let collection =
                 CollectionMapper::ensure_belong_with_return(txn, user_id, collection_id).await?;
             let cover_removed = collection
@@ -147,7 +146,7 @@ impl CollectionRepo {
         state: &PhotoState,
         user_id: UserId,
     ) -> common::error::contextual::Result<Vec<types::photo::collection::CollectionRecord>> {
-        CollectionMapper::query_by_user_id(&state.repo.db, user_id).await
+        CollectionMapper::query_by_user_id(&state.db, user_id).await
     }
 
     /// 创建用户相册.
@@ -156,7 +155,7 @@ impl CollectionRepo {
         user_id: UserId,
         req: CollectionCreateParam,
     ) -> common::error::contextual::Result<types::photo::collection::CollectionRecord> {
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             let collection =
                 CollectionMapper::insert(txn, user_id, req.name, req.description).await?;
             AuditService::append(
@@ -178,7 +177,7 @@ impl CollectionRepo {
         id: CollectionId,
         req: CollectionUpdateParam,
     ) -> Result<()> {
-        let rows = db_transaction!(scoped & state.repo.db, |txn| {
+        let rows = db_transaction!(scoped & state.db, |txn| {
             let rows =
                 CollectionMapper::update_info(txn, id, user_id, req.name, req.description).await?;
             if rows > 0 {
@@ -209,7 +208,7 @@ impl CollectionRepo {
         user_id: UserId,
         id: CollectionId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             CollectionMapper::delete_by_id(txn, id, user_id)
                 .await?
                 .no_zero_or_warn(

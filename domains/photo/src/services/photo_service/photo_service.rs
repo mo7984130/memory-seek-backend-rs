@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 use crate::{
     mappers::photo_mapper::PhotoMapper,
+    repo::PhotoRepo,
     services::photo_service::{
         AfterPhotoDelete, AfterPhotoUpload, PhotoDeleteContext, publish_after_photo_delete,
         publish_after_photo_upload, run_photo_delete_pipeline,
@@ -51,7 +52,8 @@ impl PhotoService {
         photo_ids: &[PhotoId],
     ) -> Result<Vec<PhotoView>> {
         // 获取照片记录 和 是否喜欢的id
-        let (photos, liked_photo_ids) = state.repo.load_photo_records(user_id, photo_ids).await?;
+        let (photos, liked_photo_ids) =
+            PhotoRepo::load_photo_records(state, user_id, photo_ids).await?;
 
         // 组装结果
         let views = photos
@@ -74,9 +76,7 @@ impl PhotoService {
         req: PhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
         // 获取photo_id
-        let page = state
-            .repo
-            .query_photo_cursor_ids(req)
+        let page = PhotoRepo::query_photo_cursor_ids(state, req)
             .timed(metrics_name!("find_cursor_page_ids"))
             .await?;
         if page.records.is_empty() {
@@ -133,7 +133,7 @@ impl PhotoService {
             )
         };
         // MD5 去重校验
-        if state.repo.exists_by_md5(&md5_hash).await? {
+        if PhotoRepo::exists_by_md5(state.as_ref(), &md5_hash).await? {
             return inc_error!("conflict" => log_warn(
                 "upload_photo:img_exist",
                 "图片已存在",
@@ -152,9 +152,9 @@ impl PhotoService {
             .into_contextual()?;
 
         // 更新数据库
-        let photo = state
-            .repo
-            .insert_photo(NewPhotoRecord {
+        let photo = PhotoRepo::insert_photo(
+            state.as_ref(),
+            NewPhotoRecord {
                 user_id,
                 name: metadata.name,
                 size: file_data.len() as i64,
@@ -163,20 +163,21 @@ impl PhotoService {
                 mime_type: metadata.mime_type,
                 md5: md5_hash.clone(),
                 file_id: file_id.clone(),
-            })
-            .timed(metrics_name!("db_insert"))
-            .await
-            .inspect_err_async(|_| async {
-                state
-                    .s3_client
-                    .delete(&file_id)
-                    .await
-                    .into_contextual()
-                    .emit_if_err();
-            })
-            .await
-            .inspect_err(|_| inc_error!("db"))
-            .into_contextual()?;
+            },
+        )
+        .timed(metrics_name!("db_insert"))
+        .await
+        .inspect_err_async(|_| async {
+            state
+                .s3_client
+                .delete(&file_id)
+                .await
+                .into_contextual()
+                .emit_if_err();
+        })
+        .await
+        .inspect_err(|_| inc_error!("db"))
+        .into_contextual()?;
 
         // 发布事件
         let photo_record = PhotoRecord::from(photo);
@@ -199,7 +200,7 @@ impl PhotoService {
         state: &PhotoState,
         req: ExistsByMd5BatchParam,
     ) -> Result<Vec<bool>> {
-        Ok(state.repo.exists_by_md5_batch(&req.md5s).await?)
+        Ok(PhotoRepo::exists_by_md5_batch(state, &req.md5s).await?)
     }
 
     /// 删除照片.
@@ -215,15 +216,14 @@ impl PhotoService {
     ) -> Result<()> {
         // 查询属于用户的照片
         let photos =
-            PhotoMapper::query_by_user_id_and_ids(state.repo.database(), user_id, &req.photo_ids)
-                .await?;
+            PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &req.photo_ids).await?;
         let mut ctx = PhotoDeleteContext {
             user_id,
             photos,
             #[cfg(feature = "face")]
             affected_person_ids: Vec::new(),
         };
-        run_photo_delete_pipeline(state.repo.database(), &mut ctx)
+        run_photo_delete_pipeline(&state.db, &mut ctx)
             .await
             .map_err(|error| {
                 ContextualError::error(
@@ -304,14 +304,13 @@ impl PhotoService {
             .await
             .into_contextual()?;
 
-        state
-            .repo
-            .invalidate_deleted_photos(
-                &event.photos,
-                #[cfg(feature = "face")]
-                &event.affected_person_ids,
-            )
-            .await;
+        PhotoRepo::invalidate_deleted_photos(
+            state.as_ref(),
+            &event.photos,
+            #[cfg(feature = "face")]
+            &event.affected_person_ids,
+        )
+        .await;
         Ok(())
     }
 }
@@ -329,7 +328,7 @@ impl PhotoService {
         state: Arc<PhotoState>,
         _event: Arc<AfterPhotoUpload>,
     ) -> common::Result<()> {
-        state.repo.after_photo_upload().await;
+        PhotoRepo::after_photo_upload(&state).await;
         Ok(())
     }
 }
@@ -364,7 +363,7 @@ impl PhotoService {
             token.token_type,
             ImageTokenType::Preview | ImageTokenType::Original
         ) {
-            let db = state.repo.database().clone();
+            let db = state.db.clone();
             let token = token.clone();
             tokio::spawn(async move {
                 common::db_transaction!(contextual & db, |txn| {

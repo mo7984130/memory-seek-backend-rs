@@ -10,15 +10,18 @@ use types::{
     photo::{models::LikedPhotosQuery, photo::PhotoId},
 };
 
-use crate::mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper};
 use crate::state::PhotoState;
+use crate::{
+    mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper},
+    repo::PhotoRepo,
+};
 
 pub(crate) struct PhotoLikeRepo;
 
 impl PhotoLikeRepo {
     /// 点赞照片.
     pub(crate) async fn like(state: &PhotoState, user_id: UserId, photo_id: PhotoId) -> Result<()> {
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             // 确认存在
             PhotoMapper::ensure_exist(txn, photo_id).await?;
             // 插入
@@ -43,10 +46,7 @@ impl PhotoLikeRepo {
         })
         .await?;
 
-        state
-            .repo
-            .cache_photo_like_status(user_id, photo_id, true)
-            .await;
+        PhotoRepo::cache_photo_like_status(state, user_id, photo_id, true).await;
 
         Ok(())
     }
@@ -57,7 +57,7 @@ impl PhotoLikeRepo {
         user_id: UserId,
         photo_id: PhotoId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             if !PhotoLikeMapper::delete(txn, user_id, photo_id).await? {
                 return Err(ContextualError::error_without_source(
                     "photo_not_liked",
@@ -76,10 +76,7 @@ impl PhotoLikeRepo {
             Ok(())
         })
         .await?;
-        state
-            .repo
-            .cache_photo_like_status(user_id, photo_id, false)
-            .await;
+        PhotoRepo::cache_photo_like_status(state, user_id, photo_id, false).await;
         Ok(())
     }
 
@@ -89,7 +86,6 @@ impl PhotoLikeRepo {
         user_id: UserId,
         req: &LikedPhotosQuery,
     ) -> Result<CursorPage<(PhotoId, DateTime), TimeIdCursor<PhotoId>>> {
-        PhotoLikeMapper::query_user_liked_photo_ids(&state.repo.db, user_id, &req.cursor, req.size)
-            .await
+        PhotoLikeMapper::query_user_liked_photo_ids(&state.db, user_id, &req.cursor, req.size).await
     }
 }

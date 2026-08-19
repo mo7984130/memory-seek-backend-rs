@@ -4,19 +4,36 @@ use std::sync::Mutex;
 
 use deadpool_redis::Pool;
 use multi_level_cache::CacheConfig;
+use multi_level_cache::MultiLevelCache;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "face")]
 use backup::BackupState;
 
-use crate::repo::{PhotoRepo, TimelineStatRepo};
+use common::error::ContextualError;
+use types::photo::dto::timeline_stat::MonthStat;
+use types::photo::photo::{PhotoId, PhotoRecord};
+
+#[cfg(feature = "face")]
+use crate::models::PersonBriefRow;
+
+#[derive(Clone, Deserialize, Serialize)]
+pub(crate) struct CachedPhotoLike {
+    pub(crate) photo_id: PhotoId,
+    pub(crate) is_liked: bool,
+}
 
 pub struct PhotoState {
-    /// 照片领域数据访问仓储，封装数据库与多级缓存
-    pub repo: PhotoRepo,
-    /// 时间线统计仓储，封装统计表与月度统计缓存
-    pub timeline_stat_repo: TimelineStatRepo,
+    pub(crate) db: DatabaseConnection,
+    pub(crate) cache_photo_info: MultiLevelCache<PhotoRecord, ContextualError>,
+    pub(crate) cache_photo_like: MultiLevelCache<CachedPhotoLike, ContextualError>,
+    pub(crate) cache_photo_cursor_ids: MultiLevelCache<Vec<PhotoId>, ContextualError>,
+    pub(crate) cache_photo_dimensions: MultiLevelCache<(i32, i32), ContextualError>,
+    pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
+    #[cfg(feature = "face")]
+    pub(crate) cache_person: MultiLevelCache<PersonBriefRow, ContextualError>,
     pub redis: Pool,
     pub s3_client: Arc<S3Client>,
     #[cfg(feature = "face")]
@@ -36,8 +53,34 @@ impl PhotoState {
         #[cfg(feature = "face")] backup_state: Arc<BackupState>,
     ) -> Self {
         Self {
-            repo: PhotoRepo::new(db.clone(), redis.clone(), cache_config.clone()),
-            timeline_stat_repo: TimelineStatRepo::new(db, redis.clone(), cache_config),
+            db,
+            cache_photo_info: MultiLevelCache::new_with_name(
+                "photo_info",
+                redis.clone(),
+                cache_config.clone(),
+            ),
+            cache_photo_like: MultiLevelCache::new_with_name(
+                "photo_like",
+                redis.clone(),
+                cache_config.clone(),
+            ),
+            cache_photo_cursor_ids: MultiLevelCache::new_with_name(
+                "photo_cursor_ids",
+                redis.clone(),
+                cache_config.clone(),
+            ),
+            cache_photo_dimensions: MultiLevelCache::new_with_name(
+                "photo_dimensions",
+                redis.clone(),
+                cache_config.clone(),
+            ),
+            cache_timeline_stat: MultiLevelCache::new_with_name(
+                "timeline_stat",
+                redis.clone(),
+                cache_config.clone(),
+            ),
+            #[cfg(feature = "face")]
+            cache_person: MultiLevelCache::new_with_name("person", redis.clone(), cache_config),
             redis,
             s3_client,
             #[cfg(feature = "face")]

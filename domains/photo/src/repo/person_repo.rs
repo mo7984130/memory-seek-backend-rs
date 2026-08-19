@@ -21,13 +21,13 @@ impl PersonRepo {
         Vec<types::photo::face::FaceRecord>,
         Vec<(types::photo::photo::PhotoId, String)>,
     )> {
-        let faces = FaceMapper::query_all(&state.repo.db).await?;
+        let faces = FaceMapper::query_all(&state.db).await?;
         let ids = faces
             .iter()
             .map(|face| face.photo_id)
             .collect::<std::collections::HashSet<_>>();
         let files = PhotoMapper::query_id_and_file_id_by_ids(
-            &state.repo.db,
+            &state.db,
             &ids.into_iter().collect::<Vec<_>>(),
         )
         .await?;
@@ -41,8 +41,8 @@ impl PersonRepo {
         Vec<types::photo::person::PersonRecord>,
     )> {
         Ok((
-            FaceMapper::query_unassigned(&state.repo.db).await?,
-            PersonMapper::query_all(&state.repo.db).await?,
+            FaceMapper::query_unassigned(&state.db).await?,
+            PersonMapper::query_all(&state.db).await?,
         ))
     }
     /// 更新人物名称并同步维护姓名首字母.
@@ -54,7 +54,7 @@ impl PersonRepo {
         user_id: UserId,
     ) -> Result<()> {
         use common::error::AppError;
-        common::db_transaction!(contextual & state.repo.db, |txn| {
+        common::db_transaction!(contextual & state.db, |txn| {
             let rows = PersonMapper::rename(txn, id, name, initials).await?;
             if rows == 0 {
                 return Err(common::error::ContextualError::warn_without_source(
@@ -81,7 +81,7 @@ impl PersonRepo {
         state: &PhotoState,
         id: PersonId,
     ) -> common::error::contextual::Result<Option<types::photo::person::PersonRecord>> {
-        PersonMapper::query_by_id(&state.repo.db, id).await
+        PersonMapper::query_by_id(&state.db, id).await
     }
     /// 按游标查询人物分页.
     pub(crate) async fn query_person_page(
@@ -89,7 +89,7 @@ impl PersonRepo {
         cursor: Option<types::cursor::FaceCountIdCursor<PersonId>>,
         size: u64,
     ) -> common::error::contextual::Result<CursorPage<types::photo::person::PersonRecord, ()>> {
-        PersonMapper::query(&state.repo.db, cursor, size).await
+        PersonMapper::query(&state.db, cursor, size).await
     }
     /// 按关键词查询人物分页.
     pub(crate) async fn search_person_page(
@@ -98,7 +98,7 @@ impl PersonRepo {
         cursor: Option<PersonId>,
         size: u64,
     ) -> common::error::contextual::Result<CursorPage<types::photo::person::PersonRecord, ()>> {
-        PersonMapper::query_search(&state.repo.db, keyword, cursor, size).await
+        PersonMapper::query_search(&state.db, keyword, cursor, size).await
     }
     /// 批量获取人物摘要和封面信息.
     pub(crate) async fn get_person_briefs(
@@ -113,7 +113,7 @@ impl PersonRepo {
                 |id| RedisKeys::photo::person::person_info(*id),
                 Duration::from_secs(24 * 60 * 60),
                 |miss_ids| async move {
-                    PersonMapper::query_brief_by_ids(&state.repo.db, &miss_ids).await
+                    PersonMapper::query_brief_by_ids(&state.db, &miss_ids).await
                 },
                 |person| person.id,
             )
@@ -127,6 +127,6 @@ impl PersonRepo {
             .iter()
             .map(|id| RedisKeys::photo::person::person_info(*id))
             .collect::<Vec<_>>();
-        let _ = state.repo.cache_person.invalidate_batch(&keys).await;
+        let _ = state.cache_person.invalidate_batch(&keys).await;
     }
 }

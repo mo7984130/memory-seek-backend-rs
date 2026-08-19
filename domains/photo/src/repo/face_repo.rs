@@ -49,7 +49,7 @@ impl FaceRepo {
             .order_by(types::photo::photo::Column::Id, sea_orm::Order::Asc)
             .limit(size)
             .into_tuple::<(PhotoId, String)>()
-            .all(&state.repo.db)
+            .all(&state.db)
             .await
             .map_err(Into::into)
     }
@@ -63,7 +63,7 @@ impl FaceRepo {
             types::photo::face::Entity::insert_many(
                 faces.into_iter().map(types::photo::face::ActiveModel::from),
             )
-            .exec_without_returning(&state.repo.db)
+            .exec_without_returning(&state.db)
             .await?;
         }
         Ok(())
@@ -94,16 +94,14 @@ impl FaceRepo {
         state: &PhotoState,
         photo_id: PhotoId,
     ) -> common::error::contextual::Result<(Vec<FaceRecord>, Vec<(PersonId, String)>)> {
-        let faces = FaceMapper::query_by_photo_id(&state.repo.db, photo_id).await?;
+        let faces = FaceMapper::query_by_photo_id(&state.db, photo_id).await?;
         let ids = faces
             .iter()
             .filter_map(|face| face.person_id)
             .collect::<std::collections::HashSet<_>>();
-        let names = PersonMapper::query_id_and_name_by_ids(
-            &state.repo.db,
-            &ids.into_iter().collect::<Vec<_>>(),
-        )
-        .await?;
+        let names =
+            PersonMapper::query_id_and_name_by_ids(&state.db, &ids.into_iter().collect::<Vec<_>>())
+                .await?;
         Ok((faces, names))
     }
     /// 分页查询包含未分配人脸的照片 ID.
@@ -112,7 +110,7 @@ impl FaceRepo {
         req: &types::photo::dto::face::UnassignedFacePhotoCursorParam,
     ) -> common::error::contextual::Result<CursorPage<PhotoId, ()>> {
         FaceMapper::query_unassigned_face_photo_ids_cursor_page(
-            &state.repo.db,
+            &state.db,
             req.cursor.clone(),
             req.size,
         )
@@ -125,7 +123,7 @@ impl FaceRepo {
         user_id: types::auth::user::UserId,
     ) -> common::error::contextual::Result<u64> {
         let ids = ids.clone();
-        common::db_transaction!(contextual & state.repo.db, |txn| {
+        common::db_transaction!(contextual & state.db, |txn| {
             let count = FaceMapper::delete_unassigned_by_ids(txn, &ids).await?;
             for face_id in ids.iter() {
                 AuditService::append(
@@ -146,12 +144,7 @@ impl FaceRepo {
         person_id: PersonId,
         req: &types::photo::dto::person::PersonPhotoCursorParam,
     ) -> common::error::contextual::Result<CursorPage<PhotoId, ()>> {
-        FaceMapper::query_photo_ids_cursor_page(
-            &state.repo.db,
-            person_id,
-            req.cursor.clone(),
-            req.size,
-        )
-        .await
+        FaceMapper::query_photo_ids_cursor_page(&state.db, person_id, req.cursor.clone(), req.size)
+            .await
     }
 }

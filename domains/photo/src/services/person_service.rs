@@ -42,7 +42,7 @@ use crate::{
         photo_mapper::PhotoMapper,
     },
     models::PersonBriefRow,
-    repo::{FaceRepo, PersonRepo},
+    repo::{FaceRepo, PersonRepo, PhotoRepo},
     services::photo_service::PhotoService,
 };
 
@@ -511,15 +511,9 @@ impl PersonService {
 
         // 失效源/目标人物缓存（L1 + L2），源人物已删除
         // 错误不返回
-        state
-            .repo
-            .invalidate_persons(&[source_person_id, target_person_id])
-            .await;
+        PersonRepo::invalidate_persons(state, &[source_person_id, target_person_id]).await;
 
-        let (width, height) = state
-            .repo
-            .get_photo_dimensions(&person.cover_file_id)
-            .await?;
+        let (width, height) = PhotoRepo::get_photo_dimensions(state, &person.cover_file_id).await?;
 
         Self::to_view(
             admin_id,

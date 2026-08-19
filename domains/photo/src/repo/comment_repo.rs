@@ -35,7 +35,7 @@ impl CommentRepo {
     )> {
         let hot_comments = if req.cursor.is_none() {
             CommentMapper::query_hot_comments(
-                &state.repo.db,
+                &state.db,
                 photo_id,
                 HOT_COMMENT_MIN_LIKES,
                 HOT_COMMENT_MAX_COUNT,
@@ -49,7 +49,7 @@ impl CommentRepo {
             .map(|comment| comment.id)
             .collect::<Vec<_>>();
         let comments = CommentMapper::query_by_photo_id(
-            &state.repo.db,
+            &state.db,
             photo_id,
             &exclude_ids,
             req.cursor.as_ref(),
@@ -57,7 +57,7 @@ impl CommentRepo {
         )
         .await?;
         let liked = CommentLikeMapper::query_is_like_by_comment_ids(
-            &state.repo.db,
+            &state.db,
             user_id,
             hot_comments
                 .iter()
@@ -76,7 +76,7 @@ impl CommentRepo {
         photo_id: PhotoId,
         req: CommentPublishParam,
     ) -> Result<types::photo::comment::CommentRecord> {
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             PhotoMapper::ensure_exist(txn, photo_id).await?;
             let comment =
                 CommentMapper::insert(txn, photo_id, user_id, req.content.into_inner()).await?;
@@ -100,7 +100,7 @@ impl CommentRepo {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             let photo_id = CommentMapper::query_photo_id_by_id(txn, comment_id).await?;
             if !CommentMapper::delete(txn, user_id, comment_id).await? {
                 return Err(ContextualError::error_without_source(
@@ -131,7 +131,7 @@ impl CommentRepo {
         photo_id: Option<PhotoId>,
         comment_id: CommentId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             CommentMapper::ensure_exist(txn, comment_id).await?;
             if !CommentLikeMapper::insert(txn, user_id, comment_id).await? {
                 return Err(ContextualError::error_without_source(
@@ -160,7 +160,7 @@ impl CommentRepo {
         photo_id: Option<PhotoId>,
         comment_id: CommentId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.repo.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             if !CommentLikeMapper::delete(txn, user_id, comment_id).await? {
                 return Err(ContextualError::error_without_source(
                     "comment_not_liked",
