@@ -89,12 +89,12 @@ impl PhotoService {
             .await?;
 
         // 组装结果
-        page.replace_records(photo_vos).with_next_cursor(|last_vo| {
-            Ok(TimeIdCursor {
+        Ok(page
+            .replace_records(photo_vos)
+            .with_next_cursor(|last_vo| TimeIdCursor {
                 id: last_vo.id,
-                created_at: last_vo.created_at,
-            })
-        })
+                time_at: last_vo.created_at,
+            }))
     }
 }
 

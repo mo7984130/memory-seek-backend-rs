@@ -1,5 +1,6 @@
 use crate::{
     mappers::{comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper},
+    repo::CommentRepo,
     state::PhotoState,
 };
 use common::{Result, ext::ToOk, models::CursorPage};
@@ -30,7 +31,7 @@ impl CommentService {
         photo_id: PhotoId,
         req: CommentPublishParam,
     ) -> Result<CommentView> {
-        let comment = state.repo.publish_comment(user_id, photo_id, req).await?;
+        let comment = CommentRepo::publish_comment(state, user_id, photo_id, req).await?;
 
         CommentView::from(comment).to_ok()
     }
@@ -55,13 +56,11 @@ impl CommentService {
         req: CommentCursorPageParam,
     ) -> Result<CursorPage<CommentView, TimeIdCursor<CommentId>>> {
         let (hot_comments, page, is_like) =
-            state.repo.query_comments(user_id, photo_id, &req).await?;
-        let page = page.with_next_cursor(|comment| {
-            Ok(TimeIdCursor {
-                created_at: comment.created_at,
-                id: comment.id,
-            })
-        })?;
+            CommentRepo::query_comments(state, user_id, photo_id, &req).await?;
+        let page = page.with_next_cursor(|comment| TimeIdCursor {
+            time_at: comment.created_at,
+            id: comment.id,
+        });
         page.map_records(|time_comments| {
             let mut comments = hot_comments;
             comments.extend(time_comments);
@@ -87,7 +86,7 @@ impl CommentService {
         fields(user_id = %user_id, comment_id = %comment_id)
     )]
     pub async fn delete(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
-        state.repo.delete_comment(user_id, comment_id).await?;
+        CommentRepo::delete_comment(state, user_id, comment_id).await?;
 
         Ok(())
     }

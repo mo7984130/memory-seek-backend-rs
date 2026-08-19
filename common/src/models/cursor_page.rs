@@ -1,7 +1,5 @@
 use serde::Serialize;
 
-use crate::Result;
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -49,20 +47,20 @@ impl<T, C> CursorPage<T, C> {
     }
 
     /// 仅在存在下一页时从最后一条记录生成下一页游标.
-    pub fn with_next_cursor<C2, F>(self, get_cursor: F) -> Result<CursorPage<T, C2>>
+    pub fn with_next_cursor<C2, F>(self, get_cursor: F) -> CursorPage<T, C2>
     where
-        F: FnOnce(&T) -> Result<C2>,
+        F: FnOnce(&T) -> C2,
     {
         let next_cursor = if self.has_more {
-            self.records.last().map(get_cursor).transpose()?
+            self.records.last().map(get_cursor)
         } else {
             None
         };
-        Ok(CursorPage {
+        CursorPage {
             records: self.records,
             next_cursor,
             has_more: self.has_more,
-        })
+        }
     }
 }
 
@@ -138,9 +136,8 @@ mod tests {
 
     #[test]
     fn replace_records_preserves_pagination_metadata() {
-        let page = CursorPage::from_oversize(vec![1, 2, 3], 2)
-            .with_next_cursor(|last| Ok(last.to_string()))
-            .unwrap();
+        let page =
+            CursorPage::from_oversize(vec![1, 2, 3], 2).with_next_cursor(|last| last.to_string());
         let page = page.replace_records(vec!["one", "two"]);
 
         assert_eq!(page.records, vec!["one", "two"]);
@@ -151,8 +148,7 @@ mod tests {
     #[test]
     fn with_next_cursor_skips_callback_without_more_records() {
         let page = CursorPage::from_oversize(vec![1, 2], 2)
-            .with_next_cursor(|_| -> Result<String> { panic!("must not generate cursor") })
-            .unwrap();
+            .with_next_cursor(|_| -> String { panic!("must not generate cursor") });
 
         assert!(page.next_cursor.is_none());
         assert!(!page.has_more);
@@ -161,8 +157,7 @@ mod tests {
     #[test]
     fn map_records_preserves_pagination_metadata() {
         let page = CursorPage::from_oversize(vec![1, 2, 3], 2)
-            .with_next_cursor(|last| Ok(last.to_string()))
-            .unwrap()
+            .with_next_cursor(|last| last.to_string())
             .map_records(|records| records.into_iter().map(|id| id * 10).collect());
 
         assert_eq!(page.records, vec![10, 20]);

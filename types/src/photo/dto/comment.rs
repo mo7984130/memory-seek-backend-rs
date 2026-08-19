@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use common::DateTime;
 use validator::Validate;
 
 use crate::auth::user::UserId;
@@ -27,7 +27,7 @@ crate::out_dto!(CommentView, "photo/", rename = "Comment"; {
     pub content: String,
     pub like_count: i32,
     pub is_liked: bool,
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTime,
 });
 
 #[cfg(feature = "orm")]

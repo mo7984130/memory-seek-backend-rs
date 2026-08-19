@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use chrono::DateTime;
 use common::{
-    error::ContextualError, error::contextual::Result, metrics_name, utils::MetricsTimerExt,
+    DateTime, error::ContextualError, error::contextual::Result, metrics_name,
+    utils::MetricsTimerExt,
 };
 use constants::RedisKeys;
 use deadpool_redis::Pool;
@@ -29,7 +29,7 @@ impl TimelineStatRepo {
     }
 
     /// 记录新上传照片对应月份的时间线统计。
-    pub async fn record_uploaded_photo(&self, created_at: DateTime<chrono::Utc>) -> Result<()> {
+    pub async fn record_uploaded_photo(&self, created_at: DateTime) -> Result<()> {
         TimelineStatMapper::incr_stat(&self.db, created_at).await?;
         self.invalidate_cache().await;
         Ok(())
@@ -38,7 +38,7 @@ impl TimelineStatRepo {
     /// 在照片删除事务中扣减对应月份的统计。
     pub async fn decrement_by_created_ats(
         txn: &DatabaseTransaction,
-        created_ats: &[&chrono::DateTime<chrono::Utc>],
+        created_ats: &[&DateTime],
     ) -> Result<()> {
         TimelineStatMapper::decr_stat_by_created_ats(txn, created_ats).await
     }

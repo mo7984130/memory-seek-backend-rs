@@ -1,8 +1,11 @@
 use std::collections::HashSet;
 
-use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::OkExt;
-use sea_orm::entity::prelude::DateTimeUtc;
+use common::{
+    DateTime,
+    error::{AppError, ContextualError, contextual::Result},
+    models::CursorPage,
+};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -108,7 +111,7 @@ impl PhotoMapper {
         cursor: Option<&TimeIdCursor<PhotoId>>,
         size: u64,
         direction: PageDirection,
-        anchor_time: Option<DateTimeUtc>,
+        anchor_time: Option<DateTime>,
     ) -> sea_orm::Select<Entity> {
         let (order_by_desc, filter) = match direction {
             PageDirection::Next => (true, true),   // 倒序，向前翻
@@ -125,8 +128,7 @@ impl PhotoMapper {
                 .order_by_asc(Column::Id)
         };
 
-        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-        // 由 repository 层构造 CursorPage 并截断消费
+        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定并截断。
         query = query.limit(size + 1);
 
         if let Some(c) = cursor {
@@ -152,21 +154,22 @@ impl PhotoMapper {
         query
     }
 
-    /// 查询照片游标页中的 ID, 额外读取一条记录判断是否还有下一页.
+    /// 查询照片游标页中的 ID.
     pub async fn query_cursor_page_ids(
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
         direction: PageDirection,
-        anchor_time: Option<DateTimeUtc>,
-    ) -> Result<Vec<PhotoId>> {
-        Self::build_cursor_query(cursor.as_ref(), size, direction, anchor_time)
+        anchor_time: Option<DateTime>,
+    ) -> Result<CursorPage<PhotoId, ()>> {
+        let records = Self::build_cursor_query(cursor.as_ref(), size, direction, anchor_time)
             .select_only()
             .column(Column::Id)
             .into_tuple::<PhotoId>()
             .all(db)
-            .await?
-            .to_ok()
+            .await?;
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 按照片 ID 批量查询照片记录.

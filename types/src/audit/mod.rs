@@ -1,6 +1,7 @@
 //! 审计事件类型、查询 DTO 与 `audit_event` SeaORM 实体。
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
+use common::DateTime;
 use serde_json::Value;
 
 use crate::auth::user::UserId;
@@ -19,7 +20,7 @@ pub struct AuditEvent {
     pub target_type: Option<String>,
     pub target_id: Option<i64>,
     pub detail: Option<Value>,
-    pub occurred_at: DateTime<Utc>,
+    pub occurred_at: DateTime,
 }
 
 impl AuditEvent {
@@ -119,13 +120,13 @@ pub struct BehaviorRecord {
     pub target_type: Option<BehaviorTargetType>,
     pub target_id: Option<i64>,
     pub detail: Option<Value>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTime,
 }
 
 impl BehaviorRecord {
     pub fn cursor(&self) -> TimeIdCursor<UserBehaviorId> {
         TimeIdCursor {
-            created_at: self.created_at,
+            time_at: self.created_at,
             id: self.id,
         }
     }
@@ -133,6 +134,7 @@ impl BehaviorRecord {
 
 #[cfg(feature = "orm")]
 mod entity {
+    use common::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
@@ -147,7 +149,7 @@ mod entity {
         pub target_id: Option<i64>,
         #[sea_orm(column_type = "Json")]
         pub detail: Option<Json>,
-        pub occurred_at: DateTimeUtc,
+        pub occurred_at: DateTime,
     }
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
     pub enum Relation {}

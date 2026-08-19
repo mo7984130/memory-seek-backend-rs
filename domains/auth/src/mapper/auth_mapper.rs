@@ -1,6 +1,8 @@
-use chrono::{DateTime, Utc};
-use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::OkExt;
+use common::{
+    DateTime,
+    error::{AppError, ContextualError, contextual::Result},
+};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait, DbErr,
     EntityTrait, FromQueryResult, QueryFilter, QuerySelect, RuntimeErr, sea_query::Expr,
@@ -20,7 +22,7 @@ pub struct AuthInsertParam {
 #[derive(FromQueryResult)]
 pub struct RefreshTokenValidation {
     pub refresh_token: Option<String>,
-    pub refresh_token_expire_at: Option<DateTime<Utc>>,
+    pub refresh_token_expire_at: Option<DateTime>,
 }
 // 创建
 impl AuthMapper {
@@ -102,7 +104,7 @@ impl AuthMapper {
         db: &impl ConnectionTrait,
         user_id: UserId,
         refresh_token: String,
-        refresh_token_expires_at: DateTime<Utc>,
+        refresh_token_expires_at: DateTime,
     ) -> Result<UserRecord> {
         let model = ActiveModel {
             id: Set(user_id),

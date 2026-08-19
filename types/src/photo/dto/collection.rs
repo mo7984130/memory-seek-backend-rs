@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use common::DateTime;
 use validator::Validate;
 
 use crate::auth::user::UserId;
@@ -22,7 +22,7 @@ crate::out_dto!(CollectionView, "photo/", rename = "Collection"; {
     pub cover_token: Option<String>,
     /// 封面照片 ID（字符串）
     pub cover_photo_id: Option<PhotoId>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTime,
 });
 
 #[cfg(feature = "orm")]

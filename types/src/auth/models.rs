@@ -1,7 +1,7 @@
 //! 认证相关类型定义
 
 use super::validators::*;
-use chrono::{DateTime, Utc};
+use common::DateTime;
 
 crate::in_dto!(LoginRequest, "auth/", serialize; {
     #[validate(custom(function = "validate_account"))]
@@ -14,16 +14,16 @@ crate::in_dto!(LoginRequest, "auth/", serialize; {
 crate::out_dto!(LoginResponse, "auth/"; {
     pub user: crate::user::models::UserInfo,
     pub access_token: String,
-    pub access_token_expire_at: DateTime<Utc>,
+    pub access_token_expire_at: DateTime,
     pub refresh_token: String,
-    pub refresh_token_expire_at: DateTime<Utc>,
+    pub refresh_token_expire_at: DateTime,
 });
 
 crate::out_dto!(RefreshAccessTokenResponse, "auth/"; {
     /// 访问令牌
     pub access_token: String,
     /// 访问令牌过期时间
-    pub access_token_expire_at: DateTime<Utc>,
+    pub access_token_expire_at: DateTime,
 });
 
 crate::in_dto!(RegisterRequest, "auth/", serialize; {

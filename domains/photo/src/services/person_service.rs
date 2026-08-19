@@ -2,7 +2,7 @@ use audit::{AuditEvent, AuditService};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common::ext::{IntoContextualExt, ToOk};
+use common::ext::IntoContextualExt;
 use common::{
     Result,
     error::AppError,
@@ -42,6 +42,7 @@ use crate::{
         photo_mapper::PhotoMapper,
     },
     models::PersonBriefRow,
+    repo::{FaceRepo, PersonRepo},
     services::photo_service::PhotoService,
 };
 
@@ -70,7 +71,7 @@ impl PersonService {
         info!(user_id = %user_id, "管理员触发人物全量聚类");
 
         info!("加载照片数据");
-        let (faces, photo_file_rows) = state.repo.load_faces_with_photo_files().await?;
+        let (faces, photo_file_rows) = PersonRepo::load_faces_with_photo_files(state).await?;
 
         // 一次性加载聚类涉及的全部照片, 构建 photo_id -> file_id 映射(封面冗余字段来源)
         let photo_file_ids: HashMap<PhotoId, String> = { photo_file_rows.into_iter().collect() };
@@ -105,7 +106,7 @@ impl PersonService {
         info!("聚类完成");
 
         info!("开始保存 person/face 表");
-        state.repo.backup_face_tables(&state.backup_state).await?;
+        FaceRepo::backup_face_tables(state).await?;
         info!("保存表完成");
         state
             .repo
@@ -213,7 +214,7 @@ impl PersonService {
         let SecondaryClusterParam { threshold } = req;
         info!(user_id = %user_id, threshold, "管理员触发二次聚类");
 
-        let (faces, persons) = state.repo.load_unassigned_faces_and_persons().await?;
+        let (faces, persons) = PersonRepo::load_unassigned_faces_and_persons(state).await?;
         info!(
             "加载完成: 未分配人脸 {} 张, 人物 {} 个",
             faces.len(),
@@ -559,24 +560,23 @@ impl PersonService {
         user_id: UserId,
         req: PersonCursorParam,
     ) -> Result<CursorPage<PersonView, FaceCountIdCursor<PersonId>>> {
-        let page = state.repo.query_person_page(req.cursor, req.size).await?;
+        let page = PersonRepo::query_person_page(state, req.cursor, req.size).await?;
 
         // 提取本页人物 ID, 通过三级缓存批量加载轻量摘要
         let person_ids = page.records.iter().map(|p| p.id).collect::<Vec<_>>();
-        let briefs = state.repo.get_person_briefs(&person_ids).await?;
+        let briefs = PersonRepo::get_person_briefs(state, &person_ids).await?;
 
         let views = briefs
             .into_iter()
             .flatten()
             .map(|person| Self::to_view(user_id, person))
             .collect::<Result<Vec<_>>>()?;
-        page.replace_records(views).with_next_cursor(|person| {
-            FaceCountIdCursor {
+        Ok(page
+            .replace_records(views)
+            .with_next_cursor(|person| FaceCountIdCursor {
                 face_count: person.face_count,
                 id: person.id,
-            }
-            .to_ok()
-        })
+            }))
     }
 
     /// 按关键词前缀搜索人物(匹配完整名字或姓名首字母)
@@ -599,15 +599,16 @@ impl PersonService {
 
         // 提取本页人物 ID, 通过三级缓存批量加载轻量摘要
         let person_ids = page.records.iter().map(|p| p.id).collect::<Vec<_>>();
-        let briefs = state.repo.get_person_briefs(&person_ids).await?;
+        let briefs = PersonRepo::get_person_briefs(state, &person_ids).await?;
 
         let views = briefs
             .into_iter()
             .flatten()
             .map(|person| Self::to_view(user_id, person))
             .collect::<Result<Vec<_>>>()?;
-        page.replace_records(views)
-            .with_next_cursor(|person| Ok(person.id))
+        Ok(page
+            .replace_records(views)
+            .with_next_cursor(|person| person.id))
     }
 
     /// 计算姓名首字母(大写, 如 张三 -> ZS, Alice Wang -> AW)
@@ -683,9 +684,7 @@ impl PersonService {
         person_id: PersonId,
         req: PersonPhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
-        let page = state
-            .repo
-            .query_person_photo_ids(person_id, &req)
+        let page = FaceRepo::query_person_photo_ids(state, person_id, &req)
             .timed(metrics_name!("query_photo_ids"))
             .await?;
         if page.records.is_empty() {
@@ -696,13 +695,12 @@ impl PersonService {
             .timed(metrics_name!("load_photos_info"))
             .await?;
 
-        page.replace_records(photos).with_next_cursor(|photo| {
-            TimeIdCursor {
-                created_at: photo.created_at,
+        Ok(page
+            .replace_records(photos)
+            .with_next_cursor(|photo| TimeIdCursor {
+                time_at: photo.created_at,
                 id: photo.id,
-            }
-            .to_ok()
-        })
+            }))
     }
 }
 
@@ -748,7 +746,7 @@ impl PersonService {
 
         // 失效人物缓存（L1 + L2）
         // 错误不返回
-        state.repo.invalidate_persons(&[person_id]).await;
+        PersonRepo::invalidate_persons(state, &[person_id]).await;
 
         Ok(())
     }

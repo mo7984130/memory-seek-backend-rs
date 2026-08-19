@@ -1,4 +1,4 @@
-use common::{Result, error::contextual};
+use common::{DateTime, Result, error::contextual};
 use sea_orm::{ConnectionTrait, DatabaseTransaction};
 use types::audit::{AuditEvent, AuditQuery, AuditStatsQuery, AuditTopQuery, BehaviorRecord};
 
@@ -11,7 +11,7 @@ impl AuditService {
     pub async fn query_behavior_stats(
         db: &impl ConnectionTrait,
         req: &AuditStatsQuery,
-    ) -> Result<Vec<(chrono::DateTime<chrono::Utc>, i64)>> {
+    ) -> Result<Vec<(DateTime, i64)>> {
         #[cfg(not(feature = "enable"))]
         {
             let _ = (db, req);

@@ -4,7 +4,7 @@ use types::{
     photo::{comment::CommentId, photo::PhotoId},
 };
 
-use crate::state::PhotoState;
+use crate::{repo::CommentRepo, state::PhotoState};
 
 pub(crate) struct CommentLikeService;
 
@@ -24,10 +24,7 @@ impl CommentLikeService {
         comment_id: CommentId,
     ) -> Result<()> {
         // 检查评论是否存在
-        state
-            .repo
-            .like_comment(user_id, photo_id, comment_id)
-            .await?;
+        CommentRepo::like_comment(state, user_id, photo_id, comment_id).await?;
 
         Ok(())
     }
@@ -54,10 +51,7 @@ impl CommentLikeService {
         photo_id: Option<PhotoId>,
         comment_id: CommentId,
     ) -> Result<()> {
-        state
-            .repo
-            .unlike_comment(user_id, photo_id, comment_id)
-            .await?;
+        CommentRepo::unlike_comment(state, user_id, photo_id, comment_id).await?;
 
         Ok(())
     }

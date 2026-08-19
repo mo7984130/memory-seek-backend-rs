@@ -8,7 +8,6 @@ use common::models::CursorPage;
 use common::utils::MetricsTimerExt;
 use constants::RedisKeys;
 use deadpool_redis::Pool;
-use futures::future::BoxFuture;
 use multi_level_cache::{CacheConfig, MultiLevelCache};
 use sea_orm::{ActiveModelTrait, DatabaseConnection};
 use serde::{Deserialize, Serialize};
@@ -50,23 +49,6 @@ impl PhotoRepo {
     }
 
     /// 为保留在 service 的领域不变量编排提供事务边界；连接本身不向外暴露。
-    pub(crate) async fn transaction<T>(
-        &self,
-        operation: impl for<'a> FnOnce(
-            &'a sea_orm::DatabaseTransaction,
-        ) -> BoxFuture<'a, std::result::Result<T, AppError>>,
-    ) -> Result<T> {
-        common::db_transaction!(scoped & self.db, |txn| { operation(txn).await })
-            .await
-            .map_err(|error| {
-                ContextualError::error(
-                    "photo_repo_transaction",
-                    "执行照片领域事务失败",
-                    error.to_string(),
-                    error,
-                )
-            })
-    }
     /// 创建照片仓储并初始化数据库, Redis 和缓存配置.
     pub fn new(db: DatabaseConnection, redis: Pool, cache_config: CacheConfig) -> Self {
         Self {
@@ -175,6 +157,7 @@ impl PhotoRepo {
                         None,
                     )
                     .await
+                    .map(|page| page.records)
                 })
                 .await?;
             return Ok(CursorPage::from_oversize(
@@ -186,17 +169,14 @@ impl PhotoRepo {
             ));
         }
 
-        Ok(CursorPage::from_oversize(
-            PhotoMapper::query_cursor_page_ids(
-                &self.db,
-                req.cursor,
-                req.size,
-                req.direction,
-                req.anchor_time,
-            )
-            .await?,
+        Ok(PhotoMapper::query_cursor_page_ids(
+            &self.db,
+            req.cursor,
             req.size,
-        ))
+            req.direction,
+            req.anchor_time,
+        )
+        .await?)
     }
 
     /// 失效照片游标 ID 缓存.

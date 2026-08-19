@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use common::DateTime;
 use serde::Deserialize;
 
 use crate::auth::user::UserId;
@@ -19,7 +19,7 @@ crate::out_dto!(PhotoView, "photo/", rename = "Photo"; {
     pub height: i32,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size: i64,
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTime,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_collected: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -132,7 +132,7 @@ crate::in_dto!(PhotoCursorParam, "photo/", serde_default, docs = "照片游标�
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
     pub direction: PageDirection,
-    pub anchor_time: Option<DateTime<Utc>>,
+    pub anchor_time: Option<DateTime>,
 });
 
 #[cfg(all(test, feature = "orm"))]

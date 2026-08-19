@@ -1,12 +1,9 @@
 use std::collections::HashSet;
 
-use common::error::contextual::Result;
 use common::ext::ToOk;
+use common::{DateTime, error::contextual::Result, models::CursorPage};
 use sea_orm::ActiveValue::Set;
-use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
-    entity::prelude::DateTimeUtc,
-};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use types::cursor::TimeIdCursor;
 use types::photo::photo_like::*;
 use types::{auth::user::UserId, photo::photo::PhotoId};
@@ -71,16 +68,14 @@ impl PhotoLikeMapper {
 
     /// 查询用户点赞的照片ID和点赞时间列表（带游标分页）
     ///
-    /// 返回 `(PhotoId, DateTimeUtc)` 元组，其中 DateTimeUtc 为点赞时间。
-    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-    /// 由 repository 层构造 CursorPage 并截断消费。
+    /// 返回 `(PhotoId, DateTime)` 元组，其中 DateTime 为点赞时间。
     /// 分页查询用户点赞过的照片 ID, 并返回点赞时间游标.
     pub async fn query_user_liked_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
         cursor: &Option<TimeIdCursor<PhotoId>>,
         size: u64,
-    ) -> Result<Vec<(PhotoId, DateTimeUtc)>> {
+    ) -> Result<CursorPage<(PhotoId, DateTime), TimeIdCursor<PhotoId>>> {
         let mut query = Entity::find()
             .select_only()
             .column(Column::PhotoId)
@@ -93,12 +88,14 @@ impl PhotoLikeMapper {
             query = query.filter(c.before(Column::CreatedAt, Column::PhotoId));
         }
 
-        query
+        let records = query
             .limit(size + 1)
-            .into_tuple::<(PhotoId, DateTimeUtc)>()
+            .into_tuple::<(PhotoId, DateTime)>()
             .all(db)
-            .await?
-            .to_ok()
+            .await?;
+
+        Ok(CursorPage::from_oversize(records, size)
+            .with_next_cursor(|&(id, time_at)| TimeIdCursor { time_at, id }))
     }
 }
 

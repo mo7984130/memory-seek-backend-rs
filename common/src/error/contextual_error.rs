@@ -171,6 +171,13 @@ impl Display for ContextualError {
 
 impl std::error::Error for ContextualError {}
 
+impl From<AppError> for ContextualError {
+    #[track_caller]
+    fn from(error: AppError) -> Self {
+        Self::error_without_source("app_error", "应用层错误", error)
+    }
+}
+
 impl From<std::io::Error> for ContextualError {
     fn from(error: std::io::Error) -> Self {
         Self::error(

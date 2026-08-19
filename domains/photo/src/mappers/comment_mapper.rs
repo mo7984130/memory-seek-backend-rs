@@ -1,5 +1,6 @@
 use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::{ContextOptionExt, IntoContextualExt, OkExt};
+use common::models::CursorPage;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
@@ -103,9 +104,7 @@ impl CommentMapper {
         exclude_ids: &[CommentId],
         cursor: Option<&TimeIdCursor<CommentId>>,
         size: u64,
-    ) -> Result<Vec<CommentRecord>> {
-        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-        // 由 repository 层构造 CursorPage 并截断消费
+    ) -> Result<CursorPage<CommentRecord, ()>> {
         let mut query = Entity::find()
             .filter(Column::PhotoId.eq(photo_id))
             .order_by_desc(Column::CreatedAt)
@@ -120,13 +119,14 @@ impl CommentMapper {
             query = query.filter(c.before(Column::CreatedAt, Column::Id));
         }
 
-        query
+        let records = query
             .all(db)
             .await?
             .into_iter()
             .map(CommentRecord::from)
-            .collect::<Vec<_>>()
-            .to_ok()
+            .collect::<Vec<_>>();
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 根据评论 ID 查询所属照片 ID.

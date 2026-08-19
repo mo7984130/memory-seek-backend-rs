@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
-use common::{error::contextual::Result, ext::IntoContextualExt};
+use common::{DateTime, error::contextual::Result, ext::IntoContextualExt};
 use sea_orm::{
     ActiveValue::Set,
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
-    entity::prelude::DateTimeUtc,
     sea_query::{Alias, CaseStatement, Expr, Func, OnConflict, SimpleExpr},
 };
 use types::photo::timeline_stat::TimelineStatId;
@@ -15,7 +14,7 @@ pub(crate) struct TimelineStatMapper;
 
 impl TimelineStatMapper {
     /// 将指定月份的照片统计增加一个单位.
-    pub async fn incr_stat(db: &impl ConnectionTrait, created_at: DateTimeUtc) -> Result<()> {
+    pub async fn incr_stat(db: &impl ConnectionTrait, created_at: DateTime) -> Result<()> {
         let date_str = created_at.format("%Y-%m").to_string();
         let now = Utc::now();
 
@@ -44,7 +43,7 @@ impl TimelineStatMapper {
     /// 按照片创建时间批量扣减月份统计.
     pub async fn decr_stat_by_created_ats(
         db: &impl ConnectionTrait,
-        created_ats: &[&DateTimeUtc],
+        created_ats: &[&DateTime],
     ) -> Result<()> {
         let mut date_count_map: HashMap<String, i64> = HashMap::new();
         for created_at in created_ats {

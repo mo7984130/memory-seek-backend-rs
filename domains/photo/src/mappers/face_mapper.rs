@@ -1,4 +1,4 @@
-use common::{error::contextual::Result, ext::ToOk};
+use common::{error::contextual::Result, ext::ToOk, models::CursorPage};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Expr, Query},
@@ -206,13 +206,11 @@ impl FaceMapper {
     ///
     /// 不区分照片归属者, 全局扫描未分配人脸。
     /// 用 `EXISTS` 子查询过滤, 保证同一照片多张未分配人脸不产生重复行。
-    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-    /// 由 repository 层构造 CursorPage 并截断消费。
     pub async fn query_unassigned_face_photo_ids_cursor_page(
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
-    ) -> Result<Vec<PhotoId>> {
+    ) -> Result<CursorPage<PhotoId, ()>> {
         let subquery = Query::select()
             .expr(Expr::val(1))
             .from(Entity)
@@ -236,27 +234,26 @@ impl FaceMapper {
             ));
         }
 
-        query
+        let records = query
             .select_only()
             .column(types::photo::photo::Column::Id)
             .into_tuple::<PhotoId>()
             .all(db)
-            .await?
-            .to_ok()
+            .await?;
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 查询某人物的人脸照片 id(keyset 分页, 基于照片的 (created_at, id))
     ///
     /// 用 `EXISTS` 子查询过滤该人物的人脸, 保证同一照片多张人脸不产生重复行;
     /// 排序与游标均基于 photo 表, 与 `next_cursor` 的编码维度一致。
-    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-    /// 由 repository 层构造 CursorPage 并截断消费。
     pub async fn query_photo_ids_cursor_page(
         db: &impl ConnectionTrait,
         person_id: PersonId,
         cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
-    ) -> Result<Vec<PhotoId>> {
+    ) -> Result<CursorPage<PhotoId, ()>> {
         let subquery = Query::select()
             .expr(Expr::val(1))
             .from(Entity)
@@ -280,13 +277,14 @@ impl FaceMapper {
             ));
         }
 
-        query
+        let records = query
             .select_only()
             .column(types::photo::photo::Column::Id)
             .into_tuple::<PhotoId>()
             .all(db)
-            .await?
-            .to_ok()
+            .await?;
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 }
 

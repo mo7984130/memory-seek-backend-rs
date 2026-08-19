@@ -11,6 +11,7 @@ crate::id_type!(PhotoId, "photo/");
 #[cfg(feature = "orm")]
 mod entity {
     use chrono::Utc;
+    use common::DateTime;
     use sea_orm::entity::prelude::*;
     use sea_orm::ActiveValue::Set;
     use serde::{Deserialize, Serialize};
@@ -33,8 +34,8 @@ mod entity {
         pub file_id: String,
         pub comment_count: i64,
         pub like_count: i64,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     /// 照片记录，使用强类型 ID
@@ -51,8 +52,8 @@ mod entity {
         pub file_id: String,
         pub comment_count: u64,
         pub like_count: u64,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     pub struct NewPhotoRecord {

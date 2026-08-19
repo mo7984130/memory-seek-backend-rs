@@ -37,6 +37,7 @@ use crate::{
         person_mapper::{PersonCoverUpdate, PersonMapper},
         photo_mapper::PhotoMapper,
     },
+    repo::FaceRepo,
     services::photo_service::{AfterPhotoUpload, PhotoService},
 };
 
@@ -298,9 +299,7 @@ impl FaceService {
         if faces.is_empty() {
             debug!("faces为空, 跳过");
         } else {
-            state
-                .repo
-                .insert_faces(faces)
+            FaceRepo::insert_faces(state, faces)
                 .await
                 .inspect_err(|_| inc_error!("insert"))
                 .into_contextual()?;
@@ -452,7 +451,7 @@ impl FaceService {
 
         // 失效受影响人物缓存（L1 + L2）：新旧人物 face_count/封面/质心均已变化
         // 错误不返回
-        state.repo.invalidate_persons(&affected_person_ids).await;
+        crate::repo::PersonRepo::invalidate_persons(state, &affected_person_ids).await;
 
         Ok(())
     }
@@ -590,7 +589,8 @@ impl FaceService {
         state: &PhotoState,
         photo_id: PhotoId,
     ) -> Result<Vec<FaceView>> {
-        let (faces, person_names) = state.repo.query_faces_with_person_names(photo_id).await?;
+        let (faces, person_names) =
+            FaceRepo::query_faces_with_person_names(state, photo_id).await?;
 
         // 批量加载归属人物名称
         let person_names: HashMap<PersonId, String> = person_names.into_iter().collect();
@@ -617,9 +617,7 @@ impl FaceService {
         user_id: UserId,
         req: UnassignedFacePhotoCursorParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
-        let page = state
-            .repo
-            .query_unassigned_face_photo_ids(&req)
+        let page = FaceRepo::query_unassigned_face_photo_ids(state, &req)
             .timed(metrics_name!("query_unassigned_face_photo_ids"))
             .await?;
         if page.records.is_empty() {
@@ -630,13 +628,12 @@ impl FaceService {
             .timed(metrics_name!("load_photos_info"))
             .await?;
 
-        page.replace_records(photos).with_next_cursor(|photo| {
-            TimeIdCursor {
-                created_at: photo.created_at,
+        Ok(page
+            .replace_records(photos)
+            .with_next_cursor(|photo| TimeIdCursor {
+                time_at: photo.created_at,
                 id: photo.id,
-            }
-            .to_ok()
-        })
+            }))
     }
 }
 
@@ -699,10 +696,8 @@ impl FaceService {
         face_ids: &FaceIds,
         user_id: UserId,
     ) -> Result<FaceDeleteBatchResult> {
-        let deleted_face_count = state
-            .repo
-            .delete_unassigned_faces(face_ids, user_id)
-            .await?;
+        let deleted_face_count =
+            FaceRepo::delete_unassigned_faces(state, face_ids, user_id).await?;
 
         Ok(FaceDeleteBatchResult { deleted_face_count })
     }

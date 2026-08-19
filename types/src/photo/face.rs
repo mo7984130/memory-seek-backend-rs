@@ -12,6 +12,7 @@ crate::id_type!(FaceId, "photo/");
 mod entity {
     use common::error::ContextualError;
     use common::ext::IntoContextualExt;
+    use common::DateTime;
     use insight_face_rs::types::{BoundingBox, Face, FaceEmbedding, FaceLandmarks};
     use insight_face_rs::PgVector;
     use sea_orm::entity::prelude::*;
@@ -37,8 +38,8 @@ mod entity {
 
         pub embedding: PgVector,
 
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -58,8 +59,8 @@ mod entity {
         pub score: f32,
 
         pub embedding: FaceEmbedding,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     impl TryFrom<Model> for FaceRecord {

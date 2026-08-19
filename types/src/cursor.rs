@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use base64::Engine;
-use chrono::{DateTime, Utc};
+use common::DateTime;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +22,7 @@ pub enum KeysetDirection {
 /// 序列化时直接输出编码后的 Base64 字符串，反序列化时接收 Base64 字符串。
 #[derive(Debug, Clone)]
 pub struct TimeIdCursor<I = i64> {
-    pub created_at: DateTime<Utc>,
+    pub time_at: DateTime,
     pub id: I,
 }
 
@@ -30,7 +30,7 @@ impl<I: Serialize> TimeIdCursor<I> {
     /// 编码为 URL-safe Base64 字符串
     pub fn encode(&self) -> String {
         let json = serde_json::to_string(&serde_json::json!({
-            "created_at": self.created_at,
+            "time_at": self.time_at,
             "id": &self.id,
         }))
         .unwrap_or_default();
@@ -48,12 +48,12 @@ impl<I: DeserializeOwned> TimeIdCursor<I> {
 
         #[derive(Deserialize)]
         struct Raw<I> {
-            created_at: DateTime<Utc>,
+            created_at: DateTime,
             id: I,
         }
         let raw: Raw<I> = serde_json::from_str(&json).map_err(CursorDecodeError::Json)?;
         Ok(Self {
-            created_at: raw.created_at,
+            time_at: raw.created_at,
             id: raw.id,
         })
     }
@@ -154,14 +154,14 @@ impl<I: Clone + Into<sea_orm::Value>> TimeIdCursor<I> {
     ) -> sea_orm::Condition {
         use sea_orm::Condition;
         match direction {
-            KeysetDirection::Desc => Condition::any().add(time_col.lt(self.created_at)).add(
+            KeysetDirection::Desc => Condition::any().add(time_col.lt(self.time_at)).add(
                 Condition::all()
-                    .add(time_col.eq(self.created_at))
+                    .add(time_col.eq(self.time_at))
                     .add(id_col.lt(self.id.clone())),
             ),
-            KeysetDirection::Asc => Condition::any().add(time_col.gt(self.created_at)).add(
+            KeysetDirection::Asc => Condition::any().add(time_col.gt(self.time_at)).add(
                 Condition::all()
-                    .add(time_col.eq(self.created_at))
+                    .add(time_col.eq(self.time_at))
                     .add(id_col.gt(self.id.clone())),
             ),
         }
@@ -227,14 +227,14 @@ mod tests {
     #[test]
     fn test_encode_decode_roundtrip() {
         let cursor = TimeIdCursor {
-            created_at: DateTime::from_timestamp_nanos(1712345678000000000),
+            time_at: DateTime::from_timestamp_nanos(1712345678000000000),
             id: TestId(42),
         };
 
         let encoded = cursor.encode();
         let decoded = TimeIdCursor::<TestId>::decode(&encoded).unwrap();
 
-        assert_eq!(decoded.created_at, cursor.created_at);
+        assert_eq!(decoded.time_at, cursor.time_at);
         assert_eq!(decoded.id.0, cursor.id.0);
     }
 
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn test_encode_is_url_safe_no_pad() {
         let cursor = TimeIdCursor {
-            created_at: DateTime::from_timestamp_nanos(1712345678000000000),
+            time_at: DateTime::from_timestamp_nanos(1712345678000000000),
             id: 42i64,
         };
 
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn test_serialize_outputs_base64_string() {
         let cursor = TimeIdCursor {
-            created_at: DateTime::from_timestamp_nanos(1712345678000000000),
+            time_at: DateTime::from_timestamp_nanos(1712345678000000000),
             id: 42i64,
         };
 
@@ -277,7 +277,7 @@ mod tests {
         assert_eq!(json.trim_matches('"'), cursor.encode());
 
         let decoded: TimeIdCursor<i64> = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.created_at, cursor.created_at);
+        assert_eq!(decoded.time_at, cursor.time_at);
         assert_eq!(decoded.id, cursor.id);
     }
 
@@ -320,7 +320,6 @@ mod tests {
     #[cfg(feature = "orm")]
     mod keyset_tests {
         use super::*;
-        use chrono::DateTime;
         use sea_orm::{entity::prelude::*, DbBackend, QueryFilter, QueryTrait};
 
         #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
@@ -328,7 +327,7 @@ mod tests {
         pub struct Model {
             #[sea_orm(primary_key)]
             pub id: i64,
-            pub created_at: DateTimeUtc,
+            pub created_at: DateTime,
             pub face_count: i64,
         }
 
@@ -339,7 +338,7 @@ mod tests {
 
         fn cursor() -> TimeIdCursor<i64> {
             TimeIdCursor {
-                created_at: DateTime::from_timestamp_nanos(1712345678000000000),
+                time_at: DateTime::from_timestamp_nanos(1712345678000000000),
                 id: 42,
             }
         }

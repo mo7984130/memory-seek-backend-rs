@@ -1,6 +1,7 @@
 use common::{
     error::{AppError, contextual::Result},
     ext::{IntoContextualExt, ToOk},
+    models::CursorPage,
 };
 use insight_face_rs::FaceEmbedding;
 use sea_orm::{
@@ -109,22 +110,22 @@ impl PersonMapper {
         db: &impl ConnectionTrait,
         cursor: Option<FaceCountIdCursor<PersonId>>,
         size: u64,
-    ) -> Result<Vec<PersonRecord>> {
+    ) -> Result<CursorPage<PersonRecord, ()>> {
         let mut query = Entity::find()
             .order_by_desc(Column::FaceCount)
             .order_by_desc(Column::Id);
         if let Some(cursor) = cursor {
             query = query.filter(cursor.before(Column::FaceCount, Column::Id));
         }
-        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-        // 由 repository 层构造 CursorPage 并截断消费
-        query
+        let records = query
             .limit(size + 1)
             .all(db)
             .await?
             .into_iter()
             .map(PersonRecord::try_from)
-            .collect::<std::result::Result<Vec<_>, _>>()
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 查询全部人物(id 升序, 供二次聚类等全量内存匹配使用)
@@ -147,7 +148,7 @@ impl PersonMapper {
         keyword: &str,
         cursor: Option<PersonId>,
         size: u64,
-    ) -> Result<Vec<PersonRecord>> {
+    ) -> Result<CursorPage<PersonRecord, ()>> {
         let escaped = keyword
             .replace('\\', "\\\\")
             .replace('%', "\\%")
@@ -162,15 +163,15 @@ impl PersonMapper {
         if let Some(person_id) = cursor {
             query = query.filter(Column::Id.lt(person_id));
         }
-        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-        // 由 repository 层构造 CursorPage 并截断消费
-        query
+        let records = query
             .limit(size + 1)
             .all(db)
             .await?
             .into_iter()
             .map(PersonRecord::try_from)
-            .collect::<std::result::Result<Vec<_>, _>>()
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 按 ID 查询人物

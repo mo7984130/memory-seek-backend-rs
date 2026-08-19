@@ -12,6 +12,7 @@ crate::id_type!(PersonId, "photo/");
 mod entity {
     use common::error::ContextualError;
     use common::ext::IntoContextualExt;
+    use common::DateTime;
     use insight_face_rs::types::FaceEmbedding;
     use insight_face_rs::PgVector;
     use sea_orm::{entity::prelude::*, ActiveValue::Set};
@@ -41,8 +42,8 @@ mod entity {
         pub face_count: i64,
         /// 该人物所有人脸 score 之和(增量维护质心的权重)
         pub weight: f64,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -61,8 +62,8 @@ mod entity {
         pub centroid: FaceEmbedding,
         pub face_count: u64,
         pub weight: f64,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     impl TryFrom<Model> for PersonRecord {

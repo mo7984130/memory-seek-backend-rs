@@ -10,6 +10,7 @@ crate::id_type!(CommentLikeId, "photo/");
 
 #[cfg(feature = "orm")]
 mod entity {
+    use common::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
@@ -24,8 +25,8 @@ mod entity {
         pub id: CommentLikeId,
         pub comment_id: CommentId,
         pub user_id: UserId,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     /// 评论点赞记录，使用强类型 ID
@@ -34,8 +35,8 @@ mod entity {
         pub id: CommentLikeId,
         pub comment_id: CommentId,
         pub user_id: UserId,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     impl From<Model> for CommentLikeRecord {

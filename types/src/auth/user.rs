@@ -43,6 +43,7 @@ impl AdminId {
 
 #[cfg(feature = "orm")]
 mod entity {
+    use common::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
@@ -62,9 +63,9 @@ mod entity {
         pub avatar_file_id: Option<String>,
         pub inviter: UserId,
         pub refresh_token: Option<String>,
-        pub refresh_token_expire_at: Option<DateTimeUtc>,
-        pub updated_at: DateTimeUtc,
-        pub created_at: DateTimeUtc,
+        pub refresh_token_expire_at: Option<DateTime>,
+        pub updated_at: DateTime,
+        pub created_at: DateTime,
     }
 
     /// 用户记录，使用强类型 ID
@@ -78,9 +79,9 @@ mod entity {
         pub avatar_file_id: Option<String>,
         pub inviter: UserId,
         pub refresh_token: Option<String>,
-        pub refresh_token_expire_at: Option<DateTimeUtc>,
-        pub updated_at: DateTimeUtc,
-        pub created_at: DateTimeUtc,
+        pub refresh_token_expire_at: Option<DateTime>,
+        pub updated_at: DateTime,
+        pub created_at: DateTime,
     }
 
     impl From<Model> for UserRecord {

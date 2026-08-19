@@ -1,9 +1,8 @@
 #[cfg(feature = "enable")]
-use chrono::{DateTime, Utc};
-#[cfg(feature = "enable")]
-use common::error::contextual::Result as ContextualResult;
 #[cfg(feature = "enable")]
 use common::ext::{IntoContextualExt, ToOk};
+#[cfg(feature = "enable")]
+use common::{DateTime, error::contextual::Result as ContextualResult};
 #[cfg(feature = "enable")]
 use sea_orm::ConnectionTrait;
 #[cfg(feature = "enable")]
@@ -31,10 +30,10 @@ impl AuditMapper {
         db: &impl ConnectionTrait,
         action: Option<UserBehaviorAction>,
         target_type: Option<BehaviorTargetType>,
-        start: Option<DateTime<Utc>>,
-        end: Option<DateTime<Utc>>,
+        start: Option<DateTime>,
+        end: Option<DateTime>,
         trunc: &str,
-    ) -> ContextualResult<Vec<(DateTime<Utc>, i64)>> {
+    ) -> ContextualResult<Vec<(DateTime, i64)>> {
         let bucket = Expr::expr(
             Func::cust(Alias::new("date_trunc"))
                 .arg(Expr::val(trunc))
@@ -59,7 +58,7 @@ impl AuditMapper {
             query = query.filter(Column::OccurredAt.lte(end));
         }
         query
-            .into_tuple::<(DateTime<Utc>, i64)>()
+            .into_tuple::<(DateTime, i64)>()
             .all(db)
             .await
             .into_contextual()

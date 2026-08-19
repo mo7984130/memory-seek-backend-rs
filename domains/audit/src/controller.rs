@@ -78,12 +78,11 @@ impl AuditController {
         AdminId::new(user_id)?;
         let records = AuditService::query_behavior_audit(&state.db, &req).await?;
         let page = CursorPage::from_oversize(records, req.size);
-        let page = page.with_next_cursor(|record: &BehaviorRecord| {
-            Ok(TimeIdCursor::<UserBehaviorId> {
-                created_at: record.created_at,
+        let page =
+            page.with_next_cursor(|record: &BehaviorRecord| TimeIdCursor::<UserBehaviorId> {
+                time_at: record.created_at,
                 id: record.id,
-            })
-        })?;
+            });
         Ok(page.map_records(|records| records.into_iter().map(to_audit_item).collect())).to_r_ok()
     }
 }

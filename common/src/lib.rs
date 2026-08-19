@@ -26,5 +26,7 @@ pub mod snowflake;
 
 pub use common_macros::metered;
 
+pub type DateTime = chrono::DateTime<chrono::Utc>;
+
 #[cfg(feature = "metrics")]
 pub use metrics;

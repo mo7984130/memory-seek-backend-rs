@@ -1,3 +1,4 @@
+use crate::repo::CollectionRepo;
 use crate::{services::photo_service::PhotoService, state::PhotoState};
 use common::{Result, ext::OkExt, metrics_name, models::CursorPage, utils::MetricsTimerExt};
 use types::{
@@ -30,18 +31,14 @@ impl CollectionPhotoService {
         user_id: UserId,
         photo_id: PhotoId,
     ) -> Result<Vec<CollectionBriefView>> {
-        let collection_ids = state
-            .repo
-            .query_collection_ids_by_photo(user_id, photo_id)
-            .await?;
+        let collection_ids =
+            CollectionRepo::query_collection_ids_by_photo(state, user_id, photo_id).await?;
 
         if collection_ids.is_empty() {
             return Ok(vec![]);
         }
 
-        let collections = state
-            .repo
-            .query_collection_briefs(&collection_ids)
+        let collections = CollectionRepo::query_collection_briefs(state, &collection_ids)
             .await?
             .into_iter()
             .map(|(id, name)| CollectionBriefView { id, name })
@@ -63,21 +60,19 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         req: CollectionPhotoCursorPageParam,
     ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
-        let page = state
-            .repo
-            .query_collection_photo_ids(user_id, collection_id, &req)
+        let page = CollectionRepo::query_collection_photo_ids(state, user_id, collection_id, &req)
             .timed(metrics_name!("query_photo_ids"))
             .await?;
 
         let photo_vos = PhotoService::load_photos_info(state, user_id, &page.records)
             .timed(metrics_name!("load_photos_info"))
             .await?;
-        page.replace_records(photo_vos).with_next_cursor(|vo| {
-            Ok(TimeIdCursor {
-                created_at: vo.created_at,
+        Ok(page
+            .replace_records(photo_vos)
+            .with_next_cursor(|vo| TimeIdCursor {
+                time_at: vo.created_at,
                 id: vo.id,
-            })
-        })
+            }))
     }
 }
 
@@ -96,10 +91,9 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoAddBatchResult> {
-        let photo_count = state
-            .repo
-            .add_collection_photos(user_id, collection_id, &photo_ids)
-            .await?;
+        let photo_count =
+            CollectionRepo::add_collection_photos(state, user_id, collection_id, &photo_ids)
+                .await?;
 
         Ok(CollectionPhotoAddBatchResult {
             new_photo_count: photo_count,
@@ -122,10 +116,9 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoRemoveBatchResult> {
-        let remove_count = state
-            .repo
-            .remove_collection_photos(user_id, collection_id, &photo_ids)
-            .await?;
+        let remove_count =
+            CollectionRepo::remove_collection_photos(state, user_id, collection_id, &photo_ids)
+                .await?;
 
         CollectionPhotoRemoveBatchResult {
             removed_photo_count: remove_count,

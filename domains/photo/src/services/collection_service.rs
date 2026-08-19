@@ -1,6 +1,7 @@
 use crate::mappers::{
     collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
 };
+use crate::repo::CollectionRepo;
 use crate::state::PhotoState;
 use common::Result;
 use common::ext::OkExt;
@@ -21,7 +22,7 @@ impl CollectionService {
         user_id: UserId,
     ) -> Result<Vec<CollectionView>> {
         // 获取用户收藏夹
-        let collections = state.repo.query_collections(user_id).await?;
+        let collections = CollectionRepo::query_collections(state, user_id).await?;
 
         // 组装结果
         let result = collections
@@ -43,7 +44,7 @@ impl CollectionService {
         user_id: UserId,
         req: CollectionCreateParam,
     ) -> Result<CollectionView> {
-        let collection = state.repo.create_collection(user_id, req).await?;
+        let collection = CollectionRepo::create_collection(state, user_id, req).await?;
 
         CollectionView::from(collection).to_ok()
     }
@@ -64,10 +65,7 @@ impl CollectionService {
         req: CollectionUpdateParam,
     ) -> Result<()> {
         // 修改时鉴权
-        state
-            .repo
-            .update_collection(user_id, collection_id, req)
-            .await?;
+        CollectionRepo::update_collection(state, user_id, collection_id, req).await?;
 
         Ok(())
     }
@@ -87,7 +85,7 @@ impl CollectionService {
         collection_id: CollectionId,
     ) -> Result<()> {
         // 删除收藏夹 和 收藏夹照片
-        state.repo.delete_collection(user_id, collection_id).await?;
+        CollectionRepo::delete_collection(state, user_id, collection_id).await?;
 
         Ok(())
     }

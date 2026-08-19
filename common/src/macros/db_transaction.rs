@@ -28,7 +28,9 @@
 ///         *value += 1;
 ///         Ok(())
 ///     })
-///     .await
+///     .await?;
+///
+///     Ok(())
 /// }
 /// ```
 #[macro_export]
@@ -50,7 +52,7 @@ macro_rules! db_transaction {
                         $crate::error::AppError::InternalServerError,
                     )
                 })?;
-            let result: $crate::Result<_> = async {
+            let result: $crate::error::contextual::Result<_> = async {
                 let $txn = &transaction;
                 $body
             }

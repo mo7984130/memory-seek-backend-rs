@@ -69,6 +69,8 @@ impl<Ctx: Send + 'static> StepPipeline<Ctx> {
             }
             Ok(())
         })
-        .await
+        .await?;
+
+        Ok(())
     }
 }

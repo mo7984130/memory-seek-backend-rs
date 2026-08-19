@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use common::error::contextual::Result;
 use common::ext::OkExt;
+use common::models::CursorPage;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use types::auth::user::UserId;
 use types::cursor::TimeIdCursor;
@@ -64,8 +65,6 @@ impl CollectionPhotoMapper {
         Ok(affected)
     }
 
-    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-    /// 由 repository 层构造 CursorPage 并截断消费。
     /// 查询相册中的照片 ID.
     pub async fn query_photo_id_by_collection_id(
         db: &impl ConnectionTrait,
@@ -73,7 +72,7 @@ impl CollectionPhotoMapper {
         collection_id: CollectionId,
         cursor: Option<&TimeIdCursor<PhotoId>>,
         size: u64,
-    ) -> Result<Vec<PhotoId>> {
+    ) -> Result<CursorPage<PhotoId, ()>> {
         let mut query = Entity::find()
             .filter(Column::CollectionId.eq(collection_id))
             .filter(Column::UserId.eq(user_id))
@@ -85,13 +84,14 @@ impl CollectionPhotoMapper {
             query = query.filter(c.before(Column::CreatedAt, Column::Id));
         }
 
-        query
+        let records = query
             .select_only()
             .column(Column::PhotoId)
             .into_tuple::<PhotoId>()
             .all(db)
-            .await?
-            .to_ok()
+            .await?;
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 删除相册下的全部照片关联.

@@ -1,9 +1,10 @@
 //! 审计查询接口的请求与响应 DTO。
 
+use common::DateTime;
+
 use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
 use crate::photo::behavior::{BehaviorTargetType, UserBehaviorAction, UserBehaviorId};
-use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
@@ -30,8 +31,8 @@ impl AuditGranularity {
 crate::in_dto!(AuditStatsQuery, "audit/", serde_default, docs = "审计统计查询参数"; {
     pub action: Option<UserBehaviorAction>,
     pub target_type: Option<BehaviorTargetType>,
-    pub start: Option<DateTime<Utc>>,
-    pub end: Option<DateTime<Utc>>,
+    pub start: Option<DateTime>,
+    pub end: Option<DateTime>,
     pub granularity: AuditGranularity,
 });
 
@@ -48,7 +49,7 @@ impl Default for AuditStatsQuery {
 }
 
 crate::out_dto!(AuditStatsItem, "audit/", docs = "审计统计结果项"; {
-    pub bucket: DateTime<Utc>,
+    pub bucket: DateTime,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub count: i64,
 });
@@ -115,5 +116,5 @@ crate::out_dto!(AuditItem, "audit/", docs = "审计流水响应项"; {
     pub target_id: Option<i64>,
     #[cfg_attr(feature = "ts", ts(type = "Record<string, unknown> | null"))]
     pub detail: Option<serde_json::Value>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTime,
 });

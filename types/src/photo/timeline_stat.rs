@@ -10,6 +10,7 @@ crate::id_type!(TimelineStatId, String, "photo/");
 
 #[cfg(feature = "orm")]
 mod entity {
+    use common::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
@@ -21,9 +22,9 @@ mod entity {
         #[sea_orm(primary_key)]
         pub date_str: TimelineStatId,
         pub count: i64,
-        pub anchor_time: DateTimeUtc,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub anchor_time: DateTime,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
