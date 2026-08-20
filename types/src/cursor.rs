@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use base64::Engine;
-use common::DateTime;
+use common::time::DateTime;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -320,6 +320,7 @@ mod tests {
     #[cfg(feature = "orm")]
     mod keyset_tests {
         use super::*;
+        use common::time::DateTime as CommonDateTime;
         use sea_orm::{entity::prelude::*, DbBackend, QueryFilter, QueryTrait};
 
         #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
@@ -327,7 +328,7 @@ mod tests {
         pub struct Model {
             #[sea_orm(primary_key)]
             pub id: i64,
-            pub created_at: DateTime,
+            pub created_at: CommonDateTime,
             pub face_count: i64,
         }
 
@@ -338,7 +339,7 @@ mod tests {
 
         fn cursor() -> TimeIdCursor<i64> {
             TimeIdCursor {
-                time_at: DateTime::from_timestamp_nanos(1712345678000000000),
+                time_at: CommonDateTime::from_timestamp_nanos(1712345678000000000),
                 id: 42,
             }
         }

@@ -1,6 +1,6 @@
 //! 用户相关类型定义
 
-use common::DateTime;
+use common::time::DateTime;
 use validator::Validate;
 
 use super::validators::*;
@@ -123,7 +123,7 @@ mod tests {
             nickname: "Test User".to_string(),
             email: "test@example.com".to_string(),
             avatar_token: None,
-            created_at: Utc::now(),
+            created_at: DateTime::from_timestamp(0, 0).unwrap(),
         };
         let json = serde_json::to_string(&user).unwrap();
         assert!(json.contains("\"avatarToken\""));
@@ -138,7 +138,7 @@ mod tests {
             nickname: "Test User".to_string(),
             email: "test@example.com".to_string(),
             avatar_token: Some("token123".to_string()),
-            created_at: Utc::now(),
+            created_at: DateTime::from_timestamp(0, 0).unwrap(),
         };
         let cloned = user.clone();
         assert_eq!(user.id, cloned.id);

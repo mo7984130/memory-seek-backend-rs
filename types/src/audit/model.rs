@@ -1,6 +1,6 @@
 //! 审计查询接口的请求与响应 DTO。
 
-use common::DateTime;
+use common::time::DateTime;
 
 use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;

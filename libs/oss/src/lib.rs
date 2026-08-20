@@ -5,6 +5,7 @@ mod retry;
 use retry::retry_429;
 
 use bytes::Bytes;
+use common::time::Duration;
 use futures::{Stream, StreamExt};
 use s3::creds::Credentials;
 use s3::request::ResponseData;
@@ -14,7 +15,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 #[cfg(feature = "metrics")]
 use std::time::Instant;
 

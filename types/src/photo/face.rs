@@ -12,7 +12,7 @@ crate::id_type!(FaceId, "photo/");
 mod entity {
     use common::error::ContextualError;
     use common::ext::IntoContextualExt;
-    use common::DateTime;
+    use common::time::{now, DateTime};
     use insight_face_rs::types::{BoundingBox, Face, FaceEmbedding, FaceLandmarks};
     use insight_face_rs::PgVector;
     use sea_orm::entity::prelude::*;
@@ -121,8 +121,8 @@ mod entity {
                 landmarks: Set(serde_json::to_value(record.landmarks).unwrap()),
                 score: Set(record.score),
                 embedding: Set(record.embedding.into()),
-                created_at: Set(chrono::Utc::now()),
-                updated_at: Set(chrono::Utc::now()),
+                created_at: Set(now()),
+                updated_at: Set(now()),
             }
         }
     }

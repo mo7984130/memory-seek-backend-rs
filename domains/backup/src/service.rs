@@ -3,6 +3,8 @@ use crate::exporter::CsvExporter;
 use crate::state::BackupState;
 use crate::storage::BackupTier;
 use audit::{AuditEvent, AuditService};
+use common::ext::ToOk;
+use common::time::{Duration, now};
 use common::utils::table_metadata::TableMetadata;
 use common::{Result, caller_error, inc_counter, inc_error};
 use serde_json::json;
@@ -103,7 +105,7 @@ impl BackupService {
         mode: BackupMode,
     ) -> std::result::Result<BackupResult, BackupError> {
         let start = std::time::Instant::now();
-        let run_id = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+        let run_id = now().format("%Y%m%d_%H%M%S").to_string();
         let work_dir = state.temp_dir.join(&run_id);
         state.ensure_dirs()?;
 
@@ -180,7 +182,8 @@ impl BackupService {
             AuditService::append(txn, event).await?;
             Ok(())
         })
-        .await
+        .await?
+        .to_ok()
     }
 }
 
@@ -190,7 +193,7 @@ pub struct BackupResult {
     pub exported: u32,
     pub failed: u32,
     pub cleaned: u32,
-    pub duration: std::time::Duration,
+    pub duration: Duration,
 }
 
 impl BackupResult {
@@ -200,7 +203,7 @@ impl BackupResult {
             exported: 0,
             failed: 0,
             cleaned: 0,
-            duration: std::time::Duration::ZERO,
+            duration: Duration::ZERO,
         }
     }
 }

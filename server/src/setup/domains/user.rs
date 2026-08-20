@@ -21,7 +21,7 @@ pub fn register(
         CacheConfig::new(
             cfg.cache.enabled,
             cfg.cache.local_capacity,
-            std::time::Duration::from_secs(cfg.cache.local_ttl_secs),
+            common::time::Duration::from_secs(cfg.cache.local_ttl_secs),
         ),
         state.s3_client.clone(),
     ));

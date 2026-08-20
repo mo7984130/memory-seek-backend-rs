@@ -1,5 +1,7 @@
 use std::sync::OnceLock;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
+
+use crate::time::Duration;
 
 use snowflaked::sync::Generator;
 

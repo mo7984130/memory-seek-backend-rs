@@ -25,7 +25,6 @@ types = { workspace = true, features = ["orm"] }
 oss = { path = "../../libs/oss" }
 serde = { workspace = true }
 validator = { workspace = true }
-chrono = { workspace = true }
 sea-orm = { workspace = true }
 redis = { workspace = true }
 uuid = { workspace = true }

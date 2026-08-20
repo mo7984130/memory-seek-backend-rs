@@ -12,7 +12,7 @@ crate::id_type!(PersonId, "photo/");
 mod entity {
     use common::error::ContextualError;
     use common::ext::IntoContextualExt;
-    use common::DateTime;
+    use common::time::DateTime;
     use insight_face_rs::types::FaceEmbedding;
     use insight_face_rs::PgVector;
     use sea_orm::{entity::prelude::*, ActiveValue::Set};

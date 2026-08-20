@@ -335,7 +335,6 @@ name = "audit"
 version = "0.1.0"
 dependencies = [
  "axum",
- "chrono",
  "common",
  "sea-orm",
  "serde_json",
@@ -348,7 +347,6 @@ version = "0.1.8"
 dependencies = [
  "audit",
  "axum",
- "chrono",
  "common",
  "constants",
  "criterion",
@@ -550,7 +548,6 @@ version = "0.1.6"
 dependencies = [
  "audit",
  "axum",
- "chrono",
  "common",
  "csv",
  "metrics",
@@ -3581,7 +3578,6 @@ dependencies = [
  "backup",
  "base64 0.22.1",
  "bytes",
- "chrono",
  "common",
  "constants",
  "deadpool-redis",
@@ -5911,7 +5907,6 @@ name = "types"
 version = "0.1.17"
 dependencies = [
  "base64 0.22.1",
- "chrono",
  "common",
  "derive_more 1.0.0",
  "fancy-regex",
@@ -6043,7 +6038,6 @@ dependencies = [
  "audit",
  "axum",
  "bytes",
- "chrono",
  "common",
  "constants",
  "deadpool-redis",

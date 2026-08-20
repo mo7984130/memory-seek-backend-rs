@@ -1,4 +1,4 @@
-use std::time::Duration;
+use common::time::Duration;
 
 use audit::{AuditEvent, AuditService};
 use common::error::{AppError, contextual::Result};

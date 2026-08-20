@@ -1,7 +1,6 @@
 //! 审计事件类型、查询 DTO 与 `audit_event` SeaORM 实体。
 
-use chrono::Utc;
-use common::DateTime;
+use common::time::{now, DateTime};
 use serde_json::Value;
 
 use crate::auth::user::UserId;
@@ -32,7 +31,7 @@ impl AuditEvent {
             target_type: None,
             target_id: None,
             detail: None,
-            occurred_at: Utc::now(),
+            occurred_at: now(),
         }
     }
     pub fn with_id(mut self, event_id: i64) -> Self {
@@ -134,7 +133,7 @@ impl BehaviorRecord {
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::DateTime;
+    use common::time::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 

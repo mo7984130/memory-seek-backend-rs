@@ -2,7 +2,7 @@
 #[cfg(feature = "enable")]
 use common::ext::{IntoContextualExt, ToOk};
 #[cfg(feature = "enable")]
-use common::{DateTime, error::contextual::Result as ContextualResult};
+use common::{error::contextual::Result as ContextualResult, time::DateTime};
 #[cfg(feature = "enable")]
 use sea_orm::ConnectionTrait;
 #[cfg(feature = "enable")]

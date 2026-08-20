@@ -3,13 +3,13 @@ use crate::config::{ACCESS_TOKEN_EXPIRE, EMAIL_CODE_EXPIRE, REFRESH_TOKEN_EXPIRE
 use crate::error_ext::AuthOptionExt;
 use crate::mapper::{AuthInsertParam, AuthMapper};
 use audit::{AuditEvent, AuditService};
-use chrono::Utc;
 use common::Result;
 use common::error::AppError;
 use common::ext::{
     BoolExt, ContextualResultExt, IntoContextualExt, OptionExt, RedisExt, ResultInspectErrAsync,
     log_warn,
 };
+use common::time::{after, now};
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{inc_error, metrics_name};
 use constants::RedisKeys;
@@ -127,7 +127,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     // 更新access_token和refresh_token（顺序执行，确保一致性）
     let new_access_token = rand_utils::generate_random_str(32);
     let new_refresh_token = rand_utils::generate_random_str(32);
-    let new_refresh_token_expires_at = Utc::now() + REFRESH_TOKEN_EXPIRE;
+    let new_refresh_token_expires_at = after(REFRESH_TOKEN_EXPIRE);
 
     state
         .redis
@@ -162,7 +162,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     Ok(LoginResponse {
         user: user_info,
         access_token: new_access_token,
-        access_token_expire_at: Utc::now() + ACCESS_TOKEN_EXPIRE,
+        access_token_expire_at: after(ACCESS_TOKEN_EXPIRE),
         refresh_token: new_refresh_token,
         refresh_token_expire_at: new_refresh_token_expires_at,
     })
@@ -349,7 +349,7 @@ pub async fn refresh_access_token(
 
     Ok(RefreshAccessTokenResponse {
         access_token: new_access_token,
-        access_token_expire_at: Utc::now() + ACCESS_TOKEN_EXPIRE,
+        access_token_expire_at: after(ACCESS_TOKEN_EXPIRE),
     })
 }
 
@@ -412,7 +412,7 @@ async fn verify_refresh_token(
         "刷新 access_token 时，refresh token 过期时间不存在",
         AppError::Unauthorized,
     )?;
-    (Utc::now() <= expire_at).true_or_warn(
+    (now() <= expire_at).true_or_warn(
         "refresh_token_expired",
         "刷新 access_token 时，refresh token 已过期",
         AppError::Unauthorized,

@@ -1,7 +1,11 @@
 use std::collections::HashSet;
 
 use common::ext::ToOk;
-use common::{DateTime, error::contextual::Result, models::CursorPage};
+use common::{
+    error::contextual::Result,
+    models::CursorPage,
+    time::{DateTime, now},
+};
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use types::cursor::TimeIdCursor;
@@ -18,12 +22,12 @@ impl PhotoLikeMapper {
         user_id: UserId,
         photo_id: PhotoId,
     ) -> Result<bool> {
-        let now = chrono::Utc::now();
+        let current_time = now();
         let active_model = ActiveModel {
             photo_id: Set(photo_id),
             user_id: Set(user_id),
-            created_at: Set(now),
-            updated_at: Set(now),
+            created_at: Set(current_time),
+            updated_at: Set(current_time),
             ..Default::default()
         };
 

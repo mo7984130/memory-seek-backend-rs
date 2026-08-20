@@ -10,8 +10,7 @@ crate::id_type!(PhotoId, "photo/");
 
 #[cfg(feature = "orm")]
 mod entity {
-    use chrono::Utc;
-    use common::DateTime;
+    use common::time::{now, DateTime};
     use sea_orm::entity::prelude::*;
     use sea_orm::ActiveValue::Set;
     use serde::{Deserialize, Serialize};
@@ -98,8 +97,8 @@ mod entity {
                 mime_type: Set(record.mime_type),
                 md5: Set(record.md5),
                 file_id: Set(record.file_id),
-                created_at: Set(Utc::now()),
-                updated_at: Set(Utc::now()),
+                created_at: Set(now()),
+                updated_at: Set(now()),
                 ..Default::default()
             }
         }

@@ -1,4 +1,4 @@
-use common::DateTime;
+use common::time::DateTime;
 use serde::Deserialize;
 
 use crate::auth::user::UserId;
@@ -161,8 +161,8 @@ mod orm_tests {
             file_id: "file-id".to_owned(),
             comment_count: 0,
             like_count: 0,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: DateTime::from_timestamp(0, 0).unwrap(),
+            updated_at: DateTime::from_timestamp(0, 0).unwrap(),
         }
     }
 

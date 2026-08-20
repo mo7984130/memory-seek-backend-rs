@@ -1,4 +1,4 @@
-use std::time::Duration;
+use common::time::Duration;
 
 use common::error::ContextualError;
 use multi_level_cache::{CacheConfig, MultiLevelCache, backend::Backend};

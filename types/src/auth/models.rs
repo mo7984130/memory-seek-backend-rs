@@ -1,7 +1,7 @@
 //! 认证相关类型定义
 
 use super::validators::*;
-use common::DateTime;
+use common::time::DateTime;
 
 crate::in_dto!(LoginRequest, "auth/", serialize; {
     #[validate(custom(function = "validate_account"))]
@@ -175,8 +175,6 @@ mod tests {
 
     #[test]
     fn test_login_response_serializes_to_camel_case() {
-        use chrono::TimeZone;
-
         let response = LoginResponse {
             user: crate::user::models::UserInfo {
                 id: UserId(1),
@@ -184,12 +182,12 @@ mod tests {
                 nickname: "Alice".to_string(),
                 email: "alice@example.com".to_string(),
                 avatar_token: None,
-                created_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+                created_at: DateTime::from_timestamp(1767225600, 0).unwrap(),
             },
             access_token: "tok123".to_string(),
-            access_token_expire_at: Utc.with_ymd_and_hms(2026, 6, 13, 12, 0, 0).unwrap(),
+            access_token_expire_at: DateTime::from_timestamp(1781352000, 0).unwrap(),
             refresh_token: "ref456".to_string(),
-            refresh_token_expire_at: Utc.with_ymd_and_hms(2026, 7, 13, 12, 0, 0).unwrap(),
+            refresh_token_expire_at: DateTime::from_timestamp(1783944000, 0).unwrap(),
         };
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"accessToken\""));

@@ -2,9 +2,9 @@ pub(crate) struct CollectionMapper;
 
 use std::collections::HashMap;
 
-use chrono::Utc;
 use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::{ContextOptionExt, OkExt};
+use common::time::now;
 use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
@@ -84,7 +84,7 @@ impl CollectionMapper {
         name: String,
         description: Option<String>,
     ) -> Result<CollectionRecord> {
-        let now = Utc::now();
+        let now = now();
         ActiveModel {
             user_id: Set(user_id),
             name: Set(name),
@@ -114,7 +114,7 @@ impl CollectionMapper {
         Entity::update_many()
             .col_expr(Column::CoverPhotoId, Expr::value(cover_photo_id))
             .col_expr(Column::CoverFileId, Expr::value(cover_file_id))
-            .col_expr(Column::UpdatedAt, Expr::value(chrono::Utc::now()))
+            .col_expr(Column::UpdatedAt, Expr::value(now()))
             .filter(Column::Id.eq(collection_id))
             .exec(db)
             .await?;
@@ -192,7 +192,7 @@ impl CollectionMapper {
             update = update.col_expr(Column::Description, Expr::value(description));
         }
         let result = update
-            .col_expr(Column::UpdatedAt, Expr::value(chrono::Utc::now()))
+            .col_expr(Column::UpdatedAt, Expr::value(now()))
             .filter(Column::Id.eq(collection_id))
             .filter(Column::UserId.eq(user_id))
             .exec(db)

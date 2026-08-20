@@ -1,8 +1,9 @@
 use audit::{AuditEvent, AuditService};
 use common::{
-    DateTime, db_transaction,
+    db_transaction,
     error::{AppError, ContextualError, contextual::Result},
     models::CursorPage,
+    time::DateTime,
 };
 use types::{
     auth::user::UserId,

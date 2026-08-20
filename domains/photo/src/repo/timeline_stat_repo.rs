@@ -1,6 +1,6 @@
-use std::time::Duration;
+use common::time::Duration;
 
-use common::{DateTime, error::contextual::Result, metrics_name, utils::MetricsTimerExt};
+use common::{error::contextual::Result, metrics_name, time::DateTime, utils::MetricsTimerExt};
 use constants::RedisKeys;
 use sea_orm::DatabaseTransaction;
 use types::photo::dto::timeline_stat::MonthStat;

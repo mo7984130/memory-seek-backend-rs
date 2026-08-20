@@ -1,9 +1,9 @@
 use clap::Parser;
 use common::Result;
+use common::time::Duration;
 use common::{error::ContextualError, ext::IntoContextualExt};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 

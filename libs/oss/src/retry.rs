@@ -4,8 +4,8 @@
 //! 本模块提供仅针对 429 的退避重试，其余错误（网络、4xx 非 429、5xx）立即返回，
 //! 避免掩盖真实失败原因。
 
+use common::time::Duration;
 use std::future::Future;
-use std::time::Duration;
 
 use crate::error::OssError;
 

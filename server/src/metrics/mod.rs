@@ -6,9 +6,9 @@ mod redis;
 mod system;
 
 #[cfg(feature = "metrics")]
-use std::sync::Arc;
+use common::time::Duration;
 #[cfg(feature = "metrics")]
-use std::time::Duration;
+use std::sync::Arc;
 #[cfg(feature = "metrics")]
 use sysinfo::System;
 #[cfg(feature = "metrics")]

@@ -1,4 +1,4 @@
-use common::{DateTime, Result, error::contextual};
+use common::{Result, error::contextual, time::DateTime};
 use sea_orm::{ConnectionTrait, DatabaseTransaction};
 use types::audit::{AuditEvent, AuditQuery, AuditStatsQuery, AuditTopQuery, BehaviorRecord};
 

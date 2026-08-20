@@ -10,7 +10,7 @@ crate::id_type!(CommentId, "photo/");
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::DateTime;
+    use common::time::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 

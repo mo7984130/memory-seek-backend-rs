@@ -24,7 +24,6 @@ sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 validator = { workspace = true }
-chrono = { workspace = true }
 email = { path = "../../libs/email" }
 deadpool-redis = { workspace = true }
 tokio = { workspace = true }

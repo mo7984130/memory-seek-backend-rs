@@ -10,13 +10,12 @@ crate::id_type!(CommentLikeId, "photo/");
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::DateTime;
-    use sea_orm::entity::prelude::*;
-    use serde::{Deserialize, Serialize};
-
     use super::*;
     use crate::auth::user::UserId;
     use crate::photo::comment::CommentId;
+    use common::time::DateTime;
+    use sea_orm::entity::prelude::*;
+    use serde::{Deserialize, Serialize};
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "photo_comment_like")]

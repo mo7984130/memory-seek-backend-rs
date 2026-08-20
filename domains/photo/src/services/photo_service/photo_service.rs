@@ -440,7 +440,7 @@ impl PhotoService {
 
     #[inline]
     fn get_photo_s3_key(metadata: &ImageMetaData) -> String {
-        let date_path = chrono::Utc::now().format("%Y/%m/%d");
+        let date_path = common::time::now().format("%Y/%m/%d");
         let uuid = Uuid::new_v4();
         format!("photos/{}/{}.{}", date_path, uuid, metadata.format)
     }

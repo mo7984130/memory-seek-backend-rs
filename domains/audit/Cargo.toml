@@ -10,7 +10,6 @@ controller = ["dep:axum"]
 
 [dependencies]
 common = { path = "../../common", features = ["contextual-sea-orm", "validators"] }
-chrono = { workspace = true }
 sea-orm = { workspace = true }
 serde_json = { workspace = true }
 types = { path = "../../types", features = ["orm"] }

@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use common::error::contextual::Result;
 use common::ext::ToOk;
+use common::time::now;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 use types::photo::comment_like::*;
@@ -17,7 +18,7 @@ impl CommentLikeMapper {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<bool> {
-        let now = chrono::Utc::now();
+        let now = now();
 
         let active_model = ActiveModel {
             comment_id: Set(comment_id),

@@ -1,8 +1,8 @@
 use bytes::Bytes;
-use chrono::{Duration, Utc};
 use common::ext::{
     BoolExt, ContextualResultExt, IntoContextualExt, RedisExt, ResultInspectErrAsync, ToOk, log_err,
 };
+use common::time::after;
 use common::utils::{FileValidator, MetricsTimerExt, rand_utils};
 use common::{Result, error::AppError, metrics_name, timed};
 use constants::{PasswordHasher, RedisKeys};
@@ -90,7 +90,7 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
         if success {
             return Ok(InviterCodeView {
                 inviter_code: code,
-                expire_at: Utc::now() + Duration::from_std(INVITER_CODE_TTL).unwrap(),
+                expire_at: after(INVITER_CODE_TTL),
             });
         }
     }
