@@ -2,6 +2,7 @@ use std::sync::Arc;
 #[cfg(feature = "face")]
 use std::sync::Mutex;
 
+use common::models::CursorPage;
 use deadpool_redis::Pool;
 use multi_level_cache::CacheConfig;
 use multi_level_cache::MultiLevelCache;
@@ -25,11 +26,12 @@ pub(crate) struct CachedPhotoLike {
     pub(crate) is_liked: bool,
 }
 
+#[allow(dead_code)]
 pub struct PhotoState {
     pub(crate) db: DatabaseConnection,
     pub(crate) cache_photo_info: MultiLevelCache<PhotoRecord, ContextualError>,
     pub(crate) cache_photo_like: MultiLevelCache<CachedPhotoLike, ContextualError>,
-    pub(crate) cache_photo_cursor_ids: MultiLevelCache<Vec<PhotoId>, ContextualError>,
+    pub(crate) cache_photo_cursor_ids: MultiLevelCache<CursorPage<PhotoId, ()>, ContextualError>,
     pub(crate) cache_photo_dimensions: MultiLevelCache<(i32, i32), ContextualError>,
     pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     #[cfg(feature = "face")]
@@ -57,27 +59,27 @@ impl PhotoState {
             cache_photo_info: MultiLevelCache::new_with_name(
                 "photo_info",
                 redis.clone(),
-                cache_config.clone(),
+                cache_config,
             ),
             cache_photo_like: MultiLevelCache::new_with_name(
                 "photo_like",
                 redis.clone(),
-                cache_config.clone(),
+                cache_config,
             ),
             cache_photo_cursor_ids: MultiLevelCache::new_with_name(
                 "photo_cursor_ids",
                 redis.clone(),
-                cache_config.clone(),
+                cache_config,
             ),
             cache_photo_dimensions: MultiLevelCache::new_with_name(
                 "photo_dimensions",
                 redis.clone(),
-                cache_config.clone(),
+                cache_config,
             ),
             cache_timeline_stat: MultiLevelCache::new_with_name(
                 "timeline_stat",
                 redis.clone(),
-                cache_config.clone(),
+                cache_config,
             ),
             #[cfg(feature = "face")]
             cache_person: MultiLevelCache::new_with_name("person", redis.clone(), cache_config),

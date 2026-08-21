@@ -84,7 +84,7 @@ impl PhotoController {
         Ok(photo).to_r_ok()
     }
 
-    /// 返回当前用户的照片游标分页.
+    /// 游标获取照片列表.
     async fn get_photos_cursor(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

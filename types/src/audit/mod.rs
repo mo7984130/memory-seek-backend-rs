@@ -42,9 +42,13 @@ impl AuditEvent {
         self.actor_id = Some(actor_id);
         self
     }
-    pub fn with_target(mut self, target_type: impl Into<String>, target_id: i64) -> Self {
+    pub fn with_target(
+        mut self,
+        target_type: impl Into<String>,
+        target_id: impl Into<i64>,
+    ) -> Self {
         self.target_type = Some(target_type.into());
-        self.target_id = Some(target_id);
+        self.target_id = Some(target_id.into());
         self
     }
     pub fn with_detail(mut self, detail: Value) -> Self {

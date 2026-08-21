@@ -14,7 +14,7 @@ pub(crate) struct CollectionService;
 
 // 查询
 impl CollectionService {
-    /// 查询用户拥有的相册, 并生成封面访问令牌.
+    /// 查询用户收藏夹.
     #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_collection_list(
@@ -36,7 +36,7 @@ impl CollectionService {
 
 // 添加
 impl CollectionService {
-    /// 创建相册并返回相册视图.
+    /// 创建收藏夹.
     #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn create_collection(
@@ -52,7 +52,7 @@ impl CollectionService {
 
 // 修改
 impl CollectionService {
-    /// 更新相册信息, 并在仓储层校验相册所有权.
+    /// 更新收藏夹信息
     #[common::metered]
     #[tracing::instrument(
         skip_all,
@@ -73,7 +73,7 @@ impl CollectionService {
 
 // 删除
 impl CollectionService {
-    /// 删除相册及其照片关联关系.
+    /// 删除收藏夹.
     #[common::metered]
     #[tracing::instrument(
         skip_all,
@@ -91,7 +91,7 @@ impl CollectionService {
     }
 }
 
-// 照片删除步骤:收藏夹清理
+// 当照片删除时
 #[step_derive::declare_transaction_step(
     ctx = crate::services::photo_service::PhotoDeleteContext,
     slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
@@ -99,7 +99,7 @@ impl CollectionService {
     owns = ["CollectionPhotoMapper", "CollectionMapper"],
 )]
 impl CollectionService {
-    /// 清理照片删除后失效的相册关联, 并同步照片计数.
+    /// 清理收藏夹照片 和 更新收藏夹计数.
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,

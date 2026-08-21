@@ -53,10 +53,6 @@ impl PhotoLikeMapper {
         user_id: UserId,
         photo_ids: &[PhotoId],
     ) -> Result<HashSet<PhotoId>> {
-        if photo_ids.is_empty() {
-            return HashSet::new().to_ok();
-        }
-
         Entity::find()
             .select_only()
             .column(Column::PhotoId)
@@ -117,7 +113,7 @@ impl PhotoLikeMapper {
             .exec(db)
             .await?;
 
-        Ok(res.rows_affected != 0)
+        Ok(res.rows_affected > 0)
     }
 
     /// 删除指定照片的全部点赞记录.
@@ -125,10 +121,6 @@ impl PhotoLikeMapper {
         db: &impl ConnectionTrait,
         photo_ids: &[PhotoId],
     ) -> Result<u64> {
-        if photo_ids.is_empty() {
-            return Ok(0);
-        }
-
         Entity::delete_many()
             .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .exec(db)

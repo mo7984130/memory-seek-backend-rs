@@ -85,7 +85,8 @@ impl BackupService {
             tables.iter().map(ToString::to_string).collect(),
             BackupMode::Manual,
         )
-        .await
+        .await?
+        .to_ok()
     }
 
     async fn configured_tables(

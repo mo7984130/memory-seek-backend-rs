@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     Extension, Router,
     extract::State,
-    routing::{delete, get, post},
+    routing::{delete, get},
 };
 use common::{
     Result,
@@ -23,10 +23,7 @@ use types::{
     },
 };
 
-use crate::{
-    services::{comment_like_service::CommentLikeService, comment_service::CommentService},
-    state::PhotoState,
-};
+use crate::{services::comment_service::CommentService, state::PhotoState};
 
 pub struct CommentController;
 
@@ -40,10 +37,6 @@ impl ControllerRouter for CommentController {
                 get(Self::get_cursor_page).post(Self::publish),
             )
             .route("/{photo_id}/{comment_id}", delete(Self::delete))
-            .route(
-                "/{photo_id}/{comment_id}/like",
-                post(Self::like).delete(Self::unlike),
-            )
     }
 
     fn public_routes() -> Router<Arc<Self::State>> {
@@ -53,16 +46,16 @@ impl ControllerRouter for CommentController {
 
 // 创建
 impl CommentController {
-    /// 发布一条照片评论.
+    /// 发布评论.
     async fn publish(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedPath(photo_id): ValidatedPath<PhotoId>,
         ValidatedJson(req): ValidatedJson<CommentPublishParam>,
     ) -> Result<R<CommentView>> {
-        let comment = CommentService::publish(&state, user_id, photo_id, req).await?;
-
-        Ok(comment).to_r_ok()
+        CommentService::publish(&state, user_id, photo_id, req)
+            .await
+            .to_r_ok()
     }
 }
 
@@ -71,7 +64,7 @@ impl CommentController {}
 
 // 查询
 impl CommentController {
-    /// 按游标查询照片评论, 并返回当前用户的点赞状态.
+    /// 游标查询评论列表.
     async fn get_cursor_page(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -86,39 +79,14 @@ impl CommentController {
 
 // 删除
 impl CommentController {
-    /// 删除当前用户有权删除的评论.
+    ///删除评论.
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedPath((_photo_id, comment_id)): ValidatedPath<(PhotoId, CommentId)>,
     ) -> Result<R<()>> {
-        CommentService::delete(&state, user_id, comment_id).await?;
-
-        Ok(()).to_r_ok()
-    }
-}
-
-// 点赞
-impl CommentController {
-    /// 为评论点赞.
-    async fn like(
-        State(state): State<Arc<PhotoState>>,
-        Extension(user_id): Extension<UserId>,
-        ValidatedPath((photo_id, comment_id)): ValidatedPath<(PhotoId, CommentId)>,
-    ) -> Result<R<()>> {
-        CommentLikeService::like(&state, user_id, Some(photo_id), comment_id).await?;
-
-        Ok(()).to_r_ok()
-    }
-
-    /// 取消评论点赞.
-    async fn unlike(
-        State(state): State<Arc<PhotoState>>,
-        Extension(user_id): Extension<UserId>,
-        ValidatedPath((photo_id, comment_id)): ValidatedPath<(PhotoId, CommentId)>,
-    ) -> Result<R<()>> {
-        CommentLikeService::unlike(&state, user_id, Some(photo_id), comment_id).await?;
-
-        Ok(()).to_r_ok()
+        CommentService::delete(&state, user_id, comment_id)
+            .await
+            .to_r_ok()
     }
 }

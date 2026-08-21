@@ -1,8 +1,5 @@
 use common::Result;
-use types::{
-    auth::user::UserId,
-    photo::{comment::CommentId, photo::PhotoId},
-};
+use types::{auth::user::UserId, photo::comment::CommentId};
 
 use crate::{repo::CommentRepo, state::PhotoState};
 
@@ -10,21 +7,19 @@ pub(crate) struct CommentLikeService;
 
 // 创建
 impl CommentLikeService {
-    /// 为评论点赞; 重复点赞和不存在评论由仓储层处理.
+    /// 点赞评论.
     #[common::metered(name = "like_comment")]
     #[tracing::instrument(
         name = "like_comment",
         skip_all,
         fields(user_id = %user_id, comment_id = %comment_id)
     )]
-    pub async fn like(
-        state: &PhotoState,
-        user_id: UserId,
-        photo_id: Option<PhotoId>,
-        comment_id: CommentId,
-    ) -> Result<()> {
+    pub async fn like(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
         // 检查评论是否存在
-        CommentRepo::like_comment(state, user_id, photo_id, comment_id).await?;
+        CommentRepo::ensure_exist(state, comment_id).await?;
+
+        // like评论
+        CommentRepo::like_comment(state, user_id, comment_id).await?;
 
         Ok(())
     }
@@ -38,20 +33,15 @@ impl CommentLikeService {}
 
 // 删除
 impl CommentLikeService {
-    /// 取消用户对评论的点赞.
+    /// 取消点赞.
     #[common::metered(name = "unlike_comment")]
     #[tracing::instrument(
         name = "unlike_comment",
         skip_all,
         fields(user_id = %user_id, comment_id = %comment_id)
     )]
-    pub async fn unlike(
-        state: &PhotoState,
-        user_id: UserId,
-        photo_id: Option<PhotoId>,
-        comment_id: CommentId,
-    ) -> Result<()> {
-        CommentRepo::unlike_comment(state, user_id, photo_id, comment_id).await?;
+    pub async fn unlike(state: &PhotoState, user_id: UserId, comment_id: CommentId) -> Result<()> {
+        CommentRepo::unlike_comment(state, user_id, comment_id).await?;
 
         Ok(())
     }

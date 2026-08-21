@@ -3,6 +3,9 @@
 // ============================================================
 
 crate::id_type!(TimelineStatId, String, "photo/");
+pub fn to_date_str(date: &DateTime) -> String {
+    date.format("%Y-%m").to_string()
+}
 
 // ============================================================
 // SeaORM 实体（仅 orm feature）
@@ -33,5 +36,6 @@ mod entity {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
+use common::time::DateTime;
 #[cfg(feature = "orm")]
 pub use entity::*;

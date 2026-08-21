@@ -106,7 +106,6 @@ impl PersonRepo {
         ids: &[PersonId],
     ) -> common::error::contextual::Result<Vec<Option<PersonBriefRow>>> {
         state
-            .repo
             .cache_person
             .get_or_load_batch(
                 ids,

@@ -1,43 +1,54 @@
 use audit::{AuditEvent, AuditService};
 use common::{
     db_transaction,
-    error::{AppError, contextual::Result},
-    ext::UintExt,
+    error::{AppError, ContextualError, contextual::Result},
+    ext::{ToErr, UintExt},
     models::CursorPage,
 };
-use types::photo::dto::collection::{CollectionCreateParam, CollectionUpdateParam};
-use types::{auth::user::UserId, photo::collection::CollectionId};
+use types::photo::{
+    collection::CollectionRecord,
+    dto::collection::{
+        CollectionCreateParam, CollectionPhotoCursorPageParam, CollectionUpdateParam,
+    },
+};
+use types::{
+    auth::user::UserId, photo::collection::CollectionId, photo::models::PhotoIds,
+    photo::photo::PhotoId,
+};
 
 use crate::mappers::{
     collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
+    photo_mapper::PhotoMapper,
 };
 use crate::state::PhotoState;
 
 pub(crate) struct CollectionRepo;
 
 impl CollectionRepo {
-    /// 查询用户可见的照片所属相册 ID.
+    /// 查询照片所属的收藏夹
     pub(crate) async fn query_collection_ids_by_photo(
         state: &PhotoState,
         user_id: UserId,
-        photo_id: types::photo::photo::PhotoId,
-    ) -> common::error::contextual::Result<Vec<CollectionId>> {
+        photo_id: PhotoId,
+    ) -> Result<Vec<CollectionId>> {
         CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.db, user_id, photo_id).await
     }
-    /// 批量查询相册的 ID 和名称摘要.
+
+    /// 查询收藏夹id 和 描述
     pub(crate) async fn query_collection_briefs(
         state: &PhotoState,
         ids: &[CollectionId],
-    ) -> common::error::contextual::Result<Vec<(CollectionId, String)>> {
+    ) -> Result<Vec<(CollectionId, String)>> {
         CollectionMapper::query_id_and_name_by_ids(&state.db, ids).await
     }
-    /// 按游标查询相册中的照片 ID.
+
+    /// 游标查询收藏夹中的照片Id
     pub(crate) async fn query_collection_photo_ids(
         state: &PhotoState,
         user_id: UserId,
         collection_id: CollectionId,
-        req: &types::photo::dto::collection::CollectionPhotoCursorPageParam,
-    ) -> common::error::contextual::Result<CursorPage<types::photo::photo::PhotoId, ()>> {
+        req: &CollectionPhotoCursorPageParam,
+    ) -> Result<CursorPage<PhotoId, ()>> {
         CollectionPhotoMapper::query_photo_id_by_collection_id(
             &state.db,
             user_id,
@@ -47,65 +58,105 @@ impl CollectionRepo {
         )
         .await
     }
-    /// 校验归属后批量添加照片到相册.
+
+    pub async fn ensure_belong(
+        state: &PhotoState,
+        user_id: UserId,
+        collection_id: CollectionId,
+    ) -> Result<()> {
+        CollectionMapper::ensure_belong(&state.db, user_id, collection_id).await
+    }
+
+    pub async fn ensure_belong_with_return(
+        state: &PhotoState,
+        user_id: UserId,
+        collection_id: CollectionId,
+    ) -> Result<CollectionRecord> {
+        CollectionMapper::ensure_belong_with_return(&state.db, user_id, collection_id).await
+    }
+
+    /// 添加相册照片
     pub(crate) async fn add_collection_photos(
         state: &PhotoState,
         user_id: UserId,
         collection_id: CollectionId,
-        photo_ids: &types::photo::models::PhotoIds,
+        photo_ids: &PhotoIds,
     ) -> Result<u64> {
-        CollectionMapper::ensure_belong(&state.db, user_id, collection_id).await?;
-        let photo_ids = photo_ids.clone();
         db_transaction!(scoped & state.db, |txn| {
-            let count =
-                CollectionMapper::add_photos_batch(txn, user_id, collection_id, &photo_ids).await?;
-            if let Some(photo_id) = photo_ids.first() {
-                let file_id =
-                    crate::mappers::photo_mapper::PhotoMapper::query_file_id_by_id(txn, *photo_id)
-                        .await?;
-                CollectionMapper::update_cover_photo(txn, collection_id, Some(*photo_id), file_id)
-                    .await?;
-            }
-            AuditService::append_many(
+            // 添加照片
+            let count = CollectionMapper::add_photos_batch(
                 txn,
-                photo_ids.iter().map(|photo_id| {
-                    AuditEvent::new("collect")
-                        .with_actor(user_id.0)
-                        .with_target("photo", photo_id.0)
-                        .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
-                }),
+                user_id,
+                collection_id,
+                photo_ids.iter().copied().collect::<Vec<_>>(),
+            )
+            .await?;
+
+            // 修改封面
+            if let Some(photo_id) = photo_ids.first() {
+                let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
+                match file_id {
+                    Some(file_id) => {
+                        CollectionMapper::update_cover_photo(
+                            txn,
+                            collection_id,
+                            *photo_id,
+                            file_id,
+                        )
+                        .await?;
+                    }
+                    None => {
+                        let _ = ContextualError::error_without_source(
+                            "collection_cover_file_id_not_exist",
+                            "添加照片到收藏夹时, 收藏夹封面照片的file_id不存在",
+                            AppError::InternalServerError,
+                        )
+                        .emit();
+                    }
+                }
+            }
+
+            AuditService::append(
+                txn,
+                AuditEvent::new("collect")
+                    .with_actor(user_id.0)
+                    .with_target("collection_id", collection_id.0)
+                    .with_detail(serde_json::json!({ "photoIds": photo_ids })),
             )
             .await?;
             Ok(count)
         })
         .await
     }
-    /// 校验归属后批量移除相册中的照片.
+    /// 移除收藏夹照片.
     pub(crate) async fn remove_collection_photos(
         state: &PhotoState,
         user_id: UserId,
-        collection_id: CollectionId,
-        photo_ids: &types::photo::models::PhotoIds,
+        collection: CollectionRecord,
+        photo_ids: &PhotoIds,
     ) -> Result<u64> {
-        let photo_ids = photo_ids.clone();
         db_transaction!(scoped & state.db, |txn| {
-            let collection =
-                CollectionMapper::ensure_belong_with_return(txn, user_id, collection_id).await?;
+            // 如果封面会被移除的话, 提前保存下来
             let cover_removed = collection
                 .cover_photo_id
                 .is_some_and(|id| photo_ids.contains(&id));
+
+            // 删除收藏夹照片
             let rows = CollectionPhotoMapper::delete_by_collection_id_and_photo_ids(
                 txn,
                 user_id,
-                collection_id,
+                collection.id,
                 &photo_ids,
             )
             .await?;
+
+            // 计算封面
             if cover_removed {
+                // 获取第一张照片
                 if let Some(photo_id) = CollectionPhotoMapper::query_photo_id_by_collection_id(
                     txn,
                     user_id,
-                    collection_id,
+                    collection.id,
                     None,
                     1,
                 )
@@ -113,51 +164,64 @@ impl CollectionRepo {
                 .records
                 .first()
                 {
-                    let file_id = crate::mappers::photo_mapper::PhotoMapper::query_file_id_by_id(
-                        txn, *photo_id,
-                    )
-                    .await?;
-                    CollectionMapper::update_cover_photo(
-                        txn,
-                        collection_id,
-                        Some(*photo_id),
-                        file_id,
-                    )
-                    .await?;
+                    let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
+                    match file_id {
+                        Some(file_id) => {
+                            CollectionMapper::update_cover_photo(
+                                txn,
+                                collection.id,
+                                *photo_id,
+                                file_id,
+                            )
+                            .await?;
+                        }
+                        None => {
+                            ContextualError::error_without_source(
+                                "photo_collection_cover_photo_file_id_not_exist",
+                                "从收藏夹移除照片时, 封面照片file_id不存在",
+                                AppError::InternalServerError,
+                            )
+                            .emit();
+                        }
+                    }
                 }
             }
-            CollectionMapper::update_photo_count_delta(txn, collection_id, -(rows as i64)).await?;
-            AuditService::append_many(
+
+            // 更新计数
+            CollectionMapper::update_photo_count_delta(txn, collection.id, -(rows as i64)).await?;
+
+            AuditService::append(
                 txn,
-                photo_ids.iter().map(|photo_id| {
-                    AuditEvent::new("uncollect")
-                        .with_actor(user_id.0)
-                        .with_target("photo", photo_id.0)
-                        .with_detail(serde_json::json!({ "collectionId": collection_id.0 }))
-                }),
+                AuditEvent::new("uncollect")
+                    .with_actor(user_id.0)
+                    .with_target("collection", collection.id.0)
+                    .with_detail(serde_json::json!({ "photoIds": photo_ids })),
             )
             .await?;
             Ok(rows)
         })
         .await
     }
-    /// 查询用户的相册列表.
+
+    /// 查询收藏夹列表.
     pub(crate) async fn query_collections(
         state: &PhotoState,
         user_id: UserId,
-    ) -> common::error::contextual::Result<Vec<types::photo::collection::CollectionRecord>> {
+    ) -> Result<Vec<CollectionRecord>> {
         CollectionMapper::query_by_user_id(&state.db, user_id).await
     }
 
-    /// 创建用户相册.
+    /// 创建收藏夹.
     pub(crate) async fn create_collection(
         state: &PhotoState,
         user_id: UserId,
         req: CollectionCreateParam,
-    ) -> common::error::contextual::Result<types::photo::collection::CollectionRecord> {
+    ) -> Result<CollectionRecord> {
         db_transaction!(scoped & state.db, |txn| {
+            // 插入
             let collection =
                 CollectionMapper::insert(txn, user_id, req.name, req.description).await?;
+
             AuditService::append(
                 txn,
                 AuditEvent::new("photo.collection_created")
@@ -170,17 +234,17 @@ impl CollectionRepo {
         .await
     }
 
-    /// 校验归属后更新相册信息.
+    /// 更新收藏夹信息.
     pub(crate) async fn update_collection(
         state: &PhotoState,
         user_id: UserId,
         id: CollectionId,
         req: CollectionUpdateParam,
     ) -> Result<()> {
-        let rows = db_transaction!(scoped & state.db, |txn| {
-            let rows =
+        db_transaction!(scoped & state.db, |txn| {
+            let affected =
                 CollectionMapper::update_info(txn, id, user_id, req.name, req.description).await?;
-            if rows > 0 {
+            if affected > 0 {
                 AuditService::append(
                     txn,
                     AuditEvent::new("photo.collection_updated")
@@ -188,27 +252,30 @@ impl CollectionRepo {
                         .with_target("collection", id.0),
                 )
                 .await?;
+                Ok(())
+            } else {
+                return ContextualError::warn_without_source(
+                    "collection_update_info_fail",
+                    "修改收藏夹信息失败",
+                    AppError::bad_request("修改收藏夹信息失败"),
+                )
+                .to_err();
             }
-            Ok(rows)
         })
         .await?;
-        if rows == 0 {
-            return Err(common::error::ContextualError::warn_without_source(
-                "collection_update_info_fail",
-                "修改收藏夹信息失败",
-                AppError::bad_request("修改收藏夹信息失败"),
-            ));
-        }
+
         Ok(())
     }
 
-    /// 校验归属后删除相册及其照片关联.
+    /// 删除收藏夹.
+    /// 无需健全, 在删除的时候保证user_id相等
     pub(crate) async fn delete_collection(
         state: &PhotoState,
         user_id: UserId,
         id: CollectionId,
     ) -> Result<()> {
         db_transaction!(scoped & state.db, |txn| {
+            // 删除收藏夹
             CollectionMapper::delete_by_id(txn, id, user_id)
                 .await?
                 .no_zero_or_warn(
@@ -216,7 +283,10 @@ impl CollectionRepo {
                     "删除收藏夹失败",
                     AppError::bad_request("删除收藏夹失败"),
                 )?;
+
+            // 删除收藏夹照片
             CollectionPhotoMapper::delete_by_collection_id(txn, id, user_id).await?;
+
             AuditService::append(
                 txn,
                 AuditEvent::new("photo.collection_deleted")

@@ -48,12 +48,12 @@ impl<I: DeserializeOwned> TimeIdCursor<I> {
 
         #[derive(Deserialize)]
         struct Raw<I> {
-            created_at: DateTime,
+            time_at: DateTime,
             id: I,
         }
         let raw: Raw<I> = serde_json::from_str(&json).map_err(CursorDecodeError::Json)?;
         Ok(Self {
-            time_at: raw.created_at,
+            time_at: raw.time_at,
             id: raw.id,
         })
     }

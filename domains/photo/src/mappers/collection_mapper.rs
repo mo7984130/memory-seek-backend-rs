@@ -25,10 +25,8 @@ impl CollectionMapper {
         db: &impl ConnectionTrait,
         user_id: UserId,
         collection_id: CollectionId,
-        photo_ids: &[PhotoId],
+        photo_ids: Vec<PhotoId>,
     ) -> Result<u64> {
-        let ids: Vec<PhotoId> = photo_ids.to_vec();
-
         let collection_photo_table_name = collection_photo::Entity.table_name();
         let collection_table_name = collection::Entity.table_name();
 
@@ -56,7 +54,7 @@ impl CollectionMapper {
         let stmt = Statement::from_sql_and_values(
             DbBackend::Postgres,
             &sql,
-            [collection_id.into(), ids.into(), user_id.into()],
+            [collection_id.into(), photo_ids.into(), user_id.into()],
         );
 
         let result = db.query_one(stmt).await?.context_warn_none(
@@ -77,7 +75,7 @@ impl CollectionMapper {
         })
     }
 
-    /// 创建相册记录.
+    /// 创建收藏夹.
     pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -104,12 +102,12 @@ impl CollectionMapper {
 
 // 修改
 impl CollectionMapper {
-    /// 更新相册封面照片及裁剪信息.
+    /// 更新收藏夹信息
     pub async fn update_cover_photo(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
-        cover_photo_id: Option<PhotoId>,
-        cover_file_id: Option<String>,
+        cover_photo_id: PhotoId,
+        cover_file_id: String,
     ) -> Result<()> {
         Entity::update_many()
             .col_expr(Column::CoverPhotoId, Expr::value(cover_photo_id))
@@ -122,15 +120,11 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 批量更新多个相册的照片数量.
+    /// 批量更新多个收藏夹的照片计数.
     pub async fn update_photo_count_delta_batch(
         db: &impl ConnectionTrait,
         deltas: &HashMap<CollectionId, i64>,
     ) -> Result<()> {
-        if deltas.is_empty() {
-            return Ok(());
-        }
-
         let (ids, counts): (Vec<i64>, Vec<i64>) = deltas
             .iter()
             .map(|(id, count)| (i64::from(*id), *count))
@@ -158,7 +152,7 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 按增量更新单个相册的照片数量.
+    /// 增量更新照片计数.
     pub async fn update_photo_count_delta(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -172,7 +166,7 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 更新相册基本信息, 并按用户 ID 校验归属.
+    /// 更新收藏夹信息.
     pub async fn update_info(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -180,7 +174,6 @@ impl CollectionMapper {
         name: Option<String>,
         description: Option<String>,
     ) -> Result<u64> {
-        // 如果两个字段都为 None，直接返回，无需操作
         if name.is_none() && description.is_none() {
             return Ok(0);
         }
@@ -203,28 +196,11 @@ impl CollectionMapper {
 
 // 查询
 impl CollectionMapper {
-    #[expect(dead_code)]
-    /// 按相册 ID 查询相册记录.
-    pub async fn query_by_id(
-        db: &impl ConnectionTrait,
-        collection_id: CollectionId,
-    ) -> Result<Option<CollectionRecord>> {
-        Entity::find_by_id(collection_id)
-            .one(db)
-            .await?
-            .map(CollectionRecord::from)
-            .to_ok()
-    }
-
-    /// 按 ID 批量查询收藏夹 id 与 name
+    /// 批量获取id 和 name
     pub async fn query_id_and_name_by_ids(
         db: &impl ConnectionTrait,
         ids: &[CollectionId],
     ) -> Result<Vec<(CollectionId, String)>> {
-        if ids.is_empty() {
-            return Ok(vec![]);
-        }
-
         Entity::find()
             .filter(Column::Id.is_in(ids.iter().copied()))
             .select_only()
@@ -236,7 +212,7 @@ impl CollectionMapper {
             .to_ok()
     }
 
-    /// 查询用户的全部相册.
+    /// 通过user_id查询全部收藏夹.
     pub async fn query_by_user_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -252,7 +228,7 @@ impl CollectionMapper {
             .to_ok()
     }
 
-    /// 检查相册是否属于指定用户.
+    /// 检查收藏夹是否属于对应用户.
     pub async fn is_belong(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -267,7 +243,7 @@ impl CollectionMapper {
         Ok(count > 0)
     }
 
-    /// 校验相册归属, 失败时返回权限领域错误.
+    /// 确保收藏夹属于对应用户
     pub async fn ensure_belong(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -283,7 +259,7 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 校验相册归属并返回相册记录.
+    /// 确保收藏夹属于对应用户, 并且返回收藏夹记录.
     pub async fn ensure_belong_with_return(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -305,7 +281,7 @@ impl CollectionMapper {
 
 // 删除
 impl CollectionMapper {
-    /// 删除相册记录并返回受影响行数.
+    /// 删除收藏夹.
     pub async fn delete_by_id(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,

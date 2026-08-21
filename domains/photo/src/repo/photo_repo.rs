@@ -1,8 +1,11 @@
+use std::collections::HashSet;
+
 use common::time::Duration;
 
 use audit::{AuditEvent, AuditService};
+use common::db_transaction;
 use common::error::{AppError, contextual::Result};
-use common::ext::ContextOptionExt;
+use common::ext::{CollectOkExt, ContextOptionExt, ContextualResultExt, IntoContextualExt};
 use common::metrics_name;
 use common::models::CursorPage;
 use common::utils::MetricsTimerExt;
@@ -15,27 +18,26 @@ use types::photo::photo::{ActiveModel, Model, NewPhotoRecord, PhotoId, PhotoReco
 #[cfg(feature = "face")]
 use types::photo::person::PersonId;
 
-#[cfg(feature = "face")]
-use crate::models::PersonBriefRow;
 use crate::{
     mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper},
     state::{CachedPhotoLike, PhotoState},
 };
 
 const PHOTO_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
-const PHOTO_CURSOR_CACHE_MAX_SIZE: u64 = 1024;
 
 /// 照片领域数据访问仓储，统一封装数据库与多级缓存。
 pub struct PhotoRepo;
 
 impl PhotoRepo {
-    /// 批量加载用户照片记录及其点赞状态.
+    /// 加载照片记录.
+    /// 返回照片记录 和 是否被喜欢的照片Id
     pub async fn load_photo_records(
         state: &PhotoState,
         user_id: UserId,
         photo_ids: &[PhotoId],
-    ) -> Result<(Vec<Option<PhotoRecord>>, std::collections::HashSet<PhotoId>)> {
+    ) -> Result<(Vec<Option<PhotoRecord>>, HashSet<PhotoId>)> {
         let (photos, cached_photo_likes) = tokio::join!(
+            // 获取照片记录
             state.cache_photo_info.get_or_load_batch(
                 photo_ids,
                 |id| RedisKeys::photo::photo::photo_info(*id),
@@ -43,6 +45,7 @@ impl PhotoRepo {
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
                 |photo| photo.id,
             ),
+            // 获取是否被喜欢
             state.cache_photo_like.get_or_load_batch(
                 photo_ids,
                 |id| RedisKeys::photo::photo::photo_is_liked(user_id, *id),
@@ -51,17 +54,18 @@ impl PhotoRepo {
                     let liked_photo_ids =
                         PhotoLikeMapper::query_is_like_by_photo_ids(&state.db, user_id, &miss_ids)
                             .await?;
-                    Ok(miss_ids
+                    miss_ids
                         .into_iter()
                         .map(|photo_id| CachedPhotoLike {
                             is_liked: liked_photo_ids.contains(&photo_id),
                             photo_id,
                         })
-                        .collect())
+                        .collect_ok()
                 },
                 |cached| cached.photo_id,
             ),
         );
+        let photos = photos?;
         let liked_photo_ids = cached_photo_likes?
             .into_iter()
             .zip(photo_ids)
@@ -69,10 +73,10 @@ impl PhotoRepo {
                 cached.and_then(|cached| cached.is_liked.then_some(photo_id))
             })
             .collect();
-        Ok((photos?, liked_photo_ids))
+        Ok((photos, liked_photo_ids))
     }
 
-    /// 将照片点赞状态写入本地和远端缓存.
+    /// 缓存照片喜欢状态.
     pub(super) async fn cache_photo_like_status(
         state: &PhotoState,
         user_id: UserId,
@@ -80,54 +84,50 @@ impl PhotoRepo {
         is_liked: bool,
     ) {
         let key = RedisKeys::photo::photo::photo_is_liked(user_id, photo_id);
-        let _ = state
+        state
             .cache_photo_like
             .put(
                 &key,
                 CachedPhotoLike { photo_id, is_liked },
                 PHOTO_CACHE_TTL,
             )
-            .await;
+            .await
+            .into_contextual()
+            .emit_if_err();
     }
 
-    /// 查询用户照片的游标分页 ID.
+    /// 游标查询照片id.
     pub async fn query_photo_cursor_ids(
         state: &PhotoState,
         req: PhotoCursorParam,
     ) -> Result<CursorPage<PhotoId, ()>> {
-        if req.cursor.is_none() && req.anchor_time.is_none() {
+        let photo_ids = if req.cursor.is_none() && req.anchor_time.is_none() {
             let key = RedisKeys::photo::photo::photo_cursor_page_ids(req.direction);
-            let photo_ids = state
+            state
                 .cache_photo_cursor_ids
                 .get_or_load(key, PHOTO_CACHE_TTL, || async move {
                     PhotoMapper::query_cursor_page_ids(
                         &state.db,
                         None,
-                        PHOTO_CURSOR_CACHE_MAX_SIZE,
+                        req.size,
                         req.direction,
                         None,
                     )
                     .await
-                    .map(|page| page.records)
                 })
-                .await?;
-            return Ok(CursorPage::from_oversize(
-                photo_ids
-                    .into_iter()
-                    .take((req.size + 1) as usize)
-                    .collect(),
+                .await?
+        } else {
+            PhotoMapper::query_cursor_page_ids(
+                &state.db,
+                req.cursor,
                 req.size,
-            ));
-        }
+                req.direction,
+                req.anchor_time,
+            )
+            .await?
+        };
 
-        Ok(PhotoMapper::query_cursor_page_ids(
-            &state.db,
-            req.cursor,
-            req.size,
-            req.direction,
-            req.anchor_time,
-        )
-        .await?)
+        Ok(photo_ids)
     }
 
     /// 失效照片游标 ID 缓存.
@@ -136,13 +136,18 @@ impl PhotoRepo {
             RedisKeys::photo::photo::photo_cursor_page_ids(PageDirection::Next).to_owned(),
             RedisKeys::photo::photo::photo_cursor_page_ids(PageDirection::Prev).to_owned(),
         ];
-        let _ = state.cache_photo_cursor_ids.invalidate_batch(&keys).await;
+        state
+            .cache_photo_cursor_ids
+            .invalidate_batch(&keys)
+            .await
+            .into_contextual()
+            .emit_if_err();
     }
 
-    /// 插入照片主记录.
+    /// 插入照片.
     pub async fn insert_photo(state: &PhotoState, photo: NewPhotoRecord) -> Result<Model> {
-        let photo: ActiveModel = photo.into();
-        common::db_transaction!(contextual & state.db, |txn| {
+        db_transaction!(contextual & state.db, |txn| {
+            let photo: ActiveModel = photo.into();
             let photo = photo.insert(txn).await?;
             AuditService::append(
                 txn,
@@ -154,6 +159,10 @@ impl PhotoRepo {
             Ok(photo)
         })
         .await
+    }
+
+    pub async fn ensure_exist(state: &PhotoState, photo_id: PhotoId) -> Result<()> {
+        PhotoMapper::ensure_exist(&state.db, photo_id).await
     }
 
     /// 批量查询图片 MD5 是否存在.
@@ -174,7 +183,7 @@ impl PhotoRepo {
             .await;
     }
 
-    /// 查询对象存储文件对应的图片尺寸.
+    /// 通过file_id 获取对应的图片尺寸.
     pub async fn get_photo_dimensions(state: &PhotoState, file_id: &str) -> Result<(i32, i32)> {
         let key = RedisKeys::photo::photo::photo_dimensions(file_id);
         state

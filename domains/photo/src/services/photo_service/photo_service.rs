@@ -67,7 +67,7 @@ impl PhotoService {
         Ok(views)
     }
 
-    /// 按时间与 ID 游标分页查询用户照片.
+    /// 游标获取照片列表.
     #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_photo_cursor_page(

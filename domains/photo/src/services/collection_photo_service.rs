@@ -91,6 +91,10 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoAddBatchResult> {
+        // 确认归属
+        CollectionRepo::ensure_belong(state, user_id, collection_id).await?;
+
+        // 添加照片
         let photo_count =
             CollectionRepo::add_collection_photos(state, user_id, collection_id, &photo_ids)
                 .await?;
@@ -103,7 +107,7 @@ impl CollectionPhotoService {
 
 // 删除
 impl CollectionPhotoService {
-    /// 批量从相册移除照片, 并返回实际移除数量.
+    /// 移除收藏夹照片.
     #[common::metered(name = "remove_collection_photos")]
     #[tracing::instrument(
         name = "remove_collection_photos",
@@ -116,8 +120,13 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoRemoveBatchResult> {
+        // 校验归属
+        let collection =
+            CollectionRepo::ensure_belong_with_return(state, user_id, collection_id).await?;
+
+        // 移除照片
         let remove_count =
-            CollectionRepo::remove_collection_photos(state, user_id, collection_id, &photo_ids)
+            CollectionRepo::remove_collection_photos(state, user_id, collection, &photo_ids)
                 .await?;
 
         CollectionPhotoRemoveBatchResult {

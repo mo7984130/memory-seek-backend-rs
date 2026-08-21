@@ -92,16 +92,6 @@ impl<T> ContextualResultExt<T> for Result<T> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::ContextualResultExt;
-
-    #[test]
-    fn emit_if_err_accepts_successful_result() {
-        Ok::<(), crate::error::ContextualError>(()).emit_if_err();
-    }
-}
-
 impl<T> ContextOptionExt<T> for Option<T> {
     fn context_warn_none(
         self,
@@ -119,5 +109,15 @@ impl<T> ContextOptionExt<T> for Option<T> {
         app_error: AppError,
     ) -> Result<T> {
         self.ok_or_else(|| ContextualError::error_without_source(reason, context, app_error))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ContextualResultExt;
+
+    #[test]
+    fn emit_if_err_accepts_successful_result() {
+        Ok::<(), crate::error::ContextualError>(()).emit_if_err();
     }
 }

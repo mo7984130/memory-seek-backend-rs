@@ -22,7 +22,7 @@ impl BackupScheduler {
             let state = state_clone.clone();
             tokio::spawn(async move {
                 if let Err(error) = BackupService::execute_scheduled(state).await {
-                    tracing::error!(error = %error, "定时备份执行失败");
+                    common::caller_error!(error = %error, "定时备份执行失败");
                 }
             });
         })?;

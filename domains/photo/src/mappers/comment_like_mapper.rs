@@ -52,10 +52,6 @@ impl CommentLikeMapper {
         user_id: UserId,
         comment_ids: Vec<CommentId>,
     ) -> Result<HashSet<CommentId>> {
-        if comment_ids.is_empty() {
-            return HashSet::new().to_ok();
-        }
-
         Entity::find()
             .select_only()
             .column(Column::CommentId)
@@ -72,7 +68,7 @@ impl CommentLikeMapper {
 
 // 删除
 impl CommentLikeMapper {
-    /// 删除用户对指定评论的点赞.
+    /// 删除用评论点赞.
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -84,7 +80,7 @@ impl CommentLikeMapper {
             .exec(db)
             .await?;
 
-        Ok(res.rows_affected != 0)
+        Ok(res.rows_affected > 0)
     }
 
     /// 删除指定评论的全部点赞.
@@ -105,10 +101,6 @@ impl CommentLikeMapper {
         db: &impl ConnectionTrait,
         comment_ids: &[CommentId],
     ) -> Result<u64> {
-        if comment_ids.is_empty() {
-            return Ok(0);
-        }
-
         Entity::delete_many()
             .filter(Column::CommentId.is_in(comment_ids.iter().copied()))
             .exec(db)

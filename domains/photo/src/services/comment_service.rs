@@ -1,4 +1,5 @@
 use crate::{
+    PhotoRepo,
     mappers::{comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper},
     repo::CommentRepo,
     state::PhotoState,
@@ -18,7 +19,7 @@ pub(crate) struct CommentService;
 
 // 创建
 impl CommentService {
-    /// 发布照片评论, 并由仓储层维护评论关联数据.
+    /// 发布照片评论.
     #[common::metered(name = "publish_comment")]
     #[tracing::instrument(
         name = "publish_comment",
@@ -31,6 +32,9 @@ impl CommentService {
         photo_id: PhotoId,
         req: CommentPublishParam,
     ) -> Result<CommentView> {
+        // 确认照片存在
+        PhotoRepo::ensure_exist(state, photo_id).await?;
+
         let comment = CommentRepo::publish_comment(state, user_id, photo_id, req).await?;
 
         CommentView::from(comment).to_ok()
@@ -42,7 +46,7 @@ impl CommentService {}
 
 // 查询
 impl CommentService {
-    /// 合并热门评论与时间分页结果, 并标记当前用户的点赞状态.
+    /// 获取照片评论列表.
     #[common::metered(name = "get_comment_cursor_page")]
     #[tracing::instrument(
         name = "get_comment_cursor_page",
@@ -55,15 +59,17 @@ impl CommentService {
         photo_id: PhotoId,
         req: CommentCursorPageParam,
     ) -> Result<CursorPage<CommentView, TimeIdCursor<CommentId>>> {
+        // 获取热门评论, 评论列表, 是否喜欢评论
         let (hot_comments, page, is_like) =
             CommentRepo::query_comments(state, user_id, photo_id, &req).await?;
         let page = page.with_next_cursor(|comment| TimeIdCursor {
             time_at: comment.created_at,
             id: comment.id,
         });
-        page.map_records(|time_comments| {
-            let mut comments = hot_comments;
-            comments.extend(time_comments);
+
+        // 组装结果
+        page.map_records(|mut comments| {
+            comments.extend(hot_comments);
             comments
                 .into_iter()
                 .map(|c| {
@@ -78,7 +84,8 @@ impl CommentService {
 
 // 删除
 impl CommentService {
-    /// 删除评论及其点赞关系.
+    /// 删除评论.
+    /// 同时会删除评论点赞
     #[common::metered(name = "delete_comment")]
     #[tracing::instrument(
         name = "delete_comment",
@@ -92,7 +99,8 @@ impl CommentService {
     }
 }
 
-// 照片删除步骤:评论清理
+// 当照片删除时
+// 删除评论 和 评论点赞
 #[step_derive::declare_transaction_step(
     ctx = crate::services::photo_service::PhotoDeleteContext,
     slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
@@ -100,7 +108,6 @@ impl CommentService {
     owns = ["CommentMapper", "CommentLikeMapper"],
 )]
 impl CommentService {
-    /// 清理照片删除后失效的评论及评论点赞数据.
     async fn on_photo_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
@@ -108,9 +115,13 @@ impl CommentService {
     ) -> common::Result<()> {
         let photo_ids = ctx.photo_ids();
         let comment_ids = CommentMapper::delete_by_photo_ids(txn, &photo_ids).await?;
-        if !comment_ids.is_empty() {
+
+        if comment_ids.is_empty() {
+            return Ok(());
+        } else {
             CommentLikeMapper::delete_by_comment_ids(txn, &comment_ids).await?;
         }
+
         Ok(())
     }
 }

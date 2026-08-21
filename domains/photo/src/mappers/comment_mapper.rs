@@ -1,5 +1,5 @@
 use common::error::{AppError, ContextualError, contextual::Result};
-use common::ext::{ContextOptionExt, IntoContextualExt, OkExt};
+use common::ext::{ContextOptionExt, OkExt};
 use common::models::CursorPage;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
@@ -15,7 +15,7 @@ pub struct CommentMapper;
 
 // 创建
 impl CommentMapper {
-    /// 插入评论记录并返回持久化结果.
+    /// 插入评论记录.
     pub async fn insert(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -42,12 +42,11 @@ impl CommentMapper {
         let count = Entity::find()
             .filter(Column::Id.eq(comment_id))
             .count(db)
-            .await
-            .into_contextual()?;
+            .await?;
         Ok(count > 0)
     }
 
-    /// 检查评论存在, 不存在时返回领域错误.
+    /// 确保评论存在.
     pub async fn ensure_exist(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<()> {
         if !Self::exists(db, comment_id).await? {
             return Err(ContextualError::warn_without_source(
@@ -59,7 +58,7 @@ impl CommentMapper {
         Ok(())
     }
 
-    /// 按增量更新评论点赞数.
+    /// 增量更新评论点赞计数.
     pub async fn update_like_count_delta(
         db: &impl ConnectionTrait,
         comment_id: CommentId,
@@ -151,18 +150,21 @@ impl CommentMapper {
 
 // 删除
 impl CommentMapper {
-    /// 删除单条评论, 并返回其所属照片 ID.
+    /// 删除单条评论.
+    /// 删除成功: 返回评论记录
+    /// 删除失败: 返回None
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
         comment_id: CommentId,
-    ) -> Result<bool> {
-        let ret = Entity::delete_by_id(comment_id)
+    ) -> Result<Option<CommentRecord>> {
+        Entity::delete_by_id(comment_id)
             .filter(Column::UserId.eq(user_id))
-            .exec(db)
-            .await?;
-
-        Ok(ret.rows_affected == 1)
+            .exec_with_returning(db)
+            .await?
+            .pop()
+            .map(CommentRecord::from)
+            .to_ok()
     }
 
     /// 删除指定照片的全部评论并返回评论 ID.
@@ -170,25 +172,14 @@ impl CommentMapper {
         db: &impl ConnectionTrait,
         photo_ids: &[PhotoId],
     ) -> Result<Vec<CommentId>> {
-        if photo_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
         // 先查询要删除的评论 ID
-        let comment_ids: Vec<CommentId> = Entity::find()
-            .select_only()
-            .column(Column::Id)
+        let comment_ids = Entity::delete_many()
             .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
-            .into_tuple::<CommentId>()
-            .all(db)
-            .await?;
-
-        if !comment_ids.is_empty() {
-            Entity::delete_many()
-                .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
-                .exec(db)
-                .await?;
-        }
+            .exec_with_returning(db)
+            .await?
+            .into_iter()
+            .map(|model| model.id)
+            .collect();
 
         Ok(comment_ids)
     }
