@@ -1,5 +1,5 @@
 use common::error::{AppError, ContextualError, contextual::Result};
-use common::ext::{ContextOptionExt, OkExt};
+use common::ext::OkExt;
 use common::models::CursorPage;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
@@ -126,25 +126,6 @@ impl CommentMapper {
             .collect::<Vec<_>>();
 
         Ok(CursorPage::from_oversize(records, size))
-    }
-
-    /// 根据评论 ID 查询所属照片 ID.
-    pub async fn query_photo_id_by_id(
-        db: &impl ConnectionTrait,
-        comment_id: CommentId,
-    ) -> Result<PhotoId> {
-        Entity::find()
-            .filter(Column::Id.eq(comment_id))
-            .select_only()
-            .column(Column::PhotoId)
-            .into_tuple::<PhotoId>()
-            .one(db)
-            .await?
-            .context_warn_none(
-                "comment_not_found",
-                "评论不存在",
-                AppError::bad_request("评论不存在"),
-            )
     }
 }
 
