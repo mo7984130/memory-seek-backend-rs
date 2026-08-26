@@ -1,10 +1,7 @@
 use crate::{
-    Result,
-    error::AppError,
-    ext::{
-        ToErr,
-        error_ext::{log_err, log_warn},
-    },
+    error::contextual::Result,
+    error::{AppError, ContextualError},
+    ext::ToErr,
 };
 
 /// 为 `Option<T>` 提供到 `AppError` 的便捷转换方法
@@ -70,7 +67,7 @@ impl<T> OptionExt<T> for Option<T> {
     ) -> Result<T> {
         match self {
             Some(v) => Ok(v),
-            None => log_warn(reason, context, app_err).to_err(),
+            None => ContextualError::warn_without_source(reason, context, app_err).to_err(),
         }
     }
 
@@ -84,7 +81,10 @@ impl<T> OptionExt<T> for Option<T> {
     ) -> Result<T> {
         match self {
             Some(v) => Ok(v),
-            None => log_warn(reason, context, AppError::bad_request(msg)).to_err(),
+            None => {
+                ContextualError::warn_without_source(reason, context, AppError::bad_request(msg))
+                    .to_err()
+            }
         }
     }
 
@@ -98,7 +98,7 @@ impl<T> OptionExt<T> for Option<T> {
     ) -> Result<T> {
         match self {
             Some(v) => Ok(v),
-            None => log_err(reason, context, app_err).to_err(),
+            None => ContextualError::error_without_source(reason, context, app_err).to_err(),
         }
     }
 }
@@ -131,13 +131,6 @@ mod tests {
     fn some_ok_or_warn_bad_request_returns_value() {
         let result = Some(42).ok_or_warn_bad_request("test_reason", "test_context", "bad request");
         assert_eq!(result.unwrap(), 42);
-    }
-
-    #[test]
-    fn none_ok_or_warn_bad_request_returns_bad_request() {
-        let result: Result<i32> =
-            None.ok_or_warn_bad_request("test_reason", "test_context", "bad request");
-        assert!(matches!(result.unwrap_err(), AppError::BadRequest(_)));
     }
 
     #[test]

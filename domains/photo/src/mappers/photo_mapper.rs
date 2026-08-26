@@ -1,9 +1,13 @@
+#[cfg(feature = "face")]
+use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common::Result;
-use common::error::AppError;
-use common::ext::{BoolExt, OkExt};
-use sea_orm::entity::prelude::DateTimeUtc;
+use common::ext::{ContextOptionExt, OkExt};
+use common::{
+    error::{AppError, ContextualError, contextual::Result},
+    models::CursorPage,
+    time::DateTime,
+};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
@@ -20,6 +24,7 @@ impl PhotoMapper {}
 
 // 修改
 impl PhotoMapper {
+    /// 增量更新照片的评论数量.
     pub async fn update_comment_count_delta(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -37,7 +42,7 @@ impl PhotoMapper {
         Ok(())
     }
 
-    /// 更新照片点赞数（增量）
+    /// 增量更新照片的点赞数量.
     pub async fn update_like_count_delta(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -55,6 +60,7 @@ impl PhotoMapper {
 
 // 查询
 impl PhotoMapper {
+    /// 检查照片是否存在.
     pub async fn exists(db: &impl ConnectionTrait, photo_id: PhotoId) -> Result<bool> {
         let count = Entity::find()
             .filter(Column::Id.eq(photo_id))
@@ -63,21 +69,23 @@ impl PhotoMapper {
         Ok(count > 0)
     }
 
+    /// 确保照片存在
     pub async fn ensure_exist(db: &impl ConnectionTrait, photo_id: PhotoId) -> Result<()> {
-        Self::exists(db, photo_id).await?.true_or_warn(
-            "photo_not_exist",
-            "照片不存在",
-            AppError::not_found("照片不存在"),
-        )
+        if !Self::exists(db, photo_id).await? {
+            return Err(ContextualError::warn_without_source(
+                "photo_not_exist",
+                "照片不存在",
+                AppError::not_found("照片不存在"),
+            ));
+        }
+        Ok(())
     }
 
+    /// 批量检查md5.
     pub async fn exists_by_md5_batch(
         db: &impl ConnectionTrait,
         md5s: &[impl AsRef<str>],
     ) -> Result<HashSet<String>> {
-        if md5s.is_empty() {
-            return Ok(HashSet::new());
-        }
         Entity::find()
             .filter(Column::Md5.is_in(md5s.iter().map(|s| s.as_ref())))
             .select_only()
@@ -90,16 +98,18 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    /// 检查md5.
     pub async fn exists_by_md5(db: &impl ConnectionTrait, md5: impl AsRef<str>) -> Result<bool> {
         let results = Self::exists_by_md5_batch(db, &[md5.as_ref()]).await?;
         Ok(!results.is_empty())
     }
 
+    /// 构建照片游标查询, 并统一处理时间与 ID 的排序边界.
     fn build_cursor_query(
         cursor: Option<&TimeIdCursor<PhotoId>>,
         size: u64,
         direction: PageDirection,
-        anchor_time: Option<DateTimeUtc>,
+        anchor_time: Option<DateTime>,
     ) -> sea_orm::Select<Entity> {
         let (order_by_desc, filter) = match direction {
             PageDirection::Next => (true, true),   // 倒序，向前翻
@@ -116,8 +126,7 @@ impl PhotoMapper {
                 .order_by_asc(Column::Id)
         };
 
-        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-        // 由 service 层用 CursorPage::from_oversize 截断消费
+        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定并截断。
         query = query.limit(size + 1);
 
         if let Some(c) = cursor {
@@ -143,29 +152,29 @@ impl PhotoMapper {
         query
     }
 
+    /// 游标查询照片id.
     pub async fn query_cursor_page_ids(
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<PhotoId>>,
         size: u64,
         direction: PageDirection,
-        anchor_time: Option<DateTimeUtc>,
-    ) -> Result<Vec<PhotoId>> {
-        Self::build_cursor_query(cursor.as_ref(), size, direction, anchor_time)
+        anchor_time: Option<DateTime>,
+    ) -> Result<CursorPage<PhotoId, ()>> {
+        let records = Self::build_cursor_query(cursor.as_ref(), size, direction, anchor_time)
             .select_only()
             .column(Column::Id)
             .into_tuple::<PhotoId>()
             .all(db)
-            .await?
-            .to_ok()
+            .await?;
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 
+    /// 按照片id查询记录.
     pub async fn query_by_ids(
         db: &impl ConnectionTrait,
         ids: &[PhotoId],
     ) -> Result<Vec<PhotoRecord>> {
-        if ids.is_empty() {
-            return Ok(vec![]);
-        }
         Entity::find()
             .filter(Column::Id.is_in(ids.iter().copied()))
             .all(db)
@@ -176,21 +185,26 @@ impl PhotoMapper {
             .to_ok()
     }
 
+    #[cfg(feature = "face")]
+    /// 批量查询照片 ID 和 file_id.
     pub async fn query_id_and_file_id_by_ids(
         db: &impl ConnectionTrait,
-        ids: &[PhotoId],
-    ) -> Result<Vec<(PhotoId, String)>> {
+        ids: impl IntoIterator<Item = &PhotoId>,
+    ) -> Result<HashMap<PhotoId, String>> {
         Entity::find()
-            .filter(Column::Id.is_in(ids.iter().copied()))
+            .filter(Column::Id.is_in(ids.into_iter().copied()))
             .select_only()
             .column(Column::Id)
             .column(Column::FileId)
             .into_tuple::<(PhotoId, String)>()
             .all(db)
             .await?
+            .into_iter()
+            .collect::<HashMap<PhotoId, String>>()
             .to_ok()
     }
 
+    /// 根据照片id查询属于用户的照片
     pub async fn query_by_user_id_and_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -207,27 +221,24 @@ impl PhotoMapper {
             .to_ok()
     }
 
-    /// 根据文件 ID 查询图片宽高（裁剪 token 归一化坐标换算用）
-    // todo delete
+    /// 根据 file_id 查询图片尺寸.
     pub async fn query_dimensions_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,
-    ) -> Result<Option<(i32, i32)>> {
+    ) -> Result<Option<(u32, u32)>> {
         Entity::find()
             .select_only()
             .column(Column::Width)
             .column(Column::Height)
             .filter(Column::FileId.eq(file_id))
-            .into_tuple::<(i32, i32)>()
+            .into_tuple::<(u32, u32)>()
             .one(db)
             .await?
             .to_ok()
     }
 
-    pub async fn query_file_id_by_id(
-        db: &impl ConnectionTrait,
-        id: PhotoId,
-    ) -> Result<Option<String>> {
+    /// 根据照片 id 查询 file_id.
+    pub async fn query_file_id_by_id(db: &impl ConnectionTrait, id: PhotoId) -> Result<String> {
         Entity::find()
             .select_only()
             .column(Column::FileId)
@@ -235,10 +246,14 @@ impl PhotoMapper {
             .into_tuple::<String>()
             .one(db)
             .await?
-            .to_ok()
+            .context_error_none(
+                "photo_file_id_not_exist",
+                "照片file_id不存在",
+                AppError::InternalServerError,
+            )
     }
 
-    /// 根据文件 ID 查询照片 ID（浏览埋点用）
+    /// 根据file_id 查询 id.
     pub async fn query_photo_id_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,
@@ -256,10 +271,8 @@ impl PhotoMapper {
 
 // 删除
 impl PhotoMapper {
+    /// 删除照片
     pub async fn delete_by_ids(db: &impl ConnectionTrait, ids: &[PhotoId]) -> Result<()> {
-        if ids.is_empty() {
-            return Ok(());
-        }
         Entity::delete_many()
             .filter(Column::Id.is_in(ids.iter().copied()))
             .exec(db)

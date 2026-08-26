@@ -1,111 +1,149 @@
 use common::{
-    Result,
-    ext::{ResultErrExt, ToOk},
+    error::{AppError, contextual::Result},
+    ext::{CollectOkExt, OkExt, OptionExt, UintExt},
+    models::CursorPage,
+    types::HasChanged::Changed,
 };
-use insight_face_rs::FaceEmbedding;
+use insight_face_rs::BoundingBox;
 use sea_orm::{
     ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
-    sea_query::Expr, sea_query::extension::postgres::PgExpr,
+    sea_query::{Expr, extension::postgres::PgExpr},
 };
 use types::{
-    cursor::FaceCountIdCursor,
-    photo::{FaceBBox, face::FaceId, person::*, photo::PhotoId},
+    cursor::CountIdCursor,
+    photo::{
+        face::{FaceId, FaceRecord},
+        person::*,
+    },
 };
 
-use crate::models::PersonBriefRow;
-
-impl From<PersonRecord> for PersonBriefRow {
-    fn from(value: PersonRecord) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            cover_file_id: value.cover_file_id,
-            cover_bbox: value.cover_bbox,
-            face_count: value.face_count as i64,
-        }
-    }
-}
+use crate::mappers::{face_mapper::FaceMapper, photo_mapper::PhotoMapper};
 
 pub struct PersonMapper;
 
-/// 人物封面冗余字段更新(与 `photo_person.cover_*` 列对应)
-pub struct PersonCoverUpdate {
-    pub cover_face_id: FaceId,
-    pub cover_photo_id: PhotoId,
-    pub cover_file_id: String,
-    pub cover_bbox: FaceBBox,
-}
-
 // 创建
 impl PersonMapper {
+    /// 插入新人物记录
     pub async fn insert(db: &impl ConnectionTrait, person: NewPerson) -> Result<PersonRecord> {
         let model = Entity::insert(ActiveModel::from(person))
             .exec_with_returning(db)
             .await?;
-        PersonRecord::try_from(model)
+        Ok(PersonRecord::from(model))
     }
 }
 
 // 修改
 impl PersonMapper {
-    /// 重命名人物(同步维护姓名首字母)
-    pub async fn rename(
+    pub async fn add_faces(
         db: &impl ConnectionTrait,
-        person_id: PersonId,
-        new_name: String,
-        new_name_initials: Option<String>,
-    ) -> Result<u64> {
-        Entity::update_many()
-            .filter(Column::Id.eq(person_id))
-            .col_expr(Column::Name, Expr::value(new_name))
-            .col_expr(Column::NameInitials, Expr::value(new_name_initials))
-            .exec(db)
-            .await?
-            .rows_affected
-            .to_ok()
+        person: PersonRecord,
+        faces: &[FaceRecord],
+    ) -> Result<()> {
+        let mut update_person = UpdatePersonRecord::new(person.id);
+
+        // 判断是否需要修改封面
+        // 取反判断, 视NaN为最小
+        let max_score_face = faces.iter().max_by(|a, b| b.score.total_cmp(&a.score));
+        match max_score_face {
+            // None即无人脸, 直接返回即可
+            None => return Ok(()),
+            Some(max_score_face) => {
+                // 更新封面
+                if max_score_face.score > person.cover.face_score {
+                    update_person.with_cover_face(
+                        max_score_face,
+                        PhotoMapper::query_file_id_by_id(db, max_score_face.photo_id).await?,
+                    );
+                }
+            }
+        }
+
+        // 修改其他
+        let mut new_centroid = person.centroid;
+        let mut new_weight = person.weight;
+        faces.iter().for_each(|f| {
+            new_centroid = new_centroid.add_scaled(&f.embedding, f.score);
+            new_weight += f.score as f64;
+        });
+        update_person.centroid = Changed(new_centroid);
+        update_person.face_count = Changed(person.face_count + faces.len() as u64);
+        update_person.weight = Changed(new_weight);
+
+        Self::update(db, update_person).await?;
+
+        Ok(())
     }
 
-    /// 按 ID 加行锁查询(`SELECT ... FOR UPDATE`, 供转移归属/合并等读-改-写流程使用)
-    pub async fn lock_by_id(
+    pub async fn remove_faces(
         db: &impl ConnectionTrait,
-        person_id: PersonId,
-    ) -> Result<Option<PersonRecord>> {
-        Entity::find()
-            .filter(Column::Id.eq(person_id))
-            .lock_exclusive()
-            .one(db)
-            .await?
-            .map(PersonRecord::try_from)
-            .transpose()
+        person: PersonRecord,
+        faces: &[FaceRecord],
+    ) -> Result<()> {
+        let mut update_person = UpdatePersonRecord::new(person.id);
+        let remove_faces_id: Vec<FaceId> = faces.iter().map(|f| f.id).collect();
+
+        // 判断是否需要修改封面
+        if faces.iter().any(|f| f.id == person.cover.face_id) {
+            // 获取剩下的分数最高的
+            let new_cover_face =
+                FaceMapper::query_top_score_by_person_id(db, person.id, Some(&remove_faces_id))
+                    .await?;
+
+            // 更新封面
+            // 当这个为None时, 代表已经没有剩余的人脸了
+            // 现在不做特殊处理, 保留无人脸的人物
+            if let Some(face) = new_cover_face {
+                update_person.with_cover_face(
+                    &face,
+                    PhotoMapper::query_file_id_by_id(db, face.photo_id).await?,
+                );
+            }
+        }
+
+        // 修改其他
+        let mut new_centroid = person.centroid;
+        let mut new_weight = person.weight;
+        faces.iter().for_each(|f| {
+            new_centroid = new_centroid.sub_scaled(&f.embedding, f.score);
+            new_weight -= f.score as f64;
+        });
+        update_person.centroid = Changed(new_centroid);
+        update_person.face_count = Changed(person.face_count - faces.len() as u64);
+        update_person.weight = Changed(new_weight);
+
+        Self::update(db, update_person).await?;
+
+        Ok(())
     }
 
-    /// 增量更新人物统计(数量/权重/质心)与可选封面冗余字段
-    ///
-    /// `cover` 为 `None` 表示封面不变; `Some` 时连同 `cover_face_id/cover_photo_id/
-    /// cover_file_id/cover_bbox` 一并更新(封面决策在 service 层完成)。
-    pub async fn update_stats(
-        db: &impl ConnectionTrait,
-        person_id: PersonId,
-        face_count: u64,
-        weight: f64,
-        centroid: FaceEmbedding,
-        cover: Option<PersonCoverUpdate>,
-    ) -> Result<u64> {
-        let centroid: insight_face_rs::PgVector = centroid.into();
-        let mut update = Entity::update_many()
-            .filter(Column::Id.eq(person_id))
-            .col_expr(Column::FaceCount, Expr::value(face_count as i64))
-            .col_expr(Column::Weight, Expr::value(weight))
-            .col_expr(Column::Centroid, Expr::value(centroid));
+    pub async fn update(db: &impl ConnectionTrait, person: UpdatePersonRecord) -> Result<u64> {
+        let mut update = Entity::update_many().filter(Column::Id.eq(person.id));
 
-        if let Some(cover) = cover {
+        if let Changed(name) = person.name {
+            update = update.col_expr(Column::Name, Expr::value(name))
+        };
+        if let Changed(name_initials) = person.name_initials {
+            update = update.col_expr(Column::NameInitials, Expr::value(name_initials))
+        };
+
+        if let Changed(face_count) = person.face_count {
+            update = update.col_expr(Column::FaceCount, Expr::value(face_count as i64))
+        };
+        if let Changed(weight) = person.weight {
+            update = update.col_expr(Column::Weight, Expr::value(weight))
+        };
+        if let Changed(centroid) = person.centroid {
+            update = update.col_expr(Column::Centroid, Expr::value(centroid))
+        };
+
+        if let Changed(cover) = person.cover {
             update = update
-                .col_expr(Column::CoverFaceId, Expr::value(cover.cover_face_id))
-                .col_expr(Column::CoverPhotoId, Expr::value(cover.cover_photo_id))
-                .col_expr(Column::CoverFileId, Expr::value(cover.cover_file_id))
+                .col_expr(Column::CoverFaceId, Expr::value(cover.face_id))
+                .col_expr(Column::CoverPhotoId, Expr::value(cover.photo_id))
+                .col_expr(Column::CoverFileId, Expr::value(cover.file_id))
                 .col_expr(
                     Column::CoverBbox,
-                    Expr::value(serde_json::to_value(cover.cover_bbox).unwrap()),
+                    Expr::value(BoundingBox::from(cover.bbox)),
                 );
         }
 
@@ -115,41 +153,102 @@ impl PersonMapper {
 
 // 查询
 impl PersonMapper {
-    /// 人物列表按 `face_count DESC, id DESC` keyset 分页
-    pub async fn query(
+    pub async fn query_all(db: &impl ConnectionTrait) -> Result<Vec<PersonRecord>> {
+        Entity::find()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(PersonRecord::from)
+            .collect_ok()
+    }
+
+    /// 通过 ID 查询人物
+    pub async fn query_by_id(
         db: &impl ConnectionTrait,
-        cursor: Option<FaceCountIdCursor<PersonId>>,
-        size: u64,
+        person_id: PersonId,
+    ) -> Result<PersonRecord> {
+        Entity::find()
+            .filter(Column::Id.eq(person_id))
+            .one(db)
+            .await?
+            .map(PersonRecord::from)
+            .ok_or_error(
+                "person_not_found",
+                "人物不存在",
+                AppError::not_found("人物不存在"),
+            )
+    }
+
+    /// 加行锁查询
+    pub async fn lock_by_id(
+        db: &impl ConnectionTrait,
+        person_id: PersonId,
+    ) -> Result<PersonRecord> {
+        Entity::find()
+            .filter(Column::Id.eq(person_id))
+            .lock_exclusive()
+            .one(db)
+            .await?
+            .map(PersonRecord::from)
+            .ok_or_error(
+                "person_not_found",
+                "人物不存在",
+                AppError::not_found("人物不存在"),
+            )
+    }
+    pub async fn lock_by_ids(
+        db: &impl ConnectionTrait,
+        person_ids: impl IntoIterator<Item = &PersonId>,
     ) -> Result<Vec<PersonRecord>> {
+        Entity::find()
+            .filter(Column::Id.is_in(person_ids.into_iter().copied()))
+            .lock_exclusive()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(PersonRecord::from)
+            .collect_ok()
+    }
+
+    /// 按 ID 批量查询人物 id 与 name
+    pub async fn query_id_and_name_by_ids(
+        db: &impl ConnectionTrait,
+        person_ids: impl IntoIterator<Item = PersonId>,
+    ) -> Result<Vec<(PersonId, String)>> {
+        Entity::find()
+            .filter(Column::Id.is_in(person_ids))
+            .select_only()
+            .column(Column::Id)
+            .column(Column::Name)
+            .into_tuple::<(PersonId, String)>()
+            .all(db)
+            .await?
+            .to_ok()
+    }
+
+    pub async fn query_page(
+        db: &impl ConnectionTrait,
+        cursor: Option<CountIdCursor<PersonId>>,
+        size: u64,
+    ) -> Result<CursorPage<PersonRecord, ()>> {
         let mut query = Entity::find()
             .order_by_desc(Column::FaceCount)
             .order_by_desc(Column::Id);
         if let Some(cursor) = cursor {
             query = query.filter(cursor.before(Column::FaceCount, Column::Id));
         }
-        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-        // 由 service 层用 CursorPage::from_oversize_fn 截断消费
-        query
+        let records = query
             .limit(size + 1)
             .all(db)
             .await?
             .into_iter()
-            .map(PersonRecord::try_from)
-            .collect::<std::result::Result<Vec<_>, _>>()
+            .map(PersonRecord::from)
+            .collect();
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 
-    /// 查询全部人物(id 升序, 供二次聚类等全量内存匹配使用)
-    pub async fn query_all(db: &impl ConnectionTrait) -> Result<Vec<PersonRecord>> {
-        Entity::find()
-            .order_by_asc(Column::Id)
-            .all(db)
-            .await?
-            .into_iter()
-            .map(PersonRecord::try_from)
-            .collect::<std::result::Result<Vec<_>, _>>()
-    }
-
-    /// 按关键词前缀搜索人物(id 倒序分页, 与 `query` 分页语义一致)
+    /// 按关键词前缀搜索人物
     ///
     /// 匹配 `name` 或 `name_initials` 的前缀(ILIKE 忽略大小写);
     /// `name_initials` 为 NULL 的存量数据仅能按 `name` 命中。
@@ -158,7 +257,7 @@ impl PersonMapper {
         keyword: &str,
         cursor: Option<PersonId>,
         size: u64,
-    ) -> Result<Vec<PersonRecord>> {
+    ) -> Result<CursorPage<PersonRecord, ()>> {
         let escaped = keyword
             .replace('\\', "\\\\")
             .replace('%', "\\%")
@@ -173,104 +272,31 @@ impl PersonMapper {
         if let Some(person_id) = cursor {
             query = query.filter(Column::Id.lt(person_id));
         }
-        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-        // 由 service 层用 CursorPage::from_oversize_fn 截断消费
-        query
+        let records = query
             .limit(size + 1)
             .all(db)
             .await?
             .into_iter()
-            .map(PersonRecord::try_from)
-            .collect::<std::result::Result<Vec<_>, _>>()
-    }
+            .map(PersonRecord::from)
+            .collect();
 
-    /// 按 ID 查询人物
-    pub async fn query_by_id(
-        db: &impl ConnectionTrait,
-        person_id: PersonId,
-    ) -> Result<Option<PersonRecord>> {
-        Entity::find()
-            .filter(Column::Id.eq(person_id))
-            .one(db)
-            .await?
-            .map(PersonRecord::try_from)
-            .transpose()
-    }
-
-    /// 按 ID 批量查询人物 id 与 name
-    pub async fn query_id_and_name_by_ids(
-        db: &impl ConnectionTrait,
-        person_ids: &[PersonId],
-    ) -> Result<Vec<(PersonId, String)>> {
-        if person_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        Entity::find()
-            .filter(Column::Id.is_in(person_ids.iter().copied()))
-            .select_only()
-            .column(Column::Id)
-            .column(Column::Name)
-            .into_tuple::<(PersonId, String)>()
-            .all(db)
-            .await?
-            .to_ok()
-    }
-
-    /// 按 ID 批量查询人物轻量摘要（不含人脸向量，供缓存使用）
-    pub async fn query_brief_by_ids(
-        db: &impl ConnectionTrait,
-        person_ids: &[PersonId],
-    ) -> Result<Vec<PersonBriefRow>> {
-        if person_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        #[derive(sea_orm::FromQueryResult)]
-        struct BriefRow {
-            id: PersonId,
-            name: String,
-            cover_file_id: String,
-            cover_bbox: sea_orm::JsonValue,
-            face_count: i64,
-        }
-        let rows = Entity::find()
-            .filter(Column::Id.is_in(person_ids.iter().copied()))
-            .select_only()
-            .column(Column::Id)
-            .column(Column::Name)
-            .column(Column::CoverFileId)
-            .column(Column::CoverBbox)
-            .column(Column::FaceCount)
-            .into_model::<BriefRow>()
-            .all(db)
-            .await?;
-
-        rows.into_iter()
-            .map(|row| {
-                let cover_bbox = serde_json::from_value(row.cover_bbox).trace_internal_err(
-                    "db:photo:person:cover_bbox_from:err",
-                    "封面 bbox 转换错误",
-                )?;
-                Ok(PersonBriefRow {
-                    id: row.id,
-                    name: row.name,
-                    cover_file_id: row.cover_file_id,
-                    cover_bbox,
-                    face_count: row.face_count,
-                })
-            })
-            .collect()
+        Ok(CursorPage::from_oversize(records, size))
     }
 }
 
 // 删除
 impl PersonMapper {
-    /// 删除人物
-    pub async fn delete_by_id(db: &impl ConnectionTrait, person_id: PersonId) -> Result<u64> {
+    pub async fn delete(db: &impl ConnectionTrait, person_id: PersonId) -> Result<()> {
         Entity::delete_many()
             .filter(Column::Id.eq(person_id))
             .exec(db)
             .await?
             .rows_affected
-            .to_ok()
+            .no_zero_or_error(
+                "delete_person_err",
+                "删除人物失败",
+                AppError::InternalServerError,
+            )?;
+        Ok(())
     }
 }

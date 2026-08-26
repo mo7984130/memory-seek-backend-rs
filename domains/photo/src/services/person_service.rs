@@ -1,85 +1,58 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use common::ext::ToOk;
-use common::{
-    Result,
-    error::AppError,
-    ext::{OptionExt, ResultErrExt, UintExt},
-    metrics_group, metrics_name, metrics_success,
-    models::CursorPage,
-    utils::{DbUtils, MetricsTimerExt, token_cipher},
+use crate::{
+    PhotoRepo, PhotoState,
+    mappers::{face_mapper::FaceMapper, person_mapper::PersonMapper},
+    repo::{FaceRepo, PersonRepo},
+    services::photo_service::PhotoService,
 };
-use constants::RedisKeys;
-use insight_face_rs::types::{DIMS, FaceEmbedding};
+use audit::{AuditEvent, AuditService};
+use common::{
+    Result, db_transaction,
+    error::AppError,
+    ext::{ContextResultExt, IntoContextualExt, OkExt, OptionExt},
+    metrics_name,
+    models::CursorPage,
+    utils::MetricsTimerExt,
+};
+use insight_face_rs::{FaceEmbedding, types::DIMS};
 use ndarray::Array2;
 use petal_clustering::{Fit, HDbscan};
-use sea_orm::{EntityName, EntityTrait};
 use tokio::{spawn, task::spawn_blocking};
 use tracing::{info, instrument};
 use types::{
     auth::user::{AdminId, UserId},
-    cursor::{FaceCountIdCursor, TimeIdCursor},
+    cursor::{CountIdCursor, TimeIdCursor},
     photo::{
-        ImageToken, PersonView,
-        dto::face::bbox_from_insight,
-        dto::person::{
-            MergePersonParam, PersonCursorParam, PersonPhotoCursorParam, PersonSearchParam,
-            RenamePersonParam, SecondaryClusterParam,
-        },
-        dto::photo::PhotoView,
-        face::{self, FaceId},
-        person::{self, NewPerson, PersonId},
+        MergePersonParam, PersonCursorParam, PersonPhotoCursorParam, PersonSearchParam, PersonView,
+        PhotoView, RenamePersonParam, SecondaryClusterParam,
+        face::FaceRecord,
+        person::{NewPerson, PersonCover, PersonId},
         photo::PhotoId,
     },
-};
-
-use crate::{
-    PhotoState,
-    mappers::{
-        face_mapper::FaceMapper,
-        person_mapper::{PersonCoverUpdate, PersonMapper},
-        photo_mapper::PhotoMapper,
-    },
-    models::PersonBriefRow,
-    services::photo_service::PhotoService,
 };
 
 pub struct PersonService;
 
 // 创建
 impl PersonService {
+    /// 异步启动全量人物扫描任务.
     #[instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
+        let user_id = admin.into_inner();
+        let admin = AdminId::new(user_id)?;
         spawn(async move { Self::inner_full_scan(state, admin).await });
         Ok(())
     }
 
-    #[instrument(
-        name = "person_full_scan",
-        skip_all,
-        fields(admin_user_id = %admin)
-    )]
+    #[common::metered(name = "person_full_scan")]
+    /// 执行全量扫描, 重建人物聚类和人脸归属.
     pub async fn inner_full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
-        metrics_group!();
-
         let user_id = admin.into_inner();
         info!(user_id = %user_id, "管理员触发人物全量聚类");
 
         info!("加载照片数据");
-        let faces = FaceMapper::query_all(&state.db).await?;
-
-        // 一次性加载聚类涉及的全部照片, 构建 photo_id -> file_id 映射(封面冗余字段来源)
-        let photo_file_ids: HashMap<PhotoId, String> = {
-            let photo_ids: HashSet<PhotoId> = faces.iter().map(|f| f.photo_id).collect();
-            PhotoMapper::query_id_and_file_id_by_ids(
-                &state.db,
-                &photo_ids.iter().copied().collect::<Vec<_>>(),
-            )
-            .await?
-            .into_iter()
-            .collect()
-        };
+        let (faces, photo_file_ids) = PersonRepo::load_faces_with_photo_files(&state).await?;
 
         info!("加载照片数据完成");
 
@@ -89,8 +62,11 @@ impl PersonService {
                 .iter()
                 .flat_map(|f| f.embedding.iter().copied())
                 .collect();
-            Array2::from_shape_vec((faces.len(), DIMS), embeddings)
-                .trace_internal_err("ndarray_from_shape_error", "人脸聚类时, 转换 NdArray 错误")?
+            Array2::from_shape_vec((faces.len(), DIMS), embeddings).context_error(
+                "ndarray_from_shape_error",
+                "人脸聚类时, 转换 NdArray 错误",
+                AppError::InternalServerError,
+            )?
         };
         let cluster_result = spawn_blocking(move || {
             let mut hdbscan = HDbscan {
@@ -101,54 +77,44 @@ impl PersonService {
                 ..Default::default()
             };
 
-            Ok::<_, AppError>(hdbscan.fit(&embedding_array, None))
+            hdbscan.fit(&embedding_array, None)
         })
-        .await??;
+        .await
+        .into_contextual()?;
         info!("聚类完成");
 
         info!("开始保存 person/face 表");
-        state
-            .backup_storage
-            .backup_tables(
-                &state.db,
-                &[person::Entity.table_name(), face::Entity.table_name()],
-                backup::storage::BackupType::Manual,
-            )
-            .await?;
+        FaceRepo::backup_and_truncate(&state).await?;
         info!("保存表完成");
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                info!("开始清除 person 表");
-                // 保存表(聚类会重建 person 并改写 photo_face.person_id, 两张表都备份)
-                person::Entity::delete_many().exec(txn).await?;
-                // 清空所有人脸归属, 避免指向已删除人物的悬空引用
-                // (离群/噪声人脸不在聚类结果中, 不会在下方循环里被重新指派)
-                FaceMapper::clear_person_id(txn).await?;
-                info!("清除完成");
+        db_transaction!(scoped & state.db, |txn| {
+            FaceMapper::clean_person_id(txn).await?;
+            info!("清除完成");
 
-                info!("开始插入人物");
-                for cluster in cluster_result.0 {
-                    let embedding_ids = cluster.1;
-                    // 封面人脸: 取 cluster 内 score 最高的人脸
-                    let cover_face = embedding_ids
+            info!("开始插入人物");
+            for cluster in cluster_result.0 {
+                let embedding_ids = cluster.1;
+                // 封面人脸: 取 cluster 内 score 最高的人脸
+                let cover_face = embedding_ids
+                    .iter()
+                    .max_by(|&&a, &&b| faces[a].score.total_cmp(&faces[b].score))
+                    .map(|&idx| &faces[idx])
+                    .expect("cluster should not be empty");
+                // score 加权质心: (weight, centroid) = (Σscore, Σ(score×embedding))
+                let (weight, centroid) = FaceEmbedding::weighted_sum(
+                    embedding_ids
                         .iter()
-                        .max_by(|&&a, &&b| faces[a].score.total_cmp(&faces[b].score))
-                        .map(|&idx| &faces[idx])
-                        .expect("cluster should not be empty");
-                    // score 加权质心: (weight, centroid) = (Σscore, Σ(score×embedding))
-                    let (weight, centroid) = FaceEmbedding::weighted_sum(
-                        embedding_ids
-                            .iter()
-                            .map(|idx| (faces[*idx].score, &faces[*idx].embedding)),
-                    );
-                    // 插入人物
-                    let person = NewPerson {
-                        name: cluster.0.to_string(),
-                        weight,
-                        centroid,
-                        cover_face_id: cover_face.id,
-                        cover_photo_id: cover_face.photo_id,
-                        cover_file_id: photo_file_ids
+                        .map(|idx| (faces[*idx].score, &faces[*idx].embedding)),
+                );
+                // 插入人物
+                let person = NewPerson {
+                    name: cluster.0.to_string(),
+                    weight,
+                    centroid,
+                    cover: PersonCover {
+                        face_id: cover_face.id,
+                        photo_id: cover_face.photo_id,
+                        face_score: cover_face.score,
+                        file_id: photo_file_ids
                             .get(&cover_face.photo_id)
                             .cloned()
                             .ok_or_error(
@@ -156,36 +122,37 @@ impl PersonService {
                                 "封面人脸所属照片不存在",
                                 AppError::InternalServerError,
                             )?,
-                        cover_bbox: bbox_from_insight(cover_face.bbox),
-                        face_count: embedding_ids.len() as u64,
-                    };
-                    let person = PersonMapper::insert(txn, person).await?;
+                        bbox: cover_face.bbox.into(),
+                    },
+                    face_count: embedding_ids.len() as u64,
+                };
+                let person = PersonMapper::insert(txn, person).await?;
 
-                    // 更新人脸归属
-                    FaceMapper::update_person_id(
-                        txn,
-                        person.id,
-                        embedding_ids.iter().map(|idx| faces[*idx].id),
-                    )
-                    .await?;
-                }
-                info!("插入人物完成");
-                info!("人脸聚类完成");
-                Ok(())
-            })
+                // 更新人脸归属
+                FaceMapper::update_person_ids(
+                    txn,
+                    Some(person.id),
+                    embedding_ids.iter().map(|idx| faces[*idx].id),
+                )
+                .await?;
+            }
+            info!("插入人物完成");
+            info!("人脸聚类完成");
+            AuditService::append(
+                txn,
+                AuditEvent::new("person_full_scan").with_actor(user_id.0),
+            )
+            .await?;
+            Ok(())
         })
         .await?;
 
-        metrics_success!();
         Ok(())
     }
 
     /// 二次聚类: 将全部未分配人脸(`person_id IS NULL`)按 centroid 余弦相似度
     /// 指派到已有人物, 低于阈值的人脸保持未分配。
-    ///
-    /// 人脸 embedding 已归一化(insight-face-rs 输出时 normalize);
-    /// person centroid 为未归一化加权和, 匹配前先 normalize。
-    #[instrument(skip_all, fields(admin_user_id = %admin))]
+    #[instrument(skip_all, fields(admin_id = %admin))]
     pub async fn assign_unassigned_faces(
         state: Arc<PhotoState>,
         admin: AdminId,
@@ -195,159 +162,89 @@ impl PersonService {
         Ok(())
     }
 
-    #[instrument(
-        name = "person_secondary_cluster",
-        skip_all,
-        fields(admin_user_id = %admin)
-    )]
+    #[common::metered(name = "person_secondary_cluster")]
+    /// 执行未分配人脸与人物质心的匹配和归属更新.
     async fn inner_assign_unassigned_faces(
         state: Arc<PhotoState>,
         admin: AdminId,
         req: SecondaryClusterParam,
     ) -> Result<()> {
-        metrics_group!();
-
-        let user_id = admin.into_inner();
         let SecondaryClusterParam { threshold } = req;
-        info!(user_id = %user_id, threshold, "管理员触发二次聚类");
+        info!(admin_id = %admin, threshold, "管理员触发二次聚类");
+        AuditService::record(
+            &state.db,
+            AuditEvent::new("assign_unassigned_faces_start").with_actor(admin.into_inner()),
+        )
+        .await?;
 
-        let faces = FaceMapper::query_unassigned(&state.db).await?;
-        let persons = PersonMapper::query_all(&state.db).await?;
+        let faces = FaceRepo::lock_unassigned_faces(&state).await?;
+        let persons = PersonRepo::query_all(&state).await?;
         info!(
             "加载完成: 未分配人脸 {} 张, 人物 {} 个",
             faces.len(),
             persons.len()
         );
         if faces.is_empty() || persons.is_empty() {
-            metrics_success!();
             return Ok(());
         }
 
-        // 内存分类(CPU 密集, 放入阻塞线程池; faces 原样带回供事务内使用)
+        // 内存分类(CPU 密集, 放入阻塞线程池; faces, persons 原样带回)
         let classified = spawn_blocking(move || {
-            let face_refs = faces
-                .iter()
-                .map(|f| (f.id, &f.embedding))
-                .collect::<Vec<_>>();
+            let face_embeddings = faces.iter().map(|f| &f.embedding).collect::<Vec<_>>();
             let person_refs = persons
                 .iter()
                 .map(|p| (p.id, &p.centroid))
                 .collect::<Vec<_>>();
-            let classified = Self::classify_unassigned(&face_refs, &person_refs, threshold);
-            Ok::<_, AppError>((classified, faces))
+            let classified = Self::classify_unassigned(&face_embeddings, &person_refs, threshold);
+            (classified, faces, persons)
         })
-        .await??;
-        let (classified, faces) = classified;
+        .await
+        .into_contextual()?;
+        let (classified, faces, persons) = classified;
 
         let matched = classified.len();
         let unmatched = faces.len() - matched;
         info!("分类完成: 匹配 {} 张, 未匹配 {} 张", matched, unmatched);
         if classified.is_empty() {
-            metrics_success!();
             return Ok(());
         }
 
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                // 按人物分组聚合(一次事务内批量写入, 保持不变量一致)
-                let face_by_id: HashMap<FaceId, &face::FaceRecord> =
-                    faces.iter().map(|f| (f.id, f)).collect();
-                let mut per_person: HashMap<PersonId, Vec<&face::FaceRecord>> = HashMap::new();
-                for (face_id, person_id) in &classified {
-                    per_person
-                        .entry(*person_id)
-                        .or_default()
-                        .push(face_by_id[face_id]);
-                }
+        // 按人物分组聚合
+        let mut person_map = persons
+            .into_iter()
+            .map(|p| (p.id, p))
+            .collect::<HashMap<_, _>>();
+        let mut per_person: HashMap<PersonId, Vec<FaceRecord>> = HashMap::new();
+        for (face_index, face) in faces.into_iter().enumerate() {
+            if let Some(person_id) = classified.get(&face_index) {
+                per_person.entry(*person_id).or_default().push(face);
+            }
+        }
+        for (person_id, faces) in per_person {
+            if let Some(person) = person_map.remove(&person_id) {
+                PersonRepo::add_faces(&state, person, faces).await?;
+            }
+        }
 
-                // 涉及的人物按 id 升序加行锁(与 change_face_belonging 加锁顺序一致, 防死锁)
-                let mut person_ids: Vec<PersonId> = per_person.keys().copied().collect();
-                person_ids.sort_unstable();
-                for person_id in person_ids {
-                    let assigned_faces = &per_person[&person_id];
-                    let person = PersonMapper::lock_by_id(txn, person_id)
-                        .await?
-                        .ok_or_error(
-                            "person_not_found",
-                            "二次聚类时, 人物不存在",
-                            AppError::InternalServerError,
-                        )?;
-
-                    // Δweight / Δcentroid = Σscore / Σ(score×embedding)
-                    let (delta_weight, delta_centroid) = FaceEmbedding::weighted_sum(
-                        assigned_faces.iter().map(|f| (f.score, &f.embedding)),
-                    );
-
-                    // 封面: 集合新增多张人脸, 新封面 = max(当前封面, 组内 score 最高脸)
-                    let cover = {
-                        let top_in_group = assigned_faces
-                            .iter()
-                            .max_by(|&&a, &&b| a.score.total_cmp(&b.score))
-                            .expect("assigned_faces should not be empty");
-                        let current_cover_score =
-                            FaceMapper::query_by_id(txn, person.cover_face_id)
-                                .await?
-                                .ok_or_error(
-                                    "person_cover_face_not_found",
-                                    "人物封面人脸不存在",
-                                    AppError::InternalServerError,
-                                )?
-                                .score;
-                        if top_in_group.score > current_cover_score {
-                            let file_id =
-                                PhotoMapper::query_file_id_by_id(txn, top_in_group.photo_id)
-                                    .await?
-                                    .ok_or_error(
-                                        "person_cover_photo_not_found",
-                                        "封面人脸所属照片不存在",
-                                        AppError::InternalServerError,
-                                    )?;
-                            Some(PersonCoverUpdate {
-                                cover_face_id: top_in_group.id,
-                                cover_photo_id: top_in_group.photo_id,
-                                cover_file_id: file_id,
-                                cover_bbox: bbox_from_insight(top_in_group.bbox),
-                            })
-                        } else {
-                            None
-                        }
-                    };
-
-                    PersonMapper::update_stats(
-                        txn,
-                        person_id,
-                        person.face_count + assigned_faces.len() as u64,
-                        person.weight + delta_weight,
-                        person.centroid.add(&delta_centroid),
-                        cover,
-                    )
-                    .await?;
-
-                    FaceMapper::update_person_id(
-                        txn,
-                        person_id,
-                        assigned_faces.iter().map(|f| f.id),
-                    )
-                    .await?;
-                }
-                Ok(())
-            })
-        })
+        AuditService::record(
+            &state.db,
+            AuditEvent::new("assign_unassigned_faces_finish").with_actor(admin.into_inner()),
+        )
         .await?;
 
-        metrics_success!();
         Ok(())
     }
 
     /// 最近质心分类: 每张未分配人脸取与各人物 centroid(已归一化)余弦相似度最高者,
     /// 相似度 `>= threshold` 才指派, 否则保持未分配。
+    /// 返回(index, person_id)
     fn classify_unassigned(
-        faces: &[(FaceId, &FaceEmbedding)],
+        face_embeddings: &[&FaceEmbedding],
         persons: &[(PersonId, &FaceEmbedding)],
         threshold: f32,
-    ) -> Vec<(FaceId, PersonId)> {
-        let mut assignments = Vec::new();
-        for (face_id, embedding) in faces {
+    ) -> HashMap<usize, PersonId> {
+        let mut assignments = HashMap::new();
+        for (index, embedding) in face_embeddings.iter().enumerate() {
             let mut best: Option<(f32, PersonId)> = None;
             for (person_id, centroid) in persons {
                 let sim = embedding.cosine_similarity(centroid);
@@ -356,7 +253,7 @@ impl PersonService {
                 }
             }
             if let Some((_, person_id)) = best {
-                assignments.push((*face_id, person_id));
+                assignments.insert(index, person_id);
             }
         }
         assignments
@@ -365,258 +262,159 @@ impl PersonService {
 
 // 修改
 impl PersonService {
-    /// 重命名人物(同步维护姓名首字母)
+    /// 重命名人物
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(person_id = %person_id))]
     pub async fn rename_person(
         state: &PhotoState,
         person_id: PersonId,
         req: RenamePersonParam,
+        user_id: UserId,
     ) -> Result<()> {
-        metrics_group!();
         let new_name = req.new_name.into_inner();
-        let name_initials = Self::compute_name_initials(&new_name);
-        // 校验人物存在
-        PersonMapper::rename(&state.db, person_id, new_name, name_initials)
-            .await?
-            .no_zero_or_warn(
-                "person_rename_fail",
-                "重命名人物失败",
-                AppError::bad_request("重命名人物失败"),
-            )?;
+        let new_name_initials = Self::compute_name_initials(&new_name);
+        PersonRepo::rename_person(state, person_id, new_name, new_name_initials, user_id).await?;
 
-        // 失效人物缓存（L1 + L2）
-        // 错误不返回
-        let _ = state
-            .cache_person
-            .invalidate(&RedisKeys::photo::person::person_info(person_id))
-            .timed(metrics_name!("cache_invalidate"))
-            .await;
-
-        metrics_success!();
         Ok(())
     }
 
-    /// 合并人物（高危操作，仅管理员）: 将 source 的全部人脸归属转移到 target, 并删除 source
+    /// 合并人物
+    /// 将 source 的全部人脸归属转移到 target, 并删除 source
+    /// 仅可管理员执行
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn merge_person(
         state: &PhotoState,
         admin: AdminId,
         req: MergePersonParam,
     ) -> Result<PersonView> {
-        metrics_group!();
-        let MergePersonParam {
-            source_person_id,
-            target_person_id,
-        } = req;
+        let person = PersonRepo::merge_person(state, admin, req).await?;
 
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                let (source, target) = DbUtils::ensure_lock_two_ordered(
-                    txn,
-                    source_person_id,
-                    target_person_id,
-                    PersonMapper::lock_by_id,
-                    |person| {
-                        person.ok_or_warn_bad_request(
-                            "person_not_found",
-                            "合并人物时, 人物不存在",
-                            "人物不存在",
-                        )
-                    },
-                )
-                .await?;
-
-                // 转移人脸归属
-                FaceMapper::move_person_faces(txn, source_person_id, target_person_id).await?;
-
-                // 封面: 合并后取两者封面中 score 更高者(集合取并, 极值 = max(两个封面))
-                let cover = {
-                    let faces = FaceMapper::query_by_ids(
-                        txn,
-                        &[source.cover_face_id, target.cover_face_id],
-                    )
-                    .await?;
-
-                    let source_cover_face = faces
-                        .iter()
-                        .find(|f| f.id == source.cover_face_id)
-                        .ok_or_error(
-                            "person_cover_face_not_found",
-                            "人物封面人脸不存在",
-                            AppError::InternalServerError,
-                        )?;
-
-                    let target_cover_face = faces
-                        .iter()
-                        .find(|f| f.id == target.cover_face_id)
-                        .ok_or_error(
-                            "person_cover_face_not_found",
-                            "人物封面人脸不存在",
-                            AppError::InternalServerError,
-                        )?;
-
-                    if source_cover_face.score > target_cover_face.score {
-                        let file_id =
-                            PhotoMapper::query_file_id_by_id(txn, source_cover_face.photo_id)
-                                .await?
-                                .ok_or_error(
-                                    "person_cover_photo_not_found",
-                                    "封面人脸所属照片不存在",
-                                    AppError::InternalServerError,
-                                )?;
-                        Some(PersonCoverUpdate {
-                            cover_face_id: source_cover_face.id,
-                            cover_photo_id: source_cover_face.photo_id,
-                            cover_file_id: file_id,
-                            cover_bbox: bbox_from_insight(source_cover_face.bbox),
-                        })
-                    } else {
-                        None
-                    }
-                };
-
-                // 目标人物: 数量/权重/质心合并(封面可能替换)
-                PersonMapper::update_stats(
-                    txn,
-                    target_person_id,
-                    target.face_count + source.face_count,
-                    target.weight + source.weight,
-                    target.centroid.add(&source.centroid),
-                    cover,
-                )
-                .await?;
-
-                // 删除源人物
-                PersonMapper::delete_by_id(txn, source_person_id).await?;
-                Ok(())
-            })
-        })
-        .await?;
-
-        // 返回合并后的目标人物视图
-        let person = PersonMapper::query_by_id(&state.db, target_person_id)
-            .await?
-            .ok_or_error(
-                "person_not_found",
-                "目标人物不存在",
-                AppError::not_found("目标人物不存在"),
-            )?;
-
-        // 失效源/目标人物缓存（L1 + L2），源人物已删除
-        // 错误不返回
-        let cache_keys = vec![
-            RedisKeys::photo::person::person_info(source_person_id),
-            RedisKeys::photo::person::person_info(target_person_id),
-        ];
-        let _ = state
-            .cache_person
-            .invalidate_batch(&cache_keys)
-            .timed(metrics_name!("cache_invalidate"))
-            .await;
-
-        metrics_success!();
-        Ok(Self::to_view(admin.into_inner(), person.into()))
+        let file_id = &person.cover.file_id.clone();
+        PersonView::from_record(
+            person,
+            admin.into_inner(),
+            PhotoRepo::get_photo_dimensions(state, file_id).await?,
+        )
+        .to_ok()
     }
 }
 
 // 查询
 impl PersonService {
-    /// 查询人物名称（审计记录改名前后用）
-    #[tracing::instrument(skip_all, fields(person_id = %person_id))]
-    pub async fn query_name(state: &PhotoState, person_id: PersonId) -> Result<Option<String>> {
-        PersonMapper::query_by_id(&state.db, person_id)
-            .await
-            .map(|p| p.map(|r| r.name))
-    }
-
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
+    /// 查询人物列表.
     pub async fn get_persons(
         state: &PhotoState,
         user_id: UserId,
         req: PersonCursorParam,
-    ) -> Result<CursorPage<PersonView, FaceCountIdCursor<PersonId>>> {
-        metrics_group!();
-        let persons = PersonMapper::query(&state.db, req.cursor, req.size).await?;
+    ) -> Result<CursorPage<PersonView, CountIdCursor<PersonId>>> {
+        let CursorPage {
+            records, has_more, ..
+        } = PersonRepo::query_page(state, req.cursor, req.size).await?;
 
-        // 提取本页人物 ID, 通过三级缓存批量加载轻量摘要
-        let person_ids = persons.iter().map(|p| p.id).collect::<Vec<_>>();
-        let briefs =
-            state
-                .cache_person
-                .get_or_load_batch(
-                    &person_ids,
-                    |id| RedisKeys::photo::person::person_info(*id),
-                    24 * 60 * 60,
-                    |miss_ids| async move {
-                        PersonMapper::query_brief_by_ids(&state.db, &miss_ids).await
-                    },
-                    |b| b.id,
-                )
-                .timed(metrics_name!("cache_get_or_load_batch"))
-                .await?;
-
-        let views = briefs
-            .into_iter()
-            .flatten()
-            .map(|person| Self::to_view(user_id, person))
-            .collect::<Vec<_>>();
-        let page = CursorPage::from_oversize_fn(views, req.size, |person| {
-            FaceCountIdCursor {
-                face_count: person.face_count,
-                id: person.id,
-            }
+        let mut views = Vec::with_capacity(records.len());
+        for person in records.into_iter() {
+            let file_id = person.cover.file_id.clone();
+            views.push(PersonView::from_record(
+                person,
+                user_id,
+                PhotoRepo::get_photo_dimensions(state, &file_id).await?,
+            ));
+        }
+        CursorPage::from_has_more(views, has_more)
+            .with_next_cursor(|view| CountIdCursor {
+                count: view.face_count,
+                id: view.id,
+            })
             .to_ok()
-        })?;
-        metrics_success!();
-        Ok(page)
     }
 
     /// 按关键词前缀搜索人物(匹配完整名字或姓名首字母)
+    #[common::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn search_persons(
         state: &PhotoState,
         user_id: UserId,
         req: PersonSearchParam,
     ) -> Result<CursorPage<PersonView, PersonId>> {
-        metrics_group!();
         let PersonSearchParam {
             keyword,
             cursor,
             size,
         } = req;
-        let persons = PersonMapper::query_search(&state.db, &keyword, cursor, size).await?;
+        let CursorPage {
+            records, has_more, ..
+        } = PersonRepo::search_person_page(state, &keyword, cursor, size).await?;
 
-        // 提取本页人物 ID, 通过三级缓存批量加载轻量摘要
-        let person_ids = persons.iter().map(|p| p.id).collect::<Vec<_>>();
-        let briefs =
-            state
-                .cache_person
-                .get_or_load_batch(
-                    &person_ids,
-                    |id| RedisKeys::photo::person::person_info(*id),
-                    24 * 60 * 60,
-                    |miss_ids| async move {
-                        PersonMapper::query_brief_by_ids(&state.db, &miss_ids).await
-                    },
-                    |b| b.id,
-                )
-                .timed(metrics_name!("cache_get_or_load_batch"))
-                .await?;
-
-        let views = briefs
-            .into_iter()
-            .flatten()
-            .map(|person| Self::to_view(user_id, person))
-            .collect::<Vec<_>>();
-        let page = CursorPage::from_oversize_fn(views, size, |person| Ok(person.id))?;
-        metrics_success!();
-        Ok(page)
+        let mut views = Vec::with_capacity(records.len());
+        for person in records.into_iter() {
+            let file_id = person.cover.file_id.clone();
+            views.push(PersonView::from_record(
+                person,
+                user_id,
+                PhotoRepo::get_photo_dimensions(state, &file_id).await?,
+            ));
+        }
+        CursorPage::from_has_more(views, has_more)
+            .with_next_cursor(|view| view.id)
+            .to_ok()
     }
 
+    /// 获取人物的照片列表(游标分页, 参照 `CollectionPhotoService::get_photos`)
+    #[common::metered]
+    #[tracing::instrument(
+        skip_all,
+        fields(user_id = %user_id, person_id = %person_id)
+    )]
+    /// 查询人物关联的照片并生成照片视图.
+    pub async fn get_person_photos(
+        state: &PhotoState,
+        user_id: UserId,
+        person_id: PersonId,
+        req: PersonPhotoCursorParam,
+    ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
+        let page = FaceRepo::query_person_photo_ids(state, person_id, &req)
+            .timed(metrics_name!("query_photo_ids"))
+            .await?;
+        if page.records.is_empty() {
+            return Ok(CursorPage::empty());
+        }
+
+        let photos = PhotoService::load_photos_info(state, user_id, &page.records)
+            .timed(metrics_name!("load_photos_info"))
+            .await?;
+
+        Ok(page
+            .replace_records(photos)
+            .with_next_cursor(|photo| TimeIdCursor {
+                time_at: photo.created_at,
+                id: photo.id,
+            }))
+    }
+}
+
+// 删除
+impl PersonService {
+    /// 删除人物（高危操作，仅管理员）: 清空其所有人脸归属后删除人物
+    #[tracing::instrument(
+        skip_all,
+        fields(admin_user_id = %admin, person_id = %person_id)
+    )]
+    /// 删除人物并清理其人脸归属及相关缓存.
+    pub async fn delete_person(
+        state: &PhotoState,
+        admin: AdminId,
+        person_id: PersonId,
+    ) -> Result<()> {
+        PersonRepo::delete_person(state, person_id, admin).await?;
+        Ok(())
+    }
+}
+
+impl PersonService {
     /// 计算姓名首字母(大写, 如 张三 -> ZS, Alice Wang -> AW)
-    ///
-    /// 逐字符处理: 汉字经拼音库取拼音首字母; ASCII 字母按单词取首字母;
-    /// 其余字符(空白/标点/数字)作为分隔或忽略。无有效字符时返回 `None`。
     fn compute_name_initials(name: &str) -> Option<String> {
         use pinyin::ToPinyin;
 
@@ -652,181 +450,5 @@ impl PersonService {
         } else {
             Some(initials)
         }
-    }
-
-    /// 构建人物视图: 使用封面冗余字段直接内存组装裁剪 token, 加密后返回
-    /// (与 `CollectionView::with_generate_cover_token` / `PhotoView::with_tokens` 一致)
-    fn to_view(viewer: UserId, person: PersonBriefRow) -> PersonView {
-        PersonView {
-            id: person.id,
-            name: person.name,
-            cover_token: token_cipher()
-                .encrypt(
-                    &ImageToken::crop(viewer, person.cover_file_id, person.cover_bbox),
-                    Some(&format!("{}:{}", person.id, viewer)),
-                )
-                .ok(),
-            face_count: person.face_count as u64,
-        }
-    }
-
-    /// 获取人物的照片列表(游标分页, 参照 `CollectionPhotoService::get_photos`)
-    #[tracing::instrument(
-        skip_all,
-        fields(user_id = %user_id, person_id = %person_id)
-    )]
-    pub async fn get_person_photos(
-        state: &PhotoState,
-        user_id: UserId,
-        person_id: PersonId,
-        req: PersonPhotoCursorParam,
-    ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
-        metrics_group!();
-
-        let photo_ids =
-            FaceMapper::query_photo_ids_cursor_page(&state.db, person_id, req.cursor, req.size)
-                .timed(metrics_name!("query_photo_ids"))
-                .await?;
-        if photo_ids.is_empty() {
-            metrics_success!();
-            return Ok(CursorPage::empty());
-        }
-
-        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids)
-            .timed(metrics_name!("load_photos_info"))
-            .await?;
-
-        let page = CursorPage::from_oversize_fn(photos, req.size, |photo| {
-            TimeIdCursor {
-                created_at: photo.created_at,
-                id: photo.id,
-            }
-            .to_ok()
-        })?;
-
-        metrics_success!();
-        Ok(page)
-    }
-}
-
-// 删除
-impl PersonService {
-    /// 删除人物（高危操作，仅管理员）: 清空其所有人脸归属后删除人物
-    #[tracing::instrument(
-        skip_all,
-        fields(admin_user_id = %admin, person_id = %person_id)
-    )]
-    pub async fn delete_person(
-        state: &PhotoState,
-        admin: AdminId,
-        person_id: PersonId,
-    ) -> Result<()> {
-        DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                // 清空该人物所有人脸归属, 避免悬空引用
-                FaceMapper::clear_person_id_by_person(txn, person_id).await?;
-                // 删除人物
-                PersonMapper::delete_by_id(txn, person_id)
-                    .await?
-                    .no_zero_or_warn(
-                        "person_delete_fail",
-                        "删除人物失败",
-                        AppError::not_found("人物不存在"),
-                    )?;
-                Ok(())
-            })
-        })
-        .await?;
-
-        // 失效人物缓存（L1 + L2）
-        // 错误不返回
-        let _ = state
-            .cache_person
-            .invalidate(&RedisKeys::photo::person::person_info(person_id))
-            .timed(metrics_name!("cache_invalidate"))
-            .await;
-
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::PersonService;
-    use insight_face_rs::types::{DIMS, FaceEmbedding};
-    use types::photo::{face::FaceId, person::PersonId};
-
-    fn embedding_with(x: f32) -> FaceEmbedding {
-        let mut arr = [0.0f32; DIMS];
-        arr[0] = x;
-        arr[1] = 1.0 - x;
-        FaceEmbedding(arr).normalize()
-    }
-
-    fn person(id: i64, centroid: FaceEmbedding) -> (PersonId, FaceEmbedding) {
-        (PersonId(id), centroid)
-    }
-
-    fn face(id: i64, embedding: FaceEmbedding) -> (FaceId, FaceEmbedding) {
-        (FaceId(id), embedding)
-    }
-
-    fn classify(
-        faces: &[(FaceId, FaceEmbedding)],
-        persons: &[(PersonId, FaceEmbedding)],
-        threshold: f32,
-    ) -> Vec<(FaceId, PersonId)> {
-        let face_refs = faces.iter().map(|(id, e)| (*id, e)).collect::<Vec<_>>();
-        let person_refs = persons.iter().map(|(id, c)| (*id, c)).collect::<Vec<_>>();
-        PersonService::classify_unassigned(&face_refs, &person_refs, threshold)
-    }
-
-    #[test]
-    fn classify_assigns_to_most_similar_person_above_threshold() {
-        let persons = vec![
-            person(1, embedding_with(0.9)),
-            person(2, embedding_with(0.1)),
-        ];
-        let faces = vec![face(10, embedding_with(0.95))];
-        let result = classify(&faces, &persons, 0.55);
-        assert_eq!(result, vec![(FaceId(10), PersonId(1))]);
-    }
-
-    #[test]
-    fn classify_keeps_below_threshold_unassigned() {
-        let persons = vec![person(1, embedding_with(0.9))];
-        // (0,1) 与 (0.9,0.1) 归一化后余弦 ≈ 0.11, 低于阈值
-        let faces = vec![face(10, embedding_with(0.0))];
-        let result = classify(&faces, &persons, 0.55);
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn classify_picks_highest_similarity_person() {
-        let persons = vec![
-            person(1, embedding_with(0.2)),
-            person(2, embedding_with(0.8)),
-        ];
-        let faces = vec![face(10, embedding_with(0.85))];
-        let result = classify(&faces, &persons, 0.5);
-        assert_eq!(result, vec![(FaceId(10), PersonId(2))]);
-    }
-
-    #[test]
-    fn classify_empty_inputs_returns_empty() {
-        assert!(classify(&[], &[], 0.55).is_empty());
-        let persons = vec![person(1, embedding_with(0.9))];
-        assert!(classify(&[], &persons, 0.55).is_empty());
-        let faces = vec![face(10, embedding_with(0.9))];
-        assert!(classify(&faces, &[], 0.55).is_empty());
-    }
-
-    #[test]
-    fn classify_exact_threshold_is_assigned() {
-        let persons = vec![person(1, embedding_with(0.9))];
-        let faces = vec![face(10, embedding_with(0.9))];
-        // 相同单位向量余弦 = 1.0, 边界上应被指派
-        let result = classify(&faces, &persons, 1.0);
-        assert_eq!(result, vec![(FaceId(10), PersonId(1))]);
     }
 }

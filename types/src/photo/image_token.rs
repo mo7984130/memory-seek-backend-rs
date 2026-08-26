@@ -7,11 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::user::UserId;
 #[cfg(feature = "orm")]
-use common::error::AppError;
-#[cfg(feature = "orm")]
-use common::ext::ResultErrExt;
-#[cfg(feature = "orm")]
-use common::utils::TokenCipher;
+use common::utils::token_cipher;
 
 /// 图片类型
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
@@ -34,7 +30,39 @@ pub struct FaceBBox {
     pub x2: f32,
     pub y2: f32,
 }
+impl From<insight_face_rs::BoundingBox> for FaceBBox {
+    fn from(v: insight_face_rs::BoundingBox) -> Self {
+        Self {
+            x1: v.x1,
+            y1: v.y1,
+            x2: v.x2,
+            y2: v.y2,
+        }
+    }
+}
+impl From<FaceBBox> for insight_face_rs::BoundingBox {
+    fn from(v: FaceBBox) -> Self {
+        Self {
+            x1: v.x1,
+            y1: v.y1,
+            x2: v.x2,
+            y2: v.y2,
+        }
+    }
+}
 
+/// 原图尺寸（像素）。
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(
+    feature = "ts",
+    ts(export, export_to = "photo/", rename = "ImageDimensions")
+)]
+pub struct ImageDimensions {
+    pub width: u32,
+    pub height: u32,
+}
 impl FaceBBox {
     /// 将归一化边界框转换为指定图片尺寸下的绝对像素裁剪矩形 `(x, y, w, h)`
     ///
@@ -66,6 +94,9 @@ pub struct ImageToken {
     /// 人脸边界框（归一化坐标，仅 Crop 类型需要）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bbox: Option<FaceBBox>,
+    /// 原图尺寸（像素，Crop 类型需要）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_dimensions: Option<ImageDimensions>,
     /// 浏览者用户 ID（图片访问审计主体）
     pub viewer_id: UserId,
 }
@@ -84,6 +115,7 @@ impl ImageToken {
             file_id: file_id.into(),
             token_type: ImageTokenType::Thumbnail,
             bbox: None,
+            source_dimensions: None,
             viewer_id: viewer,
         }
     }
@@ -101,6 +133,7 @@ impl ImageToken {
             file_id: file_id.into(),
             token_type: ImageTokenType::Preview,
             bbox: None,
+            source_dimensions: None,
             viewer_id: viewer,
         }
     }
@@ -118,6 +151,7 @@ impl ImageToken {
             file_id: file_id.into(),
             token_type: ImageTokenType::Original,
             bbox: None,
+            source_dimensions: None,
             viewer_id: viewer,
         }
     }
@@ -131,11 +165,17 @@ impl ImageToken {
     ///
     /// # 返回
     /// 返回类型为 `Crop` 且包含 `bbox` 的 `ImageToken`
-    pub fn crop(viewer: UserId, file_id: impl Into<String>, bbox: FaceBBox) -> Self {
+    pub fn crop(
+        viewer: UserId,
+        file_id: impl Into<String>,
+        bbox: FaceBBox,
+        source_dimensions: ImageDimensions,
+    ) -> Self {
         Self {
             file_id: file_id.into(),
             token_type: ImageTokenType::Crop,
             bbox: Some(bbox),
+            source_dimensions: Some(source_dimensions),
             viewer_id: viewer,
         }
     }
@@ -143,25 +183,18 @@ impl ImageToken {
     /// 加密头像缩略图 token
     ///
     /// # 参数
-    /// - `cipher`: token 加密器
-    /// - `avatar_file_id`: 头像文件 ID，为 `None` 时返回 `None`
+    /// - `avatar_file_id`: 头像文件 ID
     /// - `viewer`: 浏览者用户 ID
     ///
     /// # 返回
-    /// 加密后的头像 token，加密失败返回 `None`
+    /// 加密后的头像 token，加密失败返回 `AppError`
     #[cfg(feature = "orm")]
     pub fn encrypt_avatar_token(
-        cipher: &TokenCipher,
-        avatar_file_id: Option<&str>,
+        avatar_file_id: &str,
         viewer: UserId,
-    ) -> Option<String> {
-        avatar_file_id.and_then(|key| {
-            let seed = format!("{}:{}", viewer, key);
-            cipher
-                .encrypt(&Self::thumbnail(viewer, key), Some(&seed))
-                .trace_warn("encrypt_avatar_token_err", "加密头像失败", AppError::Ignore)
-                .ok()
-        })
+    ) -> common::error::contextual::Result<String> {
+        let seed = format!("{}:{}", viewer, avatar_file_id);
+        token_cipher().encrypt(&Self::thumbnail(viewer, avatar_file_id), Some(&seed))
     }
 }
 
@@ -209,7 +242,11 @@ mod tests {
             x2: 0.6,
             y2: 0.9,
         };
-        let token = ImageToken::crop(UserId(4), "crop-id", bbox);
+        let dimensions = ImageDimensions {
+            width: 800,
+            height: 400,
+        };
+        let token = ImageToken::crop(UserId(4), "crop-id", bbox, dimensions);
         assert_eq!(token.file_id, "crop-id");
         assert_eq!(token.token_type, ImageTokenType::Crop);
         let b = token.bbox.unwrap();
@@ -217,6 +254,7 @@ mod tests {
         assert_eq!(b.y1, 0.2);
         assert_eq!(b.x2, 0.6);
         assert_eq!(b.y2, 0.9);
+        assert_eq!(token.source_dimensions, Some(dimensions));
     }
 
     #[test]
@@ -284,7 +322,11 @@ mod tests {
             x2: 0.55,
             y2: 0.7,
         };
-        let token = ImageToken::crop(UserId(12), "file-xyz", bbox);
+        let dimensions = ImageDimensions {
+            width: 800,
+            height: 400,
+        };
+        let token = ImageToken::crop(UserId(12), "file-xyz", bbox, dimensions);
         let json = serde_json::to_string(&token).unwrap();
         let deserialized: ImageToken = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.file_id, "file-xyz");
@@ -295,6 +337,7 @@ mod tests {
         assert_eq!(b.y1, 0.1);
         assert_eq!(b.x2, 0.55);
         assert_eq!(b.y2, 0.7);
+        assert_eq!(deserialized.source_dimensions, Some(dimensions));
     }
 
     #[test]
@@ -354,28 +397,23 @@ mod tests {
 #[cfg(all(test, feature = "orm"))]
 mod orm_tests {
     use super::*;
-    use common::utils::TokenCipher;
+    use common::utils::{init_token_cipher, TokenCipherConfig};
 
-    fn test_cipher() -> TokenCipher {
-        TokenCipher::new("test-key-for-unit-tests", "test-salt")
+    fn test_cipher() -> &'static common::utils::TokenCipher {
+        init_token_cipher(&TokenCipherConfig {
+            key: "test-key-for-unit-tests".to_owned(),
+            salt: "test-salt".to_owned(),
+        })
     }
 
     #[test]
     fn test_encrypt_avatar_token_some() {
         let cipher = test_cipher();
-        let token = ImageToken::encrypt_avatar_token(&cipher, Some("avatar-file-id"), UserId(9));
-        assert!(token.is_some());
+        let token = ImageToken::encrypt_avatar_token("avatar-file-id", UserId(9)).unwrap();
         // 验证能解密回来
-        let decrypted: ImageToken = cipher.decrypt(&token.unwrap()).unwrap();
+        let decrypted: ImageToken = cipher.decrypt(&token).unwrap();
         assert_eq!(decrypted.file_id, "avatar-file-id");
         assert_eq!(decrypted.token_type, ImageTokenType::Thumbnail);
         assert_eq!(decrypted.viewer_id, UserId(9));
-    }
-
-    #[test]
-    fn test_encrypt_avatar_token_none() {
-        let cipher = test_cipher();
-        let token = ImageToken::encrypt_avatar_token(&cipher, None, UserId(9));
-        assert!(token.is_none());
     }
 }

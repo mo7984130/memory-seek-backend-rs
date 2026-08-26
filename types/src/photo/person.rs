@@ -10,15 +10,19 @@ crate::id_type!(PersonId, "photo/");
 
 #[cfg(feature = "face-engine")]
 mod entity {
-    use common::error::AppError;
-    use common::ext::ResultErrExt;
-    use insight_face_rs::types::FaceEmbedding;
-    use insight_face_rs::PgVector;
+
+    use common::time::DateTime;
+    use common::types::changed_value::*;
+    use insight_face_rs::{types::FaceEmbedding, BoundingBox};
     use sea_orm::{entity::prelude::*, ActiveValue::Set};
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::photo::{face::FaceId, photo::PhotoId, FaceBBox};
+    use crate::photo::{
+        face::{FaceId, FaceRecord},
+        photo::PhotoId,
+        FaceBBox,
+    };
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "photo_person")]
@@ -27,22 +31,24 @@ mod entity {
         pub id: PersonId,
         pub name: String,
         pub name_initials: Option<String>,
+
         pub cover_face_id: FaceId,
         /// 封面人脸所属照片 ID(冗余自 photo_face.photo_id,避免 N+1)
         pub cover_photo_id: PhotoId,
         /// 封面照片 file_id(冗余自 photo_photo.file_id,避免 N+1)
         pub cover_file_id: String,
+        /// 封面人脸 score(冗余自 photo_face.score,避免 N+1)
+        pub cover_face_score: f32,
         /// 封面人脸归一化 bbox(冗余自 photo_face.bbox,避免 N+1)
-        #[sea_orm(column_type = "Json")]
-        pub cover_bbox: Json,
+        pub cover_bbox: BoundingBox,
+
         /// score 加权向量和 Σ(score*embedding), 未归一化, 读取时 normalize
-        /// (增量维护, 见 docs/change-face-belonging-plan.md)
-        pub centroid: PgVector,
+        pub centroid: FaceEmbedding,
         pub face_count: i64,
         /// 该人物所有人脸 score 之和(增量维护质心的权重)
         pub weight: f64,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -50,51 +56,92 @@ mod entity {
     impl ActiveModelBehavior for ActiveModel {}
 
     #[derive(Clone, Debug, Serialize)]
+    pub struct PersonCover {
+        pub face_id: FaceId,
+        pub photo_id: PhotoId,
+        pub face_score: f32,
+        pub file_id: String,
+        pub bbox: FaceBBox,
+    }
+    impl PersonCover {
+        pub fn from_face(face: &FaceRecord, file_id: String) -> Self {
+            PersonCover {
+                face_id: face.id,
+                photo_id: face.photo_id,
+                face_score: face.score,
+                file_id,
+                bbox: face.bbox.into(),
+            }
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize)]
     pub struct PersonRecord {
         pub id: PersonId,
         pub name: String,
         pub name_initials: Option<String>,
-        pub cover_face_id: FaceId,
-        pub cover_photo_id: PhotoId,
-        pub cover_file_id: String,
-        pub cover_bbox: FaceBBox,
+        pub cover: PersonCover,
         pub centroid: FaceEmbedding,
         pub face_count: u64,
         pub weight: f64,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
-    impl TryFrom<Model> for PersonRecord {
-        type Error = AppError;
-        fn try_from(value: Model) -> Result<Self, Self::Error> {
-            let embedding: FaceEmbedding = value.centroid.into();
-            let cover_bbox: FaceBBox = serde_json::from_value(value.cover_bbox)
-                .trace_internal_err("db:photo:person:cover_bbox_from:err", "封面 bbox 转换错误")?;
+    #[derive(Debug)]
+    pub struct UpdatePersonRecord {
+        pub id: PersonId,
+        pub name: HasChanged<String>,
+        pub name_initials: HasChanged<Option<String>>,
+        pub cover: HasChanged<PersonCover>,
+        pub centroid: HasChanged<FaceEmbedding>,
+        pub face_count: HasChanged<u64>,
+        pub weight: HasChanged<f64>,
+    }
+    impl UpdatePersonRecord {
+        pub fn new(id: PersonId) -> Self {
+            Self {
+                id,
+                name: HasChanged::Unchanged,
+                name_initials: HasChanged::Unchanged,
+                cover: HasChanged::Unchanged,
+                centroid: HasChanged::Unchanged,
+                face_count: HasChanged::Unchanged,
+                weight: HasChanged::Unchanged,
+            }
+        }
 
-            Ok(Self {
+        pub fn with_cover_face(&mut self, cover_face: &FaceRecord, cover_file_id: String) -> &Self {
+            self.cover = HasChanged::Changed(PersonCover::from_face(cover_face, cover_file_id));
+            self
+        }
+    }
+
+    impl From<Model> for PersonRecord {
+        fn from(value: Model) -> Self {
+            Self {
                 id: value.id,
                 name: value.name,
                 name_initials: value.name_initials,
-                cover_face_id: value.cover_face_id,
-                cover_photo_id: value.cover_photo_id,
-                cover_file_id: value.cover_file_id,
-                cover_bbox,
-                centroid: embedding,
+                cover: PersonCover {
+                    face_id: value.cover_face_id,
+                    photo_id: value.cover_photo_id,
+                    face_score: value.cover_face_score,
+                    file_id: value.cover_file_id,
+                    bbox: value.cover_bbox.into(),
+                },
+                centroid: value.centroid,
                 face_count: value.face_count as u64,
                 weight: value.weight,
                 created_at: value.created_at,
                 updated_at: value.updated_at,
-            })
+            }
         }
     }
 
     pub struct NewPerson {
         pub name: String,
-        pub cover_face_id: FaceId,
-        pub cover_photo_id: PhotoId,
-        pub cover_file_id: String,
-        pub cover_bbox: FaceBBox,
+        pub cover: PersonCover,
         pub face_count: u64,
         /// 该人物所有人脸 score 之和(增量维护质心的权重)
         pub weight: f64,
@@ -105,13 +152,14 @@ mod entity {
         fn from(value: NewPerson) -> Self {
             ActiveModel {
                 name: Set(value.name),
-                cover_face_id: Set(value.cover_face_id),
-                cover_photo_id: Set(value.cover_photo_id),
-                cover_file_id: Set(value.cover_file_id),
-                cover_bbox: Set(serde_json::to_value(value.cover_bbox).unwrap()),
+                cover_face_id: Set(value.cover.face_id),
+                cover_photo_id: Set(value.cover.photo_id),
+                cover_face_score: Set(value.cover.face_score),
+                cover_file_id: Set(value.cover.file_id),
+                cover_bbox: Set(value.cover.bbox.into()),
                 face_count: Set(value.face_count as i64),
                 weight: Set(value.weight),
-                centroid: Set(value.centroid.into()),
+                centroid: Set(value.centroid),
                 ..Default::default()
             }
         }

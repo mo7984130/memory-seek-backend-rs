@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 
-use chrono::Utc;
-use common::{Result, ext::ResultErrExt};
+use common::{
+    error::contextual::Result,
+    ext::IntoContextualExt,
+    time::{DateTime, now},
+};
 use sea_orm::{
+    ActiveModelTrait,
     ActiveValue::Set,
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
-    entity::prelude::DateTimeUtc,
-    sea_query::{Alias, CaseStatement, Expr, Func, OnConflict, SimpleExpr},
+    sea_query::{Alias, CaseStatement, Expr, Func, SimpleExpr},
 };
 use types::photo::timeline_stat::TimelineStatId;
 use types::photo::{dto::timeline_stat::MonthStat, timeline_stat::*};
@@ -14,35 +17,53 @@ use types::photo::{dto::timeline_stat::MonthStat, timeline_stat::*};
 pub(crate) struct TimelineStatMapper;
 
 impl TimelineStatMapper {
-    pub async fn incr_stat(db: &impl ConnectionTrait, created_at: DateTimeUtc) -> Result<()> {
-        let date_str = created_at.format("%Y-%m").to_string();
-        let now = Utc::now();
+    /// 将指定月份的照片统计增加一个单位.
+    pub async fn incr_stat(db: &impl ConnectionTrait, created_at: DateTime) -> Result<()> {
+        let date_str = to_date_str(&created_at);
+        // 先更新
+        let result = Entity::update_many()
+            .col_expr(Column::Count, Expr::col(Column::Count).add(1))
+            .col_expr(
+                Column::AnchorTime,
+                Expr::expr(Func::greatest([
+                    Expr::col(Column::AnchorTime).into(),
+                    Expr::value(created_at),
+                ]))
+                .into(),
+            )
+            .col_expr(Column::UpdatedAt, Expr::value(now()))
+            .filter(Column::DateStr.eq(date_str))
+            .exec(db)
+            .await?;
 
-        let insert = ActiveModel {
+        if result.rows_affected != 0 {
+            return Ok(());
+        }
+
+        // 如果更新失败, 插入
+        Self::insert(db, created_at).await
+    }
+
+    async fn insert(db: &impl ConnectionTrait, created_at: DateTime) -> Result<()> {
+        let date_str = to_date_str(&created_at);
+        let now = now();
+        ActiveModel {
             date_str: Set(TimelineStatId(date_str)),
             count: Set(1),
             anchor_time: Set(created_at),
             created_at: Set(now),
             updated_at: Set(now),
-        };
-
-        let mut on_conflict = OnConflict::column(Column::DateStr);
-        on_conflict
-            .update_columns([Column::AnchorTime, Column::UpdatedAt])
-            .value(Column::Count, Expr::col((Entity, Column::Count)).add(1));
-
-        Entity::insert(insert)
-            .on_conflict(on_conflict)
-            .exec(db)
-            .await
-            .trace_internal_err("db_update_err", "更新照片时间线统计失败")?;
+        }
+        .insert(db)
+        .await?;
 
         Ok(())
     }
 
-    pub async fn decr_stat_by_created_ats(
+    /// 按照片创建时间批量扣减月份统计.
+    pub async fn decr_by_created_ats(
         db: &impl ConnectionTrait,
-        created_ats: &[&DateTimeUtc],
+        created_ats: &[&DateTime],
     ) -> Result<()> {
         let mut date_count_map: HashMap<String, i64> = HashMap::new();
         for created_at in created_ats {
@@ -50,20 +71,17 @@ impl TimelineStatMapper {
             *date_count_map.entry(date_str).or_insert(0) += 1;
         }
 
-        if date_count_map.is_empty() {
-            return Ok(());
-        }
-
         // 构建 CASE WHEN date_str = 'x' THEN n ... END
         let mut case_expr = CaseStatement::new();
         let mut date_strs = Vec::new();
 
-        for (date_str, decr_count) in &date_count_map {
+        for (date_str, decr_count) in date_count_map {
+            let id = TimelineStatId(date_str);
             case_expr = case_expr.case(
-                Expr::col(Column::DateStr).eq(TimelineStatId(date_str.clone())),
-                Expr::col(Column::Count).sub(*decr_count),
+                Expr::col(Column::DateStr).eq(id.clone()),
+                Expr::col(Column::Count).sub(decr_count),
             );
-            date_strs.push(TimelineStatId(date_str.clone()));
+            date_strs.push(id);
         }
         // ELSE count (不在列表中的行保持不变，实际上 filter 已经限制了)
         case_expr = case_expr.finally(Expr::col(Column::Count));
@@ -85,6 +103,7 @@ impl TimelineStatMapper {
         Ok(())
     }
 
+    /// 查询全部月份统计并按月份排序.
     pub async fn query_monthly_stats(db: &impl ConnectionTrait) -> Result<Vec<MonthStat>> {
         let result = Entity::find()
             .select_only()
@@ -94,7 +113,7 @@ impl TimelineStatMapper {
             .into_model::<MonthStat>()
             .all(db)
             .await
-            .trace_internal_err("db_query_err", "查询月度照片统计失败")?;
+            .into_contextual()?;
         Ok(result)
     }
 }

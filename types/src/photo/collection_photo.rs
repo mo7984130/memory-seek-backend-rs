@@ -10,6 +10,7 @@ crate::id_type!(CollectionPhotoId, "photo/");
 
 #[cfg(feature = "orm")]
 mod entity {
+    use common::time::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
@@ -26,8 +27,8 @@ mod entity {
         pub collection_id: CollectionId,
         pub photo_id: PhotoId,
         pub user_id: UserId,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     /// 收藏夹照片记录，使用强类型 ID
@@ -37,8 +38,8 @@ mod entity {
         pub collection_id: CollectionId,
         pub photo_id: PhotoId,
         pub user_id: UserId,
-        pub created_at: DateTimeUtc,
-        pub updated_at: DateTimeUtc,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     impl From<Model> for CollectionPhotoRecord {

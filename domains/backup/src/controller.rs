@@ -1,7 +1,7 @@
-use crate::runner::BackupRunner;
+use crate::service::BackupService;
 use crate::state::BackupState;
 use axum::{Extension, Router, extract::State, routing::post};
-use common::{Result, ext::ResultErrExt, r::R, traits::controller::ControllerRouter};
+use common::{Result, r::R, traits::controller::ControllerRouter};
 use std::sync::Arc;
 use types::auth::user::{AdminId, UserId};
 
@@ -22,15 +22,14 @@ impl ControllerRouter for BackupController {
 }
 
 impl BackupController {
+    /// 触发一次异步的定时备份流程.
     async fn trigger(
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<serde_json::Value>> {
         AdminId::new(user_id)?;
 
-        let result = BackupRunner::execute_scheduled(state)
-            .await
-            .trace_internal_err("backup_exec_err", "定时备份执行失败")?;
+        let result = BackupService::execute_scheduled(state).await?;
 
         Ok(R::ok(serde_json::json!({
             "exported": result.exported,
@@ -40,15 +39,14 @@ impl BackupController {
         })))
     }
 
+    /// 触发一次管理员手动备份流程.
     async fn manual(
         State(state): State<Arc<BackupState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<serde_json::Value>> {
         let admin = AdminId::new(user_id)?;
 
-        let result = BackupRunner::execute_manual(state, admin)
-            .await
-            .trace_internal_err("backup_manual_err", "手动备份执行失败")?;
+        let result = BackupService::execute_manual(state, admin).await?;
 
         Ok(R::ok(serde_json::json!({
             "exported": result.exported,

@@ -14,6 +14,7 @@ pub trait BoolExt {
     ///
     /// # 错误
     /// - `AppError::BadRequest`: 值为 `false` 时
+    #[track_caller]
     fn true_or_warn(
         self,
         reason: &'static str,
@@ -21,6 +22,7 @@ pub trait BoolExt {
         app_err: AppError,
     ) -> Result<()>;
 
+    #[track_caller]
     fn false_or_warn(
         self,
         reason: &'static str,
@@ -55,6 +57,7 @@ impl BoolExt for bool {
         }
     }
 
+    #[track_caller]
     fn false_or_warn(
         self,
         reason: &'static str,

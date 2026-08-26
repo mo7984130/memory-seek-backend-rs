@@ -6,7 +6,7 @@ use axum::http::HeaderMap;
 use axum::routing::post;
 use common::Result;
 use common::error::AppError;
-use common::ext::{OptionExt, ResultErrExt, ResultRExt};
+use common::ext::{OptionExt, ResultLogExt, ResultRExt};
 use common::extractors::ValidatedJson;
 use common::r::R;
 use common::traits::controller::ControllerRouter;
@@ -118,13 +118,13 @@ impl AuthController {
                 AppError::bad_request("x-user-id 头缺失"),
             )?
             .to_str()
-            .trace_warn(
+            .log_warn(
                 "x-user-id_illegal",
                 "鉴权时, x-user-id 格式非法",
                 AppError::bad_request("x-user-id 格式非法"),
             )?
             .parse::<i64>()
-            .trace_warn(
+            .log_warn(
                 "x-user-id_invalid",
                 "鉴权时, x-user-id 必须是数字",
                 AppError::bad_request("x-user-id 必须是数字"),
@@ -139,7 +139,7 @@ impl AuthController {
                 AppError::bad_request("x-refresh-token 头缺失"),
             )?
             .to_str()
-            .trace_warn(
+            .log_warn(
                 "x-refresh-token_illegal",
                 "鉴权时, x-refresh-token 格式非法",
                 AppError::bad_request("x-refresh-token 格式非法"),

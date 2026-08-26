@@ -1,22 +1,29 @@
 [package]
 name = "auth"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2024"
 
 [features]
 default = []
 metrics = ["common/metrics", "dep:metrics", "email/metrics"]
 controller = ["dep:axum", "dep:serde_json"]
+audit = ["audit/enable"]
 
 [dependencies]
+audit = { path = "../audit" }
 types = { workspace = true, features = ["orm"] }
-common = { path = "../../common", features = ["validators", "metrics", "tokio"] }
+common = { path = "../../common", features = [
+    "validators",
+    "metrics",
+    "contextual-sea-orm",
+    "contextual-redis",
+    "contextual-tokio",
+] }
 constants = { path = "../constants" }
 sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 validator = { workspace = true }
-chrono = { workspace = true }
 email = { path = "../../libs/email" }
 deadpool-redis = { workspace = true }
 tokio = { workspace = true }

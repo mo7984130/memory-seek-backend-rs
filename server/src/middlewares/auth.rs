@@ -3,7 +3,7 @@ use axum::{extract::Request, middleware::Next, response::Response};
 use common::{
     Result,
     error::AppError,
-    ext::{OptionExt, RedisExt, ResultErrExt},
+    ext::{IntoContextualExt, OptionExt, RedisExt, ResultLogExt},
 };
 use std::{str::FromStr, sync::Arc};
 use types::auth::user::UserId;
@@ -55,7 +55,7 @@ fn extract_bearer(request: &Request) -> Result<(UserId, &str)> {
         AppError::Unauthorized,
     )?;
 
-    let user_id = UserId::from_str(user_id_str).trace_err(
+    let user_id = UserId::from_str(user_id_str).log_err(
         "auth_parse_error",
         "认证的时候 user_id parse错误",
         AppError::Unauthorized,
@@ -71,7 +71,7 @@ async fn verify_token(state: &AppState, user_id: UserId, token: &str) -> Result<
     use constants::RedisKeys;
 
     let key = RedisKeys::auth::user_access_token(user_id);
-    let stored_token: Option<String> = state.redis.get_as(&key).await?;
+    let stored_token: Option<String> = state.redis.get_as(&key).await.into_contextual()?;
 
     match stored_token {
         Some(stored) if stored == token => Ok(()),

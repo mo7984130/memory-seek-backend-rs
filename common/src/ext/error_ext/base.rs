@@ -12,7 +12,18 @@ pub fn log_and_map(
     app_err: AppError,
 ) -> AppError {
     let loc = Location::caller();
+    log_and_map_at(level, reason, context, err, app_err, loc)
+}
 
+/// 在调用点记录错误上下文并映射为应用错误.
+pub(crate) fn log_and_map_at(
+    level: Level,
+    reason: &'static str,
+    context: &'static str,
+    err: Option<&dyn Debug>,
+    app_err: AppError,
+    loc: &'static Location<'static>,
+) -> AppError {
     macro_rules! emit {
         ($lvl:ident) => {
             match err {
@@ -20,17 +31,13 @@ pub fn log_and_map(
                     reason,
                     status = "failed",
                     error = ?e,
-                    caller.file = loc.file(),
-                    caller.line = loc.line(),
-                    "{context} ({}:{})",    // <-- 加入 path:line
+                    "{context} ({}:{})",
                     loc.file(),
                     loc.line()
                 ),
                 None => tracing::$lvl!(
                     reason,
                     status = "failed",
-                    caller.file = loc.file(),
-                    caller.line = loc.line(),
                     "{context} ({}:{})",
                     loc.file(),
                     loc.line()
@@ -51,26 +58,32 @@ pub fn log_and_map(
 }
 
 macro_rules! define_log_fns {
-    ($name:ident, $name_with_err:ident, $level:expr) => {
+    ($name:ident, $name_with_source:ident, $level:expr) => {
         #[track_caller]
         pub fn $name(reason: &'static str, context: &'static str, app_err: AppError) -> AppError {
             log_and_map($level, reason, context, None, app_err)
         }
 
         #[track_caller]
-        pub fn $name_with_err(
+        pub fn $name_with_source(
             reason: &'static str,
             context: &'static str,
-            err: impl Debug,
+            source: impl Debug,
             app_err: AppError,
         ) -> AppError {
-            log_and_map($level, reason, context, Some(&err as &dyn Debug), app_err)
+            log_and_map(
+                $level,
+                reason,
+                context,
+                Some(&source as &dyn Debug),
+                app_err,
+            )
         }
     };
 }
 
-define_log_fns!(log_err, log_err_with_err, Level::ERROR);
-define_log_fns!(log_warn, log_warn_with_err, Level::WARN);
-define_log_fns!(log_info, log_info_with_err, Level::INFO);
-define_log_fns!(log_debug, log_debug_with_err, Level::DEBUG);
-define_log_fns!(log_trace, log_trace_with_err, Level::TRACE);
+define_log_fns!(log_err, log_err_with_source, Level::ERROR);
+define_log_fns!(log_warn, log_warn_with_source, Level::WARN);
+define_log_fns!(log_info, log_info_with_source, Level::INFO);
+define_log_fns!(log_debug, log_debug_with_source, Level::DEBUG);
+define_log_fns!(log_trace, log_trace_with_source, Level::TRACE);

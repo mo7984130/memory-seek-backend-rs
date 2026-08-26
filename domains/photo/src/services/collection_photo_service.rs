@@ -1,18 +1,6 @@
-use crate::{
-    mappers::{
-        collection_mapper::CollectionMapper, collection_photo_mapper::CollectionPhotoMapper,
-        photo_mapper::PhotoMapper,
-    },
-    services::photo_service::PhotoService,
-    state::PhotoState,
-};
-use common::{
-    Result,
-    ext::OkExt,
-    metrics_group, metrics_name, metrics_success,
-    models::CursorPage,
-    utils::{DbUtils, MetricsTimerExt},
-};
+use crate::repo::CollectionRepo;
+use crate::{services::photo_service::PhotoService, state::PhotoState};
+use common::{Result, ext::OkExt, metrics_name, models::CursorPage, utils::MetricsTimerExt};
 use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
@@ -33,6 +21,7 @@ pub(crate) struct CollectionPhotoService;
 // 查询
 impl CollectionPhotoService {
     /// 获取包含指定照片的所有收藏夹
+    #[common::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, photo_id = %photo_id)
@@ -42,27 +31,24 @@ impl CollectionPhotoService {
         user_id: UserId,
         photo_id: PhotoId,
     ) -> Result<Vec<CollectionBriefView>> {
-        metrics_group!();
-
         let collection_ids =
-            CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.db, user_id, photo_id)
-                .await?;
+            CollectionRepo::query_collection_ids_by_photo(state, user_id, photo_id).await?;
 
         if collection_ids.is_empty() {
-            metrics_success!();
             return Ok(vec![]);
         }
 
-        let collections = CollectionMapper::query_id_and_name_by_ids(&state.db, &collection_ids)
+        let collections = CollectionRepo::query_collection_briefs(state, &collection_ids)
             .await?
             .into_iter()
             .map(|(id, name)| CollectionBriefView { id, name })
             .collect();
 
-        metrics_success!();
         Ok(collections)
     }
 
+    /// 按游标查询相册中的照片, 并补充照片视图信息.
+    #[common::metered(name = "get_collection_photos")]
     #[tracing::instrument(
         name = "get_collection_photos",
         skip_all,
@@ -73,52 +59,27 @@ impl CollectionPhotoService {
         user_id: UserId,
         collection_id: CollectionId,
         req: CollectionPhotoCursorPageParam,
-    ) -> Result<CursorPage<PhotoView, String>> {
-        metrics_group!();
+    ) -> Result<CursorPage<PhotoView, TimeIdCursor<PhotoId>>> {
+        let page = CollectionRepo::query_collection_photo_ids(state, user_id, collection_id, &req)
+            .timed(metrics_name!("query_photo_ids"))
+            .await?;
 
-        let photo_ids = CollectionPhotoMapper::query_photo_id_by_collection_id(
-            &state.db,
-            user_id,
-            collection_id,
-            req.cursor.as_ref(),
-            req.size,
-        )
-        .timed(metrics_name!("query_photo_ids"))
-        .await?;
-
-        let CursorPage {
-            records: photo_ids,
-            has_more,
-            ..
-        } = CursorPage::from_oversize(photo_ids, req.size);
-
-        let photo_vos = PhotoService::load_photos_info(state, user_id, &photo_ids)
+        let photo_vos = PhotoService::load_photos_info(state, user_id, &page.records)
             .timed(metrics_name!("load_photos_info"))
             .await?;
-        let next_cursor = if has_more {
-            photo_vos.last().map(|vo| {
-                TimeIdCursor {
-                    created_at: vo.created_at,
-                    id: vo.id,
-                }
-                .encode()
-            })
-        } else {
-            None
-        };
-
-        metrics_success!();
-        CursorPage {
-            records: photo_vos,
-            has_more,
-            next_cursor,
-        }
-        .to_ok()
+        Ok(page
+            .replace_records(photo_vos)
+            .with_next_cursor(|vo| TimeIdCursor {
+                time_at: vo.created_at,
+                id: vo.id,
+            }))
     }
 }
 
 // 添加
 impl CollectionPhotoService {
+    /// 批量将照片加入相册, 并返回实际新增数量.
+    #[common::metered(name = "add_collection_photos")]
     #[tracing::instrument(
         name = "add_collection_photos",
         skip_all,
@@ -130,39 +91,14 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoAddBatchResult> {
-        metrics_group!();
+        // 确认归属
+        CollectionRepo::ensure_belong(state, user_id, collection_id).await?;
 
-        // 插入前, 需要鉴权
-        CollectionMapper::ensure_belong(&state.db, user_id, collection_id)
-            .timed(metrics_name!("auth_check"))
-            .await?;
+        // 添加照片
+        let photo_count =
+            CollectionRepo::add_collection_photos(state, user_id, collection_id, &photo_ids)
+                .await?;
 
-        // 插入
-        let photo_count = DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                let new_photo_count =
-                    CollectionMapper::add_photos_batch(txn, user_id, collection_id, &photo_ids)
-                        .await?;
-
-                // 将新添加的第一张照片设为封面
-                if let Some(photo_id) = photo_ids.first() {
-                    let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
-                    CollectionMapper::update_cover_photo(
-                        txn,
-                        collection_id,
-                        Some(*photo_id),
-                        file_id,
-                    )
-                    .await?;
-                }
-
-                Ok(new_photo_count)
-            })
-        })
-        .timed(metrics_name!("db_transaction"))
-        .await?;
-
-        metrics_success!();
         Ok(CollectionPhotoAddBatchResult {
             new_photo_count: photo_count,
         })
@@ -171,6 +107,8 @@ impl CollectionPhotoService {
 
 // 删除
 impl CollectionPhotoService {
+    /// 移除收藏夹照片.
+    #[common::metered(name = "remove_collection_photos")]
     #[tracing::instrument(
         name = "remove_collection_photos",
         skip_all,
@@ -182,65 +120,15 @@ impl CollectionPhotoService {
         collection_id: CollectionId,
         photo_ids: PhotoIds,
     ) -> Result<CollectionPhotoRemoveBatchResult> {
-        metrics_group!();
+        // 校验归属
+        let collection =
+            CollectionRepo::ensure_belong_with_return(state, user_id, collection_id).await?;
 
-        let remove_count = DbUtils::write(&state.db, |txn| {
-            Box::pin(async move {
-                let collection =
-                    CollectionMapper::ensure_belong_with_return(txn, user_id, collection_id)
-                        .await?;
-
-                // 先检查封面是否需要更新
-                let need_update_cover = collection
-                    .cover_photo_id
-                    .map(|cover_pid| photo_ids.contains(&cover_pid))
-                    .unwrap_or(false);
-
-                let rows = CollectionPhotoMapper::delete_by_collection_id_and_photo_ids(
-                    txn,
-                    user_id,
-                    collection_id,
-                    &photo_ids,
-                )
+        // 移除照片
+        let remove_count =
+            CollectionRepo::remove_collection_photos(state, user_id, collection, &photo_ids)
                 .await?;
 
-                // 如果封面照片被删除，更新封面
-                if need_update_cover {
-                    // 获取剩余的第一张照片作为新封面
-                    let remaining_photo_ids =
-                        CollectionPhotoMapper::query_photo_id_by_collection_id(
-                            txn,
-                            user_id,
-                            collection_id,
-                            None,
-                            1,
-                        )
-                        .await?;
-
-                    if let Some(photo_id) = remaining_photo_ids.first() {
-                        let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
-
-                        CollectionMapper::update_cover_photo(
-                            txn,
-                            collection_id,
-                            Some(*photo_id),
-                            file_id,
-                        )
-                        .await?;
-                    }
-                }
-
-                // 更新收藏夹照片数量
-                CollectionMapper::update_photo_count_delta(txn, collection_id, -(rows as i64))
-                    .await?;
-
-                Ok(rows)
-            })
-        })
-        .timed(metrics_name!("db_transaction"))
-        .await?;
-
-        metrics_success!();
         CollectionPhotoRemoveBatchResult {
             removed_photo_count: remove_count,
         }

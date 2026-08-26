@@ -1,7 +1,7 @@
 //! photo 域内部共享类型
 
 use serde::{Deserialize, Serialize};
-use types::photo::{FaceBBox, person::PersonId};
+use types::photo::{FaceBBox, ImageDimensions, person::PersonId};
 
 /// 人物列表视图所需的最小字段集（不含人脸向量），用于三级缓存
 ///
@@ -12,5 +12,6 @@ pub struct PersonBriefRow {
     pub name: String,
     pub cover_file_id: String,
     pub cover_bbox: FaceBBox,
+    pub source_dimensions: ImageDimensions,
     pub face_count: i64,
 }

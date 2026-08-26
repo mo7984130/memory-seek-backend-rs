@@ -1,0 +1,16 @@
+[package]
+name = "audit"
+version = "0.2.0"
+edition = "2024"
+
+[features]
+default = []
+enable = ["common/snowflake"]
+controller = ["dep:axum"]
+
+[dependencies]
+common = { path = "../../common", features = ["contextual-sea-orm", "validators"] }
+sea-orm = { workspace = true }
+serde_json = { workspace = true }
+types = { path = "../../types", features = ["orm"] }
+axum = { workspace = true, optional = true }

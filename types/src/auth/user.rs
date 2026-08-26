@@ -15,6 +15,7 @@ pub struct AdminId(UserId);
 impl AdminId {
     pub const ADMIN_ID: AdminId = AdminId(UserId(1));
 
+    /// 判断该身份是否为系统管理员.
     pub fn is_admin(&self) -> bool {
         *self == Self::ADMIN_ID
     }
@@ -42,7 +43,7 @@ impl AdminId {
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::utils::token_cipher;
+    use common::time::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
@@ -62,9 +63,9 @@ mod entity {
         pub avatar_file_id: Option<String>,
         pub inviter: UserId,
         pub refresh_token: Option<String>,
-        pub refresh_token_expire_at: Option<DateTimeUtc>,
-        pub updated_at: DateTimeUtc,
-        pub created_at: DateTimeUtc,
+        pub refresh_token_expire_at: Option<DateTime>,
+        pub updated_at: DateTime,
+        pub created_at: DateTime,
     }
 
     /// 用户记录，使用强类型 ID
@@ -78,9 +79,9 @@ mod entity {
         pub avatar_file_id: Option<String>,
         pub inviter: UserId,
         pub refresh_token: Option<String>,
-        pub refresh_token_expire_at: Option<DateTimeUtc>,
-        pub updated_at: DateTimeUtc,
-        pub created_at: DateTimeUtc,
+        pub refresh_token_expire_at: Option<DateTime>,
+        pub updated_at: DateTime,
+        pub created_at: DateTime,
     }
 
     impl From<Model> for UserRecord {
@@ -120,16 +121,18 @@ mod entity {
     }
 
     impl UserInfo {
-        pub fn with_avatar_token(mut self) -> Self {
-            self.avatar_token = ImageToken::encrypt_avatar_token(
-                token_cipher(),
-                self.avatar_token.as_deref(),
-                self.id,
-            );
-            self
+        /// 为头像文件 ID 生成加密访问令牌.
+        pub fn with_avatar_token(mut self) -> common::error::contextual::Result<Self> {
+            self.avatar_token = self
+                .avatar_token
+                .as_deref()
+                .map(|key| ImageToken::encrypt_avatar_token(key, self.id))
+                .transpose()?;
+            Ok(self)
         }
 
-        pub fn from_with_token(user: UserRecord) -> Self {
+        /// 将用户记录转换为包含头像访问令牌的用户信息.
+        pub fn from_with_token(user: UserRecord) -> common::error::contextual::Result<Self> {
             UserInfo::from(user).with_avatar_token()
         }
     }

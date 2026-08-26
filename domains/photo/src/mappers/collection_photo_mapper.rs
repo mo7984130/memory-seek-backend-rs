@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use common::Result;
+use common::error::contextual::Result;
 use common::ext::OkExt;
+use common::models::CursorPage;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use types::auth::user::UserId;
 use types::cursor::TimeIdCursor;
@@ -11,6 +12,7 @@ use types::photo::{collection::CollectionId, photo::PhotoId};
 pub(crate) struct CollectionPhotoMapper;
 
 impl CollectionPhotoMapper {
+    /// 删除指定相册中的指定照片关联, 并返回受影响的照片数量.
     pub async fn delete_by_collection_id_and_photo_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -33,6 +35,7 @@ impl CollectionPhotoMapper {
 
     /// 根据photo_ids 删除收藏夹照片
     /// 返回HashMap<受影响的收藏夹id, 该收藏夹删除的照片个数(为负)>
+    /// 删除照片对应的全部相册关联, 并返回受影响的相册计数.
     pub async fn delete_by_photo_ids(
         db: &impl ConnectionTrait,
         photo_ids: &[PhotoId],
@@ -62,15 +65,14 @@ impl CollectionPhotoMapper {
         Ok(affected)
     }
 
-    /// 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-    /// 由 service 层用 CursorPage::from_oversize 截断消费。
+    /// 查询相册中的照片 ID.
     pub async fn query_photo_id_by_collection_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
         collection_id: CollectionId,
         cursor: Option<&TimeIdCursor<PhotoId>>,
         size: u64,
-    ) -> Result<Vec<PhotoId>> {
+    ) -> Result<CursorPage<PhotoId, ()>> {
         let mut query = Entity::find()
             .filter(Column::CollectionId.eq(collection_id))
             .filter(Column::UserId.eq(user_id))
@@ -82,15 +84,17 @@ impl CollectionPhotoMapper {
             query = query.filter(c.before(Column::CreatedAt, Column::Id));
         }
 
-        query
+        let records = query
             .select_only()
             .column(Column::PhotoId)
             .into_tuple::<PhotoId>()
             .all(db)
-            .await?
-            .to_ok()
+            .await?;
+
+        Ok(CursorPage::from_oversize(records, size))
     }
 
+    /// 删除相册下的全部照片关联.
     pub async fn delete_by_collection_id(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -106,6 +110,7 @@ impl CollectionPhotoMapper {
     }
 
     /// 查询包含指定照片的所有收藏夹 ID
+    /// 查询照片所属的相册 ID, 并按用户权限过滤.
     pub async fn query_collection_ids_by_photo_id(
         db: &impl ConnectionTrait,
         user_id: UserId,

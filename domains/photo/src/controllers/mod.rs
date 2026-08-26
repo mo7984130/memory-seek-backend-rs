@@ -4,7 +4,6 @@ use axum::Router;
 
 use crate::state::PhotoState;
 
-pub mod behavior_controller;
 pub mod collection_controller;
 pub mod collection_photo_controller;
 pub mod comment_controller;
@@ -17,7 +16,6 @@ pub mod photo_controller;
 pub mod photo_like_controller;
 pub mod timeline_stat_controller;
 
-use behavior_controller::BehaviorController;
 use collection_controller::CollectionController;
 use collection_photo_controller::CollectionPhotoController;
 use comment_controller::CommentController;
@@ -57,10 +55,6 @@ impl ControllerRouter for Controller {
             .nest(
                 "/photo/timeline",
                 TimelineStatController::protected_routes(),
-            )
-            .nest(
-                "/photo/admin/behaviors",
-                BehaviorController::protected_routes(),
             );
 
         #[cfg(feature = "face")]

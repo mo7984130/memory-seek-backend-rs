@@ -8,6 +8,7 @@ pub struct Config {
     pub salt: String,
 }
 
+/// 根据配置初始化全局令牌加密器.
 pub fn init(cfg: &Config) {
     info!("初始化 TokenCipher");
     common::utils::init_token_cipher(&TokenCipherConfig {

@@ -1,8 +1,8 @@
 use metrics::gauge;
 use std::path::PathBuf;
 use sysinfo::{Disks, System};
-use tracing::warn;
 
+/// 采集并更新系统资源指标.
 pub fn collect_system_metrics(sys: &mut System) {
     sys.refresh_all();
 
@@ -27,7 +27,7 @@ pub fn collect_system_metrics(sys: &mut System) {
             gauge!("system.memory.process_usage").set(process.memory() as f64);
         }
         None => {
-            warn!("无法获取当前进程信息");
+            common::caller_warn!("无法获取当前进程信息");
             gauge!("system.cpu.process_usage").set(-1.0);
             gauge!("system.memory.process_usage").set(-1.0);
         }

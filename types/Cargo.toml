@@ -1,6 +1,6 @@
 [package]
 name = "types"
-version = "0.1.8"
+version = "0.2.0"
 edition = "2021"
 description = "Shared types for memory-seek: ID types, DTOs, SeaORM entities"
 
@@ -14,7 +14,7 @@ lightweight = []
 ts = ["dep:ts-rs"]
 
 # 后端数据库实体
-orm = ["dep:sea-orm", "dep:sqlx", "dep:pgvector", "dep:common"]
+orm = ["dep:sea-orm"]
 
 # 人脸识别
 face-engine = ["orm", "dep:insight-face-rs", "sea-orm/postgres-vector"]
@@ -25,7 +25,6 @@ full = ["orm", "face-engine"]
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-chrono = { workspace = true }
 validator = { workspace = true }
 thiserror = { workspace = true }
 derive_more = { workspace = true }
@@ -37,9 +36,7 @@ once_cell = { workspace = true }
 ts-rs = { workspace = true, optional = true }
 
 sea-orm = { workspace = true, features = ["sqlx-postgres", "macros"], optional = true }
-sqlx = { workspace = true, optional = true }
-pgvector = { workspace = true, optional = true }
-common = { path = "../common", optional = true }
+common = { path = "../common", features = ["contextual-serde"] }
 insight-face-rs = { workspace = true, features = ["pgvector"], optional = true }
 
 [dev-dependencies]

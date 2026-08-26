@@ -5,12 +5,15 @@
 //! 未匹配（404）时回退为 `unmatched`。
 use std::time::Instant;
 
+use common::time::Duration;
+
 use axum::extract::MatchedPath;
 use axum::extract::Request;
 use axum::middleware::Next;
 use axum::response::Response;
 use common::utils::GaugeGuard;
 
+/// 记录请求耗时, 状态码和路由指标.
 pub async fn metrics_middleware(request: Request, next: Next) -> Response {
     let method = request.method().to_string();
     let route = request
@@ -30,7 +33,8 @@ pub async fn metrics_middleware(request: Request, next: Next) -> Response {
     response
 }
 
-fn record(method: &str, route: &str, status_class: &str, elapsed: std::time::Duration) {
+/// 写入单次请求的聚合指标.
+fn record(method: &str, route: &str, status_class: &str, elapsed: Duration) {
     metrics::counter!(
         "server.http.requests_total",
         "method" => method.to_string(),

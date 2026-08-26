@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use step_boundary_check::{Violation, check_source};
+use step_boundary_check::{check_source, Violation};
 
 fn main() {
     let root = std::env::args()
@@ -14,7 +14,7 @@ fn main() {
     collect_rs(&root, &mut violations);
 
     if violations.is_empty() {
-        println!("step_boundary_check: OK, 所有 Step 均遵守表归属白名单");
+        println!("step_boundary_check: OK, Step 与错误调用边界检查通过");
         return;
     }
 

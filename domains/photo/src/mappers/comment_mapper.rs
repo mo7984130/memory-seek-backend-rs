@@ -1,9 +1,6 @@
-use common::error::AppError;
+use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::OkExt;
-use common::{
-    Result,
-    ext::{BoolExt, OptionExt, ResultErrExt},
-};
+use common::models::CursorPage;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
@@ -18,6 +15,7 @@ pub struct CommentMapper;
 
 // 创建
 impl CommentMapper {
+    /// 插入评论记录.
     pub async fn insert(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -39,23 +37,28 @@ impl CommentMapper {
 
 // 修改
 impl CommentMapper {
+    /// 检查评论记录是否存在.
     pub async fn exists(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<bool> {
         let count = Entity::find()
             .filter(Column::Id.eq(comment_id))
             .count(db)
-            .await
-            .trace_internal_err("db_query_err", "查询评论是否存在失败")?;
+            .await?;
         Ok(count > 0)
     }
 
+    /// 确保评论存在.
     pub async fn ensure_exist(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<()> {
-        Self::exists(db, comment_id).await?.true_or_warn(
-            "comment_not_exist",
-            "评论不存在",
-            AppError::not_found("评论不存在"),
-        )
+        if !Self::exists(db, comment_id).await? {
+            return Err(ContextualError::warn_without_source(
+                "comment_not_exist",
+                "评论不存在",
+                AppError::not_found("评论不存在"),
+            ));
+        }
+        Ok(())
     }
 
+    /// 增量更新评论点赞计数.
     pub async fn update_like_count_delta(
         db: &impl ConnectionTrait,
         comment_id: CommentId,
@@ -73,6 +76,7 @@ impl CommentMapper {
 
 // 查询
 impl CommentMapper {
+    /// 查询照片的热门评论.
     pub async fn query_hot_comments(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
@@ -92,15 +96,14 @@ impl CommentMapper {
             .to_ok()
     }
 
+    /// 分页查询照片评论.
     pub async fn query_by_photo_id(
         db: &impl ConnectionTrait,
         photo_id: PhotoId,
         exclude_ids: &[CommentId],
         cursor: Option<&TimeIdCursor<CommentId>>,
         size: u64,
-    ) -> Result<Vec<CommentRecord>> {
-        // 分页契约: 查询 size+1 条, 多出的 1 条用于 has_more 判定,
-        // 由 service 层用 CursorPage::from_oversize 截断消费
+    ) -> Result<CursorPage<CommentRecord, ()>> {
         let mut query = Entity::find()
             .filter(Column::PhotoId.eq(photo_id))
             .order_by_desc(Column::CreatedAt)
@@ -115,68 +118,49 @@ impl CommentMapper {
             query = query.filter(c.before(Column::CreatedAt, Column::Id));
         }
 
-        query
+        let records = query
             .all(db)
             .await?
             .into_iter()
             .map(CommentRecord::from)
-            .collect::<Vec<_>>()
-            .to_ok()
-    }
+            .collect::<Vec<_>>();
 
-    pub async fn query_photo_id_by_id(
-        db: &impl ConnectionTrait,
-        comment_id: CommentId,
-    ) -> Result<PhotoId> {
-        Entity::find()
-            .filter(Column::Id.eq(comment_id))
-            .select_only()
-            .column(Column::PhotoId)
-            .into_tuple::<PhotoId>()
-            .one(db)
-            .await?
-            .ok_or_warn_bad_request("comment_not_found", "评论不存在", "评论不存在")
+        Ok(CursorPage::from_oversize(records, size))
     }
 }
 
 // 删除
 impl CommentMapper {
+    /// 删除单条评论.
+    /// 删除成功: 返回评论记录
+    /// 删除失败: 返回None
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
         comment_id: CommentId,
-    ) -> Result<bool> {
-        let ret = Entity::delete_by_id(comment_id)
+    ) -> Result<Option<CommentRecord>> {
+        Entity::delete_by_id(comment_id)
             .filter(Column::UserId.eq(user_id))
-            .exec(db)
-            .await?;
-
-        Ok(ret.rows_affected == 1)
+            .exec_with_returning(db)
+            .await?
+            .pop()
+            .map(CommentRecord::from)
+            .to_ok()
     }
 
+    /// 删除指定照片的全部评论并返回评论 ID.
     pub async fn delete_by_photo_ids(
         db: &impl ConnectionTrait,
         photo_ids: &[PhotoId],
     ) -> Result<Vec<CommentId>> {
-        if photo_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
         // 先查询要删除的评论 ID
-        let comment_ids: Vec<CommentId> = Entity::find()
-            .select_only()
-            .column(Column::Id)
+        let comment_ids = Entity::delete_many()
             .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
-            .into_tuple::<CommentId>()
-            .all(db)
-            .await?;
-
-        if !comment_ids.is_empty() {
-            Entity::delete_many()
-                .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
-                .exec(db)
-                .await?;
-        }
+            .exec_with_returning(db)
+            .await?
+            .into_iter()
+            .map(|model| model.id)
+            .collect();
 
         Ok(comment_ids)
     }

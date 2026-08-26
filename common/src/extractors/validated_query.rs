@@ -1,6 +1,6 @@
 use crate::{
     error::AppError,
-    ext::{ResultErrExt, log_warn},
+    ext::{ResultLogExt, log_warn},
     extractors::validated_json::format_validation_errors,
 };
 use axum::extract::{FromRequestParts, Query};
@@ -23,10 +23,10 @@ where
     ) -> Result<Self, Self::Rejection> {
         let Query(value) = Query::<T>::from_request_parts(parts, state)
             .await
-            .trace_warn_bad_request(
+            .log_warn(
                 "validated_query_parse_error",
                 "解析查询参数失败",
-                "解析查询参数失败",
+                AppError::bad_request("解析查询参数失败"),
             )?;
 
         value.validate().map_err(|err: ValidationErrors| {

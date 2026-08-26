@@ -10,9 +10,9 @@
 //! 保持收集顺序、final 步骤置末),从而无需维护集中的注册列表。
 
 use async_trait::async_trait;
-use sea_orm::{DatabaseConnection, DatabaseTransaction, TransactionTrait};
+use sea_orm::{DatabaseConnection, DatabaseTransaction};
 
-use crate::Result;
+use crate::{Result, db_transaction};
 
 /// 事务管道中的单个步骤
 ///
@@ -63,24 +63,14 @@ impl<Ctx: Send + 'static> StepPipeline<Ctx> {
     // todo mutlirun
     /// 在单个事务内串行执行全部步骤,任一步失败则整体回滚
     pub async fn run(&self, db: &DatabaseConnection, ctx: &mut Ctx) -> Result<()> {
-        let txn = db.begin().await?;
-        let res: Result<()> = async {
+        db_transaction!(scoped db, |txn| {
             for step in self.steps {
-                step.execute(&txn, ctx).await?;
+                step.execute(txn, ctx).await?;
             }
             Ok(())
-        }
-        .await;
+        })
+        .await?;
 
-        match res {
-            Ok(()) => {
-                txn.commit().await?;
-                Ok(())
-            }
-            Err(e) => {
-                txn.rollback().await.ok();
-                Err(e)
-            }
-        }
+        Ok(())
     }
 }

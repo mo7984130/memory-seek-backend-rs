@@ -17,6 +17,7 @@ pub struct AppSetup {
 
 impl AppSetup {
     #[allow(unused_variables)]
+    /// 初始化基础设施, 外部库, 业务域和应用路由.
     pub async fn init(cfg: &AppConfig) -> Result<Self> {
         // 1. 初始化基础设施
         let bases = bases::AppBasesInit::init(cfg).await?;
@@ -26,8 +27,7 @@ impl AppSetup {
 
         // 3. 初始化备份调度器
         #[cfg(feature = "backup")]
-        let backup_scheduler =
-            domains::backup::init(&bases.db, &libs.s3_client, &cfg.backup).await?;
+        let backup_runtime = domains::backup::init(&bases.db, &libs.s3_client, &cfg.backup).await?;
 
         // 4. 构建 AppState
         let state = Arc::new(AppState {
@@ -40,7 +40,9 @@ impl AppSetup {
             #[cfg(feature = "s3")]
             s3_client: libs.s3_client,
             #[cfg(feature = "backup")]
-            backup_scheduler,
+            backup_scheduler: backup_runtime.scheduler,
+            #[cfg(feature = "backup")]
+            backup_state: backup_runtime.state,
             #[cfg(feature = "face-engine")]
             face_engine: libs.face_engine,
         });

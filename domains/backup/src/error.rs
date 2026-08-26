@@ -1,5 +1,5 @@
 use common::error::AppError;
-use common::ext::log_err_with_err;
+use common::ext::log_err_with_source;
 use thiserror::Error;
 
 /// 备份领域统一错误类型
@@ -28,46 +28,57 @@ pub enum BackupError {
     #[error("备份调度器操作失败: {0}")]
     Scheduler(#[from] tokio_cron_scheduler::JobSchedulerError),
 
+    #[error("表不存在: {0}")]
+    TableNotExist(String),
+
     /// 业务校验类错误（如目标表不存在）
     #[error("{0}")]
     Msg(String),
 }
 
+pub type Result<T> = std::result::Result<T, BackupError>;
+
 impl From<BackupError> for AppError {
     #[track_caller]
     fn from(err: BackupError) -> Self {
         match err {
-            BackupError::Io(e) => log_err_with_err(
+            BackupError::Io(e) => log_err_with_source(
                 "backup_io_error",
                 "备份文件操作失败",
                 e,
                 AppError::InternalServerError,
             ),
-            BackupError::Csv(e) => log_err_with_err(
+            BackupError::Csv(e) => log_err_with_source(
                 "backup_csv_error",
                 "CSV 导出失败",
                 e,
                 AppError::InternalServerError,
             ),
-            BackupError::Db(e) => log_err_with_err(
+            BackupError::Db(e) => log_err_with_source(
                 "backup_db_error",
                 "备份数据库操作失败",
                 e,
                 AppError::InternalServerError,
             ),
-            BackupError::S3(e) => log_err_with_err(
+            BackupError::S3(e) => log_err_with_source(
                 "backup_s3_error",
                 "备份 S3 存储操作失败",
                 e,
                 AppError::InternalServerError,
             ),
-            BackupError::Scheduler(e) => log_err_with_err(
+            BackupError::Scheduler(e) => log_err_with_source(
                 "backup_scheduler_error",
                 "备份调度器操作失败",
                 e,
                 AppError::InternalServerError,
             ),
-            BackupError::Msg(msg) => log_err_with_err(
+            BackupError::TableNotExist(table_name) => log_err_with_source(
+                "backup_table_not_exist",
+                "备份时表不存在",
+                table_name,
+                AppError::InternalServerError,
+            ),
+            BackupError::Msg(msg) => log_err_with_source(
                 "backup_error",
                 "备份执行失败",
                 msg,

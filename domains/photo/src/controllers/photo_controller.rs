@@ -10,25 +10,22 @@ use axum::{
 };
 use common::{
     Result,
-    ext::{ResultErrExt, ResultRExt},
-    extractors::{OptionalClientIp, ValidatedJson, ValidatedQuery},
+    ext::{ResultLogExt, ResultRExt},
+    extractors::{ValidatedJson, ValidatedQuery},
     models::CursorPage,
     traits::controller::ControllerRouter,
 };
 use common::{ext::OptionExt, r::R, utils::token_cipher};
-use types::auth::user::UserId;
 use types::photo::{
-    ImageToken, ImageTokenType,
-    behavior::UserBehaviorAction,
+    ImageToken,
     dto::photo::{PhotoCursorParam, PhotoView},
     models::{DeletePhotosParam, ExistsByMd5BatchParam},
+    photo::PhotoId,
 };
+use types::{auth::user::UserId, cursor::TimeIdCursor};
 
 use crate::{
-    services::{
-        behavior_service::{BehaviorRecordReq, BehaviorService},
-        photo_service::{ImageDownloadData, PhotoService},
-    },
+    services::photo_service::{ImageDownloadData, PhotoService},
     state::PhotoState,
 };
 
@@ -54,54 +51,51 @@ impl ControllerRouter for PhotoController {
 }
 
 impl PhotoController {
+    /// 接收 multipart 图片, 完成校验, 存储并记录上传行为.
     async fn upload(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        OptionalClientIp(ip): OptionalClientIp,
         mut multipart: Multipart,
     ) -> Result<R<PhotoView>> {
         let field = multipart
             .next_field()
             .await
-            .trace_warn_bad_request("invalid_mutipart", "无效的表单数据", "无效的表单数据")?
+            .log_warn(
+                "invalid_mutipart",
+                "无效的表单数据",
+                common::error::AppError::bad_request("无效的表单数据"),
+            )?
             .ok_or_warn_bad_request("upload_file_not_found", "未找到上传文件", "未找到上传文件")?;
 
         let file_name = field.file_name().unwrap_or("photo.jpg").to_string();
         let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field
-            .bytes()
-            .await
-            .trace_internal_err("read_file_err", "读取文件失败")?;
+        let file_data = field.bytes().await.log_err(
+            "read_file_err",
+            "读取文件失败",
+            common::error::AppError::InternalServerError,
+        )?;
 
         let req = types::photo::models::UploadPhotoParam {
             file_name,
             content_type,
-            created_at: None,
         };
-        let photo = PhotoService::upload_photo(&state, user_id, file_data, req).await?;
-
-        // 行为审计：上传
-        BehaviorService::record(
-            &state,
-            BehaviorRecordReq::new(user_id, UserBehaviorAction::Upload)
-                .with_photo(photo.id.0)
-                .with_ip(ip.map(|ip| ip.to_string())),
-        )
-        .await;
+        let photo = PhotoService::upload_photo(Arc::clone(&state), user_id, file_data, req).await?;
 
         Ok(photo).to_r_ok()
     }
 
+    /// 游标获取照片列表.
     async fn get_photos_cursor(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<PhotoCursorParam>,
-    ) -> Result<R<CursorPage<PhotoView, String>>> {
+    ) -> Result<R<CursorPage<PhotoView, TimeIdCursor<PhotoId>>>> {
         PhotoService::get_photo_cursor_page(&state, user_id, req)
             .await
             .to_r_ok()
     }
 
+    /// 批量检查图片 MD5 是否已存在.
     async fn md5s_exist(
         State(state): State<Arc<PhotoState>>,
         ValidatedJson(req): ValidatedJson<ExistsByMd5BatchParam>,
@@ -111,30 +105,16 @@ impl PhotoController {
             .to_r_ok()
     }
 
+    /// 解密图片访问令牌并返回原图或处理后的图片流.
     async fn get_image(
         State(state): State<Arc<PhotoState>>,
-        OptionalClientIp(ip): OptionalClientIp,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
-        let image_token: ImageToken = token_cipher().decrypt(&token).trace_warn_bad_request(
+        let image_token: ImageToken = token_cipher().decrypt(&token).log_warn(
             "invalid_image_token",
             "无效的图片 token",
-            "无效的图片 token",
+            common::error::AppError::bad_request("无效的图片 token"),
         )?;
-
-        // 浏览埋点：仅预览/原图访问计入，缩略图/裁剪不计入
-        if matches!(
-            image_token.token_type,
-            ImageTokenType::Preview | ImageTokenType::Original
-        ) {
-            let ip_str = ip.map(|ip| ip.to_string());
-            BehaviorService::record_view_async(
-                &state,
-                image_token.viewer_id,
-                image_token.file_id.clone(),
-                ip_str,
-            );
-        }
 
         let data = PhotoService::download_image(&state, image_token).await?;
 
@@ -159,26 +139,15 @@ impl PhotoController {
         Ok(resp)
     }
 
+    /// 删除当前用户指定的照片及其对象存储文件.
     async fn delete_photos(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
-        OptionalClientIp(ip): OptionalClientIp,
         ValidatedJson(req): ValidatedJson<DeletePhotosParam>,
     ) -> Result<R<()>> {
-        let photo_ids: Vec<i64> = req.photo_ids.iter().map(|id| id.0).collect();
-
-        PhotoService::delete_photos(&state, user_id, req)
+        PhotoService::delete_photos(state, user_id, req)
             .await
             .to_r_ok()?;
-
-        // 行为审计：批量删除照片（记录保留，照片删除后仍可追溯）
-        BehaviorService::record(
-            &state,
-            BehaviorRecordReq::new(user_id, UserBehaviorAction::DeletePhotos)
-                .with_detail(serde_json::json!({ "photoIds": photo_ids }))
-                .with_ip(ip.map(|ip| ip.to_string())),
-        )
-        .await;
 
         Ok(()).to_r_ok()
     }

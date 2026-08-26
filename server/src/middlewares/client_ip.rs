@@ -5,6 +5,7 @@ use axum::{
 };
 use common::extractors::ClientIp;
 
+/// 提取客户端 IP 并注入请求扩展.
 pub async fn client_ip_middleware(request: Request, next: Next) -> Response {
     let (mut parts, body) = request.into_parts();
 

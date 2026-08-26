@@ -1,6 +1,6 @@
 use crate::{
     error::AppError,
-    ext::{ResultErrExt, log_warn},
+    ext::{BoolExt, ResultLogExt, log_warn},
 };
 use axum::{
     body::Bytes,
@@ -29,13 +29,11 @@ where
 
         // 直接拿 Bytes，body 大小限制已由 DefaultBodyLimit 中间件保证
         // axum 内部会一次性读完 stream 拼成一个连续的 Bytes，没有多余的中间层拷贝
-        let bytes = Bytes::from_request(req, state)
-            .await
-            .trace_warn_bad_request(
-                "validated_json_read_error",
-                "读取请求体失败",
-                " 请求体读取失败",
-            )?;
+        let bytes = Bytes::from_request(req, state).await.log_warn(
+            "validated_json_read_error",
+            "读取请求体失败",
+            AppError::bad_request(" 请求体读取失败"),
+        )?;
 
         // 空 body 时跳过 Content-Type 检查, 用空对象反序列化:
         // 带默认值的 DTO(如全字段可选的参数)直接得到默认值, 必填字段报 missing field;
@@ -49,11 +47,11 @@ where
                 )
             })?
         } else {
-            if !content_type_ok {
-                return Err(AppError::bad_request(
-                    "Content-Type 必须为 application/json",
-                ));
-            }
+            content_type_ok.true_or_warn(
+                "validated_json_content_type_invalid",
+                "请求 Content-Type 必须为 application/json",
+                AppError::bad_request("Content-Type 必须为 application/json"),
+            )?;
 
             serde_json::from_slice(&bytes).map_err(|e| {
                 log_warn(
@@ -130,6 +128,7 @@ pub(crate) fn format_validation_errors(errors: &ValidationErrors) -> String {
     }
 }
 
+/// 递归收集验证错误对应的字段路径.
 fn collect_field_paths(errors: &ValidationErrors, prefix: &str, out: &mut Vec<String>) {
     for (field, kind) in errors.errors() {
         let path = if prefix.is_empty() {

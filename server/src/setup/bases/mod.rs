@@ -13,6 +13,7 @@ use crate::state::AppBases;
 pub struct AppBasesInit;
 
 impl AppBasesInit {
+    /// 初始化数据库, Redis, 缓存和基础监控组件.
     pub async fn init(cfg: &AppConfig) -> Result<AppBases> {
         // 初始化数据库
         let db = database::init(&cfg.database).await?;

@@ -9,6 +9,18 @@ impl<T, E> OkExt<T, E> for T {
     }
 }
 
+pub trait CollectOkExt: Iterator + Sized {
+    #[inline]
+    fn collect_ok<T, E>(self) -> Result<T, E>
+    where
+        T: FromIterator<Self::Item>,
+    {
+        Ok(self.collect())
+    }
+}
+
+impl<I> CollectOkExt for I where I: Iterator {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

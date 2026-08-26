@@ -2,72 +2,93 @@ use std::sync::Arc;
 #[cfg(feature = "face")]
 use std::sync::Mutex;
 
-use common::cache::{CacheConfig, MultiLevelCache};
+use common::models::CursorPage;
 use deadpool_redis::Pool;
+use multi_level_cache::CacheConfig;
+use multi_level_cache::MultiLevelCache;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "face")]
-use backup::storage::BackupStorage;
+use backup::BackupState;
 
+use common::error::ContextualError;
 use types::photo::dto::timeline_stat::MonthStat;
-use types::photo::photo::PhotoRecord;
+use types::photo::photo::{PhotoId, PhotoRecord};
 
 #[cfg(feature = "face")]
 use crate::models::PersonBriefRow;
 
+#[derive(Clone, Deserialize, Serialize)]
+pub(crate) struct CachedPhotoLike {
+    pub(crate) photo_id: PhotoId,
+    pub(crate) is_liked: bool,
+}
+
+#[allow(dead_code)]
 pub struct PhotoState {
-    pub db: DatabaseConnection,
-    pub redis: Pool,
-    /// 照片信息三级缓存（本地 moka → Redis → 数据库）
-    pub cache_photo_info: MultiLevelCache<PhotoRecord>,
-    /// 时间线月度统计三级缓存（整表一条）
-    pub cache_timeline_stat: MultiLevelCache<Vec<MonthStat>>,
-    /// 照片尺寸三级缓存（按 file_id）
-    pub cache_photo_dimensions: MultiLevelCache<(i32, i32)>,
-    /// 照片 MD5 去重三级缓存（按 md5）
-    pub cache_photo_md5: MultiLevelCache<bool>,
-    /// 人物轻量摘要三级缓存（face-engine feature）
+    pub(crate) db: DatabaseConnection,
+    pub(crate) cache_photo_info: MultiLevelCache<PhotoRecord, ContextualError>,
+    pub(crate) cache_photo_like: MultiLevelCache<CachedPhotoLike, ContextualError>,
+    pub(crate) cache_photo_cursor_ids: MultiLevelCache<CursorPage<PhotoId, ()>, ContextualError>,
+    pub(crate) cache_photo_dimensions: MultiLevelCache<(u32, u32), ContextualError>,
+    pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     #[cfg(feature = "face")]
-    pub cache_person: MultiLevelCache<PersonBriefRow>,
+    pub(crate) cache_person: MultiLevelCache<PersonBriefRow, ContextualError>,
+    pub redis: Pool,
     pub s3_client: Arc<S3Client>,
     #[cfg(feature = "face")]
     pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
     #[cfg(feature = "face")]
-    pub backup_storage: BackupStorage,
+    pub backup_state: Arc<BackupState>,
 }
 
 impl PhotoState {
+    /// 组装照片域所需的仓储, 对象存储和备份组件.
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,
         cache_config: CacheConfig,
         s3_client: Arc<S3Client>,
         #[cfg(feature = "face")] face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
-        #[cfg(feature = "face")] backup_storage: BackupStorage,
+        #[cfg(feature = "face")] backup_state: Arc<BackupState>,
     ) -> Self {
-        let cache_photo_info = MultiLevelCache::new("photo_info", redis.clone(), cache_config);
-        let cache_timeline_stat =
-            MultiLevelCache::new("timeline_stat", redis.clone(), cache_config);
-        let cache_photo_dimensions =
-            MultiLevelCache::new("photo_dimensions", redis.clone(), cache_config);
-        let cache_photo_md5 = MultiLevelCache::new("photo_md5", redis.clone(), cache_config);
-        #[cfg(feature = "face")]
-        let cache_person = MultiLevelCache::new("person", redis.clone(), cache_config);
         Self {
             db,
-            redis,
-            cache_photo_info,
-            cache_timeline_stat,
-            cache_photo_dimensions,
-            cache_photo_md5,
+            cache_photo_info: MultiLevelCache::new_with_name(
+                "photo_info",
+                redis.clone(),
+                cache_config,
+            ),
+            cache_photo_like: MultiLevelCache::new_with_name(
+                "photo_like",
+                redis.clone(),
+                cache_config,
+            ),
+            cache_photo_cursor_ids: MultiLevelCache::new_with_name(
+                "photo_cursor_ids",
+                redis.clone(),
+                cache_config,
+            ),
+            cache_photo_dimensions: MultiLevelCache::new_with_name(
+                "photo_dimensions",
+                redis.clone(),
+                cache_config,
+            ),
+            cache_timeline_stat: MultiLevelCache::new_with_name(
+                "timeline_stat",
+                redis.clone(),
+                cache_config,
+            ),
             #[cfg(feature = "face")]
-            cache_person,
+            cache_person: MultiLevelCache::new_with_name("person", redis.clone(), cache_config),
+            redis,
             s3_client,
             #[cfg(feature = "face")]
             face_engine,
             #[cfg(feature = "face")]
-            backup_storage,
+            backup_state,
         }
     }
 }

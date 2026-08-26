@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use common::time::DateTime;
 use validator::Validate;
 
 use crate::auth::user::UserId;
@@ -22,7 +22,7 @@ crate::out_dto!(CollectionView, "photo/", rename = "Collection"; {
     pub cover_token: Option<String>,
     /// 封面照片 ID（字符串）
     pub cover_photo_id: Option<PhotoId>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTime,
 });
 
 #[cfg(feature = "orm")]
@@ -42,14 +42,21 @@ impl From<CollectionRecord> for CollectionView {
 
 #[cfg(feature = "orm")]
 impl CollectionView {
-    pub fn with_generate_cover_token(mut self, viewer: UserId, cipher: &TokenCipher) -> Self {
-        self.cover_token = self.cover_token.as_ref().and_then(|fid| {
-            let seed = format!("{}:{}", viewer, fid);
-            cipher
-                .encrypt(&ImageToken::thumbnail(viewer, fid.to_string()), Some(&seed))
-                .ok()
-        });
-        self
+    /// 为相册封面生成当前查看者可用的裁剪访问令牌.
+    pub fn with_generate_cover_token(
+        mut self,
+        viewer: UserId,
+        cipher: &TokenCipher,
+    ) -> common::error::contextual::Result<Self> {
+        self.cover_token = self
+            .cover_token
+            .as_ref()
+            .map(|fid| {
+                let seed = format!("{}:{}", viewer, fid);
+                cipher.encrypt(&ImageToken::thumbnail(viewer, fid.to_string()), Some(&seed))
+            })
+            .transpose()?;
+        Ok(self)
     }
 }
 
@@ -84,6 +91,7 @@ crate::in_dto!(CollectionUpdateParam, "photo/"; {
 
 pub const COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 
+/// 返回相册照片分页的默认页大小.
 fn collection_photo_cursor_page_default_size() -> u64 {
     COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }

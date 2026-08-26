@@ -1,6 +1,6 @@
 use common::error::AppError;
+use common::time::Duration;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 /// 通用 bench key 前缀
 pub const KEY_PREFIX: &str = "bench";

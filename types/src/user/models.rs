@@ -1,6 +1,6 @@
 //! 用户相关类型定义
 
-use chrono::{DateTime, Utc};
+use common::time::DateTime;
 use validator::Validate;
 
 use super::validators::*;
@@ -36,7 +36,7 @@ crate::out_dto!(UserInfo, "user/", Debug; {
     pub avatar_token: Option<String>,
 
     /// 创建时间
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTime,
 });
 
 crate::in_dto!(ChangePasswordParam, "user/", serialize; {
@@ -45,14 +45,10 @@ crate::in_dto!(ChangePasswordParam, "user/", serialize; {
 
     #[validate(
         custom(function = "validate_password"),
-        must_match(other = "new_password")
+        must_match(other = "confirm_password")
     )]
     pub new_password: String,
 
-    #[validate(
-        custom(function = "validate_password"),
-        must_match(other = "new_password")
-    )]
     pub confirm_password: String,
 });
 
@@ -71,7 +67,7 @@ crate::in_dto!(GetUserInfoBatchParam, "user/", serialize; {
 
 crate::out_dto!(InviterCodeView, "user/", rename = "InviterCode"; {
     pub inviter_code: String,
-    pub expire_at: DateTime<Utc>,
+    pub expire_at: DateTime,
 });
 
 crate::in_dto!(UpdateAvatarParam, "user/", serialize, docs = "更新头像请求参数（文件二进制数据由 multipart 单独传递）"; {
@@ -127,7 +123,7 @@ mod tests {
             nickname: "Test User".to_string(),
             email: "test@example.com".to_string(),
             avatar_token: None,
-            created_at: Utc::now(),
+            created_at: DateTime::from_timestamp(0, 0).unwrap(),
         };
         let json = serde_json::to_string(&user).unwrap();
         assert!(json.contains("\"avatarToken\""));
@@ -142,7 +138,7 @@ mod tests {
             nickname: "Test User".to_string(),
             email: "test@example.com".to_string(),
             avatar_token: Some("token123".to_string()),
-            created_at: Utc::now(),
+            created_at: DateTime::from_timestamp(0, 0).unwrap(),
         };
         let cloned = user.clone();
         assert_eq!(user.id, cloned.id);

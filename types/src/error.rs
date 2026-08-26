@@ -4,7 +4,7 @@ use thiserror::Error;
 #[cfg(feature = "orm")]
 use common::error::AppError;
 #[cfg(feature = "orm")]
-use common::ext::log_warn_with_err;
+use common::ext::log_warn_with_source;
 
 /// 枚举值解析错误（轻量，不依赖 AppError）
 #[derive(Error, Debug)]
@@ -13,7 +13,7 @@ pub struct ParseEnumError(pub String);
 
 /// ID 解析错误（轻量，不依赖 AppError）
 ///
-/// 调用方可通过 `trace_warn_bad_request` 等方式转换为 `AppError`。
+/// 调用方可按其边界策略转换为 `AppError`。
 /// 后端 orm 模式下直接实现 `From<ParseIdError> for AppError` 以便 `?` 直接使用。
 #[derive(Error, Debug)]
 #[error("{0}")]
@@ -63,7 +63,7 @@ impl std::error::Error for CursorDecodeError {
 impl From<CursorDecodeError> for AppError {
     #[track_caller]
     fn from(e: CursorDecodeError) -> Self {
-        log_warn_with_err(
+        log_warn_with_source(
             "cursor_decode_error",
             "游标解码失败",
             e,

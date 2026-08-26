@@ -19,6 +19,7 @@ impl TimelineStatController {
         Router::new()
     }
 
+    /// 返回按月份聚合的照片时间线统计.
     async fn get_monthly_stats(State(state): State<Arc<PhotoState>>) -> Result<R<Vec<MonthStat>>> {
         TimelineStatService::get_monthly_stats(&state)
             .await

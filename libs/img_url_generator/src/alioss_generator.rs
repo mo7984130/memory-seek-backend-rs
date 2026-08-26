@@ -1,8 +1,8 @@
 use crate::{ImageUrl, ImageUrlGenerator};
 use async_trait::async_trait;
+use common::time::Duration;
 use oss::S3Client;
 use std::sync::Arc;
-use std::time::Duration;
 
 const CACHE_AGE: u32 = 604800;
 

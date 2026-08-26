@@ -1,19 +1,24 @@
 use common::Result;
-use common::ext::ResultErrExt;
+use common::{error::AppError, ext::ContextResultExt};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::info;
 
 pub use backup::BackupConfig as Config;
 
+pub struct BackupRuntime {
+    pub state: Arc<backup::BackupState>,
+    pub scheduler: Arc<backup::BackupScheduler>,
+}
+
 /// 初始化备份调度器
 ///
-/// 验证配置，创建 BackupState，启动 BackupScheduler。
+/// 创建 BackupState 并启动 BackupScheduler。
 pub async fn init(
     db: &DatabaseConnection,
     s3_client: &Arc<oss::S3Client>,
     cfg: &Config,
-) -> Result<Arc<backup::BackupScheduler>> {
+) -> Result<BackupRuntime> {
     info!("初始化备份调度器");
     let bs = Arc::new(backup::BackupState::new(
         db.clone(),
@@ -22,12 +27,20 @@ pub async fn init(
     ));
     let scheduler = backup::BackupScheduler::new(bs.clone())
         .await
-        .trace_internal_err("backup_init_err", "备份调度器初始化失败")?;
-    scheduler
-        .start()
-        .await
-        .trace_internal_err("backup_start_err", "备份调度器启动失败")?;
+        .context_error(
+            "backup_init_err",
+            "备份调度器初始化失败",
+            AppError::InternalServerError,
+        )?;
+    scheduler.start().await.context_error(
+        "backup_start_err",
+        "备份调度器启动失败",
+        AppError::InternalServerError,
+    )?;
     info!("备份调度器初始化成功");
 
-    Ok(Arc::new(scheduler))
+    Ok(BackupRuntime {
+        state: bs,
+        scheduler: Arc::new(scheduler),
+    })
 }

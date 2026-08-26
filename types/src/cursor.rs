@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use base64::Engine;
-use chrono::{DateTime, Utc};
+use common::time::DateTime;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +22,7 @@ pub enum KeysetDirection {
 /// 序列化时直接输出编码后的 Base64 字符串，反序列化时接收 Base64 字符串。
 #[derive(Debug, Clone)]
 pub struct TimeIdCursor<I = i64> {
-    pub created_at: DateTime<Utc>,
+    pub time_at: DateTime,
     pub id: I,
 }
 
@@ -30,7 +30,7 @@ impl<I: Serialize> TimeIdCursor<I> {
     /// 编码为 URL-safe Base64 字符串
     pub fn encode(&self) -> String {
         let json = serde_json::to_string(&serde_json::json!({
-            "created_at": self.created_at,
+            "time_at": self.time_at,
             "id": &self.id,
         }))
         .unwrap_or_default();
@@ -48,12 +48,12 @@ impl<I: DeserializeOwned> TimeIdCursor<I> {
 
         #[derive(Deserialize)]
         struct Raw<I> {
-            created_at: DateTime<Utc>,
+            time_at: DateTime,
             id: I,
         }
         let raw: Raw<I> = serde_json::from_str(&json).map_err(CursorDecodeError::Json)?;
         Ok(Self {
-            created_at: raw.created_at,
+            time_at: raw.time_at,
             id: raw.id,
         })
     }
@@ -84,16 +84,16 @@ impl<I> validator::Validate for TimeIdCursor<I> {
 /// 用法与 [`TimeIdCursor`] 一致: `ORDER BY face_count <dir>, id <dir>`,
 /// keyset 条件 `(face_count, id) < cursor`。
 #[derive(Debug, Clone)]
-pub struct FaceCountIdCursor<I = i64> {
-    pub face_count: u64,
+pub struct CountIdCursor<I = i64> {
+    pub count: u64,
     pub id: I,
 }
 
-impl<I: Serialize> FaceCountIdCursor<I> {
+impl<I: Serialize> CountIdCursor<I> {
     /// 编码为 URL-safe Base64 字符串
     pub fn encode(&self) -> String {
         let json = serde_json::to_string(&serde_json::json!({
-            "face_count": self.face_count,
+            "face_count": self.count,
             "id": &self.id,
         }))
         .unwrap_or_default();
@@ -101,7 +101,7 @@ impl<I: Serialize> FaceCountIdCursor<I> {
     }
 }
 
-impl<I: DeserializeOwned> FaceCountIdCursor<I> {
+impl<I: DeserializeOwned> CountIdCursor<I> {
     /// 从 URL-safe Base64 字符串解码
     pub fn decode(s: impl AsRef<[u8]>) -> std::result::Result<Self, CursorDecodeError> {
         let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -116,25 +116,25 @@ impl<I: DeserializeOwned> FaceCountIdCursor<I> {
         }
         let raw: Raw<I> = serde_json::from_str(&json).map_err(CursorDecodeError::Json)?;
         Ok(Self {
-            face_count: raw.face_count,
+            count: raw.face_count,
             id: raw.id,
         })
     }
 }
 
-impl<I: Serialize> Serialize for FaceCountIdCursor<I> {
+impl<I: Serialize> Serialize for CountIdCursor<I> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.encode())
     }
 }
 
-impl<'de, I: DeserializeOwned> Deserialize<'de> for FaceCountIdCursor<I> {
+impl<'de, I: DeserializeOwned> Deserialize<'de> for CountIdCursor<I> {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         Self::decode(String::deserialize(d)?).map_err(serde::de::Error::custom)
     }
 }
 
-impl<I> validator::Validate for FaceCountIdCursor<I> {
+impl<I> validator::Validate for CountIdCursor<I> {
     fn validate(&self) -> Result<(), validator::ValidationErrors> {
         Ok(())
     }
@@ -154,14 +154,14 @@ impl<I: Clone + Into<sea_orm::Value>> TimeIdCursor<I> {
     ) -> sea_orm::Condition {
         use sea_orm::Condition;
         match direction {
-            KeysetDirection::Desc => Condition::any().add(time_col.lt(self.created_at)).add(
+            KeysetDirection::Desc => Condition::any().add(time_col.lt(self.time_at)).add(
                 Condition::all()
-                    .add(time_col.eq(self.created_at))
+                    .add(time_col.eq(self.time_at))
                     .add(id_col.lt(self.id.clone())),
             ),
-            KeysetDirection::Asc => Condition::any().add(time_col.gt(self.created_at)).add(
+            KeysetDirection::Asc => Condition::any().add(time_col.gt(self.time_at)).add(
                 Condition::all()
-                    .add(time_col.eq(self.created_at))
+                    .add(time_col.eq(self.time_at))
                     .add(id_col.gt(self.id.clone())),
             ),
         }
@@ -179,7 +179,7 @@ impl<I: Clone + Into<sea_orm::Value>> TimeIdCursor<I> {
 }
 
 #[cfg(feature = "orm")]
-impl<I: Clone + Into<sea_orm::Value>> FaceCountIdCursor<I> {
+impl<I: Clone + Into<sea_orm::Value>> CountIdCursor<I> {
     /// 构造 keyset 分页过滤条件, 需与 `ORDER BY face_count <dir>, id <dir>` 配套使用。
     ///
     /// - `Desc`: 返回 `(face_count, id) < (self.face_count, self.id)` 的行
@@ -191,7 +191,7 @@ impl<I: Clone + Into<sea_orm::Value>> FaceCountIdCursor<I> {
         direction: KeysetDirection,
     ) -> sea_orm::Condition {
         use sea_orm::Condition;
-        let face_count = self.face_count as i64;
+        let face_count = self.count as i64;
         match direction {
             KeysetDirection::Desc => Condition::any().add(count_col.lt(face_count)).add(
                 Condition::all()
@@ -227,14 +227,14 @@ mod tests {
     #[test]
     fn test_encode_decode_roundtrip() {
         let cursor = TimeIdCursor {
-            created_at: DateTime::from_timestamp_nanos(1712345678000000000),
+            time_at: DateTime::from_timestamp_nanos(1712345678000000000),
             id: TestId(42),
         };
 
         let encoded = cursor.encode();
         let decoded = TimeIdCursor::<TestId>::decode(&encoded).unwrap();
 
-        assert_eq!(decoded.created_at, cursor.created_at);
+        assert_eq!(decoded.time_at, cursor.time_at);
         assert_eq!(decoded.id.0, cursor.id.0);
     }
 
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn test_encode_is_url_safe_no_pad() {
         let cursor = TimeIdCursor {
-            created_at: DateTime::from_timestamp_nanos(1712345678000000000),
+            time_at: DateTime::from_timestamp_nanos(1712345678000000000),
             id: 42i64,
         };
 
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn test_serialize_outputs_base64_string() {
         let cursor = TimeIdCursor {
-            created_at: DateTime::from_timestamp_nanos(1712345678000000000),
+            time_at: DateTime::from_timestamp_nanos(1712345678000000000),
             id: 42i64,
         };
 
@@ -277,28 +277,28 @@ mod tests {
         assert_eq!(json.trim_matches('"'), cursor.encode());
 
         let decoded: TimeIdCursor<i64> = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.created_at, cursor.created_at);
+        assert_eq!(decoded.time_at, cursor.time_at);
         assert_eq!(decoded.id, cursor.id);
     }
 
     #[test]
     fn test_face_count_cursor_encode_decode_roundtrip() {
-        let cursor = FaceCountIdCursor {
-            face_count: 7,
+        let cursor = CountIdCursor {
+            count: 7,
             id: TestId(42),
         };
 
         let encoded = cursor.encode();
-        let decoded = FaceCountIdCursor::<TestId>::decode(&encoded).unwrap();
+        let decoded = CountIdCursor::<TestId>::decode(&encoded).unwrap();
 
-        assert_eq!(decoded.face_count, cursor.face_count);
+        assert_eq!(decoded.count, cursor.count);
         assert_eq!(decoded.id.0, cursor.id.0);
     }
 
     #[test]
     fn test_face_count_cursor_serialize_outputs_base64_string() {
-        let cursor = FaceCountIdCursor {
-            face_count: 7,
+        let cursor = CountIdCursor {
+            count: 7,
             id: 42i64,
         };
 
@@ -306,21 +306,21 @@ mod tests {
         assert!(json.starts_with('"') && json.ends_with('"'), "json: {json}");
         assert_eq!(json.trim_matches('"'), cursor.encode());
 
-        let decoded: FaceCountIdCursor<i64> = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.face_count, cursor.face_count);
+        let decoded: CountIdCursor<i64> = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.count, cursor.count);
         assert_eq!(decoded.id, cursor.id);
     }
 
     #[test]
     fn test_face_count_cursor_decode_invalid_base64() {
-        let result = FaceCountIdCursor::<i64>::decode("!!!invalid-base64!!!");
+        let result = CountIdCursor::<i64>::decode("!!!invalid-base64!!!");
         assert!(result.is_err());
     }
 
     #[cfg(feature = "orm")]
     mod keyset_tests {
         use super::*;
-        use chrono::DateTime;
+        use common::time::DateTime as CommonDateTime;
         use sea_orm::{entity::prelude::*, DbBackend, QueryFilter, QueryTrait};
 
         #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
@@ -328,7 +328,7 @@ mod tests {
         pub struct Model {
             #[sea_orm(primary_key)]
             pub id: i64,
-            pub created_at: DateTimeUtc,
+            pub created_at: CommonDateTime,
             pub face_count: i64,
         }
 
@@ -339,7 +339,7 @@ mod tests {
 
         fn cursor() -> TimeIdCursor<i64> {
             TimeIdCursor {
-                created_at: DateTime::from_timestamp_nanos(1712345678000000000),
+                time_at: CommonDateTime::from_timestamp_nanos(1712345678000000000),
                 id: 42,
             }
         }
@@ -404,10 +404,7 @@ mod tests {
 
         #[test]
         fn test_face_count_cursor_keyset_desc_before() {
-            let cursor = FaceCountIdCursor {
-                face_count: 7,
-                id: 42,
-            };
+            let cursor = CountIdCursor { count: 7, id: 42 };
             let sql = build_sql(cursor.before(Column::FaceCount, Column::Id));
             // (face_count, id) < cursor: face_count < 7 OR (face_count = 7 AND id < 42)
             assert!(
@@ -423,10 +420,7 @@ mod tests {
 
         #[test]
         fn test_face_count_cursor_keyset_asc_after() {
-            let cursor = FaceCountIdCursor {
-                face_count: 7,
-                id: 42,
-            };
+            let cursor = CountIdCursor { count: 7, id: 42 };
             let sql = build_sql(cursor.after(Column::FaceCount, Column::Id));
             assert!(
                 sql.contains("\"face_count\" > ") && sql.contains("\"face_count\" = "),
@@ -441,10 +435,7 @@ mod tests {
 
         #[test]
         fn test_face_count_cursor_keyset_direction_matches_keyset_condition() {
-            let cursor = FaceCountIdCursor {
-                face_count: 7,
-                id: 42,
-            };
+            let cursor = CountIdCursor { count: 7, id: 42 };
             assert_eq!(
                 build_sql(cursor.before(Column::FaceCount, Column::Id)),
                 build_sql(cursor.keyset_condition(

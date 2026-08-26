@@ -2,6 +2,7 @@ use axum::{extract::Request, middleware::Next, response::Response};
 use common::extractors::ClientIp;
 use tracing::Instrument;
 
+/// 为请求创建 tracing span 并关联后续处理过程.
 pub async fn tracing_span(request: Request, next: Next) -> Response {
     let (parts, body) = request.into_parts();
     let method = parts.method.clone();

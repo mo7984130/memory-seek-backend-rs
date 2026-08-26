@@ -1,6 +1,6 @@
+use common::time::Duration;
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use serde::Deserialize;
-use std::time::Duration;
 use tracing::info;
 
 /// 所有 histogram 的统一分桶（单位：秒）。

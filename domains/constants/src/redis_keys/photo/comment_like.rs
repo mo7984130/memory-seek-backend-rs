@@ -1,10 +1,12 @@
 use types::photo::comment::CommentId;
 
+/// 构造评论点赞数量缓存键.
 pub fn likes_count(comment_id: CommentId) -> String {
     // photo:comment_like:likes_count:{comment_id}
     format!("p:cl:lc:{}", comment_id)
 }
 
+/// 返回评论点赞缓存脏标记键.
 pub fn dirty_comment() -> &'static str {
     // photo:comment_like:dirty_comment
     "p:cl:dc"

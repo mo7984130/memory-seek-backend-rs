@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
-use common::Result;
+use common::error::contextual::Result;
 use common::ext::ToOk;
+use common::time::now;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 use types::photo::comment_like::*;
@@ -11,12 +12,13 @@ pub struct CommentLikeMapper;
 
 // 创建
 impl CommentLikeMapper {
+    /// 插入评论点赞记录.
     pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<bool> {
-        let now = chrono::Utc::now();
+        let now = now();
 
         let active_model = ActiveModel {
             comment_id: Set(comment_id),
@@ -44,15 +46,12 @@ impl CommentLikeMapper {}
 
 // 查询
 impl CommentLikeMapper {
+    /// 查询用户对一批评论的点赞状态.
     pub async fn query_is_like_by_comment_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
         comment_ids: Vec<CommentId>,
     ) -> Result<HashSet<CommentId>> {
-        if comment_ids.is_empty() {
-            return HashSet::new().to_ok();
-        }
-
         Entity::find()
             .select_only()
             .column(Column::CommentId)
@@ -69,6 +68,7 @@ impl CommentLikeMapper {
 
 // 删除
 impl CommentLikeMapper {
+    /// 删除用评论点赞.
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -80,9 +80,10 @@ impl CommentLikeMapper {
             .exec(db)
             .await?;
 
-        Ok(res.rows_affected != 0)
+        Ok(res.rows_affected > 0)
     }
 
+    /// 删除指定评论的全部点赞.
     pub async fn delete_all_by_comment_id(
         db: &impl ConnectionTrait,
         comment_id: CommentId,
@@ -95,14 +96,11 @@ impl CommentLikeMapper {
             .to_ok()
     }
 
+    /// 删除一批评论的全部点赞.
     pub async fn delete_by_comment_ids(
         db: &impl ConnectionTrait,
         comment_ids: &[CommentId],
     ) -> Result<u64> {
-        if comment_ids.is_empty() {
-            return Ok(0);
-        }
-
         Entity::delete_many()
             .filter(Column::CommentId.is_in(comment_ids.iter().copied()))
             .exec(db)

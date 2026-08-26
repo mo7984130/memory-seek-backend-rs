@@ -2,6 +2,7 @@ use crate::config::AppConfig;
 use crate::state::AppState;
 use axum::Router;
 use common::traits::controller::ControllerRouter;
+use multi_level_cache::CacheConfig;
 use std::sync::Arc;
 use tracing::info;
 use user::UserState;
@@ -17,10 +18,10 @@ pub fn register(
     let user_state = Arc::new(UserState::new(
         state.db.clone(),
         state.redis.clone(),
-        common::cache::CacheConfig::new(
+        CacheConfig::new(
             cfg.cache.enabled,
             cfg.cache.local_capacity,
-            std::time::Duration::from_secs(cfg.cache.local_ttl_secs),
+            common::time::Duration::from_secs(cfg.cache.local_ttl_secs),
         ),
         state.s3_client.clone(),
     ));

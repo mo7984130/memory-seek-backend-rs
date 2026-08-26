@@ -5,6 +5,7 @@ mod retry;
 use retry::retry_429;
 
 use bytes::Bytes;
+use common::time::Duration;
 use futures::{Stream, StreamExt};
 use s3::creds::Credentials;
 use s3::request::ResponseData;
@@ -12,8 +13,8 @@ use s3::{Bucket, Region};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 #[cfg(feature = "metrics")]
 use std::time::Instant;
 
@@ -104,7 +105,7 @@ impl S3Client {
     /// 上传成功返回 `()`
     ///
     /// # 错误
-    /// - `AppError::InternalServerError`: OSS 存储操作失败
+    /// - `OssError`: OSS 存储操作失败
     pub async fn upload(
         &self,
         key: &str,
@@ -125,6 +126,38 @@ impl S3Client {
         result
     }
 
+    /// 以流式方式上传本地文件到 OSS。
+    ///
+    /// 小文件由底层实现直接上传，大文件自动使用 multipart 上传，避免将整个文件读入内存。
+    /// 429 限流重试时会重新打开文件，从文件开头重新上传。
+    pub async fn upload_file(
+        &self,
+        key: &str,
+        path: impl AsRef<Path>,
+        content_type: &str,
+    ) -> Result<(), OssError> {
+        #[cfg(feature = "metrics")]
+        let start = Instant::now();
+
+        let path = path.as_ref().to_owned();
+        let result = retry_429("put_stream", key, || {
+            let path = path.clone();
+            async move {
+                let mut file = tokio::fs::File::open(path).await?;
+                self.bucket
+                    .put_object_stream_with_content_type(&mut file, key, content_type)
+                    .await
+                    .map(|_| ())
+                    .map_err(OssError::from)
+            }
+        })
+        .await;
+
+        #[cfg(feature = "metrics")]
+        record("put_stream", start, result.is_ok());
+        result
+    }
+
     /// 删除单个文件
     ///
     /// # 参数
@@ -134,7 +167,7 @@ impl S3Client {
     /// 删除成功返回 `()`
     ///
     /// # 错误
-    /// - `AppError::InternalServerError`: OSS 删除操作失败
+    /// - `OssError`: OSS 删除操作失败
     pub async fn delete(&self, key: &str) -> Result<ResponseData, OssError> {
         #[cfg(feature = "metrics")]
         let start = Instant::now();
@@ -156,7 +189,7 @@ impl S3Client {
     /// 全部删除成功返回 `()`
     ///
     /// # 错误
-    /// - `AppError::InternalServerError`: 删除文件失败
+    /// - `OssError`: 删除文件失败
     pub async fn delete_batch(&self, keys: Vec<impl AsRef<str>>) -> Result<(), OssError> {
         #[cfg(feature = "metrics")]
         let start = Instant::now();
@@ -210,7 +243,7 @@ impl S3Client {
     /// 带签名的临时访问 URL
     ///
     /// # 错误
-    /// - `AppError::InternalServerError`: OSS 签名生成失败
+    /// - `OssError`: OSS 签名生成失败
     pub async fn get_signed_url(&self, key: &str, expires: Duration) -> Result<String, OssError> {
         self.get_signed_url_with_params(key, expires, None).await
     }
@@ -226,7 +259,7 @@ impl S3Client {
     /// 带签名和图片处理参数的临时访问 URL
     ///
     /// # 错误
-    /// - `AppError::InternalServerError`: OSS 签名生成失败
+    /// - `OssError`: OSS 签名生成失败
     pub async fn get_signed_url_with_params(
         &self,
         key: &str,
@@ -261,7 +294,7 @@ impl S3Client {
     /// 文件内容的 `Bytes`，可直接用于 HTTP 响应
     ///
     /// # 错误
-    /// - `AppError::InternalServerError`: OSS 下载操作失败
+    /// - `OssError`: OSS 下载操作失败
     pub async fn download(&self, key: &str) -> Result<Bytes, OssError> {
         #[cfg(feature = "metrics")]
         let start = Instant::now();
@@ -279,6 +312,7 @@ impl S3Client {
         result
     }
 
+    /// 获取对象存储的流式下载响应.
     pub async fn get_download_stream_response(
         &self,
         key: &str,
@@ -301,6 +335,7 @@ impl S3Client {
         result
     }
 
+    /// 下载对象并应用指定的图片处理参数.
     pub async fn download_with_process(&self, key: &str, process: &str) -> Result<Bytes, OssError> {
         let url = self
             .get_signed_url_with_params(key, Duration::from_secs(3600), Some(process.to_string()))
@@ -322,6 +357,7 @@ impl S3Client {
         result
     }
 
+    /// 获取应用图片处理参数后的流式下载响应.
     pub async fn download_stream_with_process(
         &self,
         key: &str,

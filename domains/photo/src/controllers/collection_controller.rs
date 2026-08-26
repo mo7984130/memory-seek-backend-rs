@@ -40,6 +40,7 @@ impl ControllerRouter for CollectionController {
 
 // 创建
 impl CollectionController {
+    /// 创建收藏夹
     async fn create(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -53,6 +54,7 @@ impl CollectionController {
 
 // 查询
 impl CollectionController {
+    /// 获取收藏夹列表.
     async fn get_list(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -65,6 +67,7 @@ impl CollectionController {
 
 // 修改
 impl CollectionController {
+    /// 更新收藏夹信息.
     async fn update_info(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,
@@ -79,6 +82,7 @@ impl CollectionController {
 
 // 删除
 impl CollectionController {
+    /// 删除收藏夹.
     async fn delete(
         State(state): State<Arc<PhotoState>>,
         Extension(user_id): Extension<UserId>,

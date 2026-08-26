@@ -1,6 +1,6 @@
 //! `step_boundary_check` — 静态检查 `common::pipeline::Step` 的表归属白名单约束
 //!
-//! 规则(作用于所有 `impl ... Step for Xxx` 以及 `#[step_derive::declare_step(...)]`
+//! 规则(作用于所有 `impl ... Step for Xxx` 以及 `#[step_derive::declare_transaction_step(...)]`
 //! 标记的 impl 块的 `on_photo_delete` 方法体):
 //!
 //! 1. 调用路径倒数第二个 segment 以 `Mapper` 结尾时,类型名必须在 `owns()` 白名单内;
@@ -12,7 +12,9 @@
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{Block, Expr, ImplItem, Item, ItemImpl, Path};
+use syn::{
+    Block, Expr, GenericArgument, ImplItem, Item, ItemImpl, Path, PathArguments, Type, UseTree,
+};
 
 /// 一次边界违规
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,7 +37,7 @@ impl Violation {
     }
 }
 
-/// 检查一份 Rust 源码中所有 `impl Step` 与 `#[declare_step]` 的边界约束
+/// 检查一份 Rust 源码中所有 `impl Step` 与 `#[declare_transaction_step]` 的边界约束
 pub fn check_source(source: &str, file: &str) -> Vec<Violation> {
     let Ok(ast) = syn::parse_file(source) else {
         // 语法错误交由 rustc 报告,此处不重复
@@ -53,8 +55,200 @@ pub fn check_source(source: &str, file: &str) -> Vec<Violation> {
             }
         }
     });
-    collect_declare_step_impls(&ast.items, file, &mut violations);
+    collect_declare_transaction_step_impls(&ast.items, file, &mut violations);
+    check_error_boundaries(&ast, file, &mut violations);
     violations
+}
+
+fn check_error_boundaries(ast: &syn::File, file: &str, violations: &mut Vec<Violation>) {
+    let normalized = file.replace('\\', "/");
+    let is_domain_lower = normalized.contains("/src/mappers/")
+        || normalized.contains("/src/mapper/")
+        || normalized.contains("/src/repo/")
+        || normalized.ends_with("/domains/backup/src/storage.rs")
+        || normalized.ends_with("/domains/backup/src/exporter.rs")
+        || normalized.ends_with("/domains/backup/src/hasher.rs")
+        || normalized.ends_with("/domains/backup/src/state.rs");
+    let enforce_caller_macro = normalized.contains("/domains/") || normalized.contains("/server/");
+
+    let mut visitor = ErrorBoundaryVisitor {
+        file,
+        is_domain_lower,
+        enforce_caller_macro,
+        violations,
+    };
+    visitor.visit_file(ast);
+}
+
+struct ErrorBoundaryVisitor<'a> {
+    file: &'a str,
+    is_domain_lower: bool,
+    enforce_caller_macro: bool,
+    violations: &'a mut Vec<Violation>,
+}
+
+impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
+    fn visit_item_impl(&mut self, item: &'ast ItemImpl) {
+        if let Some(source) = forbidden_app_error_from_source(item) {
+            self.violations.push(Violation::new(
+                self.file,
+                item.span(),
+                format!(
+                    "禁止实现 From<{source}> for AppError，基础设施错误必须先转换为 ContextualError"
+                ),
+            ));
+        }
+        syn::visit::visit_item_impl(self, item);
+    }
+
+    fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
+        if self.is_domain_lower && imports_common_result(&item.tree, &[]) {
+            self.violations.push(Violation::new(
+                self.file,
+                item.span(),
+                "下层模块必须使用 common::error::contextual::Result，不能提前返回 common::Result/AppError",
+            ));
+        }
+        syn::visit::visit_item_use(self, item);
+    }
+
+    fn visit_path(&mut self, path: &'ast Path) {
+        if self.is_domain_lower {
+            let names = path
+                .segments
+                .iter()
+                .map(|segment| segment.ident.to_string())
+                .collect::<Vec<_>>();
+            if names.windows(2).any(|pair| pair == ["common", "Result"])
+                || names
+                    .windows(3)
+                    .any(|parts| parts == ["common", "error", "Result"])
+            {
+                self.violations.push(Violation::new(
+                    self.file,
+                    path.span(),
+                    "下层模块必须使用 common::error::contextual::Result，不能提前返回 common::Result/AppError",
+                ));
+            }
+            if names.last().is_some_and(|name| {
+                matches!(
+                    name.as_str(),
+                    "log_err" | "log_err_with_source" | "log_warn" | "log_warn_with_source"
+                )
+            }) {
+                self.violations.push(Violation::new(
+                    self.file,
+                    path.span(),
+                    "下层模块禁止直接记录错误，必须延迟到 service 边界",
+                ));
+            }
+        }
+        syn::visit::visit_path(self, path);
+    }
+
+    fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+        if self.is_domain_lower {
+            let method = call.method.to_string();
+            if matches!(method.as_str(), "true_or_warn" | "false_or_warn") {
+                self.violations.push(Violation::new(
+                    self.file,
+                    call.method.span(),
+                    "下层模块禁止调用会记录日志的错误扩展",
+                ));
+            }
+        }
+        syn::visit::visit_expr_method_call(self, call);
+    }
+
+    fn visit_macro(&mut self, mac: &'ast syn::Macro) {
+        let name = mac
+            .path
+            .segments
+            .last()
+            .map(|segment| segment.ident.to_string());
+        if self.is_domain_lower
+            && name
+                .as_deref()
+                .is_some_and(|name| matches!(name, "caller_warn" | "caller_error"))
+        {
+            self.violations.push(Violation::new(
+                self.file,
+                mac.path.span(),
+                "下层模块禁止直接记录错误，必须把问题返回 service",
+            ));
+        }
+        if self.enforce_caller_macro
+            && name
+                .as_deref()
+                .is_some_and(|name| matches!(name, "warn" | "error"))
+        {
+            self.violations.push(Violation::new(
+                self.file,
+                mac.path.span(),
+                "项目错误日志必须使用 caller_warn!/caller_error! 写入 caller 字段",
+            ));
+        }
+        syn::visit::visit_macro(self, mac);
+    }
+}
+
+fn forbidden_app_error_from_source(item: &ItemImpl) -> Option<String> {
+    let Type::Path(self_type) = item.self_ty.as_ref() else {
+        return None;
+    };
+    if self_type.path.segments.last()?.ident != "AppError" {
+        return None;
+    }
+
+    let (_, trait_path, _) = item.trait_.as_ref()?;
+    let from = trait_path.segments.last()?;
+    if from.ident != "From" {
+        return None;
+    }
+    let PathArguments::AngleBracketed(arguments) = &from.arguments else {
+        return None;
+    };
+    let source = arguments.args.iter().find_map(|argument| match argument {
+        GenericArgument::Type(Type::Path(source)) => Some(&source.path),
+        _ => None,
+    })?;
+    let names = source
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect::<Vec<_>>();
+    let last = names.last()?.as_str();
+    let forbidden = matches!(
+        last,
+        "DbErr" | "PoolError" | "RedisError" | "CacheError" | "AcquireError" | "JoinError"
+    ) || (last == "Error" && names.iter().any(|name| name == "serde_json"));
+
+    forbidden.then(|| names.join("::"))
+}
+
+fn imports_common_result(tree: &UseTree, prefix: &[String]) -> bool {
+    match tree {
+        UseTree::Path(path) => {
+            let mut next = prefix.to_vec();
+            next.push(path.ident.to_string());
+            imports_common_result(&path.tree, &next)
+        }
+        UseTree::Name(name) => {
+            matches!(prefix, [common] if common == "common") && name.ident == "Result"
+                || matches!(prefix, [common, error] if common == "common" && error == "error")
+                    && name.ident == "Result"
+        }
+        UseTree::Rename(rename) => {
+            matches!(prefix, [common] if common == "common") && rename.ident == "Result"
+                || matches!(prefix, [common, error] if common == "common" && error == "error")
+                    && rename.ident == "Result"
+        }
+        UseTree::Group(group) => group
+            .items
+            .iter()
+            .any(|item| imports_common_result(item, prefix)),
+        UseTree::Glob(_) => false,
+    }
 }
 
 /// 对一个 execute 方法体 / 宏 body 执行边界检查
@@ -86,12 +280,12 @@ fn collect_step_impls<'a>(items: &'a [Item], f: &mut impl FnMut(&'a ItemImpl)) {
     }
 }
 
-/// 递归收集所有带 `#[declare_step(...)]` 属性的 impl 块,检查其 `on_photo_delete` 方法体
-fn collect_declare_step_impls(items: &[Item], file: &str, violations: &mut Vec<Violation>) {
+/// 递归收集所有带 `#[declare_transaction_step(...)]` 属性的 impl 块,检查其 `on_photo_delete` 方法体
+fn collect_declare_transaction_step_impls(items: &[Item], file: &str, violations: &mut Vec<Violation>) {
     for item in items {
         match item {
             Item::Impl(item_impl) => {
-                if let Some(owns) = parse_declare_step_attr(&item_impl.attrs) {
+                if let Some(owns) = parse_declare_transaction_step_attr(&item_impl.attrs) {
                     for impl_item in &item_impl.items {
                         if let ImplItem::Fn(method) = impl_item {
                             if method.sig.ident == "on_photo_delete" {
@@ -103,7 +297,7 @@ fn collect_declare_step_impls(items: &[Item], file: &str, violations: &mut Vec<V
             }
             Item::Mod(item_mod) => {
                 if let Some((_, items)) = &item_mod.content {
-                    collect_declare_step_impls(items, file, violations);
+                    collect_declare_transaction_step_impls(items, file, violations);
                 }
             }
             _ => {}
@@ -111,16 +305,16 @@ fn collect_declare_step_impls(items: &[Item], file: &str, violations: &mut Vec<V
     }
 }
 
-/// 从 impl 块的属性中提取 `#[declare_step(...)]` 的 `owns` 白名单数组
-fn parse_declare_step_attr(attrs: &[syn::Attribute]) -> Option<Vec<String>> {
+/// 从 impl 块的属性中提取 `#[declare_transaction_step(...)]` 的 `owns` 白名单数组
+fn parse_declare_transaction_step_attr(attrs: &[syn::Attribute]) -> Option<Vec<String>> {
     for attr in attrs {
-        let is_declare_step = attr
+        let is_declare_transaction_step = attr
             .path()
             .segments
             .last()
-            .map(|seg| seg.ident == "declare_step")
+            .map(|seg| seg.ident == "declare_transaction_step")
             .unwrap_or(false);
-        if !is_declare_step {
+        if !is_declare_transaction_step {
             continue;
         }
         if let syn::Meta::List(list) = &attr.meta {
@@ -222,7 +416,8 @@ impl<'ast> Visit<'ast> for StepVisitor<'_> {
             if let Some(seg) = s.path.segments.last() {
                 let name = seg.ident.to_string();
                 if matches!(name.as_str(), "ActiveModel" | "Model") {
-                    self.violations.push(Violation::new(self.file, s.path.span(), ENTITY_MSG));
+                    self.violations
+                        .push(Violation::new(self.file, s.path.span(), ENTITY_MSG));
                 }
             }
         }
@@ -244,7 +439,8 @@ impl StepVisitor<'_> {
         let type_name = segments[segments.len() - 2].ident.to_string();
 
         if matches!(type_name.as_str(), "Entity" | "Column") {
-            self.violations.push(Violation::new(self.file, span, ENTITY_MSG));
+            self.violations
+                .push(Violation::new(self.file, span, ENTITY_MSG));
             return;
         }
 
@@ -285,17 +481,95 @@ impl Step<Ctx> for MyStep {{
 
     #[test]
     fn allows_owned_mapper() {
-        let src = source_with("CollectionMapper::update_count().await?;", r#"&["CollectionMapper"]"#);
+        let src = source_with(
+            "CollectionMapper::update_count().await?;",
+            r#"&["CollectionMapper"]"#,
+        );
         assert!(check_source(&src, "t.rs").is_empty());
     }
 
     #[test]
     fn rejects_unowned_mapper() {
-        let src = source_with("CommentMapper::delete_all().await?;", r#"&["CollectionMapper"]"#);
+        let src = source_with(
+            "CommentMapper::delete_all().await?;",
+            r#"&["CollectionMapper"]"#,
+        );
         let vs = check_source(&src, "t.rs");
         assert_eq!(vs.len(), 1);
         assert!(vs[0].message.contains("CommentMapper"));
         assert!(vs[0].line > 1);
+    }
+
+    #[test]
+    fn rejects_logging_result_in_mapper() {
+        let source = r#"
+            use common::Result;
+            async fn query() -> Result<()> {
+                None::<()>.ok_or_warn("db", "query", AppError::InternalServerError)?;
+                Ok(())
+            }
+        "#;
+        let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
+        assert!(violations
+            .iter()
+            .any(|v| v.message.contains("common::error::contextual::Result")));
+        assert!(violations.iter().any(|v| v.message.contains("错误扩展")));
+    }
+
+    #[test]
+    fn allows_contextual_error_in_mapper() {
+        let source = r#"
+            use common::error::contextual::Result;
+            async fn query() -> Result<()> { Ok(()) }
+        "#;
+        assert!(check_source(source, "/repo/domains/photo/src/mappers/demo.rs").is_empty());
+    }
+
+    #[test]
+    fn rejects_app_error_result_imported_from_error_module() {
+        let source = r#"
+            use common::error::Result;
+            async fn query() -> Result<()> { Ok(()) }
+        "#;
+        let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
+        assert!(violations
+            .iter()
+            .any(|v| v.message.contains("common::error::contextual::Result")));
+    }
+
+    #[test]
+    fn rejects_infrastructure_from_for_app_error() {
+        let source = r#"
+            impl From<sea_orm::DbErr> for AppError {
+                fn from(_: sea_orm::DbErr) -> Self { AppError::InternalServerError }
+            }
+        "#;
+        let violations = check_source(source, "/repo/common/src/error/db_error.rs");
+        assert!(violations.iter().any(|violation| {
+            violation.message.contains("From<sea_orm::DbErr>")
+                && violation.message.contains("ContextualError")
+        }));
+    }
+
+    #[test]
+    fn allows_domain_error_from_for_app_error() {
+        let source = r#"
+            impl From<BackupError> for AppError {
+                fn from(_: BackupError) -> Self { AppError::InternalServerError }
+            }
+        "#;
+        assert!(check_source(source, "/repo/domains/backup/src/error.rs").is_empty());
+    }
+
+    #[test]
+    fn rejects_direct_error_macro_in_service() {
+        let source = r#"
+            fn service() { tracing::error!("failed"); }
+        "#;
+        let violations = check_source(source, "/repo/domains/photo/src/services/demo.rs");
+        assert!(violations
+            .iter()
+            .any(|v| v.message.contains("caller_error")));
     }
 
     #[test]
@@ -312,7 +586,10 @@ impl Step<Ctx> for MyStep {{
 
     #[test]
     fn rejects_active_model_struct() {
-        let src = source_with("let _ = ActiveModel { id: Set(1), ..Default::default() };", r#"&[]"#);
+        let src = source_with(
+            "let _ = ActiveModel { id: Set(1), ..Default::default() };",
+            r#"&[]"#,
+        );
         assert_eq!(check_source(&src, "t.rs").len(), 1);
     }
 
@@ -365,9 +642,9 @@ mod a {
     }
 
     #[test]
-    fn allows_owned_mapper_in_declare_step() {
+    fn allows_owned_mapper_in_declare_transaction_step() {
         let src = r#"
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     ctx = crate::services::photo_service::PhotoDeleteContext,
     name = "foo",
     owns = ["CollectionPhotoMapper", "CollectionMapper"],
@@ -385,9 +662,9 @@ impl FooService {
     }
 
     #[test]
-    fn rejects_unowned_mapper_in_declare_step() {
+    fn rejects_unowned_mapper_in_declare_transaction_step() {
         let src = r#"
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     ctx = PhotoDeleteContext,
     name = "foo",
     owns = ["CollectionMapper"],
@@ -405,9 +682,9 @@ impl FooService {
     }
 
     #[test]
-    fn rejects_direct_entity_in_declare_step() {
+    fn rejects_direct_entity_in_declare_transaction_step() {
         let src = r#"
-#[step_derive::declare_step(
+#[step_derive::declare_transaction_step(
     name = "foo",
     owns = [],
     ctx = PhotoDeleteContext,
@@ -425,10 +702,10 @@ impl FooService {
     }
 
     #[test]
-    fn rejects_declare_step_in_nested_module() {
+    fn rejects_declare_transaction_step_in_nested_module() {
         let src = r#"
 mod a {
-    #[step_derive::declare_step(
+    #[step_derive::declare_transaction_step(
         ctx = PhotoDeleteContext,
         name = "foo",
         owns = ["A"],

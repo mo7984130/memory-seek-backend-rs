@@ -1,9 +1,9 @@
 use clap::Parser;
 use common::Result;
-use common::ext::ResultErrExt;
+use common::time::Duration;
+use common::{error::ContextualError, ext::IntoContextualExt};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
@@ -29,6 +29,7 @@ struct Cli {
 }
 
 #[tokio::main]
+/// 加载配置, 初始化应用并启动 HTTP 服务.
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -37,7 +38,14 @@ async fn main() -> Result<()> {
     setup::bases::log::init();
 
     // 加载配置
-    let cfg = AppConfig::load(cli.config).trace_internal_err("config_load_err", "加载配置失败")?;
+    let cfg = AppConfig::load(cli.config).map_err(|source| {
+        ContextualError::error(
+            "config_load_err",
+            "加载配置失败",
+            source,
+            common::error::AppError::InternalServerError,
+        )
+    })?;
 
     // 初始化应用（内部会初始化日志、数据库、Redis、metrics 等）
     let app_setup = AppSetup::init(&cfg).await?;
@@ -87,13 +95,13 @@ async fn main() -> Result<()> {
 
     let app = app
         .layer(axum::middleware::from_fn(
+            middlewares::tracing_span::tracing_span,
+        ))
+        .layer(axum::middleware::from_fn(
             middlewares::trace_id::trace_id_middleware,
         ))
         .layer(axum::middleware::from_fn(
             middlewares::client_ip::client_ip_middleware,
-        ))
-        .layer(axum::middleware::from_fn(
-            middlewares::tracing_span::tracing_span,
         ))
         .with_state(app_setup.state);
 
@@ -101,7 +109,7 @@ async fn main() -> Result<()> {
     tracing::info!("尝试监听{}端口", cfg.server.port);
     let listener = TcpListener::bind(&cfg.server_addr())
         .await
-        .trace_internal_err("tcp_bind_err", "端口绑定失败")?;
+        .into_contextual()?;
     tracing::info!("Server listening on {}", cfg.server_addr());
 
     let shutdown_signal = shutdown_signal(graceful_state, cancel_token);
@@ -112,7 +120,7 @@ async fn main() -> Result<()> {
     )
     .with_graceful_shutdown(shutdown_signal)
     .await
-    .trace_internal_err("server_err", "服务器运行异常")?;
+    .into_contextual()?;
 
     tracing::info!("服务已完全关闭");
     Ok(())
@@ -169,8 +177,8 @@ async fn shutdown_signal(state: Arc<crate::state::AppState>, cancel_token: Cance
 
         match stop_result {
             Ok(Ok(())) => tracing::info!("备份调度器已停止"),
-            Ok(Err(e)) => tracing::error!("停止备份调度器失败: {}", e),
-            Err(_) => tracing::error!("停止备份调度器超时"),
+            Ok(Err(e)) => common::caller_error!(error = %e, "停止备份调度器失败"),
+            Err(_) => common::caller_error!("停止备份调度器超时"),
         }
     }
 
@@ -178,7 +186,7 @@ async fn shutdown_signal(state: Arc<crate::state::AppState>, cancel_token: Cance
     tracing::info!("正在关闭数据库连接池...");
     // close() 消费 self，需要从 Arc 中 clone 出一份来关闭
     if let Err(e) = state.db.clone().close().await {
-        tracing::error!("关闭数据库连接池失败: {}", e);
+        common::caller_error!(error = %e, "关闭数据库连接池失败");
     } else {
         tracing::info!("数据库连接池已关闭");
     }

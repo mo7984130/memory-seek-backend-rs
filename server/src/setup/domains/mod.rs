@@ -4,6 +4,9 @@ pub mod auth;
 #[cfg(feature = "backup")]
 pub mod backup;
 
+#[cfg(feature = "audit")]
+pub mod audit;
+
 #[cfg(feature = "user")]
 pub mod user;
 
@@ -19,12 +22,20 @@ pub struct AppDomains;
 
 impl AppDomains {
     #[allow(unused_mut)]
+    /// 注册启用的业务域路由并返回公共和受保护路由.
     pub fn init(
         _state: &Arc<AppState>,
         _cfg: &AppConfig,
     ) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
         let mut public_router = Router::new();
         let mut protected_router = Router::new();
+
+        #[cfg(feature = "audit")]
+        {
+            let (pub_r, prot_r) = audit::register(_state, _cfg);
+            public_router = public_router.merge(pub_r);
+            protected_router = protected_router.merge(prot_r);
+        }
 
         #[cfg(feature = "auth")]
         {
