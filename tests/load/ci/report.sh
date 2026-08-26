@@ -81,19 +81,19 @@ TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
         fi
         echo ""
     done
-    echo "## 极限压测汇总 (max, 打满上限)"
+    echo "## 容量搜索汇总 (max-adaptive)"
     echo ""
-    if [ -d "$MAX_NORMALIZED_DIR" ] && ls "$MAX_NORMALIZED_DIR"/*.json >/dev/null 2>&1; then
-        echo "| 场景 | 上限 QPS | p50(ms) | p95(ms) | 错误率 |"
-        echo "|---|---|---|---|---|"
-        for f in "$MAX_NORMALIZED_DIR"/*.json; do
+    if [ -d "$MAX_ADAPTIVE_NORMALIZED_DIR" ] && ls "$MAX_ADAPTIVE_NORMALIZED_DIR"/*.json >/dev/null 2>&1; then
+        echo "| 场景 | 稳定容量 RPS | 首次失败 RPS | 停止原因 |"
+        echo "|---|---|---|---|"
+        for f in "$MAX_ADAPTIVE_NORMALIZED_DIR"/*.json; do
             name=$(basename "$f" .json)
-            echo "| $name | $(jq -r '.qps' "$f") | $(jq -r '.http_p50' "$f") | $(jq -r '.http_p95' "$f") | $(jq -r '.error_rate' "$f") |"
+            echo "| $name | $(jq -r '.stable_rps' "$f") | $(jq -r '.first_failure_rps' "$f") | $(jq -r '.reasons | join(", ")' "$f") |"
         done
         echo ""
-        echo "> 上限 = ramping-arrival-rate 加压至系统饱和/连接数上限时的实际 QPS(非目标值)。"
+        echo "> 稳定容量是 P95、错误率和 dropped_iterations 均符合阈值的最高固定到达率。"
     else
-        echo "- (未运行 max 极限压测)"
+        echo "- (未运行容量搜索)"
     fi
     echo ""
     echo "## 服务端指标快照"
@@ -107,8 +107,8 @@ TS=$(date -Is 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
     echo "## 附录"
     echo ""
     echo "- 归一化结果: \`results/normalized/\` (target)"
-    echo "- 极限归一化结果: \`results/max-normalized/\` (max)"
-    echo "- 原始轮次结果: \`results/run-<n>/\` / \`results/max-run-<n>/\`"
+    echo "- 容量搜索归一化结果: \`results/max-adaptive-normalized/\`"
+    echo "- 原始轮次结果: \`results/run-<n>/\` / \`results/max-adaptive-run-<n>/\`"
     echo "- 判定明细: \`results/verdict.json\`"
 } > "$REPORT"
 

@@ -154,47 +154,22 @@ export function logResult(label, result) {
 }
 
 /**
- * 构建 arrival-rate 负载模型 options(双模式)
+ * 构建固定到达率负载模型 options。
  *
- * LOAD_MODE=target(默认): constant-arrival-rate 固定迭代率, 稳定可对比
- * LOAD_MODE=max:          ramping-arrival-rate 逐步加压找系统上限
- *
- * 迭代率可用 __ENV.TARGET_RPS / __ENV.MAX_RPS 覆盖(单位: 迭代/秒)。
+ * 迭代率可用 __ENV.TARGET_RPS 覆盖(单位: 迭代/秒)。容量搜索由 CI 编排层
+ * 逐档运行该模型，并根据上一档 summary 决定是否继续加压。
  * 单 op 迭代脚本中迭代率即请求 QPS; 完整流程迭代脚本中 QPS ≈ 迭代率 × 每迭代请求数。
  */
 export function buildLoadOptions({
     targetRps,
-    maxRps,
     preAllocatedVUs = 100,
     maxVUs = 200,
 }) {
-    const mode = __ENV.LOAD_MODE || "target";
     const target = parseInt(__ENV.TARGET_RPS || String(targetRps), 10);
-    const max = parseInt(__ENV.MAX_RPS || String(maxRps), 10);
     const pre = parseInt(__ENV.PRE_ALLOCATED_VUS || String(preAllocatedVUs), 10);
     const mv = parseInt(__ENV.MAX_VUS || String(maxVUs), 10);
     const duration = __ENV.DURATION || "2m";
 
-    if (mode === "max") {
-        const ramp = Math.max(1, Math.floor(max * 0.1));
-        return {
-            setupTimeout: "180s",
-            scenarios: {
-                load: {
-                    executor: "ramping-arrival-rate",
-                    startRate: ramp,
-                    timeUnit: "1s",
-                    preAllocatedVUs: pre,
-                    maxVUs: mv,
-                    stages: [
-                        { duration: "1m", target: ramp },
-                        { duration: "2m", target: max },
-                        { duration: "1m", target: max },
-                    ],
-                },
-            },
-        };
-    }
     return {
         setupTimeout: "180s",
         scenarios: {

@@ -1,9 +1,7 @@
 // tests/load/scenarios/auth.js
 // 认证模块压测场景 — arrival-rate 负载模型
 //
-// 双模式(通过 LOAD_MODE 切换):
-//   target: constant-arrival-rate 固定目标 QPS(稳定对比)
-//   max   : ramping-arrival-rate 逐步加压找系统上限
+// 使用固定到达率；容量搜索由 CI 编排层逐档调用本场景。
 //
 // 会话跨迭代复用: 每 VU 仅首次迭代登录(accessToken 2h 有效), 后续复用;
 // 迭代 = 单个业务请求, rate 即请求 QPS。
@@ -11,6 +9,7 @@
 import {
     getTestUserCredentials,
     printSummary,
+    buildLoadOptions,
 } from "../helpers/common.js";
 import {
     initSession,
@@ -22,48 +21,13 @@ import {
 
 export { printSummary as handleSummary };
 
-const LOAD_MODE = __ENV.LOAD_MODE || "target";
-const TARGET_RPS = parseInt(__ENV.TARGET_RPS || "400", 10);
-const MAX_RPS = parseInt(__ENV.MAX_RPS || "100000", 10);
 const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "500", 10);
-const MAX_VUS = parseInt(__ENV.MAX_VUS || "5000", 10);
-const DURATION = __ENV.DURATION || "2m";
 
-export const options = (() => {
-    if (LOAD_MODE === "max") {
-        const ramp = Math.max(1, Math.floor(MAX_RPS * 0.1));
-        return {
-            setupTimeout: "180s",
-            scenarios: {
-                load: {
-                    executor: "ramping-arrival-rate",
-                    startRate: ramp,
-                    timeUnit: "1s",
-                    preAllocatedVUs: PRE_ALLOCATED_VUS,
-                    maxVUs: MAX_VUS,
-                    stages: [
-                        { duration: "1m", target: ramp },
-                        { duration: DURATION, target: MAX_RPS },
-                        { duration: "1m", target: MAX_RPS },
-                    ],
-                },
-            },
-        };
-    }
-    return {
-        setupTimeout: "180s",
-        scenarios: {
-            load: {
-                executor: "constant-arrival-rate",
-                rate: TARGET_RPS,
-                timeUnit: "1s",
-                duration: "2m",
-                preAllocatedVUs: PRE_ALLOCATED_VUS,
-                maxVUs: MAX_VUS,
-            },
-        },
-    };
-})();
+export const options = buildLoadOptions({
+    targetRps: 400,
+    preAllocatedVUs: PRE_ALLOCATED_VUS,
+    maxVUs: 5000,
+});
 
 export default function () {
     if (!getSession()) {

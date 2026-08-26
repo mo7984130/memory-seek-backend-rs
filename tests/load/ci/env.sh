@@ -25,7 +25,6 @@
 : "${INCLUDE_S3_PATHS:=false}"
 
 # photo 场景中不依赖 S3 的子场景(独立脚本文件名, 对应 scenarios/photo/<name>.js)
-# 注: k6 0.52+ 移除 --scenario flag, 无法从 photo.js 按 scenario 挑选, 直接运行独立脚本
 PHOTO_NOS3_SERVICES="${PHOTO_NOS3_SERVICES:-collection collection_photo comment comment_like photo_like}"
 
 # ── 目录约定 ──────────────────────────────────────────
@@ -36,8 +35,8 @@ ROOT_DIR="$(dirname "$(dirname "$LOAD_DIR")")"  # .../tests/load -> 仓库根
 RESULTS_DIR="${LOAD_DIR}/results"
 RUNS_DIR="${RESULTS_DIR}/run"                    # run-<n> 单轮结果
 NORMALIZED_DIR="${RESULTS_DIR}/normalized"       # collect.sh 归一化输出
-MAX_RUNS_DIR="${RESULTS_DIR}/max-run"            # max 极限压测单轮结果(max-run-<n>)
-MAX_NORMALIZED_DIR="${RESULTS_DIR}/max-normalized"  # max 归一化输出
+MAX_ADAPTIVE_RUNS_DIR="${RESULTS_DIR}/max-adaptive-run"
+MAX_ADAPTIVE_NORMALIZED_DIR="${RESULTS_DIR}/max-adaptive-normalized"
 METRICS_DIR="${RESULTS_DIR}/metrics"             # prometheus.sh 快照
 BASELINES_DIR="${LOAD_DIR}/baselines"            # 基线(normalized json 同构)
 
@@ -47,4 +46,4 @@ SERVER_PID="${CI_DIR}/server.pid"
 
 export REMOTE_HOST SERVER_PORT SERVER_CPUS FEATURES BIN_NAME
 export AUTH_USERS PHOTO_USERS RUNS INCLUDE_S3_PATHS PHOTO_NOS3_SERVICES
-export MAX_RUNS_DIR MAX_NORMALIZED_DIR
+export MAX_ADAPTIVE_RUNS_DIR MAX_ADAPTIVE_NORMALIZED_DIR
