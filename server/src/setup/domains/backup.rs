@@ -1,4 +1,7 @@
+use crate::{config::AppConfig, state::AppState};
+use axum::Router;
 use common::Result;
+use common::traits::controller::ControllerRouter;
 use common::{error::AppError, ext::ContextResultExt};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
@@ -9,6 +12,18 @@ pub use backup::BackupConfig as Config;
 pub struct BackupRuntime {
     pub state: Arc<backup::BackupState>,
     pub scheduler: Arc<backup::BackupScheduler>,
+}
+
+/// 注册备份管理接口。
+pub fn register(
+    state: &Arc<AppState>,
+    _cfg: &AppConfig,
+) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
+    let public_router = Router::new();
+    let protected_router = backup::controller::BackupController::protected_routes()
+        .with_state(state.backup_state.clone());
+
+    (public_router, protected_router)
 }
 
 /// 初始化备份调度器

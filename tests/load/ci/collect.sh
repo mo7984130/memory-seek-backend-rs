@@ -11,7 +11,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/env.sh"
 
 command -v jq >/dev/null 2>&1 || { echo "需要 jq, 请先安装"; exit 1; }
 
-# 支持目录覆盖: 默认跑 target 的 run-*/normalized, 可指定 max 的 max-run-*/max-normalized
+# 默认处理 target 的 run-*/normalized；容量搜索由 collect_max_adaptive.sh 单独归一化。
 : "${COLLECT_RUNS_DIR:=$RUNS_DIR}"
 : "${COLLECT_OUT_DIR:=$NORMALIZED_DIR}"
 RUNS_DIR="$COLLECT_RUNS_DIR"

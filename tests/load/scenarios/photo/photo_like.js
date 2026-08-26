@@ -1,7 +1,7 @@
-// tests/load/scenarios/photo/comment.js
-// 评论服务压测场景 — arrival-rate 负载模型
+// 照片点赞服务压测场景 — arrival-rate 负载模型
 //
-// 完整流程迭代(发评论/查列表/删评论 自洽), 会话跨迭代复用。
+// 完整流程迭代(点赞/查询已点赞/取消点赞，自洽且不积累数据)，
+// 会话跨迭代复用。
 
 import {
     getPhotoUserCredentials,
@@ -18,10 +18,10 @@ import {
     maybeRefreshSession,
 } from "../../helpers/session.js";
 import {
-    createComment,
-    listComments,
-    deleteComment,
-} from "../../helpers/domains/photo/comment.js";
+    likePhoto,
+    listLikedPhotos,
+    unlikePhoto,
+} from "../../helpers/domains/photo/photo_like.js";
 
 export { printSummary as handleSummary };
 
@@ -33,14 +33,11 @@ export const options = buildLoadOptions({
     maxVUs: 2000,
 });
 
-// setup 预登录: login 不计入压测窗口
 export function setup() {
     return setupPreLogin(getPhotoUserCredentials, PRE_ALLOCATED_VUS);
 }
 
-// ── 核心逻辑 ──
-
-function runCommentFlow(data) {
+function runPhotoLikeFlow(data) {
     const session = sessionFromData(data, __VU);
     if (session) {
         setSession(session);
@@ -51,29 +48,22 @@ function runCommentFlow(data) {
     }
     maybeRefreshSession();
 
-    // 按 VU 分散取照片, 避免所有请求命中同一张最新照片造成行锁热点
     const photoId = pickPhotoUserPhotoId(__VU);
-
-    let result = createComment(photoId, `Comment VU${__VU} ${Date.now()}`);
-    recordResult("create_comment", result);
+    let result = likePhoto(photoId);
+    recordResult("like_photo", result);
     if (!result.success) return;
-    const commentId = result.data.id;
 
-    result = listComments(photoId);
-    recordResult("list_comments", result);
+    result = listLikedPhotos();
+    recordResult("list_liked_photos", result);
 
-    result = deleteComment(photoId, commentId);
-    recordResult("delete_comment", result);
+    result = unlikePhoto(photoId);
+    recordResult("unlike_photo", result);
 }
-
-// ── 独立运行入口 ──
 
 export default function (data) {
-    runCommentFlow(data);
+    runPhotoLikeFlow(data);
 }
 
-// ── 被统一入口(photo.js)调用的 exec 函数 ──
-
-export function commentExec(data) {
-    runCommentFlow(data);
+export function photoLikeExec(data) {
+    runPhotoLikeFlow(data);
 }

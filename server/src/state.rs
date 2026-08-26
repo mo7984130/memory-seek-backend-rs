@@ -7,9 +7,6 @@ use std::sync::Arc;
 #[cfg(feature = "email")]
 use email::EmailClient;
 
-#[cfg(feature = "face-engine")]
-use std::sync::Mutex;
-
 #[cfg(feature = "s3")]
 use oss::S3Client;
 
@@ -37,7 +34,7 @@ pub struct AppLibs {
     pub s3_client: Arc<S3Client>,
 
     #[cfg(feature = "face-engine")]
-    pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
+    pub face_engine: Arc<insight_face_rs::FaceEngine>,
 }
 
 // ============ AppState ============
@@ -61,5 +58,5 @@ pub struct AppState {
     pub metrics_handle: PrometheusHandle,
 
     #[cfg(feature = "face-engine")]
-    pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
+    pub face_engine: Arc<insight_face_rs::FaceEngine>,
 }

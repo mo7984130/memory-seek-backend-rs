@@ -11,6 +11,7 @@ export { collectionExec } from "./photo/collection.js";
 export { collectionPhotoExec } from "./photo/collection_photo.js";
 export { commentExec } from "./photo/comment.js";
 export { commentLikeExec } from "./photo/comment_like.js";
+export { photoLikeExec } from "./photo/photo_like.js";
 
 export const options = {
     scenarios: {
@@ -64,6 +65,18 @@ export const options = {
         },
         comment_like_service: {
             exec: "commentLikeExec",
+            executor: "ramping-vus",
+            startVUs: 0,
+            stages: [
+                { duration: "30s", target: 5 },
+                { duration: "1m", target: 5 },
+                { duration: "30s", target: 10 },
+                { duration: "1m", target: 10 },
+                { duration: "30s", target: 0 },
+            ],
+        },
+        photo_like_service: {
+            exec: "photoLikeExec",
             executor: "ramping-vus",
             startVUs: 0,
             stages: [

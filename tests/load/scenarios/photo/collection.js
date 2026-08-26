@@ -30,7 +30,6 @@ const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
 
 export const options = buildLoadOptions({
     targetRps: 60,
-    maxRps: 150,
     preAllocatedVUs: PRE_ALLOCATED_VUS,
     maxVUs: 2000,
 });

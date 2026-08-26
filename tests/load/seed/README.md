@@ -23,7 +23,7 @@
 ## 与场景脚本的约定
 
 - 账号基数与 `tests/load/helpers/common.js:16-17` 的 `AUTH_USERS` / `PHOTO_USERS` 对齐, **任何一方调整须同步**。
-- 场景依赖的照片来自种子数据: `list_photos` / `timeline_stats` 直接读 PG; comment / collection_photo / comment_like 场景通过 `list_photos(1)` 取照片 ID 操作。
+- 场景依赖的照片来自种子数据: `list_photos` / `timeline_stats` 直接读 PG; comment / collection_photo / comment_like / photo_like 场景按 VU 选择其预置照片，避免共享行热点。
 
 ## 已知限制
 
