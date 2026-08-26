@@ -93,7 +93,7 @@ indexmap = "2.14.0"
 # Snowflake ID
 snowflaked = { version = "1.0.3", features = ["sync"] }
 
-insight-face-rs = { version = "^2.5" , features = ["sea-orm"] }
+insight-face-rs = { version = "3.0.1" , features = ["sea-orm", "tokio"] }
 
 multi-level-cache = { version = "0.1.0", features = ["redis-deadpool"] }
 

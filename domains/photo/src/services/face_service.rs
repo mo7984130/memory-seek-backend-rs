@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use common::{
     Result,
-    error::{AppError, ContextualError, contextual},
+    error::{AppError, contextual},
     ext::{ContextResultExt, IntoContextualExt, OptionExt, ToOk},
     inc_counter, inc_error, metrics_name,
     models::CursorPage,
@@ -212,17 +212,7 @@ impl FaceService {
         debug!("检测照片中");
         let face_engine_clone = Arc::clone(&state.face_engine);
         let detect_result = spawn_blocking(move || -> contextual::Result<Vec<Face>> {
-            debug!("获取face-engine 锁");
-            let mut eng = face_engine_clone.lock().map_err(|error| {
-                ContextualError::error(
-                    "poison_error",
-                    "人脸引擎锁中毒",
-                    error.to_string(),
-                    AppError::InternalServerError,
-                )
-            })?;
-            debug!("获取成功");
-            let faces = eng.run(&img).context_error(
+            let faces = face_engine_clone.run(&img).context_error(
                 "face-engine_run_error",
                 "人脸检测模型运行失败",
                 AppError::InternalServerError,

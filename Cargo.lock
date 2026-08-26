@@ -2479,9 +2479,9 @@ dependencies = [
 
 [[package]]
 name = "insight-face-rs"
-version = "2.5.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6290362ab564e80d6f36fd373bc94418c0a3fef83d0a062b5e7450db447c3afa"
+checksum = "347b99f7b296cbe8b01b09af78426ade63e99c100eb56b1dc95ac9ce399f26e9"
 dependencies = [
  "image",
  "imageproc",
@@ -2494,6 +2494,8 @@ dependencies = [
  "serde-big-array",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3557,7 +3559,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "audit",
@@ -4833,7 +4835,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "audit",
  "auth",

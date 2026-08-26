@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::{sync::Arc, time::Duration};
 
-use insight_face_rs::FaceEngine;
+use insight_face_rs::{FaceEngine, FaceEngineConfig};
 use serde::Deserialize;
 use tracing::info;
 
@@ -11,10 +11,20 @@ pub struct Config {
 }
 
 /// 根据配置初始化人脸识别引擎.
-pub fn init(cfg: &Config) -> Arc<Mutex<FaceEngine>> {
+pub fn init(cfg: &Config) -> Arc<FaceEngine> {
     info!("初始化人脸识别模型");
-    let engine = FaceEngine::new(&cfg.detect_model_path, &cfg.recognize_model_path)
-        .expect("fail to init face engine");
+    let config = FaceEngineConfig::new(
+        cfg.detect_model_path.clone(),
+        cfg.recognize_model_path.clone(),
+        Duration::from_secs(60),
+    );
+    let engine = FaceEngine::new(&config).expect("fail to init face engine");
+    engine.unload().expect("unload engine fail");
+
+    let engine = Arc::new(engine);
+    FaceEngine::start_reaper_thread(&engine);
+
     info!("人脸识别模型初始化成功");
-    Arc::new(Mutex::new(engine))
+
+    engine
 }

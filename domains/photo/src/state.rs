@@ -1,6 +1,4 @@
 use std::sync::Arc;
-#[cfg(feature = "face")]
-use std::sync::Mutex;
 
 use common::models::CursorPage;
 use deadpool_redis::Pool;
@@ -39,7 +37,7 @@ pub struct PhotoState {
     pub redis: Pool,
     pub s3_client: Arc<S3Client>,
     #[cfg(feature = "face")]
-    pub face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
+    pub face_engine: Arc<insight_face_rs::FaceEngine>,
     #[cfg(feature = "face")]
     pub backup_state: Arc<BackupState>,
 }
@@ -51,7 +49,7 @@ impl PhotoState {
         redis: Pool,
         cache_config: CacheConfig,
         s3_client: Arc<S3Client>,
-        #[cfg(feature = "face")] face_engine: Arc<Mutex<insight_face_rs::FaceEngine>>,
+        #[cfg(feature = "face")] face_engine: Arc<insight_face_rs::FaceEngine>,
         #[cfg(feature = "face")] backup_state: Arc<BackupState>,
     ) -> Self {
         Self {
