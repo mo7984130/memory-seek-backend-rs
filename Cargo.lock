@@ -1511,7 +1511,6 @@ version = "0.1.2"
 dependencies = [
  "common",
  "lettre",
- "metrics",
 ]
 
 [[package]]

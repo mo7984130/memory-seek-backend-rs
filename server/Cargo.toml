@@ -15,7 +15,7 @@ user = ["dep:user", "user/audit", "s3", "token_cipher"]
 photo = ["dep:photo", "photo/audit", "audit", "s3", "token_cipher"]
 
 email = ["dep:email"]
-metrics = ["common/metrics", "dep:metrics", "photo?/metrics", "user?/metrics", "auth?/metrics", "email?/metrics", "oss?/metrics", "backup?/metrics"]
+metrics = ["common/metrics", "dep:metrics", "photo?/metrics", "user?/metrics", "auth?/metrics", "oss?/metrics", "backup?/metrics"]
 s3 = ["dep:oss"]
 backup = ["dep:backup", "backup/audit", "s3"]
 audit = ["dep:audit", "audit/controller", "audit/enable"]

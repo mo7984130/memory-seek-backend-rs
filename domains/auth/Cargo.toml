@@ -5,7 +5,7 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics", "email/metrics"]
+metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum", "dep:serde_json"]
 audit = ["audit/enable"]
 
