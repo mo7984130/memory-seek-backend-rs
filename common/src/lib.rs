@@ -13,6 +13,7 @@ pub mod extractors;
 pub mod models;
 pub mod r;
 pub mod traits;
+pub mod types;
 pub mod utils;
 
 #[cfg(feature = "event")]

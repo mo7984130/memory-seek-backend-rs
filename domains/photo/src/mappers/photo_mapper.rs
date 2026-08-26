@@ -1,6 +1,8 @@
+#[cfg(feature = "face")]
+use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common::ext::OkExt;
+use common::ext::{ContextOptionExt, OkExt};
 use common::{
     error::{AppError, ContextualError, contextual::Result},
     models::CursorPage,
@@ -187,16 +189,18 @@ impl PhotoMapper {
     /// 批量查询照片 ID 和 file_id.
     pub async fn query_id_and_file_id_by_ids(
         db: &impl ConnectionTrait,
-        ids: &[PhotoId],
-    ) -> Result<Vec<(PhotoId, String)>> {
+        ids: impl IntoIterator<Item = &PhotoId>,
+    ) -> Result<HashMap<PhotoId, String>> {
         Entity::find()
-            .filter(Column::Id.is_in(ids.iter().copied()))
+            .filter(Column::Id.is_in(ids.into_iter().copied()))
             .select_only()
             .column(Column::Id)
             .column(Column::FileId)
             .into_tuple::<(PhotoId, String)>()
             .all(db)
             .await?
+            .into_iter()
+            .collect::<HashMap<PhotoId, String>>()
             .to_ok()
     }
 
@@ -221,41 +225,20 @@ impl PhotoMapper {
     pub async fn query_dimensions_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,
-    ) -> Result<Option<(i32, i32)>> {
+    ) -> Result<Option<(u32, u32)>> {
         Entity::find()
             .select_only()
             .column(Column::Width)
             .column(Column::Height)
             .filter(Column::FileId.eq(file_id))
-            .into_tuple::<(i32, i32)>()
+            .into_tuple::<(u32, u32)>()
             .one(db)
             .await?
             .to_ok()
     }
 
-    #[cfg(feature = "face")]
-    /// 按照片 id 批量查询图片尺寸.
-    pub async fn query_dimensions_by_ids(
-        db: &impl ConnectionTrait,
-        ids: &[PhotoId],
-    ) -> Result<Vec<(PhotoId, i32, i32)>> {
-        Entity::find()
-            .filter(Column::Id.is_in(ids.iter().copied()))
-            .select_only()
-            .column(Column::Id)
-            .column(Column::Width)
-            .column(Column::Height)
-            .into_tuple::<(PhotoId, i32, i32)>()
-            .all(db)
-            .await?
-            .to_ok()
-    }
-
     /// 根据照片 id 查询 file_id.
-    pub async fn query_file_id_by_id(
-        db: &impl ConnectionTrait,
-        id: PhotoId,
-    ) -> Result<Option<String>> {
+    pub async fn query_file_id_by_id(db: &impl ConnectionTrait, id: PhotoId) -> Result<String> {
         Entity::find()
             .select_only()
             .column(Column::FileId)
@@ -263,7 +246,11 @@ impl PhotoMapper {
             .into_tuple::<String>()
             .one(db)
             .await?
-            .to_ok()
+            .context_error_none(
+                "photo_file_id_not_exist",
+                "照片file_id不存在",
+                AppError::InternalServerError,
+            )
     }
 
     /// 根据file_id 查询 id.

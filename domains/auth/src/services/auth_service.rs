@@ -6,8 +6,8 @@ use audit::{AuditEvent, AuditService};
 use common::Result;
 use common::error::AppError;
 use common::ext::{
-    BoolExt, ContextualResultExt, IntoContextualExt, OptionExt, RedisExt, ResultInspectErrAsync,
-    log_warn,
+    BoolExt, ContextualResultExt, IntoContextualExt, OkExt, OptionExt, RedisExt,
+    ResultInspectErrAsync, log_warn,
 };
 use common::time::{after, now};
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
@@ -393,7 +393,8 @@ async fn verify_inviter_code(state: &AuthState, inviter_code: &str) -> Result<Us
             "invalid_inviter_code",
             "邀请码无效",
             AppError::bad_request("邀请码无效. 不存在或已过期"),
-        )
+        )?
+        .to_ok()
 }
 
 // 校验用户的 refresh_token：查询数据库验证匹配性和有效期，不匹配或过期返回 Unauthorized

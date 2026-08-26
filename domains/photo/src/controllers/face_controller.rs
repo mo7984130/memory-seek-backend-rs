@@ -151,7 +151,7 @@ impl FaceController {
         Extension(user_id): Extension<UserId>,
         ValidatedJson(req): ValidatedJson<FaceDeleteBatchParam>,
     ) -> Result<R<FaceDeleteBatchResult>> {
-        let result = FaceService::delete_faces_batch(&state, &req.face_ids, user_id).await?;
+        let result = FaceService::delete_faces(&state, req.face_ids, user_id).await?;
 
         Ok(result).to_r_ok()
     }

@@ -95,25 +95,8 @@ impl CollectionRepo {
             // 修改封面
             if let Some(photo_id) = photo_ids.first() {
                 let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
-                match file_id {
-                    Some(file_id) => {
-                        CollectionMapper::update_cover_photo(
-                            txn,
-                            collection_id,
-                            *photo_id,
-                            file_id,
-                        )
-                        .await?;
-                    }
-                    None => {
-                        let _ = ContextualError::error_without_source(
-                            "collection_cover_file_id_not_exist",
-                            "添加照片到收藏夹时, 收藏夹封面照片的file_id不存在",
-                            AppError::InternalServerError,
-                        )
-                        .emit();
-                    }
-                }
+                CollectionMapper::update_cover_photo(txn, collection_id, *photo_id, file_id)
+                    .await?;
             }
 
             AuditService::append(
@@ -146,7 +129,7 @@ impl CollectionRepo {
                 txn,
                 user_id,
                 collection.id,
-                &photo_ids,
+                photo_ids,
             )
             .await?;
 
@@ -165,25 +148,8 @@ impl CollectionRepo {
                 .first()
                 {
                     let file_id = PhotoMapper::query_file_id_by_id(txn, *photo_id).await?;
-                    match file_id {
-                        Some(file_id) => {
-                            CollectionMapper::update_cover_photo(
-                                txn,
-                                collection.id,
-                                *photo_id,
-                                file_id,
-                            )
-                            .await?;
-                        }
-                        None => {
-                            ContextualError::error_without_source(
-                                "photo_collection_cover_photo_file_id_not_exist",
-                                "从收藏夹移除照片时, 封面照片file_id不存在",
-                                AppError::InternalServerError,
-                            )
-                            .emit();
-                        }
-                    }
+                    CollectionMapper::update_cover_photo(txn, collection.id, *photo_id, file_id)
+                        .await?;
                 }
             }
 

@@ -38,8 +38,8 @@ impl AuditEvent {
         self.event_id = event_id;
         self
     }
-    pub fn with_actor(mut self, actor_id: i64) -> Self {
-        self.actor_id = Some(actor_id);
+    pub fn with_actor(mut self, actor_id: impl Into<i64>) -> Self {
+        self.actor_id = Some(actor_id.into());
         self
     }
     pub fn with_target(

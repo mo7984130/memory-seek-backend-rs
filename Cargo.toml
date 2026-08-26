@@ -35,8 +35,6 @@ sea-orm = { version = "=1.1.19", features = [
     "runtime-tokio-rustls",
     "macros",
 ] }
-sqlx.version = "=0.8.6"
-pgvector = "=0.4.1"
 chrono = { version = "0.4.44", features = ["serde"] }
 thiserror = "2.0.18"
 derive_more = { version = "1", default-features = false, features = ["from", "into", "display", "deref"] }
@@ -95,7 +93,7 @@ indexmap = "2.14.0"
 # Snowflake ID
 snowflaked = { version = "1.0.3", features = ["sync"] }
 
-insight-face-rs = { version = "2.1.0" , features = ["pgvector"] }
+insight-face-rs = { version = "^2.5" , features = ["sea-orm"] }
 
 multi-level-cache = { version = "0.1.0", features = ["redis-deadpool"] }
 

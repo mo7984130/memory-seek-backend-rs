@@ -27,7 +27,7 @@ impl TimelineStatMapper {
                 Column::AnchorTime,
                 Expr::expr(Func::greatest([
                     Expr::col(Column::AnchorTime).into(),
-                    Expr::value(created_at.clone()).into(),
+                    Expr::value(created_at),
                 ]))
                 .into(),
             )

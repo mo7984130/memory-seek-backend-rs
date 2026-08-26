@@ -12,6 +12,7 @@ use common::utils::MetricsTimerExt;
 use constants::RedisKeys;
 use sea_orm::ActiveModelTrait;
 use types::auth::user::UserId;
+use types::photo::ImageDimensions;
 use types::photo::dto::photo::{PageDirection, PhotoCursorParam};
 use types::photo::photo::{ActiveModel, Model, NewPhotoRecord, PhotoId, PhotoRecord};
 
@@ -184,7 +185,10 @@ impl PhotoRepo {
     }
 
     /// 通过file_id 获取对应的图片尺寸.
-    pub async fn get_photo_dimensions(state: &PhotoState, file_id: &str) -> Result<(i32, i32)> {
+    pub async fn get_photo_dimensions(
+        state: &PhotoState,
+        file_id: &str,
+    ) -> Result<ImageDimensions> {
         let key = RedisKeys::photo::photo::photo_dimensions(file_id);
         state
             .cache_photo_dimensions
@@ -199,6 +203,10 @@ impl PhotoRepo {
             })
             .timed(metrics_name!("cache_get_or_load"))
             .await
+            .map(|dimensions| ImageDimensions {
+                width: dimensions.0,
+                height: dimensions.1,
+            })
     }
 
     /// 失效照片删除后受影响的照片和人物缓存.

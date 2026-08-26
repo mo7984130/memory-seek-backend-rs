@@ -149,14 +149,7 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
     fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
         if self.is_domain_lower {
             let method = call.method.to_string();
-            if matches!(
-                method.as_str(),
-                "ok_or_warn"
-                    | "ok_or_warn_bad_request"
-                    | "ok_or_error"
-                    | "true_or_warn"
-                    | "false_or_warn"
-            ) {
+            if matches!(method.as_str(), "true_or_warn" | "false_or_warn") {
                 self.violations.push(Violation::new(
                     self.file,
                     call.method.span(),

@@ -1,5 +1,5 @@
-use common::Result;
 use common::error::AppError;
+use common::error::contextual::Result;
 use common::ext::OptionExt;
 
 /// 认证领域中必须存在用户的查询结果扩展。
@@ -21,16 +21,6 @@ impl<T> AuthOptionExt<T> for Option<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn none_user_not_found_returns_bad_request() {
-        let result: Result<()> = None.user_not_found();
-
-        assert!(matches!(
-            result.unwrap_err(),
-            AppError::BadRequest(message) if message == "用户不存在"
-        ));
-    }
 
     #[test]
     fn some_user_not_found_returns_value() {

@@ -32,7 +32,7 @@ pub struct PhotoState {
     pub(crate) cache_photo_info: MultiLevelCache<PhotoRecord, ContextualError>,
     pub(crate) cache_photo_like: MultiLevelCache<CachedPhotoLike, ContextualError>,
     pub(crate) cache_photo_cursor_ids: MultiLevelCache<CursorPage<PhotoId, ()>, ContextualError>,
-    pub(crate) cache_photo_dimensions: MultiLevelCache<(i32, i32), ContextualError>,
+    pub(crate) cache_photo_dimensions: MultiLevelCache<(u32, u32), ContextualError>,
     pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     #[cfg(feature = "face")]
     pub(crate) cache_person: MultiLevelCache<PersonBriefRow, ContextualError>,

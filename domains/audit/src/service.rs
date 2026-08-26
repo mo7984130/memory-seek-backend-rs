@@ -1,6 +1,6 @@
 use common::{Result, error::contextual, time::DateTime};
-use sea_orm::{ConnectionTrait, DatabaseTransaction};
-use types::audit::{AuditEvent, AuditQuery, AuditStatsQuery, AuditTopQuery, BehaviorRecord};
+use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseTransaction, Set};
+use types::audit::*;
 
 #[cfg(feature = "enable")]
 use {crate::mapper::AuditMapper, common::ext::ToOk};
@@ -77,6 +77,23 @@ impl AuditService {
 }
 
 impl AuditService {
+    /// 记录审计事件。
+    /// 不要求传入事务
+    pub async fn record(db: &impl ConnectionTrait, event: AuditEvent) -> contextual::Result<()> {
+        ActiveModel {
+            event_id: Set(event.event_id),
+            event_type: Set(event.event_type),
+            actor_id: Set(event.actor_id),
+            target_type: Set(event.target_type),
+            target_id: Set(event.target_id),
+            detail: Set(event.detail),
+            occurred_at: Set(event.occurred_at),
+        }
+        .insert(db)
+        .await?;
+        Ok(())
+    }
+
     /// 在调用方当前事务中追加审计事实。
     pub async fn append(txn: &DatabaseTransaction, event: AuditEvent) -> contextual::Result<()> {
         Self::append_many(txn, [event]).await
@@ -112,7 +129,7 @@ impl AuditService {
                 if event.event_id == 0 {
                     event.event_id = common::snowflake::next_id();
                 }
-                types::audit::ActiveModel {
+                ActiveModel {
                     event_id: Set(event.event_id),
                     event_type: Set(event.event_type),
                     actor_id: Set(event.actor_id),

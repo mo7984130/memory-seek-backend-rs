@@ -1,105 +1,93 @@
-use common::{error::contextual::Result, ext::ToOk, models::CursorPage};
+use common::{
+    error::{AppError, ContextualError, contextual::Result},
+    ext::{CollectOkExt, ContextOptionExt, OkExt, ToErr, UintExt},
+    models::CursorPage,
+};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, Condition, ConnectionTrait, EntityTrait, Order, QueryFilter, QueryOrder,
+    QuerySelect,
     sea_query::{Expr, Query},
 };
-use types::cursor::TimeIdCursor;
-use types::photo::{face::*, person::PersonId, photo::PhotoId};
+use types::{
+    cursor::TimeIdCursor,
+    photo::{face::*, person::PersonId, photo::PhotoId},
+};
 
 pub struct FaceMapper;
 
 // 创建
 impl FaceMapper {
-    /// 查询照片关联的人脸记录.
-    pub async fn query_by_photo_id(
-        db: &impl ConnectionTrait,
-        photo_id: PhotoId,
-    ) -> Result<Vec<FaceRecord>> {
-        Entity::find()
-            .filter(Column::PhotoId.eq(photo_id))
-            .all(db)
+    pub async fn inserts(db: &impl ConnectionTrait, new_faces: Vec<NewFaceRecord>) -> Result<u64> {
+        Entity::insert_many(new_faces.into_iter().map(ActiveModel::from))
+            .exec_without_returning(db)
             .await?
-            .into_iter()
-            .map(FaceRecord::try_from)
-            .collect()
+            .to_ok()
     }
 }
 
 // 修改
 impl FaceMapper {
-    /// 更新人脸的人物归属.
     pub async fn update_person_id(
         db: &impl ConnectionTrait,
-        person_id: PersonId,
-        face_ids: impl IntoIterator<Item = FaceId>,
-    ) -> Result<u64> {
+        person_id: Option<PersonId>,
+        face_id: FaceId,
+    ) -> Result<()> {
         Entity::update_many()
+            .filter(Column::Id.eq(face_id))
+            .col_expr(Column::PersonId, Expr::value(person_id))
+            .exec(db)
+            .await?
+            .rows_affected
+            .no_zero_or_warn(
+                "update_person_id_fail",
+                "修改人脸的人物id失败",
+                AppError::bad_request("修改人脸人物失败"),
+            )?;
+        Ok(())
+    }
+
+    /// 更新多个人脸的人物id
+    pub async fn update_person_ids(
+        db: &impl ConnectionTrait,
+        person_id: Option<PersonId>,
+        face_ids: impl ExactSizeIterator<Item = FaceId>,
+    ) -> Result<()> {
+        let size = face_ids.len() as u64;
+        let affected = Entity::update_many()
             .filter(Column::Id.is_in(face_ids))
             .col_expr(Column::PersonId, Expr::value(person_id))
             .exec(db)
             .await?
-            .rows_affected
-            .to_ok()
+            .rows_affected;
+        if affected != size {
+            ContextualError::error_without_source(
+                "update_person_ids_fail",
+                "修改人脸人物id失败",
+                AppError::bad_request("修改人脸人物失败"),
+            )
+            .to_err()
+        } else {
+            Ok(())
+        }
     }
 
-    /// 清空所有人脸的 person_id(全量聚类重建前调用, 避免悬空引用)
-    pub async fn clear_person_id(db: &impl ConnectionTrait) -> Result<u64> {
-        Entity::update_many()
-            .col_expr(Column::PersonId, Expr::value(sea_orm::Value::BigInt(None)))
-            .exec(db)
-            .await?
-            .rows_affected
-            .to_ok()
-    }
-
-    /// 修改单张人脸归属
-    pub async fn update_face_person_id(
-        db: &impl ConnectionTrait,
-        face_id: FaceId,
-        person_id: PersonId,
-    ) -> Result<u64> {
-        Entity::update_many()
-            .filter(Column::Id.eq(face_id))
-            .col_expr(Column::PersonId, Expr::value(person_id))
-            .exec(db)
-            .await?
-            .rows_affected
-            .to_ok()
-    }
-
-    /// 清空单张人脸归属(取消归属, person_id 置 NULL)
-    pub async fn clear_face_person_id(db: &impl ConnectionTrait, face_id: FaceId) -> Result<u64> {
-        Entity::update_many()
-            .filter(Column::Id.eq(face_id))
-            .col_expr(Column::PersonId, Expr::value(sea_orm::Value::BigInt(None)))
-            .exec(db)
-            .await?
-            .rows_affected
-            .to_ok()
-    }
-
-    /// 将某人物下的全部人脸归属转移到另一人物(合并)
-    pub async fn move_person_faces(
-        db: &impl ConnectionTrait,
-        source_person_id: PersonId,
-        target_person_id: PersonId,
-    ) -> Result<u64> {
-        Entity::update_many()
-            .filter(Column::PersonId.eq(source_person_id))
-            .col_expr(Column::PersonId, Expr::value(target_person_id))
-            .exec(db)
-            .await?
-            .rows_affected
-            .to_ok()
-    }
-
-    /// 清空某人物下所有人脸的归属(删除人物前调用, 避免悬空引用)
-    pub async fn clear_person_id_by_person(
+    /// 清除该人物的所有人脸的人物id
+    pub async fn clean_person_id_by_person_id(
         db: &impl ConnectionTrait,
         person_id: PersonId,
     ) -> Result<u64> {
         Entity::update_many()
             .filter(Column::PersonId.eq(person_id))
+            .col_expr(Column::PersonId, Expr::value(sea_orm::Value::BigInt(None)))
+            .exec(db)
+            .await?
+            .rows_affected
+            .to_ok()
+    }
+
+    /// 清除所有人脸的人物id
+    pub async fn clean_person_id(db: &impl ConnectionTrait) -> Result<u64> {
+        Entity::update_many()
             .col_expr(Column::PersonId, Expr::value(sea_orm::Value::BigInt(None)))
             .exec(db)
             .await?
@@ -110,102 +98,146 @@ impl FaceMapper {
 
 // 查询
 impl FaceMapper {
-    /// 按人脸 ID 查询单条人脸记录.
-    pub async fn query_by_id(db: &impl ConnectionTrait, id: FaceId) -> Result<Option<FaceRecord>> {
+    /// 查询所有人脸
+    pub async fn query_all(db: &impl ConnectionTrait) -> Result<Vec<FaceRecord>> {
         Entity::find()
-            .filter(Column::Id.eq(id))
-            .one(db)
-            .await?
-            .map(FaceRecord::try_from)
-            .transpose()
-    }
-
-    /// 按 ID 批量查询人脸记录.
-    pub async fn query_by_ids(
-        db: &impl ConnectionTrait,
-        ids: &[FaceId],
-    ) -> Result<Vec<FaceRecord>> {
-        Entity::find()
-            .filter(Column::Id.is_in(ids.iter().copied()))
             .all(db)
             .await?
             .into_iter()
-            .map(FaceRecord::try_from)
-            .collect()
+            .map(FaceRecord::from)
+            .collect_ok()
     }
 
-    /// 按 ID 加行锁查询(`SELECT ... FOR UPDATE`, 供转移归属等读-改-写流程使用)
-    pub async fn lock_by_id(
-        db: &impl ConnectionTrait,
-        face_id: FaceId,
-    ) -> Result<Option<FaceRecord>> {
+    /// 加行锁查询
+    pub async fn lock_by_id(db: &impl ConnectionTrait, face_id: FaceId) -> Result<FaceRecord> {
         Entity::find()
             .filter(Column::Id.eq(face_id))
             .lock_exclusive()
             .one(db)
             .await?
-            .map(FaceRecord::try_from)
-            .transpose()
+            .map(FaceRecord::from)
+            .context_warn_none(
+                "face_not_found",
+                "人脸不存在",
+                AppError::not_found("人脸不存在"),
+            )
     }
 
-    /// 按照片 id 加行锁批量查询人脸(`SELECT ... FOR UPDATE`,
-    /// 删除照片前锁定全部人脸行, 防止与并发转移归属互死锁/丢失更新)
+    pub async fn lock_by_ids(
+        db: &impl ConnectionTrait,
+        face_ids: impl IntoIterator<Item = &FaceId>,
+    ) -> Result<Vec<FaceRecord>> {
+        Entity::find()
+            .filter(Column::Id.is_in(face_ids.into_iter().copied()))
+            .lock_exclusive()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(FaceRecord::from)
+            .collect_ok()
+    }
+
+    /// 按照片 id 加行锁批量查询人脸
     pub async fn lock_by_photo_ids(
         db: &impl ConnectionTrait,
         photo_ids: &[PhotoId],
     ) -> Result<Vec<FaceRecord>> {
-        if photo_ids.is_empty() {
-            return Ok(Vec::new());
-        }
         Entity::find()
             .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
             .lock_exclusive()
             .all(db)
             .await?
             .into_iter()
-            .map(FaceRecord::try_from)
-            .collect()
+            .map(FaceRecord::from)
+            .collect_ok()
     }
 
-    /// 查询某人物下 score 最高的人脸(封面决策/封面回退用)
+    /// 查询某人物下 score 最高的人脸
+    ///
+    /// 若提供了 `exclude_face_ids`，则排除这些人脸的查询结果
     pub async fn query_top_score_by_person_id(
         db: &impl ConnectionTrait,
         person_id: PersonId,
+        exclude_face_ids: Option<&[FaceId]>,
     ) -> Result<Option<FaceRecord>> {
-        Entity::find()
-            .filter(Column::PersonId.eq(person_id))
+        let mut query = Entity::find().filter(Column::PersonId.eq(person_id));
+
+        // 如果提供了排除列表，添加过滤条件
+        if let Some(ids) = exclude_face_ids {
+            query = query.filter(Column::Id.is_not_in(ids.iter().copied()));
+        }
+
+        query
             .order_by(Column::Score, Order::Desc)
             .one(db)
             .await?
-            .map(FaceRecord::try_from)
-            .transpose()
+            .map(FaceRecord::from)
+            .to_ok()
     }
 
-    /// 查询全部人脸记录, 供全量人物计算使用.
-    pub async fn query_all(db: &impl ConnectionTrait) -> Result<Vec<FaceRecord>> {
+    // 查询人脸计算所需的照片id和file_id
+    pub async fn query_face_compute_photos(
+        db: &impl ConnectionTrait,
+        full: bool,
+        size: u64,
+        previous_id: PhotoId,
+    ) -> Result<Vec<(PhotoId, String)>> {
+        let condition = if full {
+            Condition::all().add(types::photo::photo::Column::Id.gt(previous_id))
+        } else {
+            let subquery = Query::select()
+                .expr(Expr::val(1))
+                .from(types::photo::face::Entity)
+                .and_where(
+                    Expr::col((
+                        types::photo::face::Entity,
+                        types::photo::face::Column::PhotoId,
+                    ))
+                    .equals((types::photo::photo::Entity, types::photo::photo::Column::Id)),
+                )
+                .to_owned();
+            Condition::all()
+                .add(types::photo::photo::Column::Id.gt(previous_id))
+                .add(Expr::exists(subquery).not())
+        };
+        types::photo::photo::Entity::find()
+            .select_only()
+            .column(types::photo::photo::Column::Id)
+            .column(types::photo::photo::Column::FileId)
+            .filter(condition)
+            .order_by(types::photo::photo::Column::Id, sea_orm::Order::Asc)
+            .limit(size)
+            .into_tuple::<(PhotoId, String)>()
+            .all(db)
+            .await
+            .map_err(Into::into)
+    }
+
+    /// 查询照片里面的人脸.
+    pub async fn query_by_photo_id(
+        db: &impl ConnectionTrait,
+        photo_id: PhotoId,
+    ) -> Result<Vec<FaceRecord>> {
         Entity::find()
+            .filter(Column::PhotoId.eq(photo_id))
+            .lock_exclusive()
             .all(db)
             .await?
             .into_iter()
-            .map(FaceRecord::try_from)
-            .collect()
+            .map(FaceRecord::from)
+            .collect_ok()
     }
 
-    /// 查询全部未分配人脸(`person_id IS NULL`, 增量插入或聚类离群)
-    pub async fn query_unassigned(db: &impl ConnectionTrait) -> Result<Vec<FaceRecord>> {
+    pub async fn lock_unassigned_faces(db: &impl ConnectionTrait) -> Result<Vec<FaceRecord>> {
         Entity::find()
             .filter(Column::PersonId.is_null())
             .all(db)
             .await?
             .into_iter()
-            .map(FaceRecord::try_from)
-            .collect()
+            .map(FaceRecord::from)
+            .collect_ok()
     }
 
-    /// 查询"包含未分配人脸"的照片 id(keyset 分页, 基于照片的 (created_at, id))
-    ///
-    /// 不区分照片归属者, 全局扫描未分配人脸。
-    /// 用 `EXISTS` 子查询过滤, 保证同一照片多张未分配人脸不产生重复行。
     pub async fn query_unassigned_face_photo_ids_cursor_page(
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<PhotoId>>,
@@ -244,11 +276,8 @@ impl FaceMapper {
         Ok(CursorPage::from_oversize(records, size))
     }
 
-    /// 查询某人物的人脸照片 id(keyset 分页, 基于照片的 (created_at, id))
-    ///
-    /// 用 `EXISTS` 子查询过滤该人物的人脸, 保证同一照片多张人脸不产生重复行;
-    /// 排序与游标均基于 photo 表, 与 `next_cursor` 的编码维度一致。
-    pub async fn query_photo_ids_cursor_page(
+    // 游标查询人物的照片
+    pub async fn query_person_photo_ids(
         db: &impl ConnectionTrait,
         person_id: PersonId,
         cursor: Option<TimeIdCursor<PhotoId>>,
@@ -286,44 +315,40 @@ impl FaceMapper {
 
         Ok(CursorPage::from_oversize(records, size))
     }
+
+    pub async fn lock_by_person_id(
+        db: &impl ConnectionTrait,
+        person_id: PersonId,
+    ) -> Result<Vec<FaceRecord>> {
+        Entity::find()
+            .filter(Column::PersonId.eq(person_id))
+            .lock_exclusive()
+            .all(db)
+            .await?
+            .into_iter()
+            .map(FaceRecord::from)
+            .collect_ok()
+    }
 }
 
 // 删除
 impl FaceMapper {
-    /// 删除单张人脸(仅限未归属人脸, 归属校验在 service 层完成)
-    pub async fn delete_by_id(db: &impl ConnectionTrait, face_id: FaceId) -> Result<u64> {
+    pub async fn delete_by_ids(db: &impl ConnectionTrait, face_ids: &[FaceId]) -> Result<u64> {
         Entity::delete_many()
-            .filter(Column::Id.eq(face_id))
+            .filter(Column::Id.is_in(face_ids.iter().copied()))
             .exec(db)
             .await?
             .rows_affected
             .to_ok()
     }
 
-    /// 删除照片的全部人脸记录(删除照片时清理人脸, 归属人物统计由 service 层维护)
+    /// 删除照片的全部人脸记录
     pub async fn delete_by_photo_ids(
         db: &impl ConnectionTrait,
         photo_ids: &[PhotoId],
     ) -> Result<u64> {
-        if photo_ids.is_empty() {
-            return Ok(0);
-        }
         Entity::delete_many()
             .filter(Column::PhotoId.is_in(photo_ids.iter().copied()))
-            .exec(db)
-            .await?
-            .rows_affected
-            .to_ok()
-    }
-
-    /// 批量删除未归属人脸(仅删除 `person_id IS NULL` 的人脸, 归属校验由 SQL 条件原子完成)
-    pub async fn delete_unassigned_by_ids(
-        db: &impl ConnectionTrait,
-        face_ids: &[FaceId],
-    ) -> Result<u64> {
-        Entity::delete_many()
-            .filter(Column::Id.is_in(face_ids.iter().copied()))
-            .filter(Column::PersonId.is_null())
             .exec(db)
             .await?
             .rows_affected

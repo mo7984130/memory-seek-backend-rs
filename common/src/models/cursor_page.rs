@@ -78,6 +78,22 @@ impl<T> CursorPage<T, ()> {
             has_more,
         }
     }
+
+    pub fn from_records(records: Vec<T>) -> Self {
+        Self {
+            records,
+            next_cursor: None,
+            has_more: false,
+        }
+    }
+
+    pub fn from_has_more(records: Vec<T>, has_more: bool) -> Self {
+        Self {
+            records,
+            next_cursor: None,
+            has_more,
+        }
+    }
 }
 
 #[macro_export]

@@ -1,13 +1,15 @@
 use validator::Validate;
 
-use crate::cursor::{FaceCountIdCursor, TimeIdCursor};
+use crate::auth::user::UserId;
+use crate::cursor::{CountIdCursor, TimeIdCursor};
 use crate::photo::models::PersonName;
-use crate::photo::person::PersonId;
+use crate::photo::person::{PersonId, PersonRecord};
 use crate::photo::photo::PhotoId;
+use crate::photo::{ImageDimensions, ImageToken};
 
 crate::in_dto!(PersonCursorParam, "photo/", serde_default, docs = "人物列表参数(cursor 为 FaceCountIdCursor<PersonId> 的 Base64 编码, 按 face_count 倒序分页)"; {
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
-    pub cursor: Option<FaceCountIdCursor<PersonId>>,
+    pub cursor: Option<CountIdCursor<PersonId>>,
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
@@ -44,9 +46,20 @@ crate::out_dto!(PersonView, "photo/", rename = "Person"; {
     pub id: PersonId,
     pub name: String,
     /// 封面图 token(加密串, 经 `GET /photo/image/{token}` 访问)
-    pub cover_token: Option<String>,
+    #[cfg_attr(feature = "ts", ts(type = "string"))]
+    pub cover_token: ImageToken,
     pub face_count: u64
 });
+impl PersonView {
+    pub fn from_record(value: PersonRecord, viewer: UserId, dimension: ImageDimensions) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            cover_token: ImageToken::crop(viewer, value.cover.file_id, value.cover.bbox, dimension),
+            face_count: value.face_count,
+        }
+    }
+}
 
 pub const PERSON_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 

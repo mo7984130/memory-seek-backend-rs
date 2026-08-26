@@ -30,6 +30,26 @@ pub struct FaceBBox {
     pub x2: f32,
     pub y2: f32,
 }
+impl From<insight_face_rs::BoundingBox> for FaceBBox {
+    fn from(v: insight_face_rs::BoundingBox) -> Self {
+        Self {
+            x1: v.x1,
+            y1: v.y1,
+            x2: v.x2,
+            y2: v.y2,
+        }
+    }
+}
+impl From<FaceBBox> for insight_face_rs::BoundingBox {
+    fn from(v: FaceBBox) -> Self {
+        Self {
+            x1: v.x1,
+            y1: v.y1,
+            x2: v.x2,
+            y2: v.y2,
+        }
+    }
+}
 
 /// 原图尺寸（像素）。
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
@@ -43,7 +63,6 @@ pub struct ImageDimensions {
     pub width: u32,
     pub height: u32,
 }
-
 impl FaceBBox {
     /// 将归一化边界框转换为指定图片尺寸下的绝对像素裁剪矩形 `(x, y, w, h)`
     ///

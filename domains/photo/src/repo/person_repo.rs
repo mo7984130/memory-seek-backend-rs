@@ -1,73 +1,53 @@
-use common::time::Duration;
+use std::collections::{HashMap, HashSet};
 
 use audit::{AuditEvent, AuditService};
-use common::{error::contextual::Result, metrics_name, models::CursorPage, utils::MetricsTimerExt};
+use common::db_transaction;
+use common::error::contextual::Result;
+use common::ext::{ContextualResultExt, IntoContextualExt, ToOk};
+use common::models::CursorPage;
+use common::types::HasChanged::Changed;
+use common::utils::DbUtils;
 use constants::RedisKeys;
-use types::{auth::user::UserId, photo::person::PersonId};
+use serde_json::json;
+use types::auth::user::{AdminId, UserId};
+use types::cursor::CountIdCursor;
+use types::photo::MergePersonParam;
+use types::photo::face::FaceRecord;
+use types::photo::person::{PersonId, PersonRecord, UpdatePersonRecord};
+use types::photo::photo::PhotoId;
 
-use crate::state::PhotoState;
-use crate::{
-    mappers::{face_mapper::FaceMapper, person_mapper::PersonMapper, photo_mapper::PhotoMapper},
-    models::PersonBriefRow,
-};
+use crate::PhotoState;
+use crate::mappers::face_mapper::FaceMapper;
+use crate::mappers::person_mapper::PersonMapper;
+use crate::mappers::photo_mapper::PhotoMapper;
 
-pub(crate) struct PersonRepo;
+pub struct PersonRepo;
 
+// 创建
+impl PersonRepo {}
+
+// 修改
 impl PersonRepo {
-    /// 加载人脸向量及其照片文件, 供人物聚类使用.
-    pub(crate) async fn load_faces_with_photo_files(
-        state: &PhotoState,
-    ) -> common::error::contextual::Result<(
-        Vec<types::photo::face::FaceRecord>,
-        Vec<(types::photo::photo::PhotoId, String)>,
-    )> {
-        let faces = FaceMapper::query_all(&state.db).await?;
-        let ids = faces
-            .iter()
-            .map(|face| face.photo_id)
-            .collect::<std::collections::HashSet<_>>();
-        let files = PhotoMapper::query_id_and_file_id_by_ids(
-            &state.db,
-            &ids.into_iter().collect::<Vec<_>>(),
-        )
-        .await?;
-        Ok((faces, files))
-    }
-    /// 一次加载未分配人脸和人物质心, 减少聚类过程的数据库往返.
-    pub(crate) async fn load_unassigned_faces_and_persons(
-        state: &PhotoState,
-    ) -> common::error::contextual::Result<(
-        Vec<types::photo::face::FaceRecord>,
-        Vec<types::photo::person::PersonRecord>,
-    )> {
-        Ok((
-            FaceMapper::query_unassigned(&state.db).await?,
-            PersonMapper::query_all(&state.db).await?,
-        ))
-    }
-    /// 更新人物名称并同步维护姓名首字母.
-    pub(crate) async fn rename_person(
+    /// 更新人物名称
+    pub async fn rename_person(
         state: &PhotoState,
         id: PersonId,
         name: String,
         initials: Option<String>,
         user_id: UserId,
     ) -> Result<()> {
-        use common::error::AppError;
-        common::db_transaction!(contextual & state.db, |txn| {
-            let rows = PersonMapper::rename(txn, id, name, initials).await?;
-            if rows == 0 {
-                return Err(common::error::ContextualError::warn_without_source(
-                    "person_rename_fail",
-                    "重命名人物失败",
-                    AppError::bad_request("重命名人物失败"),
-                ));
-            }
+        db_transaction!(contextual & state.db, |txn| {
+            let mut update_person = UpdatePersonRecord::new(id);
+            update_person.name = Changed(name.clone());
+            update_person.name_initials = Changed(initials.clone());
+            PersonMapper::update(txn, update_person).await?;
+
             AuditService::append(
                 txn,
                 AuditEvent::new("person_rename")
                     .with_actor(user_id.0)
-                    .with_target("person", id.0),
+                    .with_target("person", id.0)
+                    .with_detail(json!({ "name": name, "initials": initials })),
             )
             .await?;
             Ok(())
@@ -76,56 +56,153 @@ impl PersonRepo {
         Self::invalidate_persons(state, &[id]).await;
         Ok(())
     }
-    /// 按人物 ID 查询人物记录.
-    pub(crate) async fn query_person(
+
+    // 合并人物
+    // 返回合并后的人物记录
+    pub async fn merge_person(
         state: &PhotoState,
-        id: PersonId,
-    ) -> common::error::contextual::Result<Option<types::photo::person::PersonRecord>> {
-        PersonMapper::query_by_id(&state.db, id).await
+        admin: AdminId,
+        req: MergePersonParam,
+    ) -> Result<PersonRecord> {
+        let MergePersonParam {
+            source_person_id,
+            target_person_id,
+        } = req;
+
+        db_transaction!(scoped & state.db, |txn| {
+            // 锁定人物
+            let (source, target) = DbUtils::ensure_lock_two_ordered(
+                txn,
+                source_person_id,
+                target_person_id,
+                |db, id| async move { Ok(PersonMapper::lock_by_id(db, id).await?) },
+            )
+            .await?;
+
+            // 获取源人物人脸
+            let source_faces = FaceMapper::lock_by_person_id(txn, source_person_id).await?;
+
+            // 转移人脸归属
+            PersonMapper::add_faces(txn, target, &source_faces).await?;
+
+            // 删除源人物
+            PersonMapper::delete(txn, source.id).await?;
+
+            // 返回合并后的目标人物视图
+            let person = PersonMapper::query_by_id(txn, target_person_id).await?;
+
+            // 失效源/目标人物缓存
+            Self::invalidate_persons(state, &[source_person_id, target_person_id]).await;
+
+            AuditService::append(
+                txn,
+                AuditEvent::new("merge_person")
+                    .with_actor(admin.into_inner())
+                    .with_target("person_id", target_person_id)
+                    .with_detail(json!({"source_person_id": source_person_id})),
+            )
+            .await?;
+
+            Ok(person)
+        })
+        .await?
+        .to_ok()
     }
-    /// 按游标查询人物分页.
-    pub(crate) async fn query_person_page(
+
+    /// 为人物添加人脸.
+    pub async fn add_faces(
         state: &PhotoState,
-        cursor: Option<types::cursor::FaceCountIdCursor<PersonId>>,
+        person: PersonRecord,
+        faces: Vec<FaceRecord>,
+    ) -> Result<()> {
+        PersonMapper::add_faces(&state.db, person, &faces).await?;
+        Ok(())
+    }
+}
+
+// 查询
+impl PersonRepo {
+    pub async fn query_all(state: &PhotoState) -> Result<Vec<PersonRecord>> {
+        PersonMapper::query_all(&state.db).await
+    }
+
+    pub async fn query_page(
+        state: &PhotoState,
+        cursor: Option<CountIdCursor<PersonId>>,
         size: u64,
-    ) -> common::error::contextual::Result<CursorPage<types::photo::person::PersonRecord, ()>> {
-        PersonMapper::query(&state.db, cursor, size).await
+    ) -> Result<CursorPage<PersonRecord, ()>> {
+        PersonMapper::query_page(&state.db, cursor, size).await
     }
+
     /// 按关键词查询人物分页.
-    pub(crate) async fn search_person_page(
+    pub async fn search_person_page(
         state: &PhotoState,
         keyword: &str,
         cursor: Option<PersonId>,
         size: u64,
-    ) -> common::error::contextual::Result<CursorPage<types::photo::person::PersonRecord, ()>> {
+    ) -> Result<CursorPage<types::photo::person::PersonRecord, ()>> {
         PersonMapper::query_search(&state.db, keyword, cursor, size).await
     }
-    /// 批量获取人物摘要和封面信息.
-    pub(crate) async fn get_person_briefs(
-        state: &PhotoState,
-        ids: &[PersonId],
-    ) -> common::error::contextual::Result<Vec<Option<PersonBriefRow>>> {
-        state
-            .cache_person
-            .get_or_load_batch(
-                ids,
-                |id| RedisKeys::photo::person::person_info(*id),
-                Duration::from_secs(24 * 60 * 60),
-                |miss_ids| async move {
-                    PersonMapper::query_brief_by_ids(&state.db, &miss_ids).await
-                },
-                |person| person.id,
-            )
-            .timed(metrics_name!("cache_get_or_load_batch"))
-            .await
-    }
 
-    /// 失效人物信息缓存.
-    pub(crate) async fn invalidate_persons(state: &PhotoState, ids: &[PersonId]) {
+    pub async fn load_faces_with_photo_files(
+        state: &PhotoState,
+    ) -> Result<(Vec<FaceRecord>, HashMap<PhotoId, String>)> {
+        let faces = FaceMapper::query_all(&state.db).await?;
+        let ids = faces
+            .iter()
+            .map(|face| face.photo_id)
+            .collect::<HashSet<_>>();
+
+        let files = PhotoMapper::query_id_and_file_id_by_ids(&state.db, &ids).await?;
+        Ok((faces, files))
+    }
+}
+
+// 删除
+impl PersonRepo {
+    // 失效人物缓存
+    pub async fn invalidate_persons(state: &PhotoState, ids: &[PersonId]) {
         let keys = ids
             .iter()
             .map(|id| RedisKeys::photo::person::person_info(*id))
             .collect::<Vec<_>>();
-        let _ = state.cache_person.invalidate_batch(&keys).await;
+        state
+            .cache_person
+            .invalidate_batch(&keys)
+            .await
+            .into_contextual()
+            .emit_if_err();
+    }
+
+    // 删除人物
+    // 同时重置对应人脸的人物id
+    // 仅可以管理员执行
+    pub async fn delete_person(
+        state: &PhotoState,
+        person_id: PersonId,
+        admin: AdminId,
+    ) -> Result<()> {
+        db_transaction!(scoped & state.db, |txn| {
+            // 清空该人物所有人脸归属
+            FaceMapper::clean_person_id_by_person_id(txn, person_id).await?;
+
+            // 删除人物
+            PersonMapper::delete(txn, person_id).await?;
+
+            AuditService::append(
+                txn,
+                AuditEvent::new("person_delete")
+                    .with_actor(admin.into_inner())
+                    .with_target("person", person_id),
+            )
+            .await?;
+            Ok(())
+        })
+        .await?;
+
+        // 失效人物缓存（L1 + L2）
+        PersonRepo::invalidate_persons(state, &[person_id]).await;
+
+        Ok(())
     }
 }
