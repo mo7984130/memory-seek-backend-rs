@@ -18,6 +18,14 @@ members = [
     "tools/bench-support",
 ]
 
+[profile.release]
+strip = "symbols"
+lto = "thin"
+codegen-units = 1
+debug = 0
+# rustflags = ["-C", "target-cpu=x86-64-v3"]
+panic = "abort"
+
 [workspace.dependencies]
 types = { path = "types" }
 axum = { version = "0.8.8", features = ["macros", "multipart"] }
@@ -93,7 +101,7 @@ indexmap = "2.14.0"
 # Snowflake ID
 snowflaked = { version = "1.0.3", features = ["sync"] }
 
-insight-face-rs = { version = "3.0.1" , features = ["sea-orm", "tokio"] }
+insight-face-rs = { version = "3.0.1" , features = ["sea-orm", "tokio", "load-dynamic"] }
 
 multi-level-cache = { version = "0.1.0", features = ["redis-deadpool"] }
 
