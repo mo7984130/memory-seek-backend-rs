@@ -26,7 +26,7 @@
 
 # photo 场景中不依赖 S3 的子场景(独立脚本文件名, 对应 scenarios/photo/<name>.js)
 # 注: k6 0.52+ 移除 --scenario flag, 无法从 photo.js 按 scenario 挑选, 直接运行独立脚本
-PHOTO_NOS3_SERVICES="${PHOTO_NOS3_SERVICES:-collection collection_photo comment comment_like}"
+PHOTO_NOS3_SERVICES="${PHOTO_NOS3_SERVICES:-collection collection_photo comment comment_like photo_like}"
 
 # ── 目录约定 ──────────────────────────────────────────
 CI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

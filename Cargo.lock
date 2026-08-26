@@ -3557,7 +3557,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "audit",
@@ -4833,7 +4833,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "audit",
  "auth",

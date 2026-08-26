@@ -19,7 +19,7 @@ INCLUDE_S3_PATHS ?= false
 SERVER_CPUS ?= 2        # 被测 server 占用核数(taskset 绑定, 控制变量)
 
 # photo 场景中不依赖 S3 的子场景(独立脚本文件名, 对应 scenarios/photo/<name>.js)
-PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like
+PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like photo_like
 
 # face/person 压测数据量(与 seed.sql 对齐)
 PHOTO_COUNT ?= 40000   # photo_photo 总数(= PHOTO_USERS * PHOTOS_PER_USER)
@@ -50,6 +50,7 @@ PHOTO_COLLECTION_TARGET_RPS        ?= 60
 PHOTO_COLLECTION_PHOTO_TARGET_RPS  ?= 40
 PHOTO_COMMENT_TARGET_RPS           ?= 50
 PHOTO_COMMENT_LIKE_TARGET_RPS      ?= 50
+PHOTO_LIKE_TARGET_RPS              ?= 50
 # 压测时长(target 模式, 如 2m/3m; max 模式 stages 固定 1m+2m+1m)
 DURATION ?= 2m
 
@@ -189,6 +190,7 @@ photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景(直接�
 			collection_photo)  trps=$(PHOTO_COLLECTION_PHOTO_TARGET_RPS);; \
 			comment)           trps=$(PHOTO_COMMENT_TARGET_RPS);; \
 			comment_like)      trps=$(PHOTO_COMMENT_LIKE_TARGET_RPS);; \
+			photo_like)        trps=$(PHOTO_LIKE_TARGET_RPS);; \
 			*)                 trps=$(PHOTO_TARGET_RPS);; \
 		esac; \
 		echo "=== photo scenario: $$s (target=$$trps) ==="; \

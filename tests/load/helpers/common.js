@@ -85,6 +85,9 @@ const OP_NAMES = [
     "upload_photo",
     "list_photos",
     "timeline_stats",
+    "like_photo",
+    "list_liked_photos",
+    "unlike_photo",
     // social (collections)
     "create_collection",
     "list_collections",

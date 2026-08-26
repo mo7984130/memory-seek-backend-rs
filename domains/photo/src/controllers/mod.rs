@@ -19,6 +19,7 @@ pub mod timeline_stat_controller;
 use collection_controller::CollectionController;
 use collection_photo_controller::CollectionPhotoController;
 use comment_controller::CommentController;
+use comment_like_controller::CommentLikeController;
 #[cfg(feature = "face")]
 pub use face_controller::FaceController;
 #[cfg(feature = "face")]
@@ -51,7 +52,11 @@ impl ControllerRouter for Controller {
                 CollectionController::protected_routes()
                     .merge(CollectionPhotoController::protected_routes()),
             )
-            .nest("/photo/comment", CommentController::protected_routes())
+            .nest(
+                "/photo/comment",
+                CommentController::protected_routes()
+                    .merge(CommentLikeController::protected_routes()),
+            )
             .nest(
                 "/photo/timeline",
                 TimelineStatController::protected_routes(),

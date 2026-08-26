@@ -37,6 +37,13 @@ impl AppDomains {
             protected_router = protected_router.merge(prot_r);
         }
 
+        #[cfg(feature = "backup")]
+        {
+            let (pub_r, prot_r) = backup::register(_state, _cfg);
+            public_router = public_router.merge(pub_r);
+            protected_router = protected_router.merge(prot_r);
+        }
+
         #[cfg(feature = "auth")]
         {
             let (pub_r, prot_r) = auth::register(_state, _cfg);
