@@ -95,13 +95,13 @@ async fn main() -> Result<()> {
 
     let app = app
         .layer(axum::middleware::from_fn(
+            middlewares::tracing_span::tracing_span,
+        ))
+        .layer(axum::middleware::from_fn(
             middlewares::trace_id::trace_id_middleware,
         ))
         .layer(axum::middleware::from_fn(
             middlewares::client_ip::client_ip_middleware,
-        ))
-        .layer(axum::middleware::from_fn(
-            middlewares::tracing_span::tracing_span,
         ))
         .with_state(app_setup.state);
 
