@@ -2364,9 +2364,9 @@ dependencies = [
 
 [[package]]
 name = "insight-face-rs"
-version = "3.0.1"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "347b99f7b296cbe8b01b09af78426ade63e99c100eb56b1dc95ac9ce399f26e9"
+checksum = "724102a07bdb4bde56776d8c48d29038eb34bc7d22befdf507eec2c66b84a6ea"
 dependencies = [
  "image",
  "imageproc",
