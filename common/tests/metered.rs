@@ -17,6 +17,10 @@ async fn fails_with_question_mark() -> Result<(), &'static str> {
     Ok(())
 }
 
+fn records_labelled_gauge() {
+    common::set_gauge!("labelled_gauge", "mode", 1.0, "mode" => "full");
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn records_attempt_duration_and_each_success_once() {
     let recorder = DebuggingRecorder::new();
@@ -62,6 +66,25 @@ async fn does_not_record_success_for_error() {
             .iter()
             .all(|(key, _, _, _)| key.key().name() != "common:metered_err:success")
     );
+}
+
+#[test]
+fn records_gauge_with_labels() {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+    let _guard = metrics::set_default_local_recorder(&recorder);
+
+    records_labelled_gauge();
+
+    let snapshot = snapshotter.snapshot().into_vec();
+    assert!(snapshot.iter().any(|(key, _, _, value)| {
+        key.key().name() == "common:labelled_gauge:mode"
+            && key
+                .key()
+                .labels()
+                .any(|label| label.key() == "mode" && label.value() == "full")
+            && matches!(value, DebugValue::Gauge(value) if *value == 1.0)
+    }));
 }
 
 fn assert_metric(

@@ -81,14 +81,7 @@ impl FaceService {
         info!(user_id = %user_id, "人脸计算触发, full: {}", full);
 
         let _running_guard = GaugeGuard::start(metrics_name!("running"));
-        #[cfg(feature = "metrics")]
-        {
-            if full {
-                metrics::gauge!("photo:face_compute:mode", "mode" => "full").set(1.0);
-            } else {
-                metrics::gauge!("photo:face_compute:mode", "mode" => "incremental").set(1.0);
-            }
-        }
+        set_gauge!("mode", 1.0, "mode" => if full { "full" } else { "incremental" });
 
         // 如果是全量计算的话
         // 备份并且清空表
