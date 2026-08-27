@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
+use crate::error::contextual::ext::ResultContextualExt;
 use crate::error::{AppError, ContextualError, contextual::Result};
-use crate::ext::ContextResultExt;
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use bcrypt;
 use password_hash::SaltString;
@@ -65,7 +65,7 @@ impl HashAlgorithm {
     /// - `AppError::InternalServerError`: 哈希计算过程中发生内部错误
     pub fn hash(&self, password: &str) -> Result<String> {
         match self {
-            Self::Bcrypt(cfg) => bcrypt::hash(password, cfg.cost).context_error(
+            Self::Bcrypt(cfg) => bcrypt::hash(password, cfg.cost).context_err(
                 "bcrypt hash error",
                 "Bcrypt 计算失败",
                 AppError::InternalServerError,
@@ -73,7 +73,7 @@ impl HashAlgorithm {
             Self::Argon2id(cfg) => {
                 let hash = Self::argon2_hasher(cfg)?
                     .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
-                    .context_error(
+                    .context_err(
                         "argon2id hash error",
                         "Argon2id 计算失败",
                         AppError::InternalServerError,
@@ -97,14 +97,14 @@ impl HashAlgorithm {
     /// - `AppError::InternalServerError`: 哈希解析或验证过程中发生内部错误
     pub fn verify(&self, password: &str, hash: &str) -> Result<bool> {
         match self {
-            Self::Bcrypt(_) => bcrypt::verify(password, hash).context_error(
+            Self::Bcrypt(_) => bcrypt::verify(password, hash).context_err(
                 "bcrypt verify error",
                 "Bcrypt 密码验证失败",
                 AppError::InternalServerError,
             ),
             Self::Argon2id(cfg) => {
                 let hasher = Self::argon2_hasher(cfg)?;
-                let parsed = PasswordHash::new(hash).context_error(
+                let parsed = PasswordHash::new(hash).context_err(
                     "argon2 parse error",
                     "解析 Argon2 哈希失败",
                     AppError::InternalServerError,
@@ -150,7 +150,7 @@ impl HashAlgorithm {
 
     // 根据配置创建 Argon2id 哈希器实例
     fn argon2_hasher(cfg: &Argon2idConfig) -> Result<Argon2<'static>> {
-        let params = Params::new(cfg.m_cost, cfg.t_cost, cfg.p_cost, None).context_error(
+        let params = Params::new(cfg.m_cost, cfg.t_cost, cfg.p_cost, None).context_err(
             "argon2_params_error",
             "创建 Argon2 参数失败",
             AppError::InternalServerError,

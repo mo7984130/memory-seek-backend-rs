@@ -5,58 +5,39 @@ edition = "2024"
 
 [features]
 default = []
+
 metrics = ["dep:metrics"]
-validators = ["dep:validator"]
-file_validator = ["dep:image"]
 tokio = ["dep:tokio"]
-event = ["tokio"]
-snowflake = ["dep:snowflaked"]
-contextual-sea-orm = []
-orm = []
-contextual-redis = []
-contextual-cache = []
-contextual-serde = []
-contextual-tokio = ["tokio"]
-# TypeScript 类型导出
 ts = ["dep:ts-rs"]
+axum = ["dep:axum", "dep:validator"]
+multi-cache = ["dep:multi-level-cache"]
+snowflake = ["dep:snowflaked"]
 
 [dependencies]
-common_macros = { path = "../libs/common_macros" }
-serde = { workspace = true }
-serde_json = { workspace = true }
-axum = { workspace = true }
-thiserror = { workspace = true }
-sea-orm = { workspace = true }
-futures = { workspace = true }
-const_format = { workspace = true }
-rand = { workspace = true }
-deadpool-redis = { workspace = true }
-redis = { workspace = true }
-tracing = { workspace = true }
-image = { workspace = true, optional = true }
-hex = { workspace = true }
-validator = { workspace = true, optional = true }
-metrics = { workspace = true, optional = true }
-bcrypt = { workspace = true }
-argon2 = { workspace = true }
-password-hash = { workspace = true }
-aes-gcm = { workspace = true }
-hkdf = { workspace = true }
-sha2 = { workspace = true }
-base64 = { workspace = true }
-chrono = { workspace = true }
+common_macros.path = "../libs/common_macros"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sea-orm.workspace = true
+rand.workspace = true
+deadpool-redis.workspace = true
+redis.workspace = true
+tracing.workspace = true
+hex.workspace = true
+bcrypt.workspace = true
+argon2.workspace = true
+password-hash.workspace = true
+aes-gcm.workspace = true
+hkdf.workspace = true
+sha2.workspace = true
+base64.workspace = true
+chrono.workspace = true
+async-trait.workspace = true
+
 tokio = { workspace = true, optional = true }
 ts-rs = { workspace = true, optional = true }
 snowflaked = { workspace = true, optional = true }
-async-trait = { workspace = true }
-multi-level-cache.workspace = true
-
-[dev-dependencies]
-metrics-util = "0.20.4"
-tokio = { workspace = true }
-tracing-subscriber = { workspace = true }
-criterion = { workspace = true }
-
-[[bench]]
-name = "contextual_error"
-harness = false
+multi-level-cache = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+validator = { workspace = true, optional = true }
+metrics = { workspace = true, optional = true }

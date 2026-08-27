@@ -922,15 +922,10 @@ dependencies = [
  "bcrypt",
  "chrono",
  "common_macros",
- "const_format",
- "criterion",
  "deadpool-redis",
- "futures",
  "hex",
  "hkdf",
- "image",
  "metrics",
- "metrics-util 0.20.4",
  "multi-level-cache",
  "password-hash",
  "rand 0.10.2",
@@ -943,7 +938,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "ts-rs",
  "validator",
 ]
@@ -1578,6 +1572,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
 dependencies = [
  "simd-adler32",
+]
+
+[[package]]
+name = "file-validator"
+version = "0.1.0"
+dependencies = [
+ "const_format",
+ "hex",
+ "image",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2899,9 +2903,9 @@ dependencies = [
 
 [[package]]
 name = "multi-level-cache"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b3284ab894df8662fc32bd9958482995962a2ddef9cd2af01fa5b1f8967a643"
+checksum = "106662cda0e5ceb1edaf8764bfb7f9758d1799e58c863266a0ed4fd1f8342ed8"
 dependencies = [
  "async-trait",
  "deadpool-redis",
@@ -3457,6 +3461,7 @@ dependencies = [
  "bytes",
  "common",
  "constants",
+ "file-validator",
  "futures",
  "image",
  "insight-face-rs",
@@ -5872,6 +5877,7 @@ dependencies = [
  "bytes",
  "common",
  "constants",
+ "file-validator",
  "multi-level-cache",
  "oss",
  "redis",

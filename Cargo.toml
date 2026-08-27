@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "common",
     "libs/common_macros",
+    "libs/file_validator",
     "types",
     "libs/email",
     "libs/oss",
@@ -90,7 +91,7 @@ snowflaked = { version = "1.0.3", features = ["sync"] }
 
 insight-face-rs = { version = "3.0.1" , features = ["sea-orm", "tokio", "load-dynamic"] }
 
-multi-level-cache = { version = "0.1.0", features = ["redis-deadpool"] }
+multi-level-cache = { version = "0.1.1", features = ["redis-deadpool"] }
 
 # Backup
 csv = "1.3"

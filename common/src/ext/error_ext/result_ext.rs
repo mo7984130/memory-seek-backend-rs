@@ -1,22 +1,3 @@
-use serde::Serialize;
-
-use crate::r::R;
-
-pub trait ResultRExt<T: Serialize, E> {
-    /// 将成功值包装为统一响应结构.
-    fn to_r_ok(self) -> Result<R<T>, E>;
-}
-
-impl<T: Serialize, E> ResultRExt<T, E> for Result<T, E> {
-    #[inline]
-    fn to_r_ok(self) -> Result<R<T>, E> {
-        match self {
-            Ok(v) => Ok(R::ok(v)),
-            Err(e) => Err(e),
-        }
-    }
-}
-
 pub trait ToOk<T, E> {
     /// 将值包装为 Ok 结果.
     fn to_ok(self) -> std::result::Result<T, E>;
@@ -44,22 +25,6 @@ impl<T, E> ToErr<T, E> for E {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn ok_to_r_ok_returns_r_with_data() {
-        let result = Ok::<i32, String>(42).to_r_ok();
-        let r = result.unwrap();
-        assert_eq!(r.code, 200);
-        assert_eq!(r.data, Some(42));
-        assert!(r.msg.is_none());
-    }
-
-    #[test]
-    fn err_to_r_ok_returns_err() {
-        let result = Err::<i32, String>("error".into()).to_r_ok();
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "error");
-    }
 
     #[test]
     fn to_ok_wraps_in_ok() {

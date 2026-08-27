@@ -7,25 +7,19 @@
 //! - [`utils`]：通用工具函数（哈希、Redis、配置等）
 //! - [`macros`]：性能监控宏
 
-pub mod error;
-pub use error::Result;
-pub mod extractors;
-pub mod models;
-pub mod r;
-pub mod traits;
-pub mod types;
-pub mod utils;
+#[cfg(feature = "axum")]
+pub mod axum;
 
-#[cfg(feature = "event")]
-pub mod event;
+#[cfg(feature = "tokio")]
+pub mod tokio;
+
+pub mod error;
+
 pub mod ext;
 pub mod macros;
 pub mod pipeline;
-
-#[cfg(feature = "snowflake")]
-pub mod snowflake;
-
-pub use common_macros::metered;
+pub mod types;
+pub mod utils;
 
 pub mod time;
 
@@ -34,3 +28,8 @@ pub use metrics;
 
 pub type Pool = deadpool_redis::Pool;
 pub use sea_orm::ConnectionTrait as DbConn;
+
+pub use error::AppError;
+pub use error::ContextualError;
+pub use error::ContextualResult;
+pub use error::Result;

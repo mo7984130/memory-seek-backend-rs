@@ -12,7 +12,7 @@
 use async_trait::async_trait;
 use sea_orm::{DatabaseConnection, DatabaseTransaction};
 
-use crate::{Result, db_transaction};
+use crate::{Result, db_transaction, error::ContextualError};
 
 /// 事务管道中的单个步骤
 ///
@@ -35,7 +35,11 @@ pub trait Step<Ctx>: Send + Sync {
     }
 
     /// 在事务内执行本步骤
-    async fn execute(&self, txn: &DatabaseTransaction, ctx: &mut Ctx) -> Result<()>;
+    async fn execute(
+        &self,
+        txn: &DatabaseTransaction,
+        ctx: &mut Ctx,
+    ) -> std::result::Result<(), ContextualError>;
 }
 
 /// 按序执行一组步骤的事务管道
