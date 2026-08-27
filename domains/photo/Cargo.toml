@@ -5,12 +5,10 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics", "oss/metrics", "multi-level-cache/metrics"]
+metrics = ["common/metrics", "multi-level-cache/metrics"]
 controller = ["dep:axum"]
 audit = ["audit/recording"]
-file_validator = ["common/file_validator"]
 face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]
-# TypeScript 类型导出
 ts = ["types/ts", "common/ts"]
 
 [dependencies]
@@ -24,19 +22,18 @@ common = { path = "../../common", features = [
     "contextual-tokio",
     "event",
 ] }
-audit = { path = "../audit" }
-async-trait = { workspace = true }
-step_derive = { path = "../../libs/step_derive" }
-linkme = { workspace = true }
-constants = { path = "../constants" }
+audit.path = "../audit"
+step_derive.path = "../../libs/step_derive"
+constants.path = "../constants"
+oss.path = "../../libs/oss"
 
-oss = { path = "../../libs/oss" }
+linkme.workspace = true
+async-trait.workspace = true
 
 axum = { workspace = true, optional = true }
-metrics = { workspace = true, optional = true }
-tokio = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 sea-orm = { workspace = true }
 tracing = { workspace = true }
 md5 = { workspace = true }

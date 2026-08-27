@@ -5,7 +5,7 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics", "oss/metrics", "multi-level-cache/metrics"]
+metrics = ["common/metrics", "multi-level-cache/metrics"]
 controller = ["dep:axum"]
 audit = ["audit/recording"]
 
@@ -19,17 +19,18 @@ common = { path = "../../common", features = [
     "contextual-cache",
     "contextual-tokio",
 ] }
-audit = { path = "../audit" }
-constants = { path = "../constants" }
+audit.path = "../audit"
+constants.path = "../constants"
+oss.path = "../../libs/oss"
 types = { workspace = true, features = ["orm"] }
-oss = { path = "../../libs/oss" }
-serde = { workspace = true }
-sea-orm = { workspace = true }
-redis = { workspace = true }
-uuid = { workspace = true }
-tracing = { workspace = true }
-tokio = { workspace = true }
-axum = { workspace = true, optional = true }
-metrics = { workspace = true, optional = true }
-bytes.workspace = true
+
 multi-level-cache.workspace = true
+serde.workspace = true
+sea-orm.workspace = true
+uuid.workspace = true
+redis.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+bytes.workspace = true
+
+axum = { workspace = true, optional = true }

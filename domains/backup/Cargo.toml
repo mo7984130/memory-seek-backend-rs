@@ -1,34 +1,25 @@
 [package]
 name = "backup"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics", "oss/metrics"]
+metrics = ["common/metrics"]
 audit = ["audit/recording"]
 
 [dependencies]
-audit = { path = "../audit" }
-sea-orm = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true }
-tracing = { workspace = true }
-thiserror = { workspace = true }
-metrics = { workspace = true, optional = true }
-
-csv = { workspace = true }
-tokio-cron-scheduler = { workspace = true }
-
-# S3
-oss = { path = "../../libs/oss" }
-
-# HTTP / 控制器
-axum = { workspace = true }
-
-# 实体（UserId）
+audit.path = "../audit"
 types = { path = "../../types", features = ["orm"] }
-
-# 错误处理
 common = { path = "../../common", features = ["orm"] }
+oss.path = "../../libs/oss"
+
+sea-orm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+csv.workspace = true
+tokio-cron-scheduler.workspace = true
+axum.workspace = true

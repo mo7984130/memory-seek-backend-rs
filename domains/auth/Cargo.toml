@@ -5,14 +5,12 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics"]
+metrics = ["common/metrics"]
 controller = ["dep:axum"]
 audit = ["audit/recording"]
 
 [dependencies]
-# 审计
 audit = { path = "../audit" }
-# 类型
 types = { workspace = true, features = ["orm"] }
 common = { path = "../../common", features = [
     "validators",
@@ -23,9 +21,8 @@ common = { path = "../../common", features = [
 ] }
 constants.path = "../constants"
 email.path = "../../libs/email"
-tokio = { workspace = true }
-tracing = { workspace = true }
 
+tokio.workspace = true
+tracing.workspace = true
+sea-orm.workspace = true
 axum = { workspace = true, optional = true }
-metrics = { workspace = true, optional = true }
-sea-orm = { workspace = true }

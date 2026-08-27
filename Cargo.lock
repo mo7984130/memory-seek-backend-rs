@@ -339,7 +339,6 @@ dependencies = [
  "common",
  "constants",
  "email",
- "metrics",
  "sea-orm",
  "tokio",
  "tracing",
@@ -511,13 +510,12 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "audit",
  "axum",
  "common",
  "csv",
- "metrics",
  "oss",
  "sea-orm",
  "serde",
@@ -929,7 +927,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1043,7 +1041,7 @@ dependencies = [
 
 [[package]]
 name = "constants"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "common",
  "types",
@@ -3492,7 +3490,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "async-trait",
  "audit",
@@ -3506,7 +3504,6 @@ dependencies = [
  "insight-face-rs",
  "linkme",
  "md5",
- "metrics",
  "multi-level-cache",
  "ndarray",
  "oss",
@@ -5912,14 +5909,13 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.20"
+version = "0.1.21"
 dependencies = [
  "audit",
  "axum",
  "bytes",
  "common",
  "constants",
- "metrics",
  "multi-level-cache",
  "oss",
  "redis",
