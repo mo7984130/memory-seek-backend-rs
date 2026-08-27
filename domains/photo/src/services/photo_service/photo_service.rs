@@ -2,13 +2,14 @@ use std::{pin::Pin, sync::Arc};
 
 use bytes::Bytes;
 use common::{
+    error::contextual::ext::{ContextualResultExt, IntoContextualExt, OptionExt},
     error::{AppError, ContextualError, contextual},
-    ext::{ContextualResultExt, IntoContextualExt, OptionExt, ResultInspectErrAsync, log_warn},
-    inc_error, metrics_name,
-    models::CursorPage,
-    timed,
-    utils::{FileValidator, ImageMetaData, MetricsTimerExt},
+    ext::ResultInspectErrAsync,
+    inc_error, metrics_name, timed,
+    types::CursorPage,
+    utils::MetricsTimerExt,
 };
+use file_validator::{FileValidator, ImageMetaData};
 use futures::Stream;
 use oss::OssError;
 use tracing::instrument;
@@ -23,7 +24,7 @@ use crate::{
     },
     state::PhotoState,
 };
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::Result;
 use types::photo::{
     ImageToken, ImageTokenType,
@@ -68,7 +69,7 @@ impl PhotoService {
     }
 
     /// 游标获取照片列表.
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_photo_cursor_page(
         state: &PhotoState,
@@ -100,7 +101,7 @@ impl PhotoService {
 
 impl PhotoService {
     /// 校验图片, 计算 MD5, 上传文件并写入照片主记录.
-    #[common::metered]
+    #[common_macros::metered]
     #[instrument(
         skip_all,
         fields(user_id = %user_id, file_name = %req.file_name)
@@ -115,7 +116,14 @@ impl PhotoService {
         let metadata = {
             timed!("validate_photo", {
                 FileValidator::validate_image(&file_data, &req.file_name, &req.content_type)
-                    .inspect_err(|_| inc_error!("validation"))?
+                    .inspect_err(|_| inc_error!("validation"))
+                    .map_err(|error| {
+                        ContextualError::warn_without_source(
+                            "file_validation_error",
+                            "文件校验失败",
+                            AppError::bad_request(error.to_string()),
+                        )
+                    })?
             })
         };
 
@@ -134,11 +142,11 @@ impl PhotoService {
         };
         // MD5 去重校验
         if PhotoRepo::exists_by_md5(state.as_ref(), &md5_hash).await? {
-            return inc_error!("conflict" => log_warn(
+            return inc_error!("conflict" => ContextualError::warn_without_source(
                 "upload_photo:img_exist",
                 "图片已存在",
                 AppError::bad_request("图片已存在"),
-            ));
+            ).emit());
         }
 
         // 上传文件
@@ -194,7 +202,7 @@ impl PhotoService {
     }
 
     /// 批量查询图片 MD5 是否已存在.
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(count = %req.md5s.len()))]
     pub async fn exists_by_md5_batch(
         state: &PhotoState,
@@ -204,7 +212,7 @@ impl PhotoService {
     }
 
     /// 删除照片.
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, count = %req.photo_ids.len())
@@ -217,12 +225,7 @@ impl PhotoService {
         // 查询属于用户的照片
         let photos =
             PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &req.photo_ids).await?;
-        let mut ctx = PhotoDeleteContext {
-            user_id,
-            photos,
-            #[cfg(feature = "face")]
-            affected_person_ids: Vec::new(),
-        };
+        let mut ctx = PhotoDeleteContext { user_id, photos };
         run_photo_delete_pipeline(&state.db, &mut ctx)
             .await
             .map_err(|error| {
@@ -235,14 +238,7 @@ impl PhotoService {
             })?;
 
         // 发布删除后事件，缓存失效等后续操作不影响删除结果。
-        publish_after_photo_delete(
-            Arc::clone(&state),
-            AfterPhotoDelete {
-                photos: ctx.photos,
-                #[cfg(feature = "face")]
-                affected_person_ids: ctx.affected_person_ids,
-            },
-        );
+        publish_after_photo_delete(Arc::clone(&state), AfterPhotoDelete { photos: ctx.photos });
 
         Ok(())
     }
@@ -262,10 +258,10 @@ impl PhotoService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut PhotoDeleteContext,
-    ) -> common::Result<()> {
+    ) -> common::error::contextual::Result<()> {
         let photo_ids = ctx.photo_ids();
         PhotoMapper::delete_by_ids(txn, &photo_ids).await?;
-        AuditService::append(
+        AuditRecorder::append(
             txn,
             AuditEvent::new("delete_photos")
                 .with_actor(ctx.user_id.0)
@@ -304,13 +300,7 @@ impl PhotoService {
             .await
             .into_contextual()?;
 
-        PhotoRepo::invalidate_deleted_photos(
-            state.as_ref(),
-            &event.photos,
-            #[cfg(feature = "face")]
-            &event.affected_person_ids,
-        )
-        .await;
+        PhotoRepo::invalidate_deleted_photos(state.as_ref(), &event.photos).await;
         Ok(())
     }
 }
@@ -349,7 +339,7 @@ pub enum ImageDownloadData {
 // 图片下载
 impl PhotoService {
     /// 根据 ImageToken 下载图片，返回处理后的数据或原始流
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(viewer_id = %token.viewer_id, file_id = %token.file_id)
@@ -372,7 +362,7 @@ impl PhotoService {
                     else {
                         return Ok(());
                     };
-                    AuditService::append(
+                    AuditRecorder::append(
                         txn,
                         AuditEvent::new("view")
                             .with_actor(token.viewer_id.0)
@@ -391,16 +381,16 @@ impl PhotoService {
                     ImageTokenType::Thumbnail => "image/resize,w_300/format,webp".to_string(),
                     ImageTokenType::Preview => "image/resize,w_1920/format,webp".to_string(),
                     ImageTokenType::Crop => {
-                        let bbox = token.bbox.ok_or_warn_bad_request(
+                        let bbox = token.bbox.ok_or_warn(
                             "image_token_crop_info_not_found",
                             "token里面没有包含裁剪信息",
-                            "token不包含裁剪信息",
+                            AppError::bad_request("token不包含裁剪信息"),
                         )?;
                         let size = 200;
-                        let dimensions = token.source_dimensions.ok_or_warn_bad_request(
+                        let dimensions = token.source_dimensions.ok_or_warn(
                             "image_token_dimensions_not_found",
                             "裁剪 token 中没有包含原图尺寸",
-                            "裁剪 token 缺少原图尺寸",
+                            AppError::bad_request("裁剪 token 缺少原图尺寸"),
                         )?;
                         let (x, y, w, h) = bbox.to_pixel_rect(dimensions.width, dimensions.height);
                         format!("image/crop,x_{x},y_{y},w_{w},h_{h}/resize,w_{size}/format,webp")

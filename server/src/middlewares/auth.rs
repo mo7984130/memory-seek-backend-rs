@@ -2,8 +2,11 @@ use crate::state::AppState;
 use axum::{extract::Request, middleware::Next, response::Response};
 use common::{
     Result,
-    error::AppError,
-    ext::{IntoContextualExt, OptionExt, RedisExt, ResultLogExt},
+    error::{
+        AppError, ContextualError,
+        contextual::ext::{IntoContextualExt, OptionExt},
+    },
+    ext::RedisExt,
 };
 use std::{str::FromStr, sync::Arc};
 use types::auth::user::UserId;
@@ -55,11 +58,15 @@ fn extract_bearer(request: &Request) -> Result<(UserId, &str)> {
         AppError::Unauthorized,
     )?;
 
-    let user_id = UserId::from_str(user_id_str).log_err(
-        "auth_parse_error",
-        "认证的时候 user_id parse错误",
-        AppError::Unauthorized,
-    )?;
+    let user_id = UserId::from_str(user_id_str).map_err(|error| {
+        ContextualError::error(
+            "auth_parse_error",
+            "认证的时候 user_id parse错误",
+            error,
+            AppError::Unauthorized,
+        )
+        .emit()
+    })?;
 
     Ok((user_id, token))
 }

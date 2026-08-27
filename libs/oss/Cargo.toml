@@ -1,19 +1,15 @@
 [package]
 name = "oss"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 
-[features]
-metrics = ["dep:metrics"]
-
 [dependencies]
-common = { path = "../../common" }
-metrics = { workspace = true, optional = true }
-serde = { workspace = true }
-bytes = { workspace = true }
-reqwest = { workspace = true }
-s3 = { workspace = true }
-tokio = { workspace = true }
-futures = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
+common.path = "../../common"
+serde.workspace = true
+bytes.workspace = true
+reqwest.workspace = true
+s3.workspace = true
+tokio.workspace = true
+futures.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

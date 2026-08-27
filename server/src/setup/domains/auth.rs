@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use auth::AuthState;
 use axum::Router;
-use common::traits::controller::ControllerRouter;
+use common::axum::controller_router::ControllerRouter;
 use std::sync::Arc;
 use tracing::info;
 

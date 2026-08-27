@@ -1,7 +1,7 @@
 use crate::config::AppConfig;
 use crate::state::AppState;
 use axum::Router;
-use common::traits::controller::ControllerRouter;
+use common::axum::controller_router::ControllerRouter;
 use multi_level_cache::CacheConfig;
 use std::sync::Arc;
 use tracing::info;

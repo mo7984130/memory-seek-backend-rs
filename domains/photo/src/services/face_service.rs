@@ -1,14 +1,14 @@
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use common::{
     Result,
+    error::contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt},
     error::{AppError, contextual},
-    ext::{ContextResultExt, IntoContextualExt, OptionExt, ToOk},
-    inc_counter, inc_error, metrics_name,
-    models::CursorPage,
-    set_gauge,
+    ext::ToOk,
+    inc_counter, inc_error, metrics_name, set_gauge,
+    types::CursorPage,
     utils::{GaugeGuard, MetricsTimer, MetricsTimerExt},
 };
 use image::{ImageBuffer, Rgb};
@@ -55,7 +55,7 @@ impl FaceService {
         let user_id = admin.into_inner();
         let admin = AdminId::new(user_id)?;
         common::db_transaction!(scoped & state.db, |txn| {
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("face_compute")
                     .with_actor(user_id.0)
@@ -70,7 +70,7 @@ impl FaceService {
     }
 
     /// 人脸计算.
-    #[common::metered(name = "face_compute")]
+    #[common_macros::metered(name = "face_compute")]
     #[tracing::instrument(
         name = "face_compute",
         skip_all,
@@ -81,14 +81,7 @@ impl FaceService {
         info!(user_id = %user_id, "人脸计算触发, full: {}", full);
 
         let _running_guard = GaugeGuard::start(metrics_name!("running"));
-        #[cfg(feature = "metrics")]
-        {
-            if full {
-                metrics::gauge!("photo:face_compute:mode", "mode" => "full").set(1.0);
-            } else {
-                metrics::gauge!("photo:face_compute:mode", "mode" => "incremental").set(1.0);
-            }
-        }
+        set_gauge!("mode", 1.0, "mode" => if full { "full" } else { "incremental" });
 
         // 如果是全量计算的话
         // 备份并且清空表
@@ -150,7 +143,7 @@ impl FaceService {
                     }
                 })
                 .inspect_err(|_| {
-                    common::caller_warn!(photo_id = %photo_id, %file_id, "照片流程错误, 跳过");
+                    tracing::warn!(photo_id = %photo_id, %file_id, "照片流程错误, 跳过");
                 });
             }
             drop(_download_batch_timer);
@@ -195,7 +188,7 @@ impl FaceService {
         let decode_result = tokio::task::spawn_blocking(move || -> contextual::Result<Img> {
             image::load_from_memory(&bytes)
                 .map(|img| img.into_rgb8())
-                .context_error(
+                .context_err(
                     "decode_image_error",
                     "解码图片失败",
                     AppError::InternalServerError,
@@ -212,7 +205,7 @@ impl FaceService {
         debug!("检测照片中");
         let face_engine_clone = Arc::clone(&state.face_engine);
         let detect_result = spawn_blocking(move || -> contextual::Result<Vec<Face>> {
-            let faces = face_engine_clone.run(&img).context_error(
+            let faces = face_engine_clone.run(&img).context_err(
                 "face-engine_run_error",
                 "人脸检测模型运行失败",
                 AppError::InternalServerError,
@@ -244,7 +237,7 @@ impl FaceService {
 
 // 修改
 impl FaceService {
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(face_id = %face_id, person_id = ?person_id)
@@ -264,7 +257,7 @@ impl FaceService {
 // 查询
 impl FaceService {
     /// 查询指定照片的人脸.
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(photo_id = %photo_id))]
     pub async fn get_faces_by_photo_id(
         state: &PhotoState,
@@ -287,7 +280,7 @@ impl FaceService {
     }
 
     /// 游标获取"包含未分配人脸"的照片列表
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     /// 分页查询包含未分配人脸的照片.
     pub async fn get_unassigned_face_photos(
@@ -319,7 +312,7 @@ impl FaceService {
 impl FaceService {
     /// 删除单张人脸
     /// 仅可以删除无归属的人脸
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(face_id = %face_id))]
     pub async fn delete_face(state: &PhotoState, face_id: FaceId, user_id: UserId) -> Result<()> {
         FaceRepo::delete_faces(state, vec![face_id], user_id).await?;
@@ -329,7 +322,7 @@ impl FaceService {
 
     /// 批量删除人脸
     /// 仅可以删除无归属的人脸
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(count = %face_ids.len()))]
     pub async fn delete_faces(
         state: &PhotoState,
@@ -385,7 +378,7 @@ impl FaceService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::photo_service::PhotoDeleteContext,
-    ) -> common::Result<()> {
+    ) -> common::error::contextual::Result<()> {
         let photo_ids = ctx.photo_ids();
 
         // 加行锁读取待删照片的全部人脸, 阻止并发转移归属读到将删人脸
@@ -417,9 +410,6 @@ impl FaceService {
 
             PersonMapper::remove_faces(txn, person, &faces).await?;
         }
-
-        // 记录受影响人物 ID, 供 delete_photos 在事务提交后失效人物缓存
-        ctx.affected_person_ids = by_person.keys().copied().collect();
 
         Ok(())
     }

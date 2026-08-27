@@ -1,4 +1,4 @@
-use deadpool_redis::Pool;
+use common::Pool;
 use multi_level_cache::CacheConfig;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;

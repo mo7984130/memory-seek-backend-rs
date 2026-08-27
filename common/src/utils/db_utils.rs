@@ -1,15 +1,14 @@
+use std::pin::Pin;
+
+use crate::DbConn;
 use crate::Result;
-use crate::{
-    error::{AppError, ContextualError, contextual},
-    ext::log_err_with_source,
-};
-use futures::future::BoxFuture;
-use sea_orm::{
-    ConnectionTrait, DatabaseConnection, DatabaseTransaction, TransactionError, TransactionTrait,
-};
+use crate::error::ContextualResult;
+use crate::error::{AppError, ContextualError, contextual};
+use sea_orm::{DatabaseConnection, DatabaseTransaction, TransactionError, TransactionTrait};
 
 pub struct DbUtils;
 
+type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 impl DbUtils {
     /// 在下层执行事务，但把连接和事务错误延迟到 service 边界再记录。
     pub async fn write_contextual<F, T>(db: &DatabaseConnection, block: F) -> contextual::Result<T>
@@ -46,19 +45,24 @@ impl DbUtils {
     /// - `AppError::InternalServerError`: 数据库连接错误
     /// - `AppError`: 闭包返回的业务错误（事务自动回滚）
     #[inline]
-    pub async fn write<F, T>(db: &DatabaseConnection, block: F) -> Result<T>
+    pub async fn write<F, T>(db: &DatabaseConnection, block: F) -> ContextualResult<T>
     where
         F: for<'a> FnOnce(&'a DatabaseTransaction) -> BoxFuture<'a, Result<T>> + Send,
         T: Send,
     {
         db.transaction(|txn| block(txn)).await.map_err(|e| match e {
-            TransactionError::Connection(e) => log_err_with_source(
+            TransactionError::Connection(e) => ContextualError::error(
                 "db_conn_err",
                 "获取数据库连接错误",
                 e,
                 AppError::InternalServerError,
             ),
-            TransactionError::Transaction(e) => e,
+            TransactionError::Transaction(e) => ContextualError::error(
+                "db_transaction_err",
+                "数据库事务错误",
+                e,
+                AppError::InternalServerError,
+            ),
         })
     }
 
@@ -69,7 +73,7 @@ impl DbUtils {
         f: F,
     ) -> Result<(Option<T>, Option<T>)>
     where
-        DB: ConnectionTrait + ?Sized,
+        DB: DbConn + ?Sized,
         Id: Ord + Copy,
         F: Fn(&'a DB, Id) -> Fut,
         Fut: Future<Output = Result<Option<T>>>,
@@ -97,7 +101,7 @@ impl DbUtils {
         f: F,
     ) -> Result<(T, T)>
     where
-        DB: ConnectionTrait + ?Sized,
+        DB: DbConn + ?Sized,
         Id: Ord + Copy,
         F: Fn(&'a DB, Id) -> Fut,
         Fut: Future<Output = Result<T>>,
@@ -126,7 +130,7 @@ impl DbUtils {
         miss_f: MF,
     ) -> Result<(T, Option<T>)>
     where
-        DB: ConnectionTrait + ?Sized,
+        DB: DbConn + ?Sized,
         Id: Ord + Copy,
         F: Fn(&'a DB, Id) -> Fut,
         MF: Fn(Option<T>) -> Result<T>,
@@ -163,7 +167,7 @@ impl DbUtils {
         f: F,
     ) -> Result<(T, Option<T>)>
     where
-        DB: ConnectionTrait + ?Sized,
+        DB: DbConn + ?Sized,
         Id: Ord + Copy,
         F: Fn(&'a DB, Id) -> Fut,
         Fut: Future<Output = Result<T>>,

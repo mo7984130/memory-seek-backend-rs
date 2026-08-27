@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
+    error::contextual::ext::{ContextualResultExt, OptionExt},
     error::{AppError, ContextualError, contextual::Result},
-    ext::{ContextOptionExt, ContextualResultExt},
-    models::CursorPage,
+    types::CursorPage,
 };
 use types::{
     auth::user::UserId,
@@ -21,6 +21,7 @@ use crate::mappers::{
     comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper,
     photo_mapper::PhotoMapper,
 };
+use crate::repo::PhotoRepo;
 use crate::state::PhotoState;
 
 pub(crate) struct CommentRepo;
@@ -86,11 +87,11 @@ impl CommentRepo {
         photo_id: PhotoId,
         req: CommentPublishParam,
     ) -> Result<types::photo::comment::CommentRecord> {
-        db_transaction!(scoped & state.db, |txn| {
+        let comment = db_transaction!(scoped & state.db, |txn| {
             let comment =
                 CommentMapper::insert(txn, photo_id, user_id, req.content.into_inner()).await?;
             PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("comment_publish")
                     .with_actor(user_id.0)
@@ -100,7 +101,9 @@ impl CommentRepo {
             .await?;
             Ok(comment)
         })
-        .await
+        .await?;
+        PhotoRepo::invalidate_photo_info(state, photo_id).await;
+        Ok(comment)
     }
 
     /// 删除评论.
@@ -110,11 +113,11 @@ impl CommentRepo {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        let photo_id = db_transaction!(scoped & state.db, |txn| {
             // 删除评论
             let comment = CommentMapper::delete(txn, user_id, comment_id)
                 .await?
-                .context_warn_none(
+                .ok_or_warn(
                     "comment_delete_failed",
                     "删除评论失败",
                     AppError::bad_request("删除评论失败"),
@@ -132,7 +135,7 @@ impl CommentRepo {
                 .await
                 .emit_if_err();
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("comment_delete")
                     .with_actor(user_id.0)
@@ -140,9 +143,11 @@ impl CommentRepo {
                     .with_detail(serde_json::json!({ "commentId": comment_id.0 })),
             )
             .await?;
-            Ok(())
+            Ok(comment.photo_id)
         })
-        .await
+        .await?;
+        PhotoRepo::invalidate_photo_info(state, photo_id).await;
+        Ok(())
     }
 
     pub async fn ensure_exist(state: &PhotoState, comment_id: CommentId) -> Result<()> {
@@ -169,7 +174,7 @@ impl CommentRepo {
             // 更新like计数
             CommentMapper::update_like_count_delta(txn, comment_id, 1).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("comment_like")
                     .with_actor(user_id.0)
@@ -200,7 +205,7 @@ impl CommentRepo {
             // 更新点赞计数
             CommentMapper::update_like_count_delta(txn, comment_id, -1).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("comment_unlike")
                     .with_actor(user_id.0)

@@ -10,12 +10,18 @@ use axum::{
 };
 use common::{
     Result,
-    ext::{ResultLogExt, ResultRExt},
-    extractors::{ValidatedJson, ValidatedQuery},
-    models::CursorPage,
-    traits::controller::ControllerRouter,
+    axum::{
+        R,
+        controller_router::ControllerRouter,
+        ext::ToROkExt,
+        extractors::{ValidatedJson, ValidatedQuery},
+    },
+    types::CursorPage,
 };
-use common::{ext::OptionExt, r::R, utils::token_cipher};
+use common::{
+    error::{AppError, ContextualError, contextual::ext::OptionExt},
+    utils::token_cipher,
+};
 use types::photo::{
     ImageToken,
     dto::photo::{PhotoCursorParam, PhotoView},
@@ -60,20 +66,32 @@ impl PhotoController {
         let field = multipart
             .next_field()
             .await
-            .log_warn(
-                "invalid_mutipart",
-                "无效的表单数据",
-                common::error::AppError::bad_request("无效的表单数据"),
-            )?
-            .ok_or_warn_bad_request("upload_file_not_found", "未找到上传文件", "未找到上传文件")?;
+            .map_err(|error| {
+                ContextualError::warn(
+                    "invalid_mutipart",
+                    "无效的表单数据",
+                    error,
+                    AppError::bad_request("无效的表单数据"),
+                )
+                .emit()
+            })?
+            .ok_or_warn(
+                "upload_file_not_found",
+                "未找到上传文件",
+                AppError::bad_request("未找到上传文件"),
+            )?;
 
         let file_name = field.file_name().unwrap_or("photo.jpg").to_string();
         let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field.bytes().await.log_err(
-            "read_file_err",
-            "读取文件失败",
-            common::error::AppError::InternalServerError,
-        )?;
+        let file_data = field.bytes().await.map_err(|error| {
+            ContextualError::error(
+                "read_file_err",
+                "读取文件失败",
+                error,
+                AppError::InternalServerError,
+            )
+            .emit()
+        })?;
 
         let req = types::photo::models::UploadPhotoParam {
             file_name,
@@ -110,11 +128,9 @@ impl PhotoController {
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
-        let image_token: ImageToken = token_cipher().decrypt(&token).log_warn(
-            "invalid_image_token",
-            "无效的图片 token",
-            common::error::AppError::bad_request("无效的图片 token"),
-        )?;
+        let image_token: ImageToken = token_cipher()
+            .decrypt(&token)
+            .map_err(ContextualError::emit)?;
 
         let data = PhotoService::download_image(&state, image_token).await?;
 

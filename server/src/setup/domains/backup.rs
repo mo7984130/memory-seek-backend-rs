@@ -1,8 +1,8 @@
 use crate::{config::AppConfig, state::AppState};
 use axum::Router;
 use common::Result;
-use common::traits::controller::ControllerRouter;
-use common::{error::AppError, ext::ContextResultExt};
+use common::axum::controller_router::ControllerRouter;
+use common::error::{AppError, contextual::ext::ResultContextualExt};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::info;
@@ -40,14 +40,12 @@ pub async fn init(
         s3_client.clone(),
         cfg.clone(),
     ));
-    let scheduler = backup::BackupScheduler::new(bs.clone())
-        .await
-        .context_error(
-            "backup_init_err",
-            "备份调度器初始化失败",
-            AppError::InternalServerError,
-        )?;
-    scheduler.start().await.context_error(
+    let scheduler = backup::BackupScheduler::new(bs.clone()).await.context_err(
+        "backup_init_err",
+        "备份调度器初始化失败",
+        AppError::InternalServerError,
+    )?;
+    scheduler.start().await.context_err(
         "backup_start_err",
         "备份调度器启动失败",
         AppError::InternalServerError,

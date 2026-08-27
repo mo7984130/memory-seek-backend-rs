@@ -3,10 +3,6 @@ name = "email"
 version = "0.1.2"
 edition = "2024"
 
-[features]
-metrics = ["dep:metrics"]
-
 [dependencies]
-common = { path = "../../common" }
-lettre = { workspace = true }
-metrics = { workspace = true, optional = true }
+common.path = "../../common"
+lettre.workspace = true

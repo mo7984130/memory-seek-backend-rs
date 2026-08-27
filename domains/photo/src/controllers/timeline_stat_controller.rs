@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use axum::{Router, extract::State, routing::get};
 use common::Result;
-use common::ext::ResultRExt;
-use common::r::R;
+use common::axum::{R, ext::ToROkExt};
 use types::photo::dto::timeline_stat::MonthStat;
 
 use crate::{services::timeline_stat_service::TimelineStatService, state::PhotoState};

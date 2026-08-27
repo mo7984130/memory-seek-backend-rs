@@ -1,4 +1,4 @@
-pub mod error_ext;
+mod error_ext;
 pub use error_ext::*;
 
 mod redis_ext;

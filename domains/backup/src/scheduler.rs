@@ -18,13 +18,17 @@ impl BackupScheduler {
         let schedule = state.config.scheduled.schedule.clone();
         let state_clone = state.clone();
 
-        let job = Job::new(schedule.as_str(), move |_, _| {
+        let job = Job::new_async(schedule.as_str(), move |_, _| {
             let state = state_clone.clone();
-            tokio::spawn(async move {
+
+            Box::pin(async move {
                 if let Err(error) = BackupService::execute_scheduled(state).await {
-                    common::caller_error!(error = %error, "定时备份执行失败");
+                    tracing::error!(
+                        error = %error,
+                        "定时备份执行失败"
+                    );
                 }
-            });
+            })
         })?;
 
         scheduler.add(job).await?;

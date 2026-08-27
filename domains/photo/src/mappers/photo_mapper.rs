@@ -2,16 +2,16 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common::ext::{ContextOptionExt, OkExt};
+use common::error::contextual::ext::OptionExt;
+use common::ext::ToOk;
 use common::{
+    DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
-    models::CursorPage,
     time::DateTime,
+    types::CursorPage,
 };
 use sea_orm::sea_query::Expr;
-use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
-};
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 
 use types::auth::user::UserId;
 use types::cursor::TimeIdCursor;
@@ -246,7 +246,7 @@ impl PhotoMapper {
             .into_tuple::<String>()
             .one(db)
             .await?
-            .context_error_none(
+            .ok_or_error(
                 "photo_file_id_not_exist",
                 "照片file_id不存在",
                 AppError::InternalServerError,

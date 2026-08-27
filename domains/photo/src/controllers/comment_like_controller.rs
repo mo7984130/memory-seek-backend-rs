@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use axum::{Extension, Router, extract::State, routing::post};
 use common::{
-    Result, ext::ResultRExt, extractors::ValidatedPath, r::R, traits::controller::ControllerRouter,
+    Result,
+    axum::{R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedPath},
 };
 use types::{auth::user::UserId, photo::comment::CommentId};
 

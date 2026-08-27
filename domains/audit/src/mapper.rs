@@ -1,39 +1,29 @@
-#[cfg(feature = "enable")]
-#[cfg(feature = "enable")]
-use common::ext::{IntoContextualExt, ToOk};
-#[cfg(feature = "enable")]
-use common::{error::contextual::Result as ContextualResult, time::DateTime};
-#[cfg(feature = "enable")]
-use sea_orm::ConnectionTrait;
-#[cfg(feature = "enable")]
+use common::{
+    DbConn,
+    error::contextual::{Result, ext::IntoContextualExt},
+    time::DateTime,
+    types::CursorPage,
+};
 use sea_orm::{
     ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, Expr, Func},
 };
-#[cfg(feature = "enable")]
-use types::audit::BehaviorRecord;
-#[cfg(feature = "enable")]
+use types::audit::{AuditEventId, AuditRecord};
 use types::audit::{Column, Entity};
-#[cfg(feature = "enable")]
-use types::auth::user::UserId;
-#[cfg(feature = "enable")]
-use types::cursor::TimeIdCursor;
-#[cfg(feature = "enable")]
-use types::photo::behavior::{BehaviorTargetType, UserBehaviorAction, UserBehaviorId};
 
-#[cfg(feature = "enable")]
+use types::auth::user::UserId;
+use types::cursor::TimeIdCursor;
 pub(super) struct AuditMapper;
 
-#[cfg(feature = "enable")]
 impl AuditMapper {
     pub(super) async fn query_stats(
-        db: &impl ConnectionTrait,
-        action: Option<UserBehaviorAction>,
-        target_type: Option<BehaviorTargetType>,
+        db: &impl DbConn,
+        event_type: Option<&str>,
+        target_type: Option<&str>,
         start: Option<DateTime>,
         end: Option<DateTime>,
         trunc: &str,
-    ) -> ContextualResult<Vec<(DateTime, i64)>> {
+    ) -> Result<Vec<(DateTime, i64)>> {
         let bucket = Expr::expr(
             Func::cust(Alias::new("date_trunc"))
                 .arg(Expr::val(trunc))
@@ -45,11 +35,11 @@ impl AuditMapper {
             .column_as(Column::EventId.count(), "cnt")
             .group_by(bucket)
             .order_by_asc(Column::OccurredAt);
-        if let Some(action) = action {
-            query = query.filter(Column::EventType.eq(action.as_str()));
+        if let Some(event_type) = event_type {
+            query = query.filter(Column::EventType.eq(event_type));
         }
         if let Some(target_type) = target_type {
-            query = query.filter(Column::TargetType.eq(target_type.as_str()));
+            query = query.filter(Column::TargetType.eq(target_type));
         }
         if let Some(start) = start {
             query = query.filter(Column::OccurredAt.gte(start));
@@ -65,17 +55,17 @@ impl AuditMapper {
     }
 
     pub(super) async fn query_top_targets(
-        db: &impl ConnectionTrait,
-        action: UserBehaviorAction,
-        target_type: BehaviorTargetType,
+        db: &impl DbConn,
+        event_type: &str,
+        target_type: &str,
         limit: u64,
-    ) -> ContextualResult<Vec<(i64, i64)>> {
+    ) -> Result<Vec<(i64, i64)>> {
         Entity::find()
             .select_only()
             .column(Column::TargetId)
             .column_as(Column::EventId.count(), "cnt")
-            .filter(Column::EventType.eq(action.as_str()))
-            .filter(Column::TargetType.eq(target_type.as_str()))
+            .filter(Column::EventType.eq(event_type))
+            .filter(Column::TargetType.eq(target_type))
             .filter(Column::TargetId.is_not_null())
             .group_by(Column::TargetId)
             .order_by_desc(Column::EventId.count())
@@ -88,41 +78,46 @@ impl AuditMapper {
     }
 
     pub(super) async fn query_audit_page(
-        db: &impl ConnectionTrait,
-        action: Option<UserBehaviorAction>,
-        target_type: Option<BehaviorTargetType>,
+        db: &impl DbConn,
+        event_type: Option<&str>,
+        target_type: Option<&str>,
         target_id: Option<i64>,
-        user_id: Option<UserId>,
-        cursor: &Option<TimeIdCursor<UserBehaviorId>>,
+        actor_id: Option<UserId>,
+        cursor: &Option<TimeIdCursor<AuditEventId>>,
         size: u64,
-    ) -> ContextualResult<Vec<BehaviorRecord>> {
+    ) -> Result<CursorPage<AuditRecord, ()>> {
         let mut query = Entity::find()
             .order_by_desc(Column::OccurredAt)
             .order_by_desc(Column::EventId)
             .limit(size + 1);
-        if let Some(action) = action {
-            query = query.filter(Column::EventType.eq(action.as_str()));
+        if let Some(event_type) = event_type {
+            query = query.filter(Column::EventType.eq(event_type));
         }
         if let Some(target_type) = target_type {
-            query = query.filter(Column::TargetType.eq(target_type.as_str()));
+            query = query.filter(Column::TargetType.eq(target_type));
         }
         if let Some(target_id) = target_id {
             query = query.filter(Column::TargetId.eq(target_id));
         }
-        if let Some(user_id) = user_id {
-            query = query.filter(Column::ActorId.eq(user_id.0));
+        if let Some(actor_id) = actor_id {
+            query = query.filter(Column::ActorId.eq(actor_id.0));
         }
         if let Some(cursor) = cursor {
             query = query.filter(cursor.before(Column::OccurredAt, Column::EventId));
         }
 
-        query
+        let records = query
             .all(db)
             .await
             .into_contextual()?
             .into_iter()
-            .map(BehaviorRecord::from)
-            .collect::<Vec<_>>()
-            .to_ok()
+            .map(AuditRecord::from)
+            .collect::<Vec<_>>();
+
+        Ok(CursorPage {
+            has_more: records.len() > size as usize,
+            records,
+            next_cursor: None,
+        })
     }
 }

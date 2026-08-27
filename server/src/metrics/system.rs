@@ -27,7 +27,7 @@ pub fn collect_system_metrics(sys: &mut System) {
             gauge!("system.memory.process_usage").set(process.memory() as f64);
         }
         None => {
-            common::caller_warn!("无法获取当前进程信息");
+            tracing::warn!("无法获取当前进程信息");
             gauge!("system.cpu.process_usage").set(-1.0);
             gauge!("system.memory.process_usage").set(-1.0);
         }

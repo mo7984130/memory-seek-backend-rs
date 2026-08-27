@@ -1,6 +1,6 @@
-use common::{
-    error::{AppError, contextual::Result},
-    ext::ContextResultExt,
+use common::error::{
+    AppError,
+    contextual::{Result, ext::ResultContextualExt},
 };
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
@@ -72,59 +72,36 @@ impl EmailClient {
     /// # 错误
     /// - `ContextualError`: 由调用 service 记录并转换为 `AppError`
     pub async fn send_message(&self, to: &str, subject: &str, body: String) -> Result<()> {
-        #[cfg(feature = "metrics")]
-        let start = std::time::Instant::now();
-        #[cfg(feature = "metrics")]
-        metrics::counter!("email:send:attempts").increment(1);
-
-        let result = (async {
-            let email = Message::builder()
-                .from(
-                    format!("{} <{}>", self.from_name, self.from_email)
-                        .parse::<Mailbox>()
-                        .context_error(
-                            "email_from_email_err",
-                            "发件人地址格式错误",
-                            AppError::InternalServerError,
-                        )?,
-                )
-                .to(to.parse::<Mailbox>().context_warn(
-                    "email_to_email_err",
-                    "目标邮箱格式错误",
-                    AppError::bad_request("邮箱格式错误"),
-                )?)
-                .subject(subject)
-                .header(ContentType::TEXT_HTML)
-                .body(body)
-                .context_error(
-                    "email_body_err",
-                    "构建邮件消息失败",
-                    AppError::InternalServerError,
-                )?;
-
-            self.transport.send(email).await.context_error(
-                "email_send_err",
-                "邮件服务商发送失败",
+        let email = Message::builder()
+            .from(
+                format!("{} <{}>", self.from_name, self.from_email)
+                    .parse::<Mailbox>()
+                    .context_err(
+                        "email_from_email_err",
+                        "发件人地址格式错误",
+                        AppError::InternalServerError,
+                    )?,
+            )
+            .to(to.parse::<Mailbox>().context_warn(
+                "email_to_email_err",
+                "目标邮箱格式错误",
+                AppError::bad_request("邮箱格式错误"),
+            )?)
+            .subject(subject)
+            .header(ContentType::TEXT_HTML)
+            .body(body)
+            .context_err(
+                "email_body_err",
+                "构建邮件消息失败",
                 AppError::InternalServerError,
             )?;
 
-            Ok(())
-        })
-        .await
-        .inspect_err(|_| {
-            #[cfg(feature = "metrics")]
-            metrics::counter!("email:send:errors:smtp").increment(1);
-        });
+        self.transport.send(email).await.context_err(
+            "email_send_err",
+            "邮件服务商发送失败",
+            AppError::InternalServerError,
+        )?;
 
-        #[cfg(feature = "metrics")]
-        {
-            if result.is_ok() {
-                metrics::counter!("email:send:success").increment(1);
-            }
-            metrics::histogram!("email:send:duration_seconds")
-                .record(start.elapsed().as_secs_f64());
-        }
-
-        result
+        Ok(())
     }
 }

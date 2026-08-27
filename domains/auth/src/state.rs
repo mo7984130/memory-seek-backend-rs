@@ -1,4 +1,4 @@
-use deadpool_redis::Pool;
+use common::Pool;
 use email::EmailClient;
 use sea_orm::DatabaseConnection;
 

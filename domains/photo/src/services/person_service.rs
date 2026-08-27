@@ -6,13 +6,16 @@ use crate::{
     repo::{FaceRepo, PersonRepo},
     services::photo_service::PhotoService,
 };
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::{
     Result, db_transaction,
-    error::AppError,
-    ext::{ContextResultExt, IntoContextualExt, OkExt, OptionExt},
+    error::{
+        AppError,
+        contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt},
+    },
+    ext::ToOk,
     metrics_name,
-    models::CursorPage,
+    types::CursorPage,
     utils::MetricsTimerExt,
 };
 use insight_face_rs::{FaceEmbedding, types::DIMS};
@@ -45,7 +48,7 @@ impl PersonService {
         Ok(())
     }
 
-    #[common::metered(name = "person_full_scan")]
+    #[common_macros::metered(name = "person_full_scan")]
     /// 执行全量扫描, 重建人物聚类和人脸归属.
     pub async fn inner_full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
         let user_id = admin.into_inner();
@@ -62,7 +65,7 @@ impl PersonService {
                 .iter()
                 .flat_map(|f| f.embedding.iter().copied())
                 .collect();
-            Array2::from_shape_vec((faces.len(), DIMS), embeddings).context_error(
+            Array2::from_shape_vec((faces.len(), DIMS), embeddings).context_err(
                 "ndarray_from_shape_error",
                 "人脸聚类时, 转换 NdArray 错误",
                 AppError::InternalServerError,
@@ -138,7 +141,7 @@ impl PersonService {
             }
             info!("插入人物完成");
             info!("人脸聚类完成");
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("person_full_scan").with_actor(user_id.0),
             )
@@ -162,7 +165,7 @@ impl PersonService {
         Ok(())
     }
 
-    #[common::metered(name = "person_secondary_cluster")]
+    #[common_macros::metered(name = "person_secondary_cluster")]
     /// 执行未分配人脸与人物质心的匹配和归属更新.
     async fn inner_assign_unassigned_faces(
         state: Arc<PhotoState>,
@@ -171,10 +174,14 @@ impl PersonService {
     ) -> Result<()> {
         let SecondaryClusterParam { threshold } = req;
         info!(admin_id = %admin, threshold, "管理员触发二次聚类");
-        AuditService::record(
-            &state.db,
-            AuditEvent::new("assign_unassigned_faces_start").with_actor(admin.into_inner()),
-        )
+        db_transaction!(scoped & state.db, |txn| {
+            AuditRecorder::append(
+                txn,
+                AuditEvent::new("assign_unassigned_faces_start").with_actor(admin.into_inner()),
+            )
+            .await?;
+            Ok(())
+        })
         .await?;
 
         let faces = FaceRepo::lock_unassigned_faces(&state).await?;
@@ -226,10 +233,14 @@ impl PersonService {
             }
         }
 
-        AuditService::record(
-            &state.db,
-            AuditEvent::new("assign_unassigned_faces_finish").with_actor(admin.into_inner()),
-        )
+        db_transaction!(scoped & state.db, |txn| {
+            AuditRecorder::append(
+                txn,
+                AuditEvent::new("assign_unassigned_faces_finish").with_actor(admin.into_inner()),
+            )
+            .await?;
+            Ok(())
+        })
         .await?;
 
         Ok(())
@@ -263,7 +274,7 @@ impl PersonService {
 // 修改
 impl PersonService {
     /// 重命名人物
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(person_id = %person_id))]
     pub async fn rename_person(
         state: &PhotoState,
@@ -281,7 +292,7 @@ impl PersonService {
     /// 合并人物
     /// 将 source 的全部人脸归属转移到 target, 并删除 source
     /// 仅可管理员执行
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn merge_person(
         state: &PhotoState,
@@ -302,7 +313,7 @@ impl PersonService {
 
 // 查询
 impl PersonService {
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     /// 查询人物列表.
     pub async fn get_persons(
@@ -332,7 +343,7 @@ impl PersonService {
     }
 
     /// 按关键词前缀搜索人物(匹配完整名字或姓名首字母)
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn search_persons(
         state: &PhotoState,
@@ -363,7 +374,7 @@ impl PersonService {
     }
 
     /// 获取人物的照片列表(游标分页, 参照 `CollectionPhotoService::get_photos`)
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, person_id = %person_id)

@@ -4,7 +4,7 @@ use crate::{
     repo::CommentRepo,
     state::PhotoState,
 };
-use common::{Result, ext::ToOk, models::CursorPage};
+use common::{Result, ext::ToOk, types::CursorPage};
 use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
@@ -20,7 +20,7 @@ pub(crate) struct CommentService;
 // 创建
 impl CommentService {
     /// 发布照片评论.
-    #[common::metered(name = "publish_comment")]
+    #[common_macros::metered(name = "publish_comment")]
     #[tracing::instrument(
         name = "publish_comment",
         skip_all,
@@ -47,7 +47,7 @@ impl CommentService {}
 // 查询
 impl CommentService {
     /// 获取照片评论列表.
-    #[common::metered(name = "get_comment_cursor_page")]
+    #[common_macros::metered(name = "get_comment_cursor_page")]
     #[tracing::instrument(
         name = "get_comment_cursor_page",
         skip_all,
@@ -86,7 +86,7 @@ impl CommentService {
 impl CommentService {
     /// 删除评论.
     /// 同时会删除评论点赞
-    #[common::metered(name = "delete_comment")]
+    #[common_macros::metered(name = "delete_comment")]
     #[tracing::instrument(
         name = "delete_comment",
         skip_all,
@@ -112,7 +112,7 @@ impl CommentService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::photo_service::PhotoDeleteContext,
-    ) -> common::Result<()> {
+    ) -> common::error::contextual::Result<()> {
         let photo_ids = ctx.photo_ids();
         let comment_ids = CommentMapper::delete_by_photo_ids(txn, &photo_ids).await?;
 

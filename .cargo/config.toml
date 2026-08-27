@@ -9,3 +9,6 @@
 # 目录归属由各类型上的 export_to 属性决定（auth / photo / user）。
 [env]
 TS_RS_EXPORT_DIR = { value = "bindings", relative = true }
+
+[build]
+rustflags = ["-C", "target-cpu=x86-64-v3"]

@@ -1,9 +1,8 @@
-use common::error::contextual::Result;
-use common::ext::OkExt;
+use common::ext::ToOk;
+use common::{DbConn, error::contextual::Result};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseTransaction, EntityTrait, QueryFilter,
-    QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect, Set,
 };
 use types::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
@@ -17,7 +16,7 @@ pub struct UserMapper;
 impl UserMapper {
     /// 修改用户昵称
     pub async fn update_nickname(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         user_id: UserId,
         new_nickname: &str,
     ) -> Result<()> {
@@ -58,7 +57,7 @@ impl UserMapper {
 
     /// 更新用户密码哈希
     pub async fn update_password(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         user_id: UserId,
         new_password_hash: String,
     ) -> Result<()> {
@@ -74,7 +73,7 @@ impl UserMapper {
     }
 
     /// 登出时清除 refresh_token 与过期时间
-    pub async fn clear_refresh_token(db: &impl ConnectionTrait, user_id: UserId) -> Result<()> {
+    pub async fn clear_refresh_token(db: &impl DbConn, user_id: UserId) -> Result<()> {
         ActiveModel {
             id: Set(user_id),
             refresh_token: Set(None),
@@ -91,10 +90,7 @@ impl UserMapper {
 // 查询
 impl UserMapper {
     /// 按 ID 查询完整用户记录
-    pub async fn query_by_id(
-        db: &impl ConnectionTrait,
-        user_id: UserId,
-    ) -> Result<Option<UserRecord>> {
+    pub async fn query_by_id(db: &impl DbConn, user_id: UserId) -> Result<Option<UserRecord>> {
         Entity::find_by_id(user_id)
             .one(db)
             .await?
@@ -104,7 +100,7 @@ impl UserMapper {
 
     /// 批量查询用户基本信息（未找到的用户不包含在结果中）
     pub async fn query_info_rows(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         user_ids: &[UserId],
     ) -> Result<Vec<UserBriefRow>> {
         Entity::find()
@@ -120,7 +116,7 @@ impl UserMapper {
     }
 
     /// 查询用户密码哈希
-    pub async fn query_password_hash(db: &impl ConnectionTrait, user_id: UserId) -> Result<String> {
+    pub async fn query_password_hash(db: &impl DbConn, user_id: UserId) -> Result<String> {
         Entity::find_by_id(user_id)
             .select_only()
             .column(Column::Password)

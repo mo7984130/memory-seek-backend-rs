@@ -15,6 +15,7 @@ scripts
 memo.md
 **/superpowers
 tags
+dist
 
 docs
 !docs/sql

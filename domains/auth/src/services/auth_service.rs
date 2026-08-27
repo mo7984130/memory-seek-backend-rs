@@ -2,13 +2,11 @@ use crate::AuthState;
 use crate::config::{ACCESS_TOKEN_EXPIRE, EMAIL_CODE_EXPIRE, REFRESH_TOKEN_EXPIRE};
 use crate::error_ext::AuthOptionExt;
 use crate::mapper::{AuthInsertParam, AuthMapper};
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::Result;
-use common::error::AppError;
-use common::ext::{
-    BoolExt, ContextualResultExt, IntoContextualExt, OkExt, OptionExt, RedisExt,
-    ResultInspectErrAsync, log_warn,
-};
+use common::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt, OptionExt};
+use common::error::{AppError, ContextualError};
+use common::ext::{RedisExt, ResultInspectErrAsync, ToOk};
 use common::time::{after, now};
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
 use common::{inc_error, metrics_name};
@@ -51,7 +49,7 @@ static EMAIL_SEND_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(16)
 /// # 错误
 /// - `AppError::bad_request`: 账号不存在或密码错误
 /// - `AppError::InternalServerError`: 数据库查询/更新失败或 Redis 操作失败
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(
@@ -73,11 +71,11 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
                 .await
                 .into_contextual()
                 .emit_if_err();
-            return inc_error!("auth" => log_warn(
+            return inc_error!("auth" => ContextualError::warn_without_source(
                 "account_not_found",
                 "用户登陆时账号不存在",
                 AppError::bad_request("账号或者密码错误"),
-            ));
+            ).emit());
         }
     };
 
@@ -101,11 +99,11 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         let verify_result = result?;
 
         if !verify_result.0 {
-            return inc_error!("auth" => log_warn(
+            return inc_error!("auth" => ContextualError::warn_without_source(
                 "invalid_password",
                 "用户登录时密码错误",
                 AppError::bad_request("账号或者密码错误"),
-            ));
+            ).emit());
         }
 
         verify_result.1
@@ -183,7 +181,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
 /// # 错误
 /// - `AppError::bad_request`: 邮箱验证码错误、邀请码无效、用户名或邮箱已被占用
 /// - `AppError::InternalServerError`: 数据库插入失败或其他内部错误
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(
@@ -228,7 +226,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
             .timed(metrics_name!("db_insert"))
             .await?;
 
-        AuditService::append(
+        AuditRecorder::append(
             txn,
             AuditEvent::new("auth.user_registered")
                 .with_actor(user_model.id.0)
@@ -264,7 +262,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
 ///
 /// # 错误
 /// - `AppError::InternalServerError`: Redis 操作失败或邮件发送失败
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(
@@ -322,7 +320,7 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
 /// # 错误
 /// - `AppError::Unauthorized`: refresh_token 不存在、不匹配或已过期
 /// - `AppError::InternalServerError`: 数据库查询或 Redis 操作失败
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(skip_all, fields(user_id = %user_id))]
 pub async fn refresh_access_token(
     state: &AuthState,

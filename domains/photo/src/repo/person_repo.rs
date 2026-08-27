@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::db_transaction;
-use common::error::contextual::Result;
-use common::ext::{ContextualResultExt, IntoContextualExt, ToOk};
-use common::models::CursorPage;
+use common::error::{ContextualError, contextual::Result};
+use common::ext::ToOk;
+use common::types::CursorPage;
 use common::types::HasChanged::Changed;
 use common::utils::DbUtils;
-use constants::RedisKeys;
 use serde_json::json;
 use types::auth::user::{AdminId, UserId};
 use types::cursor::CountIdCursor;
@@ -42,7 +41,7 @@ impl PersonRepo {
             update_person.name_initials = Changed(initials.clone());
             PersonMapper::update(txn, update_person).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("person_rename")
                     .with_actor(user_id.0)
@@ -53,7 +52,6 @@ impl PersonRepo {
             Ok(())
         })
         .await?;
-        Self::invalidate_persons(state, &[id]).await;
         Ok(())
     }
 
@@ -77,7 +75,10 @@ impl PersonRepo {
                 target_person_id,
                 |db, id| async move { Ok(PersonMapper::lock_by_id(db, id).await?) },
             )
-            .await?;
+            .await
+            .map_err(|error| {
+                ContextualError::error_without_source("person_lock_err", "锁定人物失败", error)
+            })?;
 
             // 获取源人物人脸
             let source_faces = FaceMapper::lock_by_person_id(txn, source_person_id).await?;
@@ -91,10 +92,7 @@ impl PersonRepo {
             // 返回合并后的目标人物视图
             let person = PersonMapper::query_by_id(txn, target_person_id).await?;
 
-            // 失效源/目标人物缓存
-            Self::invalidate_persons(state, &[source_person_id, target_person_id]).await;
-
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("merge_person")
                     .with_actor(admin.into_inner())
@@ -160,20 +158,6 @@ impl PersonRepo {
 
 // 删除
 impl PersonRepo {
-    // 失效人物缓存
-    pub async fn invalidate_persons(state: &PhotoState, ids: &[PersonId]) {
-        let keys = ids
-            .iter()
-            .map(|id| RedisKeys::photo::person::person_info(*id))
-            .collect::<Vec<_>>();
-        state
-            .cache_person
-            .invalidate_batch(&keys)
-            .await
-            .into_contextual()
-            .emit_if_err();
-    }
-
     // 删除人物
     // 同时重置对应人脸的人物id
     // 仅可以管理员执行
@@ -189,7 +173,7 @@ impl PersonRepo {
             // 删除人物
             PersonMapper::delete(txn, person_id).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("person_delete")
                     .with_actor(admin.into_inner())
@@ -199,9 +183,6 @@ impl PersonRepo {
             Ok(())
         })
         .await?;
-
-        // 失效人物缓存（L1 + L2）
-        PersonRepo::invalidate_persons(state, &[person_id]).await;
 
         Ok(())
     }

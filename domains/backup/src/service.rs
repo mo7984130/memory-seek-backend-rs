@@ -2,11 +2,11 @@ use crate::error::BackupError;
 use crate::exporter::CsvExporter;
 use crate::state::BackupState;
 use crate::storage::BackupTier;
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::ext::ToOk;
 use common::time::{Duration, now};
 use common::utils::table_metadata::TableMetadata;
-use common::{Result, caller_error, inc_counter, inc_error};
+use common::{Result, inc_counter, inc_error};
 use serde_json::json;
 use std::sync::Arc;
 use types::auth::user::AdminId;
@@ -38,7 +38,7 @@ impl BackupMode {
 
 impl BackupService {
     /// 执行定时备份，并在完成后清理过期备份。
-    #[common::metered(name = "scheduled")]
+    #[common_macros::metered(name = "scheduled")]
     pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult> {
         let tables = Self::configured_tables(&state).await?;
         let mut result = Self::execute(state.clone(), tables, BackupMode::Scheduled).await?;
@@ -47,7 +47,7 @@ impl BackupService {
             Ok(removed) => result.cleaned = removed,
             Err(error) => {
                 inc_error!("scheduled", "cleanup");
-                caller_error!(error = %error, "GFS 清理失败");
+                tracing::error!(error = %error, "GFS 清理失败");
             }
         }
 
@@ -59,7 +59,7 @@ impl BackupService {
     }
 
     /// 执行管理员触发的全表手动备份。
-    #[common::metered(name = "manual")]
+    #[common_macros::metered(name = "manual")]
     pub async fn execute_manual(state: Arc<BackupState>, admin: AdminId) -> Result<BackupResult> {
         let tables = Self::configured_tables(&state).await?;
         let result = Self::execute(state.clone(), tables, BackupMode::Manual).await?;
@@ -135,7 +135,7 @@ impl BackupService {
                                 BackupMode::Scheduled => inc_error!("scheduled", "save"),
                                 BackupMode::Manual => inc_error!("manual", "save"),
                             }
-                            caller_error!(run_id = %run_id, table = %table_name, error = %error, "保存备份失败");
+                            tracing::error!(run_id = %run_id, table = %table_name, error = %error, "保存备份失败");
                         }
                     }
                     std::fs::remove_file(&csv_path).map_err(BackupError::from)?;
@@ -146,7 +146,7 @@ impl BackupService {
                         BackupMode::Scheduled => inc_error!("scheduled", "export"),
                         BackupMode::Manual => inc_error!("manual", "export"),
                     }
-                    caller_error!(run_id = %run_id, table = %table_name, error = %error, "导出备份失败");
+                    tracing::error!(run_id = %run_id, table = %table_name, error = %error, "导出备份失败");
                 }
             }
         }
@@ -180,7 +180,7 @@ impl BackupService {
         let event = actor_id.map_or(event.clone(), |actor_id| event.with_actor(actor_id.0));
 
         common::db_transaction!(scoped & state.db, |txn| {
-            AuditService::append(txn, event).await?;
+            AuditRecorder::append(txn, event).await?;
             Ok(())
         })
         .await?

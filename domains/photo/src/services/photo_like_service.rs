@@ -1,5 +1,5 @@
 use common::ext::ToOk;
-use common::{Result, metrics_name, models::CursorPage, utils::MetricsTimerExt};
+use common::{Result, metrics_name, types::CursorPage, utils::MetricsTimerExt};
 use types::{auth::user::UserId, cursor::TimeIdCursor, photo::photo::PhotoId};
 
 use crate::{
@@ -14,7 +14,7 @@ pub(crate) struct PhotoLikeService;
 // 创建
 impl PhotoLikeService {
     /// 为照片点赞.
-    #[common::metered(name = "like_photo")]
+    #[common_macros::metered(name = "like_photo")]
     #[tracing::instrument(
         name = "like_photo",
         skip_all,
@@ -30,7 +30,7 @@ impl PhotoLikeService {
 // 查询
 impl PhotoLikeService {
     /// 查询用户点赞的照片列表
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_user_liked_photos(
         state: &PhotoState,
@@ -56,7 +56,7 @@ impl PhotoLikeService {
 // 删除
 impl PhotoLikeService {
     /// 取消点赞.
-    #[common::metered(name = "unlike_photo")]
+    #[common_macros::metered(name = "unlike_photo")]
     #[tracing::instrument(
         name = "unlike_photo",
         skip_all,
@@ -82,7 +82,7 @@ impl PhotoLikeService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::photo_service::PhotoDeleteContext,
-    ) -> common::Result<()> {
+    ) -> common::error::contextual::Result<()> {
         let photo_ids = ctx.photo_ids();
         PhotoLikeMapper::delete_all_by_photo_ids(txn, &photo_ids).await?;
         Ok(())

@@ -1,9 +1,9 @@
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
     error::{AppError, ContextualError, contextual::Result},
-    models::CursorPage,
     time::DateTime,
+    types::CursorPage,
 };
 use types::{
     auth::user::UserId,
@@ -36,7 +36,7 @@ impl PhotoLikeRepo {
             // 更新计数
             PhotoMapper::update_like_count_delta(txn, photo_id, 1).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("like")
                     .with_actor(user_id.0)
@@ -48,6 +48,7 @@ impl PhotoLikeRepo {
         .await?;
 
         PhotoRepo::cache_photo_like_status(state, user_id, photo_id, true).await;
+        PhotoRepo::invalidate_photo_info(state, photo_id).await;
 
         Ok(())
     }
@@ -67,7 +68,7 @@ impl PhotoLikeRepo {
                 ));
             }
             PhotoMapper::update_like_count_delta(txn, photo_id, -1).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("unlike")
                     .with_actor(user_id.0)
@@ -78,6 +79,7 @@ impl PhotoLikeRepo {
         })
         .await?;
         PhotoRepo::cache_photo_like_status(state, user_id, photo_id, false).await;
+        PhotoRepo::invalidate_photo_info(state, photo_id).await;
         Ok(())
     }
 

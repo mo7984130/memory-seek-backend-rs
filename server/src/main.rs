@@ -1,7 +1,7 @@
 use clap::Parser;
 use common::Result;
+use common::error::{ContextualError, contextual::ext::IntoContextualExt};
 use common::time::Duration;
-use common::{error::ContextualError, ext::IntoContextualExt};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -177,8 +177,8 @@ async fn shutdown_signal(state: Arc<crate::state::AppState>, cancel_token: Cance
 
         match stop_result {
             Ok(Ok(())) => tracing::info!("备份调度器已停止"),
-            Ok(Err(e)) => common::caller_error!(error = %e, "停止备份调度器失败"),
-            Err(_) => common::caller_error!("停止备份调度器超时"),
+            Ok(Err(e)) => tracing::error!(error = %e, "停止备份调度器失败"),
+            Err(_) => tracing::error!("停止备份调度器超时"),
         }
     }
 
@@ -186,7 +186,7 @@ async fn shutdown_signal(state: Arc<crate::state::AppState>, cancel_token: Cance
     tracing::info!("正在关闭数据库连接池...");
     // close() 消费 self，需要从 Arc 中 clone 出一份来关闭
     if let Err(e) = state.db.clone().close().await {
-        common::caller_error!(error = %e, "关闭数据库连接池失败");
+        tracing::error!(error = %e, "关闭数据库连接池失败");
     } else {
         tracing::info!("数据库连接池已关闭");
     }

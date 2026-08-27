@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 
 use common::{
+    DbConn as ConnectionTrait,
     error::contextual::Result,
-    ext::IntoContextualExt,
+    error::contextual::ext::IntoContextualExt,
     time::{DateTime, now},
 };
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::Set,
-    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, CaseStatement, Expr, Func, SimpleExpr},
 };
 use types::photo::timeline_stat::TimelineStatId;

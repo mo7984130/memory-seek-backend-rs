@@ -10,9 +10,9 @@ crate::id_type!(PhotoId, "photo/");
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::time::{now, DateTime};
-    use sea_orm::entity::prelude::*;
+    use common::time::{DateTime, now};
     use sea_orm::ActiveValue::Set;
+    use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
     use super::*;

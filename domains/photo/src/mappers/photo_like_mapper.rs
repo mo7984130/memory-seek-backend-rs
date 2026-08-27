@@ -2,12 +2,13 @@ use std::collections::HashSet;
 
 use common::ext::ToOk;
 use common::{
+    DbConn as ConnectionTrait,
     error::contextual::Result,
-    models::CursorPage,
     time::{DateTime, now},
+    types::CursorPage,
 };
 use sea_orm::ActiveValue::Set;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use types::cursor::TimeIdCursor;
 use types::photo::photo_like::*;
 use types::{auth::user::UserId, photo::photo::PhotoId};

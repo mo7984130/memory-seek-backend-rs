@@ -1,5 +1,5 @@
 use axum::{extract::Request, middleware::Next, response::Response};
-use common::extractors::ClientIp;
+use common::axum::extractors::ClientIp;
 use tracing::Instrument;
 
 /// 为请求创建 tracing span 并关联后续处理过程.

@@ -1,11 +1,12 @@
-use common::ext::OkExt;
+use common::ext::ToOk;
 use common::{
+    DbConn,
     error::{AppError, ContextualError, contextual::Result},
     time::DateTime,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait, DbErr,
-    EntityTrait, FromQueryResult, QueryFilter, QuerySelect, RuntimeErr, sea_query::Expr,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, DbErr, EntityTrait,
+    FromQueryResult, QueryFilter, QuerySelect, RuntimeErr, sea_query::Expr,
 };
 use types::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
@@ -27,7 +28,7 @@ pub struct RefreshTokenValidation {
 // 创建
 impl AuthMapper {
     /// 插入用户及其认证记录.
-    pub async fn insert(db: &impl ConnectionTrait, param: AuthInsertParam) -> Result<UserRecord> {
+    pub async fn insert(db: &impl DbConn, param: AuthInsertParam) -> Result<UserRecord> {
         let model = ActiveModel {
             username: Set(param.username),
             email: Set(param.email),
@@ -67,7 +68,7 @@ impl AuthMapper {
 
     /// 查询用户保存的 refresh token 及其过期时间.
     pub async fn query_refresh_token(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         user_id: UserId,
     ) -> Result<Option<RefreshTokenValidation>> {
         Entity::find()
@@ -85,11 +86,7 @@ impl AuthMapper {
 // 修改
 impl AuthMapper {
     /// 更新用户密码哈希.
-    pub async fn update_password(
-        db: &impl ConnectionTrait,
-        user_id: UserId,
-        password: &str,
-    ) -> Result<u64> {
+    pub async fn update_password(db: &impl DbConn, user_id: UserId, password: &str) -> Result<u64> {
         Entity::update_many()
             .filter(Column::Id.eq(user_id))
             .col_expr(Column::Password, Expr::value(password))
@@ -101,7 +98,7 @@ impl AuthMapper {
 
     /// 更新用户 refresh token 及其过期时间.
     pub async fn update_refresh_token(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         user_id: UserId,
         refresh_token: String,
         refresh_token_expires_at: DateTime,
@@ -127,7 +124,7 @@ pub struct UserPasswordId {
 impl AuthMapper {
     /// 按账号查询用户认证记录.
     pub async fn query_by_account(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         account: &str,
     ) -> Result<Option<UserPasswordId>> {
         Entity::find()

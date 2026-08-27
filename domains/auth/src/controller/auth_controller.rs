@@ -5,11 +5,11 @@ use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::routing::post;
 use common::Result;
-use common::error::AppError;
-use common::ext::{OptionExt, ResultLogExt, ResultRExt};
-use common::extractors::ValidatedJson;
-use common::r::R;
-use common::traits::controller::ControllerRouter;
+use common::axum::{
+    R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
+};
+use common::error::contextual::ext::OptionExt;
+use common::error::{AppError, ContextualError};
 use std::sync::Arc;
 use types::auth::user::UserId;
 use types::auth::{
@@ -118,17 +118,25 @@ impl AuthController {
                 AppError::bad_request("x-user-id 头缺失"),
             )?
             .to_str()
-            .log_warn(
-                "x-user-id_illegal",
-                "鉴权时, x-user-id 格式非法",
-                AppError::bad_request("x-user-id 格式非法"),
-            )?
+            .map_err(|error| {
+                ContextualError::warn(
+                    "x-user-id_illegal",
+                    "鉴权时, x-user-id 格式非法",
+                    error,
+                    AppError::bad_request("x-user-id 格式非法"),
+                )
+                .emit()
+            })?
             .parse::<i64>()
-            .log_warn(
-                "x-user-id_invalid",
-                "鉴权时, x-user-id 必须是数字",
-                AppError::bad_request("x-user-id 必须是数字"),
-            )
+            .map_err(|error| {
+                ContextualError::warn(
+                    "x-user-id_invalid",
+                    "鉴权时, x-user-id 必须是数字",
+                    error,
+                    AppError::bad_request("x-user-id 必须是数字"),
+                )
+                .emit()
+            })
             .map(UserId)?;
 
         let refresh_token = headers
@@ -139,11 +147,15 @@ impl AuthController {
                 AppError::bad_request("x-refresh-token 头缺失"),
             )?
             .to_str()
-            .log_warn(
-                "x-refresh-token_illegal",
-                "鉴权时, x-refresh-token 格式非法",
-                AppError::bad_request("x-refresh-token 格式非法"),
-            )?
+            .map_err(|error| {
+                ContextualError::warn(
+                    "x-refresh-token_illegal",
+                    "鉴权时, x-refresh-token 格式非法",
+                    error,
+                    AppError::bad_request("x-refresh-token 格式非法"),
+                )
+                .emit()
+            })?
             .to_string();
         auth_service::refresh_access_token(&state, user_id, refresh_token)
             .await

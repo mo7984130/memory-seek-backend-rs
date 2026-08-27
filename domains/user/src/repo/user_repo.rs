@@ -1,10 +1,9 @@
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::error::{ContextualError, contextual::Result};
 use common::ext::RedisExt;
 use common::utils::MetricsTimerExt;
-use common::{db_transaction, metrics_name};
+use common::{Pool, db_transaction, metrics_name};
 use constants::RedisKeys;
-use deadpool_redis::Pool;
 use multi_level_cache::{CacheConfig, MultiLevelCache};
 use sea_orm::DatabaseConnection;
 use types::auth::user::UserId;
@@ -48,7 +47,7 @@ impl UserRepo {
         let info = self
             .cache_user_info_single
             .get_or_load(
-                &RedisKeys::auth::user_info_cache(user_id),
+                &RedisKeys::auth::user_full_info_cache(user_id),
                 USER_INFO_CACHE_TTL,
                 || async move {
                     let user = UserMapper::query_by_id(&self.db, user_id)
@@ -72,7 +71,7 @@ impl UserRepo {
             .cache_user_info
             .get_or_load_batch(
                 user_ids,
-                |id| RedisKeys::auth::user_info_cache(*id),
+                |id| RedisKeys::auth::user_brief_info_cache(*id),
                 USER_INFO_CACHE_TTL,
                 |miss_ids| async move {
                     let users = UserMapper::query_info_rows(&self.db, &miss_ids).await?;
@@ -93,7 +92,7 @@ impl UserRepo {
             UserMapper::update_nickname(txn, user_id, &nickname_for_update)
                 .timed(metrics_name!("db_update"))
                 .await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("user.nickname_changed")
                     .with_actor(user_id.0)
@@ -113,7 +112,7 @@ impl UserRepo {
     pub async fn update_avatar(&self, user_id: UserId, new_key: String) -> Result<Option<String>> {
         let old_key = db_transaction!(contextual & self.db, |txn| {
             let old_key = UserMapper::update_avatar(txn, user_id, new_key).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("user.avatar_updated")
                     .with_actor(user_id.0)
@@ -141,7 +140,7 @@ impl UserRepo {
     pub async fn update_password(&self, user_id: UserId, new_password_hash: String) -> Result<()> {
         db_transaction!(contextual & self.db, |txn| {
             UserMapper::update_password(txn, user_id, new_password_hash).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("user.password_changed")
                     .with_actor(user_id.0)
@@ -157,7 +156,7 @@ impl UserRepo {
     pub async fn clear_refresh_token(&self, user_id: UserId) -> Result<()> {
         db_transaction!(contextual & self.db, |txn| {
             UserMapper::clear_refresh_token(txn, user_id).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("user.logged_out")
                     .with_actor(user_id.0)
@@ -184,13 +183,14 @@ impl UserRepo {
 
     /// 失效用户信息缓存（L1 + L2），失败不返回错误，下次读取时自动重建
     async fn invalidate_user_info(&self, user_id: UserId) {
-        let cache_key = RedisKeys::auth::user_info_cache(user_id);
+        let full_cache_key = RedisKeys::auth::user_full_info_cache(user_id);
+        let brief_cache_key = RedisKeys::auth::user_brief_info_cache(user_id);
         let _ = tokio::join!(
             self.cache_user_info
-                .invalidate(&cache_key)
+                .invalidate(&brief_cache_key)
                 .timed(metrics_name!("cache_invalidate")),
             self.cache_user_info_single
-                .invalidate(&cache_key)
+                .invalidate(&full_cache_key)
                 .timed(metrics_name!("cache_invalidate_single"))
         );
     }

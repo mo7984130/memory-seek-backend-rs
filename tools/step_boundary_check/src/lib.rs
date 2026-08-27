@@ -69,12 +69,9 @@ fn check_error_boundaries(ast: &syn::File, file: &str, violations: &mut Vec<Viol
         || normalized.ends_with("/domains/backup/src/exporter.rs")
         || normalized.ends_with("/domains/backup/src/hasher.rs")
         || normalized.ends_with("/domains/backup/src/state.rs");
-    let enforce_caller_macro = normalized.contains("/domains/") || normalized.contains("/server/");
-
     let mut visitor = ErrorBoundaryVisitor {
         file,
         is_domain_lower,
-        enforce_caller_macro,
         violations,
     };
     visitor.visit_file(ast);
@@ -83,7 +80,6 @@ fn check_error_boundaries(ast: &syn::File, file: &str, violations: &mut Vec<Viol
 struct ErrorBoundaryVisitor<'a> {
     file: &'a str,
     is_domain_lower: bool,
-    enforce_caller_macro: bool,
     violations: &'a mut Vec<Violation>,
 }
 
@@ -146,20 +142,6 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
         syn::visit::visit_path(self, path);
     }
 
-    fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
-        if self.is_domain_lower {
-            let method = call.method.to_string();
-            if matches!(method.as_str(), "true_or_warn" | "false_or_warn") {
-                self.violations.push(Violation::new(
-                    self.file,
-                    call.method.span(),
-                    "下层模块禁止调用会记录日志的错误扩展",
-                ));
-            }
-        }
-        syn::visit::visit_expr_method_call(self, call);
-    }
-
     fn visit_macro(&mut self, mac: &'ast syn::Macro) {
         let name = mac
             .path
@@ -175,17 +157,6 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
                 self.file,
                 mac.path.span(),
                 "下层模块禁止直接记录错误，必须把问题返回 service",
-            ));
-        }
-        if self.enforce_caller_macro
-            && name
-                .as_deref()
-                .is_some_and(|name| matches!(name, "warn" | "error"))
-        {
-            self.violations.push(Violation::new(
-                self.file,
-                mac.path.span(),
-                "项目错误日志必须使用 caller_warn!/caller_error! 写入 caller 字段",
             ));
         }
         syn::visit::visit_macro(self, mac);
@@ -281,7 +252,11 @@ fn collect_step_impls<'a>(items: &'a [Item], f: &mut impl FnMut(&'a ItemImpl)) {
 }
 
 /// 递归收集所有带 `#[declare_transaction_step(...)]` 属性的 impl 块,检查其 `on_photo_delete` 方法体
-fn collect_declare_transaction_step_impls(items: &[Item], file: &str, violations: &mut Vec<Violation>) {
+fn collect_declare_transaction_step_impls(
+    items: &[Item],
+    file: &str,
+    violations: &mut Vec<Violation>,
+) {
     for item in items {
         match item {
             Item::Impl(item_impl) => {
@@ -501,7 +476,7 @@ impl Step<Ctx> for MyStep {{
     }
 
     #[test]
-    fn rejects_logging_result_in_mapper() {
+    fn rejects_app_error_result_in_mapper() {
         let source = r#"
             use common::Result;
             async fn query() -> Result<()> {
@@ -510,10 +485,11 @@ impl Step<Ctx> for MyStep {{
             }
         "#;
         let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
-        assert!(violations
-            .iter()
-            .any(|v| v.message.contains("common::error::contextual::Result")));
-        assert!(violations.iter().any(|v| v.message.contains("错误扩展")));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.message.contains("common::error::contextual::Result"))
+        );
     }
 
     #[test]
@@ -532,9 +508,11 @@ impl Step<Ctx> for MyStep {{
             async fn query() -> Result<()> { Ok(()) }
         "#;
         let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
-        assert!(violations
-            .iter()
-            .any(|v| v.message.contains("common::error::contextual::Result")));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.message.contains("common::error::contextual::Result"))
+        );
     }
 
     #[test]
@@ -562,14 +540,12 @@ impl Step<Ctx> for MyStep {{
     }
 
     #[test]
-    fn rejects_direct_error_macro_in_service() {
+    fn allows_direct_error_macro_in_service() {
         let source = r#"
             fn service() { tracing::error!("failed"); }
         "#;
         let violations = check_source(source, "/repo/domains/photo/src/services/demo.rs");
-        assert!(violations
-            .iter()
-            .any(|v| v.message.contains("caller_error")));
+        assert!(violations.is_empty());
     }
 
     #[test]

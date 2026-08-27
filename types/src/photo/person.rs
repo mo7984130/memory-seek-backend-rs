@@ -12,16 +12,16 @@ crate::id_type!(PersonId, "photo/");
 mod entity {
 
     use common::time::DateTime;
-    use common::types::changed_value::*;
-    use insight_face_rs::{types::FaceEmbedding, BoundingBox};
-    use sea_orm::{entity::prelude::*, ActiveValue::Set};
+    use common::types::HasChanged;
+    use insight_face_rs::{BoundingBox, types::FaceEmbedding};
+    use sea_orm::{ActiveValue::Set, entity::prelude::*};
     use serde::{Deserialize, Serialize};
 
     use super::*;
     use crate::photo::{
+        FaceBBox,
         face::{FaceId, FaceRecord},
         photo::PhotoId,
-        FaceBBox,
     };
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]

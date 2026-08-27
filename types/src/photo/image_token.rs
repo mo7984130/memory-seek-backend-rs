@@ -30,6 +30,7 @@ pub struct FaceBBox {
     pub x2: f32,
     pub y2: f32,
 }
+#[cfg(feature = "face-engine")]
 impl From<insight_face_rs::BoundingBox> for FaceBBox {
     fn from(v: insight_face_rs::BoundingBox) -> Self {
         Self {
@@ -40,6 +41,7 @@ impl From<insight_face_rs::BoundingBox> for FaceBBox {
         }
     }
 }
+#[cfg(feature = "face-engine")]
 impl From<FaceBBox> for insight_face_rs::BoundingBox {
     fn from(v: FaceBBox) -> Self {
         Self {
@@ -397,7 +399,7 @@ mod tests {
 #[cfg(all(test, feature = "orm"))]
 mod orm_tests {
     use super::*;
-    use common::utils::{init_token_cipher, TokenCipherConfig};
+    use common::utils::{TokenCipherConfig, init_token_cipher};
 
     fn test_cipher() -> &'static common::utils::TokenCipher {
         init_token_cipher(&TokenCipherConfig {

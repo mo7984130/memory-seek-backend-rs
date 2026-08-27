@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use common::models::CursorPage;
-use deadpool_redis::Pool;
+use common::{Pool, types::CursorPage};
 use multi_level_cache::CacheConfig;
 use multi_level_cache::MultiLevelCache;
 use oss::S3Client;
@@ -14,9 +13,6 @@ use backup::BackupState;
 use common::error::ContextualError;
 use types::photo::dto::timeline_stat::MonthStat;
 use types::photo::photo::{PhotoId, PhotoRecord};
-
-#[cfg(feature = "face")]
-use crate::models::PersonBriefRow;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct CachedPhotoLike {
@@ -32,8 +28,6 @@ pub struct PhotoState {
     pub(crate) cache_photo_cursor_ids: MultiLevelCache<CursorPage<PhotoId, ()>, ContextualError>,
     pub(crate) cache_photo_dimensions: MultiLevelCache<(u32, u32), ContextualError>,
     pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
-    #[cfg(feature = "face")]
-    pub(crate) cache_person: MultiLevelCache<PersonBriefRow, ContextualError>,
     pub redis: Pool,
     pub s3_client: Arc<S3Client>,
     #[cfg(feature = "face")]
@@ -79,8 +73,6 @@ impl PhotoState {
                 redis.clone(),
                 cache_config,
             ),
-            #[cfg(feature = "face")]
-            cache_person: MultiLevelCache::new_with_name("person", redis.clone(), cache_config),
             redis,
             s3_client,
             #[cfg(feature = "face")]

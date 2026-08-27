@@ -1,7 +1,7 @@
 use common::time::Duration;
 use std::sync::Arc;
 
-use common::ext::{ContextualResultExt, IntoContextualExt};
+use common::error::contextual::ext::{ContextualResultExt, IntoContextualExt};
 use common::{error::contextual::Result, metrics_name, time::DateTime, utils::MetricsTimerExt};
 use constants::RedisKeys;
 use sea_orm::DatabaseTransaction;

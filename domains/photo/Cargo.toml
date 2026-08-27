@@ -1,60 +1,48 @@
 [package]
 name = "photo"
-version = "0.2.2"
+version = "0.2.4"
 edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "dep:metrics", "oss/metrics", "multi-level-cache/metrics"]
-controller = ["dep:axum"]
-audit = ["audit/enable"]
-file_validator = ["common/file_validator"]
+metrics = ["common/metrics", "multi-level-cache/metrics"]
+controller = ["dep:axum", "common/axum"]
+audit = ["audit/recording"]
 face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]
-# TypeScript 类型导出
 ts = ["types/ts", "common/ts"]
 
 [dependencies]
 common = { path = "../../common", features = [
-    "validators",
-    "file_validator",
     "metrics",
-    "contextual-sea-orm",
-    "contextual-cache",
-    "contextual-serde",
-    "contextual-tokio",
-    "event",
+    "tokio",
+    "multi-cache",
 ] }
-audit = { path = "../audit" }
-async-trait = { workspace = true }
-step_derive = { path = "../../libs/step_derive" }
-linkme = { workspace = true }
-constants = { path = "../constants" }
+file-validator.path = "../../libs/file_validator"
+common_macros.path = "../../libs/common_macros"
+audit.path = "../audit"
+step_derive.path = "../../libs/step_derive"
+constants.path = "../constants"
+oss.path = "../../libs/oss"
+types = { workspace = true, features = ["orm"] }
 
-oss = { path = "../../libs/oss" }
-img_url_generator = { path = "../../libs/img_url_generator" }
+linkme.workspace = true
+async-trait.workspace = true
 
-axum = { workspace = true, optional = true }
-metrics = { workspace = true, optional = true }
-tokio = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-sea-orm = { workspace = true }
-tracing = { workspace = true }
-md5 = { workspace = true }
-uuid = { workspace = true }
-futures = { workspace = true }
-deadpool-redis = { workspace = true }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sea-orm.workspace = true
+tracing.workspace = true
+md5.workspace = true
+uuid.workspace = true
+futures.workspace = true
 multi-level-cache.workspace = true
-base64 = { workspace = true }
-moka = { workspace = true }
-bytes = { workspace = true }
-once_cell = { workspace = true }
-validator = { workspace = true }
-insight-face-rs = { workspace = true, optional = true }
-backup = { path = "../backup", optional = true }
+bytes.workspace = true
 image.workspace = true
-types = { workspace = true, features = ["full"] }
-smallvec = "1.15.2"
-pinyin = { workspace = true }
+pinyin.workspace = true
 petal-clustering = "0.13.0"
 ndarray = "0.17.2"
+
+axum = { workspace = true, optional = true }
+insight-face-rs = { workspace = true, optional = true }
+backup = { path = "../backup", optional = true }

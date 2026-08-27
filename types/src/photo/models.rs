@@ -313,6 +313,7 @@ mod tests {
         assert!(param.validate().is_err());
     }
 
+    #[cfg(feature = "face-engine")]
     #[test]
     fn test_person_name_deserialize_then_validate() {
         // 超长名称应能反序列化, 校验错误走 validator 通道, 不含位置信息

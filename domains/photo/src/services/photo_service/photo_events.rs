@@ -1,7 +1,5 @@
 #[cfg(feature = "face")]
 use bytes::Bytes;
-#[cfg(feature = "face")]
-use types::photo::person::PersonId;
 use types::photo::photo::PhotoRecord;
 
 /// 照片主记录落库后发布的事件，供时间线、人脸等后续服务消费。
@@ -23,8 +21,6 @@ step_derive::declare_async_event!(
 /// 照片及其文件删除后发布的事件，供缓存等后续服务消费。
 pub struct AfterPhotoDelete {
     pub photos: Vec<PhotoRecord>,
-    #[cfg(feature = "face")]
-    pub affected_person_ids: Vec<PersonId>,
 }
 
 step_derive::declare_async_event!(

@@ -8,10 +8,28 @@
 /// // 自动使用当前 span 名
 /// set_gauge!("batch", 5.0);
 /// // 显式指定函数名
-/// set_gauge!("face:compute", "mode", 1.0);
+/// set_gauge!("face_compute", "mode", 1.0);
+/// // 添加标签
+/// set_gauge!("mode", 1.0, "mode" => "full");
 /// ```
 #[macro_export]
 macro_rules! set_gauge {
+    ($step:literal, $value:expr, $($label_key:literal => $label_value:expr),+ $(,)?) => {
+        #[cfg(feature = "metrics")]
+        $crate::metrics::gauge!(
+            $crate::metrics_name!($step),
+            $($label_key => $label_value),+
+        )
+        .set($value);
+    };
+    ($func_name:literal, $step:literal, $value:expr, $($label_key:literal => $label_value:expr),+ $(,)?) => {
+        #[cfg(feature = "metrics")]
+        $crate::metrics::gauge!(
+            $crate::metrics_name!($func_name, $step),
+            $($label_key => $label_value),+
+        )
+        .set($value);
+    };
     ($step:literal, $value:expr) => {
         #[cfg(feature = "metrics")]
         $crate::metrics::gauge!($crate::metrics_name!($step)).set($value);

@@ -1,7 +1,7 @@
-use common::{Result, error::ContextualError};
+use common::{Pool, Result, error::ContextualError};
 use serde::Deserialize;
 
-use deadpool_redis::{Config as DeadpoolConfig, Pool, PoolConfig, Runtime};
+use deadpool_redis::{Config as DeadpoolConfig, PoolConfig, Runtime};
 use tracing::info;
 
 #[derive(Debug, Deserialize)]

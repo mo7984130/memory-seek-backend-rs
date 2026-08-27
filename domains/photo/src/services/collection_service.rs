@@ -4,7 +4,7 @@ use crate::mappers::{
 use crate::repo::CollectionRepo;
 use crate::state::PhotoState;
 use common::Result;
-use common::ext::OkExt;
+use common::ext::ToOk;
 use common::utils::token_cipher;
 use types::auth::user::UserId;
 use types::photo::collection::CollectionId;
@@ -15,7 +15,7 @@ pub(crate) struct CollectionService;
 // 查询
 impl CollectionService {
     /// 查询用户收藏夹.
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_collection_list(
         state: &PhotoState,
@@ -37,7 +37,7 @@ impl CollectionService {
 // 添加
 impl CollectionService {
     /// 创建收藏夹.
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn create_collection(
         state: &PhotoState,
@@ -53,7 +53,7 @@ impl CollectionService {
 // 修改
 impl CollectionService {
     /// 更新收藏夹信息
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, collection_id = %collection_id)
@@ -74,7 +74,7 @@ impl CollectionService {
 // 删除
 impl CollectionService {
     /// 删除收藏夹.
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, collection_id = %collection_id)
@@ -104,7 +104,7 @@ impl CollectionService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::photo_service::PhotoDeleteContext,
-    ) -> common::Result<()> {
+    ) -> common::error::contextual::Result<()> {
         let photo_ids = ctx.photo_ids();
         let affected = CollectionPhotoMapper::delete_by_photo_ids(txn, &photo_ids).await?;
         CollectionMapper::update_photo_count_delta_batch(txn, &affected).await?;

@@ -1,17 +1,11 @@
+use crate::cursor::TimeIdCursor;
 use common::time::DateTime;
 use validator::Validate;
 
-use crate::auth::user::UserId;
-use crate::cursor::TimeIdCursor;
 use crate::photo::collection::CollectionId;
-#[cfg(feature = "orm")]
-use crate::photo::collection::CollectionRecord;
+
 use crate::photo::models::PhotoIds;
 use crate::photo::photo::PhotoId;
-#[cfg(feature = "orm")]
-use crate::photo::ImageToken;
-#[cfg(feature = "orm")]
-use common::utils::TokenCipher;
 
 crate::out_dto!(CollectionView, "photo/", rename = "Collection"; {
     pub id: CollectionId,
@@ -25,55 +19,10 @@ crate::out_dto!(CollectionView, "photo/", rename = "Collection"; {
     pub created_at: DateTime,
 });
 
-#[cfg(feature = "orm")]
-impl From<CollectionRecord> for CollectionView {
-    fn from(record: CollectionRecord) -> Self {
-        CollectionView {
-            id: record.id,
-            name: record.name,
-            description: record.description,
-            photo_count: record.photo_count,
-            cover_token: record.cover_file_id,
-            cover_photo_id: record.cover_photo_id,
-            created_at: record.created_at,
-        }
-    }
-}
-
-#[cfg(feature = "orm")]
-impl CollectionView {
-    /// 为相册封面生成当前查看者可用的裁剪访问令牌.
-    pub fn with_generate_cover_token(
-        mut self,
-        viewer: UserId,
-        cipher: &TokenCipher,
-    ) -> common::error::contextual::Result<Self> {
-        self.cover_token = self
-            .cover_token
-            .as_ref()
-            .map(|fid| {
-                let seed = format!("{}:{}", viewer, fid);
-                cipher.encrypt(&ImageToken::thumbnail(viewer, fid.to_string()), Some(&seed))
-            })
-            .transpose()?;
-        Ok(self)
-    }
-}
-
 crate::out_dto!(CollectionBriefView, "photo/", rename = "CollectionBrief"; {
     pub id: CollectionId,
     pub name: String,
 });
-
-#[cfg(feature = "orm")]
-impl From<CollectionRecord> for CollectionBriefView {
-    fn from(record: CollectionRecord) -> Self {
-        CollectionBriefView {
-            id: record.id,
-            name: record.name,
-        }
-    }
-}
 
 crate::in_dto!(CollectionCreateParam, "photo/"; {
     #[validate(length(min = 1, max = 128, message = "相册名长度在 1 到 128 个字符"))]
@@ -125,6 +74,58 @@ crate::out_dto!(CollectionPhotoRemoveBatchResult, "photo/", Default; {
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub removed_photo_count: u64,
 });
+
+#[cfg(feature = "orm")]
+mod orm {
+    use super::*;
+
+    use crate::auth::user::UserId;
+    use crate::photo::collection::CollectionRecord;
+    use crate::photo::{CollectionBriefView, ImageToken};
+    use common::utils::TokenCipher;
+
+    impl From<CollectionRecord> for CollectionBriefView {
+        fn from(record: CollectionRecord) -> Self {
+            CollectionBriefView {
+                id: record.id,
+                name: record.name,
+            }
+        }
+    }
+
+    impl CollectionView {
+        /// 为相册封面生成当前查看者可用的裁剪访问令牌.
+        pub fn with_generate_cover_token(
+            mut self,
+            viewer: UserId,
+            cipher: &TokenCipher,
+        ) -> common::error::contextual::Result<Self> {
+            self.cover_token = self
+                .cover_token
+                .as_ref()
+                .map(|fid| {
+                    let seed = format!("{}:{}", viewer, fid);
+                    cipher.encrypt(&ImageToken::thumbnail(viewer, fid.to_string()), Some(&seed))
+                })
+                .transpose()?;
+            Ok(self)
+        }
+    }
+
+    impl From<CollectionRecord> for CollectionView {
+        fn from(record: CollectionRecord) -> Self {
+            CollectionView {
+                id: record.id,
+                name: record.name,
+                description: record.description,
+                photo_count: record.photo_count,
+                cover_token: record.cover_file_id,
+                cover_photo_id: record.cover_photo_id,
+                created_at: record.created_at,
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
