@@ -48,7 +48,8 @@ pub fn photo_is_liked(user_id: UserId, photo_id: PhotoId) -> String {
 
 /// 生成照片首屏 ID 列表的 Redis 缓存键。
 ///
-/// 缓存按排序方向拆分，供无游标、无锚点时间的首屏分页共用。
+/// 缓存存储每个方向允许的最大首屏，调用方再按实际页大小截断，因此键无需包含
+/// `size` 且能被上传、删除操作准确失效。
 #[inline]
 pub fn photo_cursor_page_ids(direction: PageDirection) -> &'static str {
     //photo:photo:cursor_page_ids

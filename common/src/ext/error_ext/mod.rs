@@ -12,6 +12,7 @@ pub use base::*;
 pub use bool_ext::BoolExt;
 pub use contextual_ext::{
     ContextOptionExt, ContextResultExt, ContextualResultExt, IntoContextualExt,
+    fallback_on_cache_error,
 };
 pub use ok_ext::*;
 pub use option_ext::OptionExt;

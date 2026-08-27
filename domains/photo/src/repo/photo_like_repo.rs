@@ -48,6 +48,7 @@ impl PhotoLikeRepo {
         .await?;
 
         PhotoRepo::cache_photo_like_status(state, user_id, photo_id, true).await;
+        PhotoRepo::invalidate_photo_info(state, photo_id).await;
 
         Ok(())
     }
@@ -78,6 +79,7 @@ impl PhotoLikeRepo {
         })
         .await?;
         PhotoRepo::cache_photo_like_status(state, user_id, photo_id, false).await;
+        PhotoRepo::invalidate_photo_info(state, photo_id).await;
         Ok(())
     }
 

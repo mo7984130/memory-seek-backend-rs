@@ -418,9 +418,6 @@ impl FaceService {
             PersonMapper::remove_faces(txn, person, &faces).await?;
         }
 
-        // 记录受影响人物 ID, 供 delete_photos 在事务提交后失效人物缓存
-        ctx.affected_person_ids = by_person.keys().copied().collect();
-
         Ok(())
     }
 }

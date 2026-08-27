@@ -21,6 +21,7 @@ use crate::mappers::{
     comment_like_mapper::CommentLikeMapper, comment_mapper::CommentMapper,
     photo_mapper::PhotoMapper,
 };
+use crate::repo::PhotoRepo;
 use crate::state::PhotoState;
 
 pub(crate) struct CommentRepo;
@@ -86,7 +87,7 @@ impl CommentRepo {
         photo_id: PhotoId,
         req: CommentPublishParam,
     ) -> Result<types::photo::comment::CommentRecord> {
-        db_transaction!(scoped & state.db, |txn| {
+        let comment = db_transaction!(scoped & state.db, |txn| {
             let comment =
                 CommentMapper::insert(txn, photo_id, user_id, req.content.into_inner()).await?;
             PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
@@ -100,7 +101,9 @@ impl CommentRepo {
             .await?;
             Ok(comment)
         })
-        .await
+        .await?;
+        PhotoRepo::invalidate_photo_info(state, photo_id).await;
+        Ok(comment)
     }
 
     /// 删除评论.
@@ -110,7 +113,7 @@ impl CommentRepo {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        let photo_id = db_transaction!(scoped & state.db, |txn| {
             // 删除评论
             let comment = CommentMapper::delete(txn, user_id, comment_id)
                 .await?
@@ -140,9 +143,11 @@ impl CommentRepo {
                     .with_detail(serde_json::json!({ "commentId": comment_id.0 })),
             )
             .await?;
-            Ok(())
+            Ok(comment.photo_id)
         })
-        .await
+        .await?;
+        PhotoRepo::invalidate_photo_info(state, photo_id).await;
+        Ok(())
     }
 
     pub async fn ensure_exist(state: &PhotoState, comment_id: CommentId) -> Result<()> {

@@ -14,6 +14,8 @@ pub struct ContextualError(Box<dyn ContextualReport>);
 trait ContextualReport: Debug + Send + Sync {
     fn app_error(&self) -> &AppError;
 
+    fn reason(&self) -> &'static str;
+
     #[track_caller]
     fn emit(self: Box<Self>) -> AppError;
 }
@@ -33,6 +35,10 @@ where
 {
     fn app_error(&self) -> &AppError {
         &self.app_error
+    }
+
+    fn reason(&self) -> &'static str {
+        self.reason
     }
 
     #[track_caller]
@@ -61,6 +67,10 @@ impl ContextualReport for ReportWithoutSource {
         &self.app_error
     }
 
+    fn reason(&self) -> &'static str {
+        self.reason
+    }
+
     #[track_caller]
     fn emit(self: Box<Self>) -> AppError {
         log_and_map_at(
@@ -75,6 +85,11 @@ impl ContextualReport for ReportWithoutSource {
 }
 
 impl ContextualError {
+    /// 返回错误分类，供基础设施降级路径识别可恢复错误。
+    pub fn reason(&self) -> &'static str {
+        self.0.reason()
+    }
+
     /// 记录错误上下文并返回对应的应用错误。
     ///
     /// 该方法会消费错误，确保同一份上下文最多被记录一次。适用于补偿操作失败时

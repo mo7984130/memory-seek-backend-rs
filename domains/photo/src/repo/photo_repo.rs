@@ -5,7 +5,9 @@ use common::time::Duration;
 use audit::{AuditEvent, AuditRecorder};
 use common::db_transaction;
 use common::error::{AppError, contextual::Result};
-use common::ext::{CollectOkExt, ContextOptionExt, ContextualResultExt, IntoContextualExt};
+use common::ext::{
+    CollectOkExt, ContextOptionExt, ContextualResultExt, IntoContextualExt, fallback_on_cache_error,
+};
 use common::metrics_name;
 use common::models::CursorPage;
 use common::utils::MetricsTimerExt;
@@ -16,15 +18,14 @@ use types::photo::ImageDimensions;
 use types::photo::dto::photo::{PageDirection, PhotoCursorParam};
 use types::photo::photo::{ActiveModel, Model, NewPhotoRecord, PhotoId, PhotoRecord};
 
-#[cfg(feature = "face")]
-use types::photo::person::PersonId;
-
 use crate::{
     mappers::{photo_like_mapper::PhotoLikeMapper, photo_mapper::PhotoMapper},
     state::{CachedPhotoLike, PhotoState},
 };
 
 const PHOTO_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+/// 首屏缓存统一保存 API 允许的最大页，避免 `size` 不在缓存键中造成结果串页。
+const PHOTO_CURSOR_CACHE_SIZE: u64 = 1024;
 
 /// 照片领域数据访问仓储，统一封装数据库与多级缓存。
 pub struct PhotoRepo;
@@ -97,6 +98,17 @@ impl PhotoRepo {
             .emit_if_err();
     }
 
+    /// 照片聚合字段变更后失效详情缓存。
+    pub(super) async fn invalidate_photo_info(state: &PhotoState, photo_id: PhotoId) {
+        let key = RedisKeys::photo::photo::photo_info(photo_id);
+        state
+            .cache_photo_info
+            .invalidate(&key)
+            .await
+            .into_contextual()
+            .emit_if_err();
+    }
+
     /// 游标查询照片id.
     pub async fn query_photo_cursor_ids(
         state: &PhotoState,
@@ -104,19 +116,28 @@ impl PhotoRepo {
     ) -> Result<CursorPage<PhotoId, ()>> {
         let photo_ids = if req.cursor.is_none() && req.anchor_time.is_none() {
             let key = RedisKeys::photo::photo::photo_cursor_page_ids(req.direction);
-            state
-                .cache_photo_cursor_ids
-                .get_or_load(key, PHOTO_CACHE_TTL, || async move {
-                    PhotoMapper::query_cursor_page_ids(
-                        &state.db,
-                        None,
-                        req.size,
-                        req.direction,
-                        None,
-                    )
-                    .await
-                })
-                .await?
+            let direction = req.direction;
+            let size = req.size;
+            let page = fallback_on_cache_error(
+                state
+                    .cache_photo_cursor_ids
+                    .get_or_load(key, PHOTO_CACHE_TTL, || async move {
+                        PhotoMapper::query_cursor_page_ids(
+                            &state.db,
+                            None,
+                            PHOTO_CURSOR_CACHE_SIZE,
+                            direction,
+                            None,
+                        )
+                        .await
+                    })
+                    .await,
+                || async move {
+                    PhotoMapper::query_cursor_page_ids(&state.db, None, size, direction, None).await
+                },
+            )
+            .await?;
+            Self::resize_cached_first_page(page, size)
         } else {
             PhotoMapper::query_cursor_page_ids(
                 &state.db,
@@ -143,6 +164,17 @@ impl PhotoRepo {
             .await
             .into_contextual()
             .emit_if_err();
+    }
+
+    fn resize_cached_first_page(
+        mut page: CursorPage<PhotoId, ()>,
+        size: u64,
+    ) -> CursorPage<PhotoId, ()> {
+        if page.records.len() > size as usize {
+            page.records.truncate(size as usize);
+            page.has_more = true;
+        }
+        page
     }
 
     /// 插入照片.
@@ -190,9 +222,21 @@ impl PhotoRepo {
         file_id: &str,
     ) -> Result<ImageDimensions> {
         let key = RedisKeys::photo::photo::photo_dimensions(file_id);
-        state
-            .cache_photo_dimensions
-            .get_or_load(key.as_str(), PHOTO_CACHE_TTL, || async move {
+        fallback_on_cache_error(
+            state
+                .cache_photo_dimensions
+                .get_or_load(key.as_str(), PHOTO_CACHE_TTL, || async move {
+                    PhotoMapper::query_dimensions_by_file_id(&state.db, file_id)
+                        .await?
+                        .context_warn_none(
+                            "photo_not_found",
+                            "裁剪图片不存在",
+                            AppError::bad_request("照片不存在"),
+                        )
+                })
+                .timed(metrics_name!("cache_get_or_load"))
+                .await,
+            || async move {
                 PhotoMapper::query_dimensions_by_file_id(&state.db, file_id)
                     .await?
                     .context_warn_none(
@@ -200,21 +244,17 @@ impl PhotoRepo {
                         "裁剪图片不存在",
                         AppError::bad_request("照片不存在"),
                     )
-            })
-            .timed(metrics_name!("cache_get_or_load"))
-            .await
-            .map(|dimensions| ImageDimensions {
-                width: dimensions.0,
-                height: dimensions.1,
-            })
+            },
+        )
+        .await
+        .map(|dimensions| ImageDimensions {
+            width: dimensions.0,
+            height: dimensions.1,
+        })
     }
 
     /// 失效照片删除后受影响的照片和人物缓存.
-    pub async fn invalidate_deleted_photos(
-        state: &PhotoState,
-        photos: &[PhotoRecord],
-        #[cfg(feature = "face")] affected_person_ids: &[PersonId],
-    ) {
+    pub async fn invalidate_deleted_photos(state: &PhotoState, photos: &[PhotoRecord]) {
         let photo_keys = photos
             .iter()
             .map(|photo| RedisKeys::photo::photo::photo_info(photo.id))
@@ -224,28 +264,37 @@ impl PhotoRepo {
             .map(|photo| RedisKeys::photo::photo::photo_dimensions(&photo.file_id))
             .collect::<Vec<_>>();
 
-        #[cfg(feature = "face")]
-        let person_keys = affected_person_ids
-            .iter()
-            .map(|&id| RedisKeys::photo::person::person_info(id))
-            .collect::<Vec<_>>();
+        let _ = tokio::join!(
+            state.cache_photo_info.invalidate_batch(&photo_keys),
+            state
+                .cache_photo_dimensions
+                .invalidate_batch(&dimension_keys),
+            Self::invalidate_photo_cursor_ids(state),
+        );
+    }
+}
 
-        #[cfg(feature = "face")]
-        let _ = tokio::join!(
-            state.cache_photo_info.invalidate_batch(&photo_keys),
-            state
-                .cache_photo_dimensions
-                .invalidate_batch(&dimension_keys),
-            Self::invalidate_photo_cursor_ids(state),
-            state.cache_person.invalidate_batch(&person_keys),
-        );
-        #[cfg(not(feature = "face"))]
-        let _ = tokio::join!(
-            state.cache_photo_info.invalidate_batch(&photo_keys),
-            state
-                .cache_photo_dimensions
-                .invalidate_batch(&dimension_keys),
-            Self::invalidate_photo_cursor_ids(state),
-        );
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cached_first_page_is_trimmed_to_requested_size() {
+        let page = CursorPage::from_has_more(vec![PhotoId(1), PhotoId(2), PhotoId(3)], false);
+
+        let page = PhotoRepo::resize_cached_first_page(page, 2);
+
+        assert_eq!(page.records, vec![PhotoId(1), PhotoId(2)]);
+        assert!(page.has_more);
+    }
+
+    #[test]
+    fn cached_first_page_preserves_source_has_more() {
+        let page = CursorPage::from_has_more(vec![PhotoId(1)], true);
+
+        let page = PhotoRepo::resize_cached_first_page(page, 32);
+
+        assert_eq!(page.records, vec![PhotoId(1)]);
+        assert!(page.has_more);
     }
 }

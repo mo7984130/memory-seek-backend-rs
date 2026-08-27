@@ -217,12 +217,7 @@ impl PhotoService {
         // 查询属于用户的照片
         let photos =
             PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &req.photo_ids).await?;
-        let mut ctx = PhotoDeleteContext {
-            user_id,
-            photos,
-            #[cfg(feature = "face")]
-            affected_person_ids: Vec::new(),
-        };
+        let mut ctx = PhotoDeleteContext { user_id, photos };
         run_photo_delete_pipeline(&state.db, &mut ctx)
             .await
             .map_err(|error| {
@@ -235,14 +230,7 @@ impl PhotoService {
             })?;
 
         // 发布删除后事件，缓存失效等后续操作不影响删除结果。
-        publish_after_photo_delete(
-            Arc::clone(&state),
-            AfterPhotoDelete {
-                photos: ctx.photos,
-                #[cfg(feature = "face")]
-                affected_person_ids: ctx.affected_person_ids,
-            },
-        );
+        publish_after_photo_delete(Arc::clone(&state), AfterPhotoDelete { photos: ctx.photos });
 
         Ok(())
     }
@@ -304,13 +292,7 @@ impl PhotoService {
             .await
             .into_contextual()?;
 
-        PhotoRepo::invalidate_deleted_photos(
-            state.as_ref(),
-            &event.photos,
-            #[cfg(feature = "face")]
-            &event.affected_person_ids,
-        )
-        .await;
+        PhotoRepo::invalidate_deleted_photos(state.as_ref(), &event.photos).await;
         Ok(())
     }
 }

@@ -1,6 +1,6 @@
 use audit::{AuditEvent, AuditRecorder};
 use common::error::{ContextualError, contextual::Result};
-use common::ext::RedisExt;
+use common::ext::{RedisExt, fallback_on_cache_error};
 use common::utils::MetricsTimerExt;
 use common::{Pool, db_transaction, metrics_name};
 use constants::RedisKeys;
@@ -44,20 +44,28 @@ impl UserRepo {
 
     /// 获取用户完整信息（带三级缓存，缓存完整 `UserInfo`，token 确定性加密可安全缓存）
     pub async fn get_user_info(&self, user_id: UserId) -> Result<UserInfo> {
-        let info = self
-            .cache_user_info_single
-            .get_or_load(
-                &RedisKeys::auth::user_info_cache(user_id),
-                USER_INFO_CACHE_TTL,
-                || async move {
-                    let user = UserMapper::query_by_id(&self.db, user_id)
-                        .await?
-                        .user_not_found()?;
-                    UserInfo::from_with_token(user)
-                },
-            )
-            .timed(metrics_name!("cache_get_or_load"))
-            .await?;
+        let info = fallback_on_cache_error(
+            self.cache_user_info_single
+                .get_or_load(
+                    &RedisKeys::auth::user_full_info_cache(user_id),
+                    USER_INFO_CACHE_TTL,
+                    || async move {
+                        let user = UserMapper::query_by_id(&self.db, user_id)
+                            .await?
+                            .user_not_found()?;
+                        UserInfo::from_with_token(user)
+                    },
+                )
+                .timed(metrics_name!("cache_get_or_load"))
+                .await,
+            || async move {
+                let user = UserMapper::query_by_id(&self.db, user_id)
+                    .await?
+                    .user_not_found()?;
+                UserInfo::from_with_token(user)
+            },
+        )
+        .await?;
 
         Ok(info)
     }
@@ -71,7 +79,7 @@ impl UserRepo {
             .cache_user_info
             .get_or_load_batch(
                 user_ids,
-                |id| RedisKeys::auth::user_info_cache(*id),
+                |id| RedisKeys::auth::user_brief_info_cache(*id),
                 USER_INFO_CACHE_TTL,
                 |miss_ids| async move {
                     let users = UserMapper::query_info_rows(&self.db, &miss_ids).await?;
@@ -183,13 +191,14 @@ impl UserRepo {
 
     /// 失效用户信息缓存（L1 + L2），失败不返回错误，下次读取时自动重建
     async fn invalidate_user_info(&self, user_id: UserId) {
-        let cache_key = RedisKeys::auth::user_info_cache(user_id);
+        let full_cache_key = RedisKeys::auth::user_full_info_cache(user_id);
+        let brief_cache_key = RedisKeys::auth::user_brief_info_cache(user_id);
         let _ = tokio::join!(
             self.cache_user_info
-                .invalidate(&cache_key)
+                .invalidate(&brief_cache_key)
                 .timed(metrics_name!("cache_invalidate")),
             self.cache_user_info_single
-                .invalidate(&cache_key)
+                .invalidate(&full_cache_key)
                 .timed(metrics_name!("cache_invalidate_single"))
         );
     }

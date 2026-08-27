@@ -1,7 +1,7 @@
 use common::time::Duration;
 use std::sync::Arc;
 
-use common::ext::{ContextualResultExt, IntoContextualExt};
+use common::ext::{ContextualResultExt, IntoContextualExt, fallback_on_cache_error};
 use common::{error::contextual::Result, metrics_name, time::DateTime, utils::MetricsTimerExt};
 use constants::RedisKeys;
 use sea_orm::DatabaseTransaction;
@@ -34,15 +34,19 @@ impl TimelineStatRepo {
 
     /// 获取统计。
     pub async fn get_monthly_stats(state: &PhotoState) -> Result<Vec<MonthStat>> {
-        state
-            .cache_timeline_stat
-            .get_or_load(
-                RedisKeys::photo::timeline_stat::monthly_stats(),
-                TIMELINE_STAT_CACHE_TTL,
-                || async move { TimelineStatMapper::query_monthly_stats(&state.db).await },
-            )
-            .timed(metrics_name!("cache_get_or_load"))
-            .await
+        fallback_on_cache_error(
+            state
+                .cache_timeline_stat
+                .get_or_load(
+                    RedisKeys::photo::timeline_stat::monthly_stats(),
+                    TIMELINE_STAT_CACHE_TTL,
+                    || async move { TimelineStatMapper::query_monthly_stats(&state.db).await },
+                )
+                .timed(metrics_name!("cache_get_or_load"))
+                .await,
+            || async move { TimelineStatMapper::query_monthly_stats(&state.db).await },
+        )
+        .await
     }
 
     /// 失效缓存.

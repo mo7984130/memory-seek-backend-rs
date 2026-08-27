@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, future::Future};
 
 use crate::error::{AppError, ContextualError, contextual::Result};
 
@@ -92,6 +92,22 @@ impl<T> ContextualResultExt<T> for Result<T> {
     }
 }
 
+/// 缓存基础设施不可用时回源加载，业务错误仍按原样返回。
+pub async fn fallback_on_cache_error<T, F, Fut>(result: Result<T>, loader: F) -> Result<T>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<T>>,
+{
+    match result {
+        Ok(value) => Ok(value),
+        Err(error) if error.reason() == "cache_err" => {
+            error.emit();
+            loader().await
+        }
+        Err(error) => Err(error),
+    }
+}
+
 impl<T> ContextOptionExt<T> for Option<T> {
     fn context_warn_none(
         self,
@@ -114,10 +130,41 @@ impl<T> ContextOptionExt<T> for Option<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::ContextualResultExt;
+    use super::{ContextualResultExt, fallback_on_cache_error};
+    use crate::error::{AppError, ContextualError};
 
     #[test]
     fn emit_if_err_accepts_successful_result() {
         Ok::<(), crate::error::ContextualError>(()).emit_if_err();
+    }
+
+    #[tokio::test]
+    async fn cache_error_falls_back_to_loader() {
+        let result = fallback_on_cache_error(
+            Err(ContextualError::warn_without_source(
+                "cache_err",
+                "缓存错误",
+                AppError::InternalServerError,
+            )),
+            || async { Ok(42) },
+        )
+        .await;
+
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn business_error_does_not_fall_back_to_loader() {
+        let result = fallback_on_cache_error(
+            Err(ContextualError::warn_without_source(
+                "record_not_found",
+                "记录不存在",
+                AppError::bad_request("记录不存在"),
+            )),
+            || async { Ok(42) },
+        )
+        .await;
+
+        assert_eq!(result.unwrap_err().reason(), "record_not_found");
     }
 }

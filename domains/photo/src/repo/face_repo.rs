@@ -2,11 +2,10 @@ use audit::{AuditEvent, AuditRecorder};
 use common::{
     DbConn as ConnectionTrait, db_transaction,
     error::{AppError, ContextualError, contextual::Result},
-    ext::{ContextualResultExt, IntoContextualExt, ToOk},
+    ext::ToOk,
     models::CursorPage,
     utils::DbUtils,
 };
-use constants::RedisKeys;
 use sea_orm::{DbBackend, EntityName, Statement};
 use types::{
     auth::user::UserId,
@@ -43,14 +42,12 @@ impl FaceRepo {
         person_id: Option<PersonId>,
         user_id: UserId,
     ) -> Result<()> {
-        let old_person_id = db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(scoped & state.db, |txn| {
             // 锁定人脸
             let face = FaceMapper::lock_by_id(txn, face_id).await?;
-            let old_person_id = face.person_id;
-
             // 归属未变化, 直接返回
             if person_id == face.person_id {
-                return Ok(None);
+                return Ok(());
             }
 
             // 移动人脸归属
@@ -96,19 +93,9 @@ impl FaceRepo {
             )
             .await?;
 
-            Ok(old_person_id)
+            Ok(())
         })
         .await?;
-
-        let mut affected_person_ids = Vec::with_capacity(2);
-        if let Some(new_person_id) = person_id {
-            affected_person_ids.push(new_person_id);
-        }
-        if let Some(old_person_id) = old_person_id {
-            affected_person_ids.push(old_person_id);
-        }
-        // 失效受影响人物缓存
-        Self::invalidate_persons(state, &affected_person_ids).await;
 
         Ok(())
     }
@@ -173,20 +160,6 @@ impl FaceRepo {
 
 // 删除
 impl FaceRepo {
-    /// 失效人物信息缓存.
-    pub async fn invalidate_persons(state: &PhotoState, ids: &[PersonId]) {
-        let keys = ids
-            .iter()
-            .map(|id| RedisKeys::photo::person::person_info(*id))
-            .collect::<Vec<_>>();
-        state
-            .cache_person
-            .invalidate_batch(&keys)
-            .await
-            .into_contextual()
-            .emit_if_err();
-    }
-
     // 删除人脸
     pub async fn delete_faces(
         state: &PhotoState,

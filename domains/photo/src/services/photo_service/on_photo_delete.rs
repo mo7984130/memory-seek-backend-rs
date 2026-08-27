@@ -1,5 +1,3 @@
-#[cfg(feature = "face")]
-use types::photo::person::PersonId;
 use types::{
     auth::user::UserId,
     photo::photo::{PhotoId, PhotoRecord},
@@ -15,9 +13,6 @@ step_derive::declare_pipeline!(
 pub struct PhotoDeleteContext {
     pub user_id: UserId,
     pub photos: Vec<PhotoRecord>,
-    #[cfg(feature = "face")]
-    /// 删除人脸步骤更新过统计的人物 ID，供事务提交后失效缓存。
-    pub affected_person_ids: Vec<PersonId>,
 }
 
 impl PhotoDeleteContext {
