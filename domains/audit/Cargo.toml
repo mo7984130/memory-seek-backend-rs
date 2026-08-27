@@ -5,7 +5,7 @@ edition = "2024"
 
 [features]
 default = []
-enable = ["common/snowflake"]
+recording = ["common/snowflake"]
 controller = ["dep:axum"]
 
 [dependencies]

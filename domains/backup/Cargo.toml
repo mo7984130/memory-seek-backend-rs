@@ -6,7 +6,7 @@ edition = "2024"
 [features]
 default = []
 metrics = ["common/metrics", "dep:metrics", "oss/metrics"]
-audit = ["audit/enable"]
+audit = ["audit/recording"]
 
 [dependencies]
 audit = { path = "../audit" }

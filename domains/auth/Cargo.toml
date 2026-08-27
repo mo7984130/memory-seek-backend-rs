@@ -7,7 +7,7 @@ edition = "2024"
 default = []
 metrics = ["common/metrics", "dep:metrics"]
 controller = ["dep:axum"]
-audit = ["audit/enable"]
+audit = ["audit/recording"]
 
 [dependencies]
 audit = { path = "../audit" }
