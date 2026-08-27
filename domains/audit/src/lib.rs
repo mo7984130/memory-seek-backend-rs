@@ -5,8 +5,8 @@
 mod mapper;
 
 mod service;
-pub use service::AuditService;
-pub use types::audit::{AuditEvent, BehaviorRecord, BehaviorRecordReq};
+pub use service::*;
+pub use types::audit::{AuditEvent, AuditRecord};
 
 #[cfg(feature = "controller")]
 pub(crate) mod state;

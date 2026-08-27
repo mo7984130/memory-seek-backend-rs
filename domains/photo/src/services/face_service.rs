@@ -1,4 +1,4 @@
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -55,7 +55,7 @@ impl FaceService {
         let user_id = admin.into_inner();
         let admin = AdminId::new(user_id)?;
         common::db_transaction!(scoped & state.db, |txn| {
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("face_compute")
                     .with_actor(user_id.0)

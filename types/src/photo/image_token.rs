@@ -30,6 +30,7 @@ pub struct FaceBBox {
     pub x2: f32,
     pub y2: f32,
 }
+#[cfg(feature = "face-engine")]
 impl From<insight_face_rs::BoundingBox> for FaceBBox {
     fn from(v: insight_face_rs::BoundingBox) -> Self {
         Self {
@@ -40,6 +41,7 @@ impl From<insight_face_rs::BoundingBox> for FaceBBox {
         }
     }
 }
+#[cfg(feature = "face-engine")]
 impl From<FaceBBox> for insight_face_rs::BoundingBox {
     fn from(v: FaceBBox) -> Self {
         Self {

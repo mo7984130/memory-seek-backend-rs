@@ -1,4 +1,4 @@
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
     error::{AppError, ContextualError, contextual::Result},
@@ -36,7 +36,7 @@ impl PhotoLikeRepo {
             // 更新计数
             PhotoMapper::update_like_count_delta(txn, photo_id, 1).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("like")
                     .with_actor(user_id.0)
@@ -67,7 +67,7 @@ impl PhotoLikeRepo {
                 ));
             }
             PhotoMapper::update_like_count_delta(txn, photo_id, -1).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("unlike")
                     .with_actor(user_id.0)

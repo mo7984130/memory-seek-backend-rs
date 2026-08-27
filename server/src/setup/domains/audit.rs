@@ -15,7 +15,7 @@ pub fn register(
     });
     let public_router = Router::new();
     let protected_router = Router::new().nest(
-        "/photo/admin/behaviors",
+        "/admin/audits",
         AuditController::protected_routes().with_state(audit_state),
     );
     (public_router, protected_router)

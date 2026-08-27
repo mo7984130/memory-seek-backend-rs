@@ -1,4 +1,4 @@
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
     error::{AppError, ContextualError, contextual::Result},
@@ -87,7 +87,7 @@ impl FaceRepo {
                 }
             };
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("face_change_belonging")
                     .with_actor(user_id)
@@ -209,7 +209,7 @@ impl FaceRepo {
             // 删除人脸
             let affected = FaceMapper::delete_by_ids(txn, &face_ids).await?;
 
-            AuditService::append_many(
+            AuditRecorder::append_many(
                 txn,
                 face_ids.iter().map(|id| {
                     AuditEvent::new("face_delete")

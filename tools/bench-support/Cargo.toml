@@ -11,7 +11,5 @@ deadpool-redis = { workspace = true }
 redis = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
-bytes = { workspace = true }
 serde = { workspace = true }
-async-trait = { workspace = true }
 multi-level-cache.workspace = true

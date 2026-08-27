@@ -2,7 +2,7 @@ use crate::AuthState;
 use crate::config::{ACCESS_TOKEN_EXPIRE, EMAIL_CODE_EXPIRE, REFRESH_TOKEN_EXPIRE};
 use crate::error_ext::AuthOptionExt;
 use crate::mapper::{AuthInsertParam, AuthMapper};
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::Result;
 use common::error::AppError;
 use common::ext::{
@@ -228,7 +228,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
             .timed(metrics_name!("db_insert"))
             .await?;
 
-        AuditService::append(
+        AuditRecorder::append(
             txn,
             AuditEvent::new("auth.user_registered")
                 .with_actor(user_model.id.0)

@@ -2,7 +2,7 @@ use crate::error::BackupError;
 use crate::exporter::CsvExporter;
 use crate::state::BackupState;
 use crate::storage::BackupTier;
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::ext::ToOk;
 use common::time::{Duration, now};
 use common::utils::table_metadata::TableMetadata;
@@ -180,7 +180,7 @@ impl BackupService {
         let event = actor_id.map_or(event.clone(), |actor_id| event.with_actor(actor_id.0));
 
         common::db_transaction!(scoped & state.db, |txn| {
-            AuditService::append(txn, event).await?;
+            AuditRecorder::append(txn, event).await?;
             Ok(())
         })
         .await?

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::db_transaction;
 use common::error::contextual::Result;
 use common::ext::{ContextualResultExt, IntoContextualExt, ToOk};
@@ -42,7 +42,7 @@ impl PersonRepo {
             update_person.name_initials = Changed(initials.clone());
             PersonMapper::update(txn, update_person).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("person_rename")
                     .with_actor(user_id.0)
@@ -94,7 +94,7 @@ impl PersonRepo {
             // 失效源/目标人物缓存
             Self::invalidate_persons(state, &[source_person_id, target_person_id]).await;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("merge_person")
                     .with_actor(admin.into_inner())
@@ -189,7 +189,7 @@ impl PersonRepo {
             // 删除人物
             PersonMapper::delete(txn, person_id).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("person_delete")
                     .with_actor(admin.into_inner())

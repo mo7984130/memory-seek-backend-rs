@@ -23,7 +23,7 @@ use crate::{
     },
     state::PhotoState,
 };
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::Result;
 use types::photo::{
     ImageToken, ImageTokenType,
@@ -265,7 +265,7 @@ impl PhotoService {
     ) -> common::Result<()> {
         let photo_ids = ctx.photo_ids();
         PhotoMapper::delete_by_ids(txn, &photo_ids).await?;
-        AuditService::append(
+        AuditRecorder::append(
             txn,
             AuditEvent::new("delete_photos")
                 .with_actor(ctx.user_id.0)
@@ -372,7 +372,7 @@ impl PhotoService {
                     else {
                         return Ok(());
                     };
-                    AuditService::append(
+                    AuditRecorder::append(
                         txn,
                         AuditEvent::new("view")
                             .with_actor(token.viewer_id.0)

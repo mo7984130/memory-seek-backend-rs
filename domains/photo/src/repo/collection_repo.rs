@@ -1,4 +1,4 @@
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
     error::{AppError, ContextualError, contextual::Result},
@@ -99,7 +99,7 @@ impl CollectionRepo {
                     .await?;
             }
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("collect")
                     .with_actor(user_id.0)
@@ -156,7 +156,7 @@ impl CollectionRepo {
             // 更新计数
             CollectionMapper::update_photo_count_delta(txn, collection.id, -(rows as i64)).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("uncollect")
                     .with_actor(user_id.0)
@@ -188,7 +188,7 @@ impl CollectionRepo {
             let collection =
                 CollectionMapper::insert(txn, user_id, req.name, req.description).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("photo.collection_created")
                     .with_actor(user_id.0)
@@ -211,7 +211,7 @@ impl CollectionRepo {
             let affected =
                 CollectionMapper::update_info(txn, id, user_id, req.name, req.description).await?;
             if affected > 0 {
-                AuditService::append(
+                AuditRecorder::append(
                     txn,
                     AuditEvent::new("photo.collection_updated")
                         .with_actor(user_id.0)
@@ -253,7 +253,7 @@ impl CollectionRepo {
             // 删除收藏夹照片
             CollectionPhotoMapper::delete_by_collection_id(txn, id, user_id).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("photo.collection_deleted")
                     .with_actor(user_id.0)

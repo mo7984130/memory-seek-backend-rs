@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use common::time::Duration;
 
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::db_transaction;
 use common::error::{AppError, contextual::Result};
 use common::ext::{CollectOkExt, ContextOptionExt, ContextualResultExt, IntoContextualExt};
@@ -150,7 +150,7 @@ impl PhotoRepo {
         db_transaction!(contextual & state.db, |txn| {
             let photo: ActiveModel = photo.into();
             let photo = photo.insert(txn).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("upload")
                     .with_actor(photo.user_id.0)

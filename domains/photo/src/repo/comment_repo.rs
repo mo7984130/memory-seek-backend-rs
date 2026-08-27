@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
     error::{AppError, ContextualError, contextual::Result},
@@ -90,7 +90,7 @@ impl CommentRepo {
             let comment =
                 CommentMapper::insert(txn, photo_id, user_id, req.content.into_inner()).await?;
             PhotoMapper::update_comment_count_delta(txn, photo_id, 1).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("comment_publish")
                     .with_actor(user_id.0)
@@ -132,7 +132,7 @@ impl CommentRepo {
                 .await
                 .emit_if_err();
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("comment_delete")
                     .with_actor(user_id.0)
@@ -169,7 +169,7 @@ impl CommentRepo {
             // 更新like计数
             CommentMapper::update_like_count_delta(txn, comment_id, 1).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("comment_like")
                     .with_actor(user_id.0)
@@ -200,7 +200,7 @@ impl CommentRepo {
             // 更新点赞计数
             CommentMapper::update_like_count_delta(txn, comment_id, -1).await?;
 
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("comment_unlike")
                     .with_actor(user_id.0)

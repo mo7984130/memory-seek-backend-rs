@@ -1,4 +1,4 @@
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::error::{ContextualError, contextual::Result};
 use common::ext::RedisExt;
 use common::utils::MetricsTimerExt;
@@ -93,7 +93,7 @@ impl UserRepo {
             UserMapper::update_nickname(txn, user_id, &nickname_for_update)
                 .timed(metrics_name!("db_update"))
                 .await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("user.nickname_changed")
                     .with_actor(user_id.0)
@@ -113,7 +113,7 @@ impl UserRepo {
     pub async fn update_avatar(&self, user_id: UserId, new_key: String) -> Result<Option<String>> {
         let old_key = db_transaction!(contextual & self.db, |txn| {
             let old_key = UserMapper::update_avatar(txn, user_id, new_key).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("user.avatar_updated")
                     .with_actor(user_id.0)
@@ -141,7 +141,7 @@ impl UserRepo {
     pub async fn update_password(&self, user_id: UserId, new_password_hash: String) -> Result<()> {
         db_transaction!(contextual & self.db, |txn| {
             UserMapper::update_password(txn, user_id, new_password_hash).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("user.password_changed")
                     .with_actor(user_id.0)
@@ -157,7 +157,7 @@ impl UserRepo {
     pub async fn clear_refresh_token(&self, user_id: UserId) -> Result<()> {
         db_transaction!(contextual & self.db, |txn| {
             UserMapper::clear_refresh_token(txn, user_id).await?;
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("user.logged_out")
                     .with_actor(user_id.0)

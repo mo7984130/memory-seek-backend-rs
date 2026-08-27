@@ -24,7 +24,6 @@ constants = { path = "../constants" }
 types = { workspace = true, features = ["orm"] }
 oss = { path = "../../libs/oss" }
 serde = { workspace = true }
-validator = { workspace = true }
 sea-orm = { workspace = true }
 redis = { workspace = true }
 uuid = { workspace = true }
@@ -33,9 +32,5 @@ tracing = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true, optional = true }
 metrics = { workspace = true, optional = true }
-num_cpus = { workspace = true }
 bytes.workspace = true
 multi-level-cache.workspace = true
-
-[dev-dependencies]
-tokio-test = { workspace = true }

@@ -6,7 +6,7 @@ use crate::{
     repo::{FaceRepo, PersonRepo},
     services::photo_service::PhotoService,
 };
-use audit::{AuditEvent, AuditService};
+use audit::{AuditEvent, AuditRecorder};
 use common::{
     Result, db_transaction,
     error::AppError,
@@ -138,7 +138,7 @@ impl PersonService {
             }
             info!("插入人物完成");
             info!("人脸聚类完成");
-            AuditService::append(
+            AuditRecorder::append(
                 txn,
                 AuditEvent::new("person_full_scan").with_actor(user_id.0),
             )
@@ -171,10 +171,14 @@ impl PersonService {
     ) -> Result<()> {
         let SecondaryClusterParam { threshold } = req;
         info!(admin_id = %admin, threshold, "管理员触发二次聚类");
-        AuditService::record(
-            &state.db,
-            AuditEvent::new("assign_unassigned_faces_start").with_actor(admin.into_inner()),
-        )
+        db_transaction!(scoped & state.db, |txn| {
+            AuditRecorder::append(
+                txn,
+                AuditEvent::new("assign_unassigned_faces_start").with_actor(admin.into_inner()),
+            )
+            .await?;
+            Ok(())
+        })
         .await?;
 
         let faces = FaceRepo::lock_unassigned_faces(&state).await?;
@@ -226,10 +230,14 @@ impl PersonService {
             }
         }
 
-        AuditService::record(
-            &state.db,
-            AuditEvent::new("assign_unassigned_faces_finish").with_actor(admin.into_inner()),
-        )
+        db_transaction!(scoped & state.db, |txn| {
+            AuditRecorder::append(
+                txn,
+                AuditEvent::new("assign_unassigned_faces_finish").with_actor(admin.into_inner()),
+            )
+            .await?;
+            Ok(())
+        })
         .await?;
 
         Ok(())

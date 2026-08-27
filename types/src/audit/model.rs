@@ -2,9 +2,10 @@
 
 use common::time::DateTime;
 
+use super::AuditEventId;
+use crate::audit::AuditRecord;
 use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
-use crate::photo::behavior::{BehaviorTargetType, UserBehaviorAction, UserBehaviorId};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
@@ -29,8 +30,8 @@ impl AuditGranularity {
 }
 
 crate::in_dto!(AuditStatsQuery, "audit/", serde_default, docs = "审计统计查询参数"; {
-    pub action: Option<UserBehaviorAction>,
-    pub target_type: Option<BehaviorTargetType>,
+    pub event_type: Option<String>,
+    pub target_type: Option<String>,
     pub start: Option<DateTime>,
     pub end: Option<DateTime>,
     pub granularity: AuditGranularity,
@@ -39,7 +40,7 @@ crate::in_dto!(AuditStatsQuery, "audit/", serde_default, docs = "审计统计查
 impl Default for AuditStatsQuery {
     fn default() -> Self {
         Self {
-            action: None,
+            event_type: None,
             target_type: None,
             start: None,
             end: None,
@@ -62,8 +63,8 @@ crate::out_dto!(AuditTopItem, "audit/", docs = "审计热门目标结果项"; {
 });
 
 crate::in_dto!(AuditTopQuery, "audit/", serde_default, docs = "审计热门目标查询参数"; {
-    pub action: UserBehaviorAction,
-    pub target_type: BehaviorTargetType,
+    pub event_type: String,
+    pub target_type: String,
     #[validate(range(min = 1, max = 100, message = "limit 在 1 到 100 之间"))]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
@@ -73,21 +74,21 @@ crate::in_dto!(AuditTopQuery, "audit/", serde_default, docs = "审计热门目�
 impl Default for AuditTopQuery {
     fn default() -> Self {
         Self {
-            action: UserBehaviorAction::View,
-            target_type: BehaviorTargetType::Photo,
+            event_type: "view".to_owned(),
+            target_type: "photo".to_owned(),
             limit: 3,
         }
     }
 }
 
 crate::in_dto!(AuditQuery, "audit/", serde_default, docs = "审计流水查询参数"; {
-    pub action: Option<UserBehaviorAction>,
-    pub target_type: Option<BehaviorTargetType>,
+    pub event_type: Option<String>,
+    pub target_type: Option<String>,
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub target_id: Option<i64>,
-    pub user_id: Option<UserId>,
+    pub actor_id: Option<UserId>,
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
-    pub cursor: Option<TimeIdCursor<UserBehaviorId>>,
+    pub cursor: Option<TimeIdCursor<AuditEventId>>,
     #[validate(range(min = 1, max = 100, message = "size 在 1 到 100 之间"))]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
@@ -97,10 +98,10 @@ crate::in_dto!(AuditQuery, "audit/", serde_default, docs = "审计流水查询�
 impl Default for AuditQuery {
     fn default() -> Self {
         Self {
-            action: None,
+            event_type: None,
             target_type: None,
             target_id: None,
-            user_id: None,
+            actor_id: None,
             cursor: None,
             size: 32,
         }
@@ -108,13 +109,26 @@ impl Default for AuditQuery {
 }
 
 crate::out_dto!(AuditItem, "audit/", docs = "审计流水响应项"; {
-    pub id: UserBehaviorId,
-    pub user_id: UserId,
-    pub action: UserBehaviorAction,
-    pub target_type: Option<BehaviorTargetType>,
+    pub id: AuditEventId,
+    pub event_type: String,
+    pub actor_id: Option<UserId>,
+    pub target_type: Option<String>,
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub target_id: Option<i64>,
     #[cfg_attr(feature = "ts", ts(type = "Record<string, unknown> | null"))]
     pub detail: Option<serde_json::Value>,
     pub created_at: DateTime,
 });
+impl From<AuditRecord> for AuditItem {
+    fn from(record: AuditRecord) -> Self {
+        Self {
+            id: record.id,
+            event_type: record.event_type,
+            actor_id: record.actor_id.map(UserId),
+            target_type: record.target_type,
+            target_id: record.target_id,
+            detail: record.detail,
+            created_at: record.created_at,
+        }
+    }
+}
