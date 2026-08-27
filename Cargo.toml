@@ -5,7 +5,6 @@ members = [
     "libs/common_macros",
     "types",
     "libs/email",
-    "libs/img_url_generator",
     "libs/oss",
     "libs/step_derive",
     "domains/constants",

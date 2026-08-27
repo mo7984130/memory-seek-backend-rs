@@ -26,25 +26,26 @@ audit.path = "../audit"
 step_derive.path = "../../libs/step_derive"
 constants.path = "../constants"
 oss.path = "../../libs/oss"
+types = { workspace = true, features = ["full"] }
 
 linkme.workspace = true
 async-trait.workspace = true
 
-axum = { workspace = true, optional = true }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sea-orm = { workspace = true }
-tracing = { workspace = true }
-md5 = { workspace = true }
-uuid = { workspace = true }
-futures = { workspace = true }
+sea-orm.workspace = true
+tracing.workspace = true
+md5.workspace = true
+uuid.workspace = true
+futures.workspace = true
 multi-level-cache.workspace = true
-bytes = { workspace = true }
-insight-face-rs = { workspace = true, optional = true }
-backup = { path = "../backup", optional = true }
+bytes.workspace = true
 image.workspace = true
-types = { workspace = true, features = ["full"] }
-pinyin = { workspace = true }
+pinyin.workspace = true
 petal-clustering = "0.13.0"
 ndarray = "0.17.2"
+
+axum = { workspace = true, optional = true }
+insight-face-rs = { workspace = true, optional = true }
+backup = { path = "../backup", optional = true }
