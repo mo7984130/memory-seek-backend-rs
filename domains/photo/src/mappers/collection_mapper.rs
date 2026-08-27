@@ -2,14 +2,17 @@ pub(crate) struct CollectionMapper;
 
 use std::collections::HashMap;
 
-use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::{ContextOptionExt, OkExt};
 use common::time::now;
+use common::{
+    DbConn as ConnectionTrait,
+    error::{AppError, ContextualError, contextual::Result},
+};
 use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityName, EntityTrait, Iden,
-    IdenStatic, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
+    ActiveModelTrait, ColumnTrait, DbBackend, EntityName, EntityTrait, Iden, IdenStatic,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
 use types::photo::collection::{self, CollectionId};
 use types::photo::collection_photo;

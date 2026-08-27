@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use common::models::CursorPage;
-use deadpool_redis::Pool;
+use common::{Pool, models::CursorPage};
 use multi_level_cache::CacheConfig;
 use multi_level_cache::MultiLevelCache;
 use oss::S3Client;

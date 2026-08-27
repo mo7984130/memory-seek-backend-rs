@@ -1,4 +1,5 @@
-use sea_orm::{ConnectionTrait, Statement};
+use crate::DbConn;
+use sea_orm::Statement;
 
 /// 数据库表元数据查询器
 pub struct TableMetadata;
@@ -6,7 +7,7 @@ pub struct TableMetadata;
 impl TableMetadata {
     /// 获取表的主键列名（按 ordinal_position 排序）
     pub async fn get_primary_key_columns(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         table_name: &str,
     ) -> Result<Vec<String>, sea_orm::DbErr> {
         let sql = format!(
@@ -37,7 +38,7 @@ impl TableMetadata {
 
     /// 获取表的所有列名（按 ordinal_position 排序）
     pub async fn get_column_names(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         table_name: &str,
     ) -> Result<Vec<String>, sea_orm::DbErr> {
         let sql = format!(
@@ -62,7 +63,7 @@ impl TableMetadata {
     }
 
     /// 获取所有用户表名
-    pub async fn get_all_tables(db: &impl ConnectionTrait) -> Result<Vec<String>, sea_orm::DbErr> {
+    pub async fn get_all_tables(db: &impl DbConn) -> Result<Vec<String>, sea_orm::DbErr> {
         let sql = r#"
             SELECT table_name
             FROM information_schema.tables

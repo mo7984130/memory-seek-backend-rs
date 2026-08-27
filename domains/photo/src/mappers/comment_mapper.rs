@@ -1,9 +1,12 @@
-use common::error::{AppError, ContextualError, contextual::Result};
 use common::ext::OkExt;
 use common::models::CursorPage;
+use common::{
+    DbConn as ConnectionTrait,
+    error::{AppError, ContextualError, contextual::Result},
+};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, sea_query::Expr,
 };
 use types::{
     auth::user::UserId,

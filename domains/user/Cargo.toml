@@ -27,7 +27,6 @@ serde = { workspace = true }
 sea-orm = { workspace = true }
 redis = { workspace = true }
 uuid = { workspace = true }
-deadpool-redis = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true, optional = true }

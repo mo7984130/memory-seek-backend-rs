@@ -10,6 +10,10 @@ controller = ["dep:axum"]
 
 [dependencies]
 common = { path = "../../common", features = ["contextual-sea-orm", "validators"] }
-sea-orm = { workspace = true }
 types = { path = "../../types", features = ["orm"] }
+
+# controller 需要
 axum = { workspace = true, optional = true }
+
+# mapper 需要
+sea-orm = { workspace = true }

@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use common::error::contextual::Result;
 use common::ext::ToOk;
 use common::time::now;
+use common::{DbConn as ConnectionTrait, error::contextual::Result};
 use sea_orm::ActiveValue::Set;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 use types::photo::comment_like::*;
 use types::{auth::user::UserId, photo::comment::CommentId};
 

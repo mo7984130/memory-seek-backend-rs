@@ -1,4 +1,4 @@
-use deadpool_redis::Pool;
+use common::Pool;
 use metrics::gauge;
 
 /// 采集 Redis 连接池指标

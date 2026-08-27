@@ -1,4 +1,5 @@
-use deadpool_redis::{Config, Pool, Runtime};
+use common::Pool;
+use deadpool_redis::{Config, Runtime};
 use redis::AsyncCommands;
 
 /// 默认 Redis 地址:使用专用 db(15),避免误删本地默认库数据

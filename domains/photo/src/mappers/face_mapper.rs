@@ -1,11 +1,11 @@
 use common::{
+    DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
     ext::{CollectOkExt, ContextOptionExt, OkExt, ToErr, UintExt},
     models::CursorPage,
 };
 use sea_orm::{
-    ColumnTrait, Condition, ConnectionTrait, EntityTrait, Order, QueryFilter, QueryOrder,
-    QuerySelect,
+    ColumnTrait, Condition, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Expr, Query},
 };
 use types::{

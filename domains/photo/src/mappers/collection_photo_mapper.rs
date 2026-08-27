@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use common::error::contextual::Result;
 use common::ext::OkExt;
 use common::models::CursorPage;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+use common::{DbConn as ConnectionTrait, error::contextual::Result};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use types::auth::user::UserId;
 use types::cursor::TimeIdCursor;
 use types::photo::collection_photo::*;

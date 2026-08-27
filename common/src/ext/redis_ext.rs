@@ -1,4 +1,5 @@
-use deadpool_redis::{Connection, Pool, PoolError};
+use crate::Pool;
+use deadpool_redis::{Connection, PoolError};
 use redis::{AsyncCommands, FromRedisValue, ToSingleRedisArg};
 use std::future::Future;
 

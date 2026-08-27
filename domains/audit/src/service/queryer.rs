@@ -1,7 +1,6 @@
 use common::ext::OkExt;
 use common::models::CursorPage;
-use common::{Result, ext::CollectOkExt};
-use sea_orm::ConnectionTrait;
+use common::{DbConn, Result, ext::CollectOkExt};
 use types::audit::{
     AuditEventId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem,
     AuditTopQuery,
@@ -14,7 +13,7 @@ pub struct AuditQueryer;
 
 impl AuditQueryer {
     pub async fn query_stats(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         req: &AuditStatsQuery,
     ) -> Result<Vec<AuditStatsItem>> {
         AuditMapper::query_stats(
@@ -31,10 +30,7 @@ impl AuditQueryer {
         .collect_ok()
     }
 
-    pub async fn query_top(
-        db: &impl ConnectionTrait,
-        req: &AuditTopQuery,
-    ) -> Result<Vec<AuditTopItem>> {
+    pub async fn query_top(db: &impl DbConn, req: &AuditTopQuery) -> Result<Vec<AuditTopItem>> {
         AuditMapper::query_top_targets(db, &req.event_type, &req.target_type, req.limit)
             .await?
             .into_iter()
@@ -43,7 +39,7 @@ impl AuditQueryer {
     }
 
     pub async fn query_events(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         req: &AuditQuery,
     ) -> Result<CursorPage<AuditItem, TimeIdCursor<AuditEventId>>> {
         AuditMapper::query_audit_page(

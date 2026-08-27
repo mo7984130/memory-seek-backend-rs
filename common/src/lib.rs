@@ -31,3 +31,6 @@ pub mod time;
 
 #[cfg(feature = "metrics")]
 pub use metrics;
+
+pub type Pool = deadpool_redis::Pool;
+pub use sea_orm::ConnectionTrait as DbConn;

@@ -1,13 +1,13 @@
 use audit::{AuditEvent, AuditRecorder};
 use common::{
-    db_transaction,
+    DbConn as ConnectionTrait, db_transaction,
     error::{AppError, ContextualError, contextual::Result},
     ext::{ContextualResultExt, IntoContextualExt, ToOk},
     models::CursorPage,
     utils::DbUtils,
 };
 use constants::RedisKeys;
-use sea_orm::{ConnectionTrait, DbBackend, EntityName, Statement};
+use sea_orm::{DbBackend, EntityName, Statement};
 use types::{
     auth::user::UserId,
     photo::{

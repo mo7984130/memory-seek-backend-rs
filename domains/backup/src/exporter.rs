@@ -1,8 +1,8 @@
 use crate::error::BackupError;
 use crate::error::Result;
-use common::utils::table_metadata::TableMetadata;
+use common::{DbConn, utils::table_metadata::TableMetadata};
 use csv::Writer;
-use sea_orm::{ConnectionTrait, Statement};
+use sea_orm::Statement;
 use std::path::{Path, PathBuf};
 
 /// CSV 导出器
@@ -13,7 +13,7 @@ impl CsvExporter {
     ///
     /// 返回导出的文件路径
     pub async fn export_to_dir(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         table_name: &str,
         output_dir: &Path,
     ) -> Result<PathBuf> {

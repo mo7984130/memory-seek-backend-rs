@@ -1,7 +1,6 @@
 use common::ext::IntoContextualExt;
 use common::models::CursorPage;
-use common::{error::contextual::Result, time::DateTime};
-use sea_orm::ConnectionTrait;
+use common::{DbConn, error::contextual::Result, time::DateTime};
 use sea_orm::{
     ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, Expr, Func},
@@ -15,7 +14,7 @@ pub(super) struct AuditMapper;
 
 impl AuditMapper {
     pub(super) async fn query_stats(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         event_type: Option<&str>,
         target_type: Option<&str>,
         start: Option<DateTime>,
@@ -53,7 +52,7 @@ impl AuditMapper {
     }
 
     pub(super) async fn query_top_targets(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         event_type: &str,
         target_type: &str,
         limit: u64,
@@ -76,7 +75,7 @@ impl AuditMapper {
     }
 
     pub(super) async fn query_audit_page(
-        db: &impl ConnectionTrait,
+        db: &impl DbConn,
         event_type: Option<&str>,
         target_type: Option<&str>,
         target_id: Option<i64>,

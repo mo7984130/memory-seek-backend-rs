@@ -6,7 +6,7 @@ mod redis;
 mod system;
 
 #[cfg(feature = "metrics")]
-use common::time::Duration;
+use common::{Pool, time::Duration};
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
 #[cfg(feature = "metrics")]
@@ -30,7 +30,7 @@ pub async fn render_metrics(
 #[cfg(feature = "metrics")]
 pub fn start_collector(
     db: sea_orm::DatabaseConnection,
-    redis_pool: deadpool_redis::Pool,
+    redis_pool: Pool,
     interval: Duration,
     cancel_token: CancellationToken,
 ) {

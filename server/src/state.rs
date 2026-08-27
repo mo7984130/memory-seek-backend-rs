@@ -1,4 +1,4 @@
-use deadpool_redis::Pool;
+use common::Pool;
 use sea_orm::DatabaseConnection;
 
 #[cfg(any(feature = "s3", feature = "backup", feature = "face-engine"))]

@@ -1,12 +1,11 @@
+use crate::DbConn;
 use crate::Result;
 use crate::{
     error::{AppError, ContextualError, contextual},
     ext::log_err_with_source,
 };
 use futures::future::BoxFuture;
-use sea_orm::{
-    ConnectionTrait, DatabaseConnection, DatabaseTransaction, TransactionError, TransactionTrait,
-};
+use sea_orm::{DatabaseConnection, DatabaseTransaction, TransactionError, TransactionTrait};
 
 pub struct DbUtils;
 
@@ -69,7 +68,7 @@ impl DbUtils {
         f: F,
     ) -> Result<(Option<T>, Option<T>)>
     where
-        DB: ConnectionTrait + ?Sized,
+        DB: DbConn + ?Sized,
         Id: Ord + Copy,
         F: Fn(&'a DB, Id) -> Fut,
         Fut: Future<Output = Result<Option<T>>>,
@@ -97,7 +96,7 @@ impl DbUtils {
         f: F,
     ) -> Result<(T, T)>
     where
-        DB: ConnectionTrait + ?Sized,
+        DB: DbConn + ?Sized,
         Id: Ord + Copy,
         F: Fn(&'a DB, Id) -> Fut,
         Fut: Future<Output = Result<T>>,
@@ -126,7 +125,7 @@ impl DbUtils {
         miss_f: MF,
     ) -> Result<(T, Option<T>)>
     where
-        DB: ConnectionTrait + ?Sized,
+        DB: DbConn + ?Sized,
         Id: Ord + Copy,
         F: Fn(&'a DB, Id) -> Fut,
         MF: Fn(Option<T>) -> Result<T>,
@@ -163,7 +162,7 @@ impl DbUtils {
         f: F,
     ) -> Result<(T, Option<T>)>
     where
-        DB: ConnectionTrait + ?Sized,
+        DB: DbConn + ?Sized,
         Id: Ord + Copy,
         F: Fn(&'a DB, Id) -> Fut,
         Fut: Future<Output = Result<T>>,

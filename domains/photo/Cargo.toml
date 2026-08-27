@@ -42,7 +42,6 @@ tracing = { workspace = true }
 md5 = { workspace = true }
 uuid = { workspace = true }
 futures = { workspace = true }
-deadpool-redis = { workspace = true }
 multi-level-cache.workspace = true
 bytes = { workspace = true }
 insight-face-rs = { workspace = true, optional = true }
