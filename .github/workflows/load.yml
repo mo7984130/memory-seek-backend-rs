@@ -97,6 +97,13 @@ jobs:
             - name: Build (release + metrics)
               run: cargo build --release --features "$FEATURES"
 
+            - name: Prepare runtime libraries
+              run: |
+                    mkdir -p target/release/libs
+                    find thirdparty \( -type f -o -type l \) \
+                      \( -name "*.so" -o -name "*.so.*" \) \
+                      -exec cp -a {} target/release/libs/ \;
+
             - name: Install k6
               uses: grafana/setup-k6-action@v1
               with:

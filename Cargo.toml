@@ -2,9 +2,9 @@
 resolver = "3"
 members = [
     "common",
+    "types",
     "libs/common_macros",
     "libs/file_validator",
-    "types",
     "libs/email",
     "libs/oss",
     "libs/step_derive",
@@ -19,12 +19,15 @@ members = [
 ]
 
 [profile.release]
+opt-level = 3
+debug = false
 strip = "symbols"
+debug-assertions = false
+overflow-checks = false
 lto = "thin"
-codegen-units = 1
-debug = 0
-# rustflags = ["-C", "target-cpu=x86-64-v3"]
 panic = "abort"
+codegen-units = 1
+rpath = false
 
 [workspace.dependencies]
 types = { path = "types" }
