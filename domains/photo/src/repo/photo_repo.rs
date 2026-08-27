@@ -4,12 +4,11 @@ use common::time::Duration;
 
 use audit::{AuditEvent, AuditRecorder};
 use common::db_transaction;
+use common::error::contextual::ext::{ContextualResultExt, IntoContextualExt, OptionExt};
 use common::error::{AppError, contextual::Result};
-use common::ext::{
-    CollectOkExt, ContextOptionExt, ContextualResultExt, IntoContextualExt, fallback_on_cache_error,
-};
+use common::ext::ToOk;
 use common::metrics_name;
-use common::models::CursorPage;
+use common::types::CursorPage;
 use common::utils::MetricsTimerExt;
 use constants::RedisKeys;
 use sea_orm::ActiveModelTrait;
@@ -62,7 +61,8 @@ impl PhotoRepo {
                             is_liked: liked_photo_ids.contains(&photo_id),
                             photo_id,
                         })
-                        .collect_ok()
+                        .collect::<Vec<_>>()
+                        .to_ok()
                 },
                 |cached| cached.photo_id,
             ),
@@ -118,25 +118,19 @@ impl PhotoRepo {
             let key = RedisKeys::photo::photo::photo_cursor_page_ids(req.direction);
             let direction = req.direction;
             let size = req.size;
-            let page = fallback_on_cache_error(
-                state
-                    .cache_photo_cursor_ids
-                    .get_or_load(key, PHOTO_CACHE_TTL, || async move {
-                        PhotoMapper::query_cursor_page_ids(
-                            &state.db,
-                            None,
-                            PHOTO_CURSOR_CACHE_SIZE,
-                            direction,
-                            None,
-                        )
-                        .await
-                    })
-                    .await,
-                || async move {
-                    PhotoMapper::query_cursor_page_ids(&state.db, None, size, direction, None).await
-                },
-            )
-            .await?;
+            let page = state
+                .cache_photo_cursor_ids
+                .get_or_load(key, PHOTO_CACHE_TTL, || async move {
+                    PhotoMapper::query_cursor_page_ids(
+                        &state.db,
+                        None,
+                        PHOTO_CURSOR_CACHE_SIZE,
+                        direction,
+                        None,
+                    )
+                    .await
+                })
+                .await?;
             Self::resize_cached_first_page(page, size)
         } else {
             PhotoMapper::query_cursor_page_ids(
@@ -222,35 +216,23 @@ impl PhotoRepo {
         file_id: &str,
     ) -> Result<ImageDimensions> {
         let key = RedisKeys::photo::photo::photo_dimensions(file_id);
-        fallback_on_cache_error(
-            state
-                .cache_photo_dimensions
-                .get_or_load(key.as_str(), PHOTO_CACHE_TTL, || async move {
-                    PhotoMapper::query_dimensions_by_file_id(&state.db, file_id)
-                        .await?
-                        .context_warn_none(
-                            "photo_not_found",
-                            "裁剪图片不存在",
-                            AppError::bad_request("照片不存在"),
-                        )
-                })
-                .timed(metrics_name!("cache_get_or_load"))
-                .await,
-            || async move {
+        state
+            .cache_photo_dimensions
+            .get_or_load(key.as_str(), PHOTO_CACHE_TTL, || async move {
                 PhotoMapper::query_dimensions_by_file_id(&state.db, file_id)
                     .await?
-                    .context_warn_none(
+                    .ok_or_warn(
                         "photo_not_found",
                         "裁剪图片不存在",
                         AppError::bad_request("照片不存在"),
                     )
-            },
-        )
-        .await
-        .map(|dimensions| ImageDimensions {
-            width: dimensions.0,
-            height: dimensions.1,
-        })
+            })
+            .timed(metrics_name!("cache_get_or_load"))
+            .await
+            .map(|dimensions| ImageDimensions {
+                width: dimensions.0,
+                height: dimensions.1,
+            })
     }
 
     /// 失效照片删除后受影响的照片和人物缓存.

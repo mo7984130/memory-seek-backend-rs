@@ -41,7 +41,7 @@ backup = { path = "../domains/backup", optional = true }
 audit = { path = "../domains/audit", optional = true }
 
 # 基础设施
-common = { path = "../common", features = ["contextual-redis"] }
+common = { path = "../common", features = ["axum", "tokio"] }
 constants = { path = "../domains/constants" }
 types = { path = "../types", features = ["orm"] }
 email = { path = "../libs/email", optional = true }

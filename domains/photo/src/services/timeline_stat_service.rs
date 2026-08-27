@@ -8,7 +8,7 @@ pub(crate) struct TimelineStatService;
 
 impl TimelineStatService {
     /// 获取时间线统计.
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(skip_all)]
     pub async fn get_monthly_stats(state: &PhotoState) -> Result<Vec<MonthStat>> {
         TimelineStatRepo::get_monthly_stats(state).await?.to_ok()
@@ -28,7 +28,7 @@ impl TimelineStatService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::photo_service::PhotoDeleteContext,
-    ) -> common::Result<()> {
+    ) -> common::error::contextual::Result<()> {
         let created_ats = ctx.photos.iter().map(|p| &p.created_at).collect::<Vec<_>>();
         crate::repo::TimelineStatRepo::decrement_by_created_ats(txn, &created_ats).await?;
         Ok(())

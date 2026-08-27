@@ -13,7 +13,7 @@ orm = ["dep:sea-orm"]
 face-engine = ["orm", "dep:insight-face-rs"]
 
 [dependencies]
-common = { path = "../common", features = ["contextual-serde"] }
+common.path = "../common"
 
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

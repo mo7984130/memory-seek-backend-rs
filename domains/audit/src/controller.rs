@@ -3,8 +3,9 @@ use std::sync::Arc;
 use crate::{AuditState, service::AuditQueryer};
 use axum::{Extension, Router, extract::State, routing::get};
 use common::{
-    Result, ext::ResultRExt, extractors::ValidatedQuery, models::CursorPage, r::R,
-    traits::controller::ControllerRouter,
+    Result,
+    axum::{R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedQuery},
+    types::CursorPage,
 };
 use types::audit::{
     AuditEventId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem,

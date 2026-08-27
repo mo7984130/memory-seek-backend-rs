@@ -2,7 +2,7 @@ use crate::config::AppConfig;
 use crate::state::AppState;
 use audit::{AuditController, AuditState};
 use axum::Router;
-use common::traits::controller::ControllerRouter;
+use common::axum::controller_router::ControllerRouter;
 use std::sync::Arc;
 
 /// 注册审计管理路由。

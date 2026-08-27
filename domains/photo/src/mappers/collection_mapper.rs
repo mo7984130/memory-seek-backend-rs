@@ -2,7 +2,8 @@ pub(crate) struct CollectionMapper;
 
 use std::collections::HashMap;
 
-use common::ext::{ContextOptionExt, OkExt};
+use common::error::contextual::ext::OptionExt;
+use common::ext::ToOk;
 use common::time::now;
 use common::{
     DbConn as ConnectionTrait,
@@ -60,7 +61,7 @@ impl CollectionMapper {
             [collection_id.into(), photo_ids.into(), user_id.into()],
         );
 
-        let result = db.query_one(stmt).await?.context_warn_none(
+        let result = db.query_one(stmt).await?.ok_or_warn(
             "collection_not_found",
             "收藏夹不存在",
             AppError::not_found("收藏夹不存在"),
@@ -273,7 +274,7 @@ impl CollectionMapper {
             .filter(Column::UserId.eq(user_id))
             .one(db)
             .await?
-            .context_warn_none(
+            .ok_or_warn(
                 "collection_not_belong_user",
                 "收藏夹不属于用户",
                 AppError::forbidden("该收藏夹不属于你"),

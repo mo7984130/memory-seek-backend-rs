@@ -7,10 +7,13 @@ use axum::{
 };
 use common::{
     Result,
-    ext::ResultRExt,
-    extractors::{ValidatedPath, ValidatedQuery},
-    models::CursorPage,
-    r::R,
+    axum::{
+        R,
+        controller_router::ControllerRouter,
+        ext::ToROkExt,
+        extractors::{ValidatedPath, ValidatedQuery},
+    },
+    types::CursorPage,
 };
 use types::{
     auth::user::UserId,
@@ -19,7 +22,6 @@ use types::{
 };
 
 use crate::{services::photo_like_service::PhotoLikeService, state::PhotoState};
-use common::traits::controller::ControllerRouter;
 
 pub struct PhotoLikeController;
 

@@ -7,10 +7,12 @@ use axum::{
 };
 use common::{
     Result,
-    ext::ResultRExt,
-    extractors::{ValidatedJson, ValidatedPath},
-    r::R,
-    traits::controller::ControllerRouter,
+    axum::{
+        R,
+        controller_router::ControllerRouter,
+        ext::ToROkExt,
+        extractors::{ValidatedJson, ValidatedPath},
+    },
 };
 use types::{
     auth::user::UserId,

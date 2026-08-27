@@ -1,9 +1,10 @@
 use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
+    error::contextual::ext::UintExt,
     error::{AppError, ContextualError, contextual::Result},
-    ext::{ToErr, UintExt},
-    models::CursorPage,
+    ext::ToErr,
+    types::CursorPage,
 };
 use types::photo::{
     collection::CollectionRecord,

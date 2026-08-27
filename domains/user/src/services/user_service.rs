@@ -1,11 +1,15 @@
 use bytes::Bytes;
-use common::ext::{
-    BoolExt, ContextualResultExt, IntoContextualExt, RedisExt, ResultInspectErrAsync, ToOk, log_err,
-};
+use common::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt};
+use common::ext::{RedisExt, ResultInspectErrAsync, ToOk};
 use common::time::after;
-use common::utils::{FileValidator, MetricsTimerExt, rand_utils};
-use common::{Result, error::AppError, metrics_name, timed};
+use common::utils::{MetricsTimerExt, rand_utils};
+use common::{
+    Result,
+    error::{AppError, ContextualError},
+    metrics_name, timed,
+};
 use constants::{PasswordHasher, RedisKeys};
+use file_validator::FileValidator;
 use sea_orm::sqlx::types::uuid;
 use std::sync::LazyLock;
 use tokio::sync::Semaphore;
@@ -41,7 +45,7 @@ static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
 ///
 /// # 错误
 /// - `AppError`: 用户不存在或数据库查询失败时返回错误
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
@@ -63,7 +67,7 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
 ///
 /// # 错误
 /// - `AppError`: 邀请码生成重试耗尽（冲突）或 Redis 操作失败时返回内部服务器错误
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
@@ -95,11 +99,12 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
         }
     }
 
-    Err(log_err(
+    Err(ContextualError::error_without_source(
         "inviter_code_generate_max_loop",
         "生成邀请码达到最大尝试次数",
         AppError::InternalServerError,
-    ))
+    )
+    .emit())
 }
 
 /// 修改用户昵称
@@ -111,7 +116,7 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
 ///
 /// # 返回
 /// 返回更新后的昵称字符串
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id, new_nickname = %req.new_nickname)
@@ -130,7 +135,7 @@ pub async fn change_nickname(
 }
 
 /// 上传并更新用户头像
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
@@ -143,7 +148,15 @@ pub async fn update_avatar(
 ) -> Result<String> {
     // 校验图片
     let img_metadata = timed!("validate_image", {
-        FileValidator::validate_image(&file_data, &req.file_name, &req.content_type)?
+        FileValidator::validate_image(&file_data, &req.file_name, &req.content_type).map_err(
+            |error| {
+                ContextualError::warn_without_source(
+                    "file_validation_error",
+                    "文件校验失败",
+                    AppError::bad_request(error.to_string()),
+                )
+            },
+        )?
     });
 
     // 上传图片
@@ -205,7 +218,7 @@ pub async fn update_avatar(
 ///
 /// # 错误
 /// - `AppError`: 用户不存在、旧密码校验失败、新旧密码相同或数据库更新失败时返回错误
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
@@ -273,7 +286,7 @@ pub async fn change_password(
 ///
 /// # 错误
 /// - `AppError`: 数据库更新或 Redis 删除失败时返回错误
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id)
@@ -292,7 +305,7 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
 ///
 /// # 返回
 /// 返回用户信息列表，未找到的用户对应位置为 `None`
-#[common::metered]
+#[common_macros::metered]
 #[tracing::instrument(
     skip_all,
     fields(user_id = %user_id, count = %req.user_ids.len())

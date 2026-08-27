@@ -100,14 +100,13 @@ impl S3Client {
         data: impl AsRef<[u8]>,
         content_type: &str,
     ) -> Result<ResponseData, OssError> {
-        let result = retry_429("put", key, || async {
+        retry_429("put", key, || async {
             self.bucket
                 .put_object_with_content_type(key, data.as_ref(), content_type)
                 .await
                 .map_err(OssError::from)
         })
-        .await;
-        result
+        .await
     }
 
     /// 以流式方式上传本地文件到 OSS。
@@ -121,7 +120,7 @@ impl S3Client {
         content_type: &str,
     ) -> Result<(), OssError> {
         let path = path.as_ref().to_owned();
-        let result = retry_429("put_stream", key, || {
+        retry_429("put_stream", key, || {
             let path = path.clone();
             async move {
                 let mut file = tokio::fs::File::open(path).await?;
@@ -132,9 +131,7 @@ impl S3Client {
                     .map_err(OssError::from)
             }
         })
-        .await;
-
-        result
+        .await
     }
 
     /// 删除单个文件
@@ -148,11 +145,10 @@ impl S3Client {
     /// # 错误
     /// - `OssError`: OSS 删除操作失败
     pub async fn delete(&self, key: &str) -> Result<ResponseData, OssError> {
-        let result = retry_429("delete", key, || async {
+        retry_429("delete", key, || async {
             self.bucket.delete_object(key).await.map_err(OssError::from)
         })
-        .await;
-        result
+        .await
     }
 
     /// 批量删除文件，分片并发执行，遇错即停
@@ -166,7 +162,7 @@ impl S3Client {
     /// # 错误
     /// - `OssError`: 删除文件失败
     pub async fn delete_batch(&self, keys: Vec<impl AsRef<str>>) -> Result<(), OssError> {
-        let result = async {
+        async {
             for concurrent_chunks in keys.chunks(CHUNK_SIZE * CONCURRENCY) {
                 let futures: Vec<_> = concurrent_chunks
                     .chunks(CHUNK_SIZE)
@@ -189,8 +185,7 @@ impl S3Client {
 
             Ok(())
         }
-        .await;
-        result
+        .await
     }
 
     /// 获取文件的公开访问 URL
@@ -244,12 +239,10 @@ impl S3Client {
         } else {
             None
         };
-        let result = self
-            .bucket
+        self.bucket
             .presign_get(key, expires.as_secs() as u32, custom_queries)
             .await
-            .map_err(OssError::from);
-        result
+            .map_err(OssError::from)
     }
 
     /// 下载文件
@@ -263,7 +256,7 @@ impl S3Client {
     /// # 错误
     /// - `OssError`: OSS 下载操作失败
     pub async fn download(&self, key: &str) -> Result<Bytes, OssError> {
-        let result = async {
+        async {
             let response_data = retry_429("get", key, || async {
                 self.bucket.get_object(key).await.map_err(OssError::from)
             })
@@ -271,8 +264,7 @@ impl S3Client {
 
             Ok::<Bytes, OssError>(response_data.into_bytes())
         }
-        .await;
-        result
+        .await
     }
 
     /// 获取对象存储的流式下载响应.
@@ -280,7 +272,7 @@ impl S3Client {
         &self,
         key: &str,
     ) -> Result<impl Stream<Item = Result<Bytes, OssError>> + use<>, OssError> {
-        let result = async {
+        async {
             let response = retry_429("get_stream", key, || async {
                 self.bucket
                     .get_object_stream(key)
@@ -290,8 +282,7 @@ impl S3Client {
             .await?;
             Ok::<_, OssError>(response.bytes.map(|item| item.map_err(OssError::from)))
         }
-        .await;
-        result
+        .await
     }
 
     /// 下载对象并应用指定的图片处理参数.
@@ -299,7 +290,7 @@ impl S3Client {
         let url = self
             .get_signed_url_with_params(key, Duration::from_secs(3600), Some(process.to_string()))
             .await?;
-        let result = retry_429("get_with_process", key, || async {
+        retry_429("get_with_process", key, || async {
             let response = reqwest::get(&url).await?;
             if !response.status().is_success() {
                 return Err(OssError::from_response(response).await);
@@ -307,8 +298,7 @@ impl S3Client {
 
             response.bytes().await.map_err(OssError::from)
         })
-        .await;
-        result
+        .await
     }
 
     /// 获取应用图片处理参数后的流式下载响应.
@@ -321,7 +311,7 @@ impl S3Client {
             .get_signed_url_with_params(key, Duration::from_secs(3600), Some(process.to_string()))
             .await?;
 
-        let result = async {
+        async {
             let response = retry_429("stream_with_process", key, || async {
                 let response = reqwest::get(&url).await?;
                 if !response.status().is_success() {
@@ -333,7 +323,6 @@ impl S3Client {
 
             Ok::<_, OssError>(response.bytes_stream().map(|r| r.map_err(OssError::from)))
         }
-        .await;
-        result
+        .await
     }
 }

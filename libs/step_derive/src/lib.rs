@@ -52,7 +52,7 @@ pub fn declare_transaction_step(attr: TokenStream, item: TokenStream) -> TokenSt
 
 /// `declare_async_event!(<状态类型>, <事件类型>, <切片名>, <发布函数名>, <事件名>)` — 声明提交后的异步事件。
 ///
-/// 展开为一个 `linkme` 分布式切片和调用 `common::event::dispatch_async_event` 的发布函数。
+/// 展开为一个 `linkme` 分布式切片和调用 `common::tokio::event::dispatch_async_event` 的发布函数。
 #[proc_macro]
 pub fn declare_async_event(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as EventArgs);
@@ -65,13 +65,13 @@ pub fn declare_async_event(input: TokenStream) -> TokenStream {
     } = args;
     quote! {
         #[::linkme::distributed_slice]
-        pub(crate) static #slice: [&'static dyn ::common::event::EventConsumer<#state, #event>] = [..];
+        pub(crate) static #slice: [&'static dyn ::common::tokio::event::EventConsumer<#state, #event>] = [..];
 
         pub(crate) fn #dispatch(
             state: ::std::sync::Arc<#state>,
             event: #event,
         ) {
-            ::common::event::dispatch_async_event(#name, state, event, &#slice);
+            ::common::tokio::event::dispatch_async_event(#name, state, event, &#slice);
         }
     }
     .into()
@@ -338,7 +338,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
             return Err(syn::Error::new(
                 item_impl.span(),
                 "`#[declare_transaction_step]` 仅支持路径类型的 impl 目标",
-            ))
+            ));
         }
     };
     let step_static = format_ident!("__step_{}", self_ty_ident);
@@ -362,7 +362,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
                 &self,
                 txn: &::sea_orm::DatabaseTransaction,
                 ctx: &mut #ctx,
-            ) -> ::common::Result<()> {
+            ) -> ::common::error::contextual::Result<()> {
                 self.on_photo_delete(txn, ctx).await
             }
         }
@@ -428,7 +428,7 @@ fn expand_event_consumer(
         #item_impl
 
         #[::async_trait::async_trait]
-        impl ::common::event::EventConsumer<#state, #event> for #self_ty {
+        impl ::common::tokio::event::EventConsumer<#state, #event> for #self_ty {
             fn name(&self) -> &'static str {
                 #name
             }
@@ -444,8 +444,8 @@ fn expand_event_consumer(
 
         #[allow(non_upper_case_globals)]
         #[::linkme::distributed_slice(#slice)]
-        static #registration: &'static dyn ::common::event::EventConsumer<#state, #event> =
-            &#self_ty as &dyn ::common::event::EventConsumer<#state, #event>;
+        static #registration: &'static dyn ::common::tokio::event::EventConsumer<#state, #event> =
+            &#self_ty as &dyn ::common::tokio::event::EventConsumer<#state, #event>;
     })
 }
 

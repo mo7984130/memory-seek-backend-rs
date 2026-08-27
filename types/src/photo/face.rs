@@ -10,7 +10,7 @@ crate::id_type!(FaceId, "photo/");
 
 #[cfg(feature = "face-engine")]
 mod entity {
-    use common::time::{now, DateTime};
+    use common::time::{DateTime, now};
     use insight_face_rs::types::{BoundingBox, Face, FaceEmbedding, FaceLandmarks};
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};

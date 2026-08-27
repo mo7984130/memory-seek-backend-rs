@@ -3,7 +3,7 @@ use common::{
     DbConn as ConnectionTrait, db_transaction,
     error::{AppError, ContextualError, contextual::Result},
     ext::ToOk,
-    models::CursorPage,
+    types::CursorPage,
     utils::DbUtils,
 };
 use sea_orm::{DbBackend, EntityName, Statement};
@@ -64,7 +64,14 @@ impl FaceRepo {
                         face.person_id,
                         |txn, id| async move { Ok(PersonMapper::lock_by_id(txn, id).await?) },
                     )
-                    .await?;
+                    .await
+                    .map_err(|error| {
+                        ContextualError::error_without_source(
+                            "person_lock_err",
+                            "锁定人物失败",
+                            error,
+                        )
+                    })?;
 
                     // 添加进的人物
                     PersonMapper::add_faces(txn, new_person, std::slice::from_ref(&face)).await?;

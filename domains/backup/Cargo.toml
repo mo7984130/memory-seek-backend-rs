@@ -11,7 +11,8 @@ audit = ["audit/recording"]
 [dependencies]
 audit.path = "../audit"
 types = { path = "../../types", features = ["orm"] }
-common = { path = "../../common", features = ["orm"] }
+common = { path = "../../common", features = ["axum"] }
+common_macros.path = "../../libs/common_macros"
 oss.path = "../../libs/oss"
 
 sea-orm.workspace = true

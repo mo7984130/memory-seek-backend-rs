@@ -1,7 +1,10 @@
 use crate::service::BackupService;
 use crate::state::BackupState;
 use axum::{Extension, Router, extract::State, routing::post};
-use common::{Result, r::R, traits::controller::ControllerRouter};
+use common::{
+    Result,
+    axum::{R, controller_router::ControllerRouter},
+};
 use std::sync::Arc;
 use types::auth::user::{AdminId, UserId};
 

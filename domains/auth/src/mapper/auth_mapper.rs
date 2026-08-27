@@ -1,4 +1,4 @@
-use common::ext::OkExt;
+use common::ext::ToOk;
 use common::{
     DbConn,
     error::{AppError, ContextualError, contextual::Result},

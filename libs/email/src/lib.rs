@@ -1,6 +1,6 @@
-use common::{
-    error::{AppError, contextual::Result},
-    ext::ContextResultExt,
+use common::error::{
+    AppError,
+    contextual::{Result, ext::ResultContextualExt},
 };
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
@@ -76,7 +76,7 @@ impl EmailClient {
             .from(
                 format!("{} <{}>", self.from_name, self.from_email)
                     .parse::<Mailbox>()
-                    .context_error(
+                    .context_err(
                         "email_from_email_err",
                         "发件人地址格式错误",
                         AppError::InternalServerError,
@@ -90,13 +90,13 @@ impl EmailClient {
             .subject(subject)
             .header(ContentType::TEXT_HTML)
             .body(body)
-            .context_error(
+            .context_err(
                 "email_body_err",
                 "构建邮件消息失败",
                 AppError::InternalServerError,
             )?;
 
-        self.transport.send(email).await.context_error(
+        self.transport.send(email).await.context_err(
             "email_send_err",
             "邮件服务商发送失败",
             AppError::InternalServerError,

@@ -3,13 +3,13 @@ use validator::Validate;
 
 use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
+#[cfg(feature = "orm")]
+use crate::photo::ImageToken;
 use crate::photo::collection::CollectionId;
 #[cfg(feature = "orm")]
 use crate::photo::collection::CollectionRecord;
 use crate::photo::models::PhotoIds;
 use crate::photo::photo::PhotoId;
-#[cfg(feature = "orm")]
-use crate::photo::ImageToken;
 #[cfg(feature = "orm")]
 use common::utils::TokenCipher;
 

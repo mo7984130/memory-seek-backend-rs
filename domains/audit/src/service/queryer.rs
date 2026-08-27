@@ -1,6 +1,4 @@
-use common::ext::OkExt;
-use common::models::CursorPage;
-use common::{DbConn, Result, ext::CollectOkExt};
+use common::{DbConn, Result, ext::ToOk, types::CursorPage};
 use types::audit::{
     AuditEventId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem,
     AuditTopQuery,
@@ -16,7 +14,7 @@ impl AuditQueryer {
         db: &impl DbConn,
         req: &AuditStatsQuery,
     ) -> Result<Vec<AuditStatsItem>> {
-        AuditMapper::query_stats(
+        Ok(AuditMapper::query_stats(
             db,
             req.event_type.as_deref(),
             req.target_type.as_deref(),
@@ -27,15 +25,17 @@ impl AuditQueryer {
         .await?
         .into_iter()
         .map(|(bucket, count)| AuditStatsItem { bucket, count })
-        .collect_ok()
+        .collect())
     }
 
     pub async fn query_top(db: &impl DbConn, req: &AuditTopQuery) -> Result<Vec<AuditTopItem>> {
-        AuditMapper::query_top_targets(db, &req.event_type, &req.target_type, req.limit)
-            .await?
-            .into_iter()
-            .map(|(target_id, count)| AuditTopItem { target_id, count })
-            .collect_ok()
+        Ok(
+            AuditMapper::query_top_targets(db, &req.event_type, &req.target_type, req.limit)
+                .await?
+                .into_iter()
+                .map(|(target_id, count)| AuditTopItem { target_id, count })
+                .collect(),
+        )
     }
 
     pub async fn query_events(

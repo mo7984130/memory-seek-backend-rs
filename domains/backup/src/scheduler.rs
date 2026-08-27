@@ -23,7 +23,7 @@ impl BackupScheduler {
 
             Box::pin(async move {
                 if let Err(error) = BackupService::execute_scheduled(state).await {
-                    common::caller_error!(
+                    tracing::error!(
                         error = %error,
                         "定时备份执行失败"
                     );

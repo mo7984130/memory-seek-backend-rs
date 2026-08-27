@@ -6,22 +6,19 @@ edition = "2024"
 [features]
 default = []
 metrics = ["common/metrics", "multi-level-cache/metrics"]
-controller = ["dep:axum"]
+controller = ["dep:axum", "common/axum"]
 audit = ["audit/recording"]
 face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]
 ts = ["types/ts", "common/ts"]
 
 [dependencies]
 common = { path = "../../common", features = [
-    "validators",
-    "file_validator",
     "metrics",
-    "contextual-sea-orm",
-    "contextual-cache",
-    "contextual-serde",
-    "contextual-tokio",
-    "event",
+    "tokio",
+    "multi-cache",
 ] }
+file-validator.path = "../../libs/file_validator"
+common_macros.path = "../../libs/common_macros"
 audit.path = "../audit"
 step_derive.path = "../../libs/step_derive"
 constants.path = "../constants"

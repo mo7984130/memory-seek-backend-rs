@@ -1,6 +1,9 @@
-use common::ext::IntoContextualExt;
-use common::models::CursorPage;
-use common::{DbConn, error::contextual::Result, time::DateTime};
+use common::{
+    DbConn,
+    error::contextual::{Result, ext::IntoContextualExt},
+    time::DateTime,
+    types::CursorPage,
+};
 use sea_orm::{
     ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, Expr, Func},

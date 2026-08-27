@@ -1,5 +1,5 @@
-use common::ext::OkExt;
-use common::models::CursorPage;
+use common::ext::ToOk;
+use common::types::CursorPage;
 use common::{
     DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},

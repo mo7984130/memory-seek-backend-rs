@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use common::{
     DbConn as ConnectionTrait,
     error::contextual::Result,
-    ext::IntoContextualExt,
+    error::contextual::ext::IntoContextualExt,
     time::{DateTime, now},
 };
 use sea_orm::{

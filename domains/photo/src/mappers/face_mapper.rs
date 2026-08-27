@@ -1,8 +1,9 @@
 use common::{
     DbConn as ConnectionTrait,
+    error::contextual::ext::{OptionExt, UintExt},
     error::{AppError, ContextualError, contextual::Result},
-    ext::{CollectOkExt, ContextOptionExt, OkExt, ToErr, UintExt},
-    models::CursorPage,
+    ext::{ToErr, ToOk},
+    types::CursorPage,
 };
 use sea_orm::{
     ColumnTrait, Condition, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
@@ -105,7 +106,8 @@ impl FaceMapper {
             .await?
             .into_iter()
             .map(FaceRecord::from)
-            .collect_ok()
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     /// 加行锁查询
@@ -116,7 +118,7 @@ impl FaceMapper {
             .one(db)
             .await?
             .map(FaceRecord::from)
-            .context_warn_none(
+            .ok_or_warn(
                 "face_not_found",
                 "人脸不存在",
                 AppError::not_found("人脸不存在"),
@@ -134,7 +136,8 @@ impl FaceMapper {
             .await?
             .into_iter()
             .map(FaceRecord::from)
-            .collect_ok()
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     /// 按照片 id 加行锁批量查询人脸
@@ -149,7 +152,8 @@ impl FaceMapper {
             .await?
             .into_iter()
             .map(FaceRecord::from)
-            .collect_ok()
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     /// 查询某人物下 score 最高的人脸
@@ -225,7 +229,8 @@ impl FaceMapper {
             .await?
             .into_iter()
             .map(FaceRecord::from)
-            .collect_ok()
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     pub async fn lock_unassigned_faces(db: &impl ConnectionTrait) -> Result<Vec<FaceRecord>> {
@@ -235,7 +240,8 @@ impl FaceMapper {
             .await?
             .into_iter()
             .map(FaceRecord::from)
-            .collect_ok()
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     pub async fn query_unassigned_face_photo_ids_cursor_page(
@@ -327,7 +333,8 @@ impl FaceMapper {
             .await?
             .into_iter()
             .map(FaceRecord::from)
-            .collect_ok()
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 }
 

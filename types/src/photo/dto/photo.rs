@@ -3,13 +3,13 @@ use serde::Deserialize;
 
 use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
+#[cfg(feature = "orm")]
+use crate::photo::ImageToken;
 use crate::photo::photo::PhotoId;
 #[cfg(feature = "orm")]
 use crate::photo::photo::PhotoRecord;
 #[cfg(feature = "orm")]
-use crate::photo::ImageToken;
-#[cfg(feature = "orm")]
-use common::utils::{token_cipher, TokenCipher};
+use common::utils::{TokenCipher, token_cipher};
 
 crate::out_dto!(PhotoView, "photo/", rename = "Photo"; {
     pub id: PhotoId,
@@ -139,7 +139,7 @@ crate::in_dto!(PhotoCursorParam, "photo/", serde_default, docs = "照片游标�
 mod orm_tests {
     use super::*;
     use crate::photo::ImageTokenType;
-    use common::utils::{init_token_cipher, TokenCipherConfig};
+    use common::utils::{TokenCipherConfig, init_token_cipher};
 
     fn test_cipher() -> &'static TokenCipher {
         init_token_cipher(&TokenCipherConfig {

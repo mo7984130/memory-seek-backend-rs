@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use audit::{AuditEvent, AuditRecorder};
 use common::db_transaction;
-use common::error::contextual::Result;
+use common::error::{ContextualError, contextual::Result};
 use common::ext::ToOk;
-use common::models::CursorPage;
+use common::types::CursorPage;
 use common::types::HasChanged::Changed;
 use common::utils::DbUtils;
 use serde_json::json;
@@ -75,7 +75,10 @@ impl PersonRepo {
                 target_person_id,
                 |db, id| async move { Ok(PersonMapper::lock_by_id(db, id).await?) },
             )
-            .await?;
+            .await
+            .map_err(|error| {
+                ContextualError::error_without_source("person_lock_err", "锁定人物失败", error)
+            })?;
 
             // 获取源人物人脸
             let source_faces = FaceMapper::lock_by_person_id(txn, source_person_id).await?;

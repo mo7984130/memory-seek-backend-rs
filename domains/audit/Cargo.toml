@@ -6,10 +6,10 @@ edition = "2024"
 [features]
 default = []
 recording = ["common/snowflake"]
-controller = ["dep:axum"]
+controller = ["dep:axum", "common/axum"]
 
 [dependencies]
-common = { path = "../../common", features = ["contextual-sea-orm", "validators"] }
+common = { path = "../../common", features = ["snowflake"] }
 types = { path = "../../types", features = ["orm"] }
 
 # controller 需要

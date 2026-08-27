@@ -3,9 +3,9 @@ use std::collections::HashSet;
 use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
+    error::contextual::ext::{ContextualResultExt, OptionExt},
     error::{AppError, ContextualError, contextual::Result},
-    ext::{ContextOptionExt, ContextualResultExt},
-    models::CursorPage,
+    types::CursorPage,
 };
 use types::{
     auth::user::UserId,
@@ -117,7 +117,7 @@ impl CommentRepo {
             // 删除评论
             let comment = CommentMapper::delete(txn, user_id, comment_id)
                 .await?
-                .context_warn_none(
+                .ok_or_warn(
                     "comment_delete_failed",
                     "删除评论失败",
                     AppError::bad_request("删除评论失败"),

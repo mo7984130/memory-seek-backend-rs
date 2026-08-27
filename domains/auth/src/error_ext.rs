@@ -1,6 +1,6 @@
 use common::error::AppError;
 use common::error::contextual::Result;
-use common::ext::OptionExt;
+use common::error::contextual::ext::OptionExt;
 
 /// 认证领域中必须存在用户的查询结果扩展。
 pub(crate) trait AuthOptionExt<T> {

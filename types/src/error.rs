@@ -2,9 +2,7 @@ use base64::DecodeError;
 use thiserror::Error;
 
 #[cfg(feature = "orm")]
-use common::error::AppError;
-#[cfg(feature = "orm")]
-use common::ext::log_warn_with_source;
+use common::error::{AppError, ContextualError};
 
 /// 枚举值解析错误（轻量，不依赖 AppError）
 #[derive(Error, Debug)]
@@ -63,11 +61,12 @@ impl std::error::Error for CursorDecodeError {
 impl From<CursorDecodeError> for AppError {
     #[track_caller]
     fn from(e: CursorDecodeError) -> Self {
-        log_warn_with_source(
+        ContextualError::warn(
             "cursor_decode_error",
             "游标解码失败",
             e,
             AppError::bad_request("游标解析失败"),
         )
+        .emit()
     }
 }

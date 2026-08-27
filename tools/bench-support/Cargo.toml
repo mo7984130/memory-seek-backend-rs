@@ -4,7 +4,7 @@ version = "0.1.3"
 edition = "2024"
 
 [dependencies]
-common = { path = "../../common", features = ["contextual-cache"] }
+common = { path = "../../common", features = ["multi-cache"]}
 oss = { path = "../../libs/oss" }
 criterion = { workspace = true }
 deadpool-redis = { workspace = true }

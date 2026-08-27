@@ -3,7 +3,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use common::extractors::ClientIp;
+use common::axum::extractors::ClientIp;
 
 /// 提取客户端 IP 并注入请求扩展.
 pub async fn client_ip_middleware(request: Request, next: Next) -> Response {

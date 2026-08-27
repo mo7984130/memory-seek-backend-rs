@@ -321,7 +321,7 @@ mod tests {
     mod keyset_tests {
         use super::*;
         use common::time::DateTime as CommonDateTime;
-        use sea_orm::{entity::prelude::*, DbBackend, QueryFilter, QueryTrait};
+        use sea_orm::{DbBackend, QueryFilter, QueryTrait, entity::prelude::*};
 
         #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
         #[sea_orm(table_name = "test_entity")]

@@ -7,11 +7,13 @@ use axum::{
 };
 use common::{
     Result,
-    ext::ResultRExt,
-    extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
-    models::CursorPage,
-    r::R,
-    traits::controller::ControllerRouter,
+    axum::{
+        R,
+        controller_router::ControllerRouter,
+        ext::ToROkExt,
+        extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
+    },
+    types::CursorPage,
 };
 use types::{
     auth::user::{AdminId, UserId},

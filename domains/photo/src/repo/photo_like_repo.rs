@@ -2,8 +2,8 @@ use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
     error::{AppError, ContextualError, contextual::Result},
-    models::CursorPage,
     time::DateTime,
+    types::CursorPage,
 };
 use types::{
     auth::user::UserId,

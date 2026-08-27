@@ -1,4 +1,4 @@
-use common::ext::OkExt;
+use common::ext::ToOk;
 use common::{DbConn, error::contextual::Result};
 use sea_orm::sea_query::Expr;
 use sea_orm::{

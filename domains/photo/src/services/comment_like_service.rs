@@ -8,7 +8,7 @@ pub(crate) struct CommentLikeService;
 // 创建
 impl CommentLikeService {
     /// 点赞评论.
-    #[common::metered(name = "like_comment")]
+    #[common_macros::metered(name = "like_comment")]
     #[tracing::instrument(
         name = "like_comment",
         skip_all,
@@ -34,7 +34,7 @@ impl CommentLikeService {}
 // 删除
 impl CommentLikeService {
     /// 取消点赞.
-    #[common::metered(name = "unlike_comment")]
+    #[common_macros::metered(name = "unlike_comment")]
     #[tracing::instrument(
         name = "unlike_comment",
         skip_all,

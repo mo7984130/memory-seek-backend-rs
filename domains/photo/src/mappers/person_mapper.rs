@@ -1,8 +1,9 @@
 use common::{
     DbConn as ConnectionTrait,
+    error::contextual::ext::{OptionExt, UintExt},
     error::{AppError, contextual::Result},
-    ext::{CollectOkExt, OkExt, OptionExt, UintExt},
-    models::CursorPage,
+    ext::ToOk,
+    types::CursorPage,
     types::HasChanged::Changed,
 };
 use insight_face_rs::BoundingBox;
@@ -160,7 +161,8 @@ impl PersonMapper {
             .await?
             .into_iter()
             .map(PersonRecord::from)
-            .collect_ok()
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     /// 通过 ID 查询人物
@@ -208,7 +210,8 @@ impl PersonMapper {
             .await?
             .into_iter()
             .map(PersonRecord::from)
-            .collect_ok()
+            .collect::<Vec<_>>()
+            .to_ok()
     }
 
     /// 按 ID 批量查询人物 id 与 name

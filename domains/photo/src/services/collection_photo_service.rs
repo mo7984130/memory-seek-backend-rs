@@ -1,6 +1,6 @@
 use crate::repo::CollectionRepo;
 use crate::{services::photo_service::PhotoService, state::PhotoState};
-use common::{Result, ext::OkExt, metrics_name, models::CursorPage, utils::MetricsTimerExt};
+use common::{Result, ext::ToOk, metrics_name, types::CursorPage, utils::MetricsTimerExt};
 use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
@@ -21,7 +21,7 @@ pub(crate) struct CollectionPhotoService;
 // 查询
 impl CollectionPhotoService {
     /// 获取包含指定照片的所有收藏夹
-    #[common::metered]
+    #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, photo_id = %photo_id)
@@ -48,7 +48,7 @@ impl CollectionPhotoService {
     }
 
     /// 按游标查询相册中的照片, 并补充照片视图信息.
-    #[common::metered(name = "get_collection_photos")]
+    #[common_macros::metered(name = "get_collection_photos")]
     #[tracing::instrument(
         name = "get_collection_photos",
         skip_all,
@@ -79,7 +79,7 @@ impl CollectionPhotoService {
 // 添加
 impl CollectionPhotoService {
     /// 批量将照片加入相册, 并返回实际新增数量.
-    #[common::metered(name = "add_collection_photos")]
+    #[common_macros::metered(name = "add_collection_photos")]
     #[tracing::instrument(
         name = "add_collection_photos",
         skip_all,
@@ -108,7 +108,7 @@ impl CollectionPhotoService {
 // 删除
 impl CollectionPhotoService {
     /// 移除收藏夹照片.
-    #[common::metered(name = "remove_collection_photos")]
+    #[common_macros::metered(name = "remove_collection_photos")]
     #[tracing::instrument(
         name = "remove_collection_photos",
         skip_all,

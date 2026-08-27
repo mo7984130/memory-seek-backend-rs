@@ -38,7 +38,7 @@ impl AuditRecorder {
 
         let models = events.into_iter().map(|mut event| {
             if event.event_id == 0 {
-                event.event_id = common::snowflake::next_id();
+                event.event_id = common::utils::snowflake::next_id();
             }
             ActiveModel {
                 event_id: Set(event.event_id),

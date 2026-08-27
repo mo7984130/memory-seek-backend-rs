@@ -6,21 +6,19 @@ edition = "2024"
 [features]
 default = []
 metrics = ["common/metrics"]
-controller = ["dep:axum"]
+controller = ["dep:axum", "common/axum"]
 audit = ["audit/recording"]
 
 [dependencies]
 audit = { path = "../audit" }
 types = { workspace = true, features = ["orm"] }
 common = { path = "../../common", features = [
-    "validators",
     "metrics",
-    "contextual-sea-orm",
-    "contextual-redis",
-    "contextual-tokio",
+    "tokio"
 ] }
 constants.path = "../constants"
 email.path = "../../libs/email"
+common_macros.path = "../../libs/common_macros"
 
 tokio.workspace = true
 tracing.workspace = true

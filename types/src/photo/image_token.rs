@@ -399,7 +399,7 @@ mod tests {
 #[cfg(all(test, feature = "orm"))]
 mod orm_tests {
     use super::*;
-    use common::utils::{init_token_cipher, TokenCipherConfig};
+    use common::utils::{TokenCipherConfig, init_token_cipher};
 
     fn test_cipher() -> &'static common::utils::TokenCipher {
         init_token_cipher(&TokenCipherConfig {

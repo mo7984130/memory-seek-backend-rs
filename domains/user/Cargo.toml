@@ -6,19 +6,17 @@ edition = "2024"
 [features]
 default = []
 metrics = ["common/metrics", "multi-level-cache/metrics"]
-controller = ["dep:axum"]
+controller = ["dep:axum", "common/axum"]
 audit = ["audit/recording"]
 
 [dependencies]
 common = { path = "../../common", features = [
-    "file_validator",
-    "validators",
     "metrics",
-    "contextual-sea-orm",
-    "contextual-redis",
-    "contextual-cache",
-    "contextual-tokio",
+    "tokio",
+    "multi-cache"
 ] }
+file-validator.path = "../../libs/file_validator"
+common_macros.path = "../../libs/common_macros"
 audit.path = "../audit"
 constants.path = "../constants"
 oss.path = "../../libs/oss"

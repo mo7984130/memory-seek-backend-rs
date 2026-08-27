@@ -28,7 +28,7 @@ use photo_controller::PhotoController;
 use photo_like_controller::PhotoLikeController;
 use timeline_stat_controller::TimelineStatController;
 
-use common::traits::controller::ControllerRouter;
+use common::axum::controller_router::ControllerRouter;
 
 pub struct Controller;
 

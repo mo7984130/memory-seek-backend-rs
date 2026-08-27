@@ -1,6 +1,6 @@
 //! 审计事件类型、查询 DTO 与 `audit_event` SeaORM 实体。
 
-use common::time::{now, DateTime};
+use common::time::{DateTime, now};
 use serde_json::Value;
 
 use crate::cursor::TimeIdCursor;
