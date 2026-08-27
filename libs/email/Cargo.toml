@@ -4,5 +4,5 @@ version = "0.1.2"
 edition = "2024"
 
 [dependencies]
-common = { path = "../../common" }
-lettre = { workspace = true }
+common.path = "../../common"
+lettre.workspace = true

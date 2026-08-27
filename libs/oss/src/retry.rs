@@ -43,8 +43,6 @@ where
         match f().await {
             Ok(value) => return Ok(value),
             Err(err) if err.is_rate_limited() && attempts < delays.len() => {
-                #[cfg(feature = "metrics")]
-                metrics::counter!(format!("oss:{op}:retries")).increment(1);
                 let delay = delays[attempts];
                 tracing::debug!(
                     key = %key,

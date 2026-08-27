@@ -10,7 +10,8 @@
 //! - `validate_password`: 密码强度验证（8-64 位，必须包含字母和数字）
 //! - `validate_normal_char`: 常规字符验证（禁止 `< > / \ " ' & @` 等特殊符号）
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
+
 use validator::ValidationError;
 
 // ==================== 用户名 ====================
@@ -25,8 +26,8 @@ impl UsernameValidConfig {
     pub const PATTERN: &str = r"^[a-zA-Z0-9_-]+$";
 }
 
-static USERNAME_REGEX: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(UsernameValidConfig::PATTERN).unwrap());
+static USERNAME_REGEX: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(UsernameValidConfig::PATTERN).unwrap());
 
 /// 验证用户名格式
 ///
@@ -48,7 +49,7 @@ pub fn validate_username(username: &str) -> Result<(), ValidationError> {
 // ==================== 邮箱 ====================
 
 /// 邮箱正则表达式，匹配 `local@domain.tld` 格式，支持子域名和 `+` 标签
-pub static EMAIL_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
+pub static EMAIL_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z0-9-]+$").unwrap()
 });
 
@@ -78,13 +79,28 @@ pub struct PasswordValidConfig;
 impl PasswordValidConfig {
     pub const MIN: usize = 8;
     pub const MAX: usize = 64;
-    pub const PATTERN: &'static str = r"^(?=.*[A-Za-z])(?=.*\d)\S+$";
+    pub fn is_valid_password(password: &str) -> bool {
+        if password.is_empty() {
+            return false;
+        }
+
+        let mut has_letter = false;
+        let mut has_digit = false;
+
+        for c in password.chars() {
+            if c.is_whitespace() {
+                return false;
+            }
+
+            has_letter |= c.is_ascii_alphabetic();
+            has_digit |= c.is_ascii_digit();
+        }
+
+        has_letter && has_digit
+    }
     pub const LEN_MSG: &'static str = "密码长度需在 8 到 64 位之间";
     pub const PATTERN_MSG: &'static str = "需包含字母和数字 (包含特殊字符)";
 }
-
-static PASSWORD_REGEX: Lazy<fancy_regex::Regex> =
-    Lazy::new(|| fancy_regex::Regex::new(PasswordValidConfig::PATTERN).unwrap());
 
 /// 验证密码强度
 ///
@@ -104,13 +120,10 @@ pub fn validate_password(password: &str) -> Result<(), ValidationError> {
     }
 
     // 3. 复杂性检查 (Pattern: 字母 + 数字)
-    match PASSWORD_REGEX.is_match(password) {
-        Ok(true) => Ok(()),
-        Ok(false) => Err(ValidationError::new("invalid_password")
+    match PasswordValidConfig::is_valid_password(password) {
+        true => Ok(()),
+        false => Err(ValidationError::new("invalid_password")
             .with_message(PasswordValidConfig::PATTERN_MSG.into())),
-        Err(_) => {
-            Err(ValidationError::new("internal_error").with_message("服务器内部校验错误".into()))
-        }
     }
 }
 
@@ -124,7 +137,7 @@ impl CommonValidConfig {
     pub const NORMAL_CHAR_MSG: &'static str = "不能包含 < > / \\ \" ' & @等特殊符号";
 }
 
-static NORMAL_CHAR_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
+static NORMAL_CHAR_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(CommonValidConfig::NORMAL_CHAR_PATTERN).expect("Invalid Normal Char Regex")
 });
 

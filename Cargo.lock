@@ -588,21 +588,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bit-set"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3"
-dependencies = [
- "bit-vec",
-]
-
-[[package]]
-name = "bit-vec"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
-
-[[package]]
 name = "bit_field"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1572,17 +1557,6 @@ dependencies = [
  "rayon-core",
  "smallvec",
  "zune-inflate",
-]
-
-[[package]]
-name = "fancy-regex"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72cf461f865c862bb7dc573f643dd6a2b6842f7c30b07882b56bd148cc2761b8"
-dependencies = [
- "bit-set",
- "regex-automata",
- "regex-syntax",
 ]
 
 [[package]]
@@ -3274,12 +3248,11 @@ dependencies = [
 
 [[package]]
 name = "oss"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "bytes",
  "common",
  "futures",
- "metrics",
  "reqwest",
  "rust-s3",
  "serde",
@@ -3475,7 +3448,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "async-trait",
  "audit",
@@ -4743,7 +4716,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "audit",
  "auth",
@@ -5767,14 +5740,12 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "common",
  "derive_more 1.0.0",
- "fancy-regex",
  "insight-face-rs",
- "once_cell",
  "regex",
  "sea-orm",
  "serde",

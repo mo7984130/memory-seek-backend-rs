@@ -1,6 +1,6 @@
 [package]
 name = "photo"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 
 [features]
@@ -26,7 +26,7 @@ audit.path = "../audit"
 step_derive.path = "../../libs/step_derive"
 constants.path = "../constants"
 oss.path = "../../libs/oss"
-types = { workspace = true, features = ["full"] }
+types = { workspace = true, features = ["orm"] }
 
 linkme.workspace = true
 async-trait.workspace = true
