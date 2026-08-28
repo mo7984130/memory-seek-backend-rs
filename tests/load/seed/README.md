@@ -6,9 +6,9 @@
 
 | 文件 | 作用 |
 |---|---|
-| `seed.sh` | 入口: 建表(init.sql) → schema 对齐 → 灌数据(seed.sql) → 汇总校验 |
+| `seed.sh` | 入口: 建表(init.sql) → 创建压测补充索引 → 灌数据(seed.sql) → 汇总校验 |
 | `seed.sql` | 灌入压测账号 / 照片元数据 / 时间线统计(ON CONFLICT 幂等) |
-| `schema_align.sql` | 补齐 `docs/sql/init.sql` 与当前代码不一致的列(如 `photo_collection.cover_photo_id`) |
+| `schema_align.sql` | 创建仅服务于压测查询的补充索引 |
 
 执行入口: `make seed`(依赖 compose 中 postgres 服务已启动)。数据量通过 `ci/env.sh` 的 `AUTH_USERS` / `PHOTO_USERS` / `PHOTOS_PER_USER` 覆盖。
 
@@ -28,4 +28,4 @@
 ## 已知限制
 
 - 不依赖 S3(CI 不模拟): 种子照片无真实对象存储, 上传(`photo_service` 场景)仅本地连真实 OSS 时可跑。
-- `init.sql` 存在与代码不同步的列, 由 `schema_align.sql` 在压测环境补齐(生产 schema 治理不在压测体系范围内)。
+- `init.sql` 是与当前实体定义一致的新库建表来源；`schema_align.sql` 不修改表结构。
