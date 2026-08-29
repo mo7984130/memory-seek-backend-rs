@@ -30,7 +30,7 @@ mkdir -p "$output_dir"
 run_k6() {
     local rate=$1 duration=$2 summary=$3
     k6 run -q \
-        -e BASE_URL="http://${REMOTE_HOST}:${SERVER_PORT}" \
+        -e BASE_URL="$BASE_URL" \
         -e TARGET_RPS="$rate" \
         -e DURATION="$duration" \
         -e PRE_ALLOCATED_VUS="$max_vus" \
@@ -42,7 +42,7 @@ run_k6() {
         -e FACES="$FACES" \
         -e PERSONS="$PERSONS" \
         -e SUMMARY_EXPORT="$summary" \
-        "$script"
+        "$script" || true
 }
 
 # 预热不进入容量判定，避免连接、缓存和 JIT 冷启动污染首档结果。
@@ -81,7 +81,8 @@ while [ "$rate" -le "$ceiling_rps" ] && [ "$step" -le "$MAX_ADAPTIVE_MAX_STEPS" 
     elif awk -v value="$error_rate" -v limit="$MAX_ADAPTIVE_ERROR_RATE" 'BEGIN { exit !(value > limit) }'; then
         failed="error_rate_exceeded"
     elif awk -v value="$dropped" -v limit="$MAX_ADAPTIVE_DROPPED_ITERATIONS" 'BEGIN { exit !(value > limit) }'; then
-        failed="dropped_iterations_exceeded"
+        # 达到 MAX_VUS 时 k6 也会丢迭代，不能把压测机的 VU 上限误报为服务容量。
+        failed="generator_vu_exhausted"
     fi
 
     if [ -n "$failed" ]; then

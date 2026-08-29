@@ -172,6 +172,12 @@ export function buildLoadOptions({
 
     return {
         setupTimeout: "180s",
+        // 让不可完成的到达率和业务失败直接使 k6 返回非零；编排层不再吞掉该错误。
+        // 容量搜索会自行读取 summary，并允许预期的阈值失败进入 SLO 判定。
+        thresholds: {
+            http_req_failed: ["rate<0.05"],
+            dropped_iterations: ["count==0"],
+        },
         scenarios: {
             load: {
                 executor: "constant-arrival-rate",

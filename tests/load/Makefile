@@ -10,6 +10,8 @@
 
 REMOTE_HOST ?= 127.0.0.1
 SERVER_PORT ?= 7985
+# 完整目标地址优先，可用于 HTTPS、非默认端口和反向代理路径前缀。
+BASE_URL ?= http://$(REMOTE_HOST):$(SERVER_PORT)
 
 # 构建与运行
 FEATURES ?= metrics,auth,user,photo,face-engine
@@ -66,7 +68,6 @@ SERVER_BIN   := ../../target/release/$(BIN_NAME)
 SERVER_LOG   := $(CI_DIR)/server.log
 SERVER_PID   := $(CI_DIR)/server.pid
 COMPOSE      := docker compose -f docker-compose.load.yml
-BASE_URL     := http://$(REMOTE_HOST):$(SERVER_PORT)
 
 # 多轮输出目录
 RUN_PREFIX := run
@@ -142,7 +143,7 @@ ci-up:                 ## 启动压测环境(容器依赖 + release server 进�
 		./target/release/$(BIN_NAME) --config $(CI_DIR)/server-config.yml \
 		> $(CI_DIR)/server.log 2>&1 & echo $$! > $(SERVER_PID)
 	@for i in $$(seq 1 60); do \
-		if curl -sf http://127.0.0.1:$(SERVER_PORT)/health > /dev/null; then \
+		if curl -sf $(BASE_URL)/health > /dev/null; then \
 			echo "Server ready at $(BASE_URL)"; exit 0; \
 		fi; \
 		sleep 1; \
@@ -158,7 +159,7 @@ ci-down:               ## 停止压测环境(server 进程 + 容器)
 
 # ── 压测(编排层) ────────────────────────────────────
 run-all:               ## 全场景 target 压测，多轮结果由 collect 归一化
-	@for run in $$(seq 1 $(RUNS)); do \
+	@set -e; for run in $$(seq 1 $(RUNS)); do \
 		echo "===== Run $$run / $(RUNS) ====="; \
 		$(MAKE) run-once RUN=$$run; \
 		sleep 5; \
@@ -195,14 +196,14 @@ collect-max-adaptive:  ## 归一化容量搜索结论 -> results/max-adaptive-no
 	$(CI_DIR)/collect_max_adaptive.sh
 
 run-once:              ## 单轮全场景压测(auth + user + photo + face + person)
-	$(MAKE) auth RUN=$(RUN) || echo "[warn] auth 轮 $(RUN) 失败(见 results)"
-	$(MAKE) user RUN=$(RUN) || echo "[warn] user 轮 $(RUN) 失败(见 results)"
-	$(MAKE) photo-nos3 RUN=$(RUN) || echo "[warn] photo 轮 $(RUN) 失败(见 results)"
-	$(MAKE) face RUN=$(RUN) || echo "[warn] face 轮 $(RUN) 失败(见 results)"
-	$(MAKE) person RUN=$(RUN) || echo "[warn] person 轮 $(RUN) 失败(见 results)"
+	$(MAKE) auth RUN=$(RUN)
+	$(MAKE) user RUN=$(RUN)
+	$(MAKE) photo-nos3 RUN=$(RUN)
+	$(MAKE) face RUN=$(RUN)
+	$(MAKE) person RUN=$(RUN)
 
 photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景(直接运行独立脚本)
-	@for s in $(PHOTO_NOS3_SERVICES); do \
+	@set -e; for s in $(PHOTO_NOS3_SERVICES); do \
 		case "$$s" in \
 			collection)        trps=$(PHOTO_COLLECTION_TARGET_RPS);; \
 			collection_photo)  trps=$(PHOTO_COLLECTION_PHOTO_TARGET_RPS);; \
@@ -219,7 +220,7 @@ photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景(直接�
 			-e PHOTOS_PER_USER=$(PHOTOS_PER_USER) \
 			-e PHOTO_USERS=$(PHOTO_USERS) \
 			-e SUMMARY_EXPORT=$(OUT_DIR)/photo_$${s}_summary.json \
-			scenarios/photo/$$s.js || echo "[warn] scenario $$s 失败"; \
+			scenarios/photo/$$s.js; \
 	done
 
 seed:                  ## 灌入种子数据(建表 + 压测账号/照片/时间线统计)

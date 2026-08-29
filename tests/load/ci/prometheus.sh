@@ -12,11 +12,11 @@ TAG="${TAG:-$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$METRICS_DIR"
 
 out="$METRICS_DIR/prom-$TAG.txt"
-if curl -sf --max-time 10 "http://${REMOTE_HOST}:${SERVER_PORT}/metrics" -o "$out"; then
+if curl -sf --max-time 10 "${BASE_URL}/metrics" -o "$out"; then
     lines=$(wc -l < "$out" | tr -d ' ')
     echo "[prometheus] 快照已保存: $out ($lines 行)"
 else
-    echo "[prometheus] 警告: 无法访问 ${REMOTE_HOST}:${SERVER_PORT}/metrics, 请确认 server 已启用 metrics feature"
+    echo "[prometheus] 警告: 无法访问 ${BASE_URL}/metrics, 请确认 server 已启用 metrics feature"
     exit 1
 fi
 
