@@ -1,6 +1,7 @@
 use sea_orm::DatabaseConnection;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::config::BackupConfig;
 use crate::storage::BackupStorage;
@@ -12,6 +13,7 @@ pub struct BackupState {
     pub storage: BackupStorage,
     pub config: BackupConfig,
     pub temp_dir: PathBuf,
+    pub operation_lock: Mutex<()>,
 }
 
 impl BackupState {
@@ -31,6 +33,7 @@ impl BackupState {
             storage,
             config,
             temp_dir,
+            operation_lock: Mutex::new(()),
         }
     }
 

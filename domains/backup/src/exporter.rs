@@ -1,68 +1,68 @@
 use crate::error::BackupError;
 use crate::error::Result;
-use common::{DbConn, utils::table_metadata::TableMetadata};
-use csv::Writer;
-use sea_orm::Statement;
+use async_compression::tokio::write::ZstdEncoder;
+use futures_util::TryStreamExt;
+use sea_orm::DatabaseConnection;
+use sqlx::postgres::PgPoolCopyExt;
 use std::path::{Path, PathBuf};
+use tokio::io::AsyncWriteExt;
 
-/// CSV 导出器
-pub struct CsvExporter;
+/// PostgreSQL 二进制 COPY 导出器。
+pub struct BinaryCopyExporter;
 
-impl CsvExporter {
-    /// 导出指定表到指定路径的 CSV 文件
-    ///
-    /// 返回导出的文件路径
+impl BinaryCopyExporter {
+    /// 将指定表流式导出为经 Zstd 压缩的 PostgreSQL 二进制 COPY 文件。
     pub async fn export_to_dir(
-        db: &impl DbConn,
+        db: &DatabaseConnection,
         table_name: &str,
         output_dir: &Path,
     ) -> Result<PathBuf> {
-        let output_path = output_dir.join(format!("{}.csv", table_name));
-
-        let columns = TableMetadata::get_column_names(db, table_name).await?;
-        if columns.is_empty() {
-            return Err(BackupError::TableNotExist(table_name.to_string()));
-        }
-        let pks = TableMetadata::get_primary_key_columns(db, table_name).await?;
-        let select_cols = columns
-            .iter()
-            .map(|c| format!("\"{}\"::text as \"{}\"", c, c))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let order_by = pks
-            .iter()
-            .map(|c| format!("\"{}\"", c))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let sql = format!(
-            "SELECT {} FROM \"{}\" ORDER BY {}",
-            select_cols, table_name, order_by
-        );
-        let stmt = Statement::from_string(sea_orm::DatabaseBackend::Postgres, sql);
-
-        let result = db.query_all(stmt).await?;
+        let output_path = output_dir.join(format!("{table_name}.copy.zst"));
 
         if let Some(parent) = output_path.parent() {
-            std::fs::create_dir_all(parent)?;
+            tokio::fs::create_dir_all(parent).await?;
         }
 
-        let mut wtr = Writer::from_path(&output_path)?;
+        let result = async {
+            let copy_sql = format!(
+                "COPY {} TO STDOUT (FORMAT binary)",
+                Self::quote_identifier(table_name)
+            );
+            let mut source = db
+                .get_postgres_connection_pool()
+                .copy_out_raw(&copy_sql)
+                .await?;
+            let file = tokio::fs::File::create(&output_path).await?;
+            let mut encoder = ZstdEncoder::new(file);
 
-        wtr.write_record(&columns)?;
-
-        for row in &result {
-            let mut record = Vec::new();
-            for col in &columns {
-                let value = row
-                    .try_get_by::<String, _>(col.as_str())
-                    .unwrap_or_default();
-                record.push(value);
+            while let Some(chunk) = source.try_next().await? {
+                encoder.write_all(&chunk).await?;
             }
-            wtr.write_record(&record)?;
+            encoder.shutdown().await?;
+            Ok::<(), BackupError>(())
         }
+        .await;
 
-        wtr.flush()?;
+        if result.is_err() {
+            let _ = tokio::fs::remove_file(&output_path).await;
+        }
+        result.map(|()| output_path)
+    }
 
-        Ok(output_path)
+    fn quote_identifier(identifier: &str) -> String {
+        format!("\"{}\"", identifier.replace('"', "\"\""))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BinaryCopyExporter;
+
+    #[test]
+    fn quotes_table_identifier() {
+        assert_eq!(
+            BinaryCopyExporter::quote_identifier("photo\"archive"),
+            "\"photo\"\"archive\""
+        );
     }
 }

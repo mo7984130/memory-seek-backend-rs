@@ -1,12 +1,15 @@
 use crate::service::BackupService;
 use crate::state::BackupState;
-use axum::{Extension, Router, extract::State, routing::post};
+use axum::{Extension, Json, Router, extract::State, routing::post};
 use common::{
     Result,
     axum::{R, controller_router::ControllerRouter},
 };
 use std::sync::Arc;
-use types::auth::user::{AdminId, UserId};
+use types::{
+    auth::user::{AdminId, UserId},
+    backup::RestoreRequest,
+};
 
 pub struct BackupController;
 
@@ -21,6 +24,7 @@ impl ControllerRouter for BackupController {
         Router::new()
             .route("/admin/backup/trigger", post(Self::trigger))
             .route("/admin/backup/manual", post(Self::manual))
+            .route("/admin/backup/restore", post(Self::restore))
     }
 }
 
@@ -56,5 +60,23 @@ impl BackupController {
             "failed": result.failed,
             "durationSecs": result.duration.as_secs_f64(),
         })))
+    }
+
+    async fn restore(
+        State(state): State<Arc<BackupState>>,
+        Extension(user_id): Extension<UserId>,
+        Json(req): Json<RestoreRequest>,
+    ) -> Result<R<serde_json::Value>> {
+        let admin = AdminId::new(user_id)?;
+        let restored = BackupService::restore(
+            state,
+            admin,
+            req.source,
+            req.tier,
+            req.run_id,
+            req.confirm_run_id,
+        )
+        .await?;
+        Ok(R::ok(serde_json::json!({ "restored": restored })))
     }
 }

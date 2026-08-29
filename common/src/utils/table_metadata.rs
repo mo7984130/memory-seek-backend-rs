@@ -84,4 +84,23 @@ impl TableMetadata {
 
         Ok(tables)
     }
+
+    /// 获取 PostgreSQL 主版本，用于二进制 COPY 归档兼容性校验。
+    pub async fn postgres_major_version(db: &impl DbConn) -> Result<u32, sea_orm::DbErr> {
+        let stmt = Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            "SHOW server_version_num".to_string(),
+        );
+        let row = db
+            .query_one(stmt)
+            .await?
+            .ok_or_else(|| sea_orm::DbErr::Custom("无法读取 PostgreSQL 版本".to_string()))?;
+        let version = row
+            .try_get_by::<String, _>("server_version_num")
+            .map_err(|error| sea_orm::DbErr::Custom(error.to_string()))?;
+        version
+            .parse::<u32>()
+            .map(|version| version / 10_000)
+            .map_err(|error| sea_orm::DbErr::Custom(error.to_string()))
+    }
 }
