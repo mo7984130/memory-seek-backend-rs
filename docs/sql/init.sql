@@ -46,6 +46,12 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
+-- 显式写入管理员 ID 后同步序列，避免后续自增插入仍从 1 开始。
+SELECT setval(
+    pg_get_serial_sequence('auth_user', 'id'),
+    (SELECT COALESCE(MAX(id), 1) FROM "auth_user")
+);
+
 -- ============================================
 -- Photo 模块
 -- ============================================
@@ -60,8 +66,8 @@ CREATE TABLE IF NOT EXISTS photo_photo
     width                INTEGER      NOT NULL DEFAULT 0,
     height               INTEGER      NOT NULL DEFAULT 0,
     mime_type            VARCHAR(100) NOT NULL DEFAULT '',
-    md5                  CHAR(32)     NULL,
-    file_id              VARCHAR(255) NULL,
+    md5                  CHAR(32)     NOT NULL,
+    file_id              VARCHAR(255) NOT NULL,
     comment_count        BIGINT       NOT NULL DEFAULT 0,
     like_count           BIGINT       NOT NULL DEFAULT 0,
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -118,6 +124,7 @@ CREATE TABLE IF NOT EXISTS photo_collection (
     description   TEXT,
     photo_count   BIGINT DEFAULT 0 NOT NULL,
     cover_file_id VARCHAR,
+    cover_photo_id BIGINT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -129,6 +136,7 @@ COMMENT ON COLUMN photo_collection.name IS '收藏夹名称';
 COMMENT ON COLUMN photo_collection.description IS '收藏夹详细描述';
 COMMENT ON COLUMN photo_collection.photo_count IS '逻辑字段：统计该收藏夹下的图片总数';
 COMMENT ON COLUMN photo_collection.cover_file_id IS '收藏夹封面图的文件ID';
+COMMENT ON COLUMN photo_collection.cover_photo_id IS '收藏夹封面图的照片ID';
 COMMENT ON COLUMN photo_collection.created_at IS '创建时间';
 COMMENT ON COLUMN photo_collection.updated_at IS '更新时间';
 
@@ -250,7 +258,7 @@ CREATE TABLE IF NOT EXISTS photo_face (
     person_id  BIGINT NULL,
     bbox       JSONB NOT NULL,
     landmarks  JSONB NOT NULL,
-    score      DOUBLE PRECISION NOT NULL,
+    score      REAL NOT NULL,
     embedding  vector(512) NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -262,11 +270,12 @@ CREATE INDEX IF NOT EXISTS idx_photo_face_person_id ON photo_face(person_id);
 -- 人物表
 CREATE TABLE IF NOT EXISTS photo_person (
     id             BIGSERIAL PRIMARY KEY,
-    name           VARCHAR(32) NULL,
+    name           VARCHAR(32) NOT NULL,
     name_initials  VARCHAR(32) NULL,
-    cover_face_id  BIGINT NULL,
+    cover_face_id  BIGINT NOT NULL,
     cover_photo_id BIGINT NOT NULL,
-    cover_file_id  VARCHAR(255) NOT NULL,
+    cover_file_id     VARCHAR(255) NOT NULL,
+    cover_face_score  REAL NOT NULL,
     cover_bbox     JSONB NOT NULL,
     centroid       vector(512) NOT NULL,
     face_count     BIGINT NOT NULL DEFAULT 0,
@@ -282,6 +291,7 @@ COMMENT ON COLUMN photo_person.name_initials IS '姓名首字母';
 COMMENT ON COLUMN photo_person.cover_face_id IS '封面人脸ID(cluster 内 score 最高)';
 COMMENT ON COLUMN photo_person.cover_photo_id IS '封面人脸所属照片ID(冗余自 photo_face.photo_id, 消除封面查询 N+1)';
 COMMENT ON COLUMN photo_person.cover_file_id IS '封面照片 file_id(冗余自 photo_photo.file_id, 消除封面查询 N+1)';
+COMMENT ON COLUMN photo_person.cover_face_score IS '封面人脸 score(冗余自 photo_face.score, 消除封面查询 N+1)';
 COMMENT ON COLUMN photo_person.cover_bbox IS '封面人脸归一化 bbox(冗余自 photo_face.bbox, 消除封面查询 N+1)';
 COMMENT ON COLUMN photo_person.centroid IS 'score 加权向量和 Σ(score*embedding), 未归一化, 读取时 normalize(增量维护)';
 COMMENT ON COLUMN photo_person.face_count IS '人脸数量';

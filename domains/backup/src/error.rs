@@ -11,13 +11,16 @@ pub enum BackupError {
     #[error("备份文件操作失败: {0}")]
     Io(#[from] std::io::Error),
 
-    /// CSV 写入/读取失败
-    #[error("CSV 导出失败: {0}")]
-    Csv(#[from] csv::Error),
-
     /// 数据库查询失败
     #[error("备份数据库操作失败: {0}")]
     Db(#[from] sea_orm::DbErr),
+
+    /// PostgreSQL 二进制 COPY 导出失败
+    #[error("备份 PostgreSQL COPY 操作失败: {0}")]
+    Copy(#[from] sqlx::Error),
+
+    #[error("备份清单处理失败: {0}")]
+    Json(#[from] serde_json::Error),
 
     /// S3 上传/删除失败
     #[error("备份 S3 存储操作失败: {0}")]
@@ -26,9 +29,6 @@ pub enum BackupError {
     /// 备份调度器（cron）失败
     #[error("备份调度器操作失败: {0}")]
     Scheduler(#[from] tokio_cron_scheduler::JobSchedulerError),
-
-    #[error("表不存在: {0}")]
-    TableNotExist(String),
 
     /// 业务校验类错误（如目标表不存在）
     #[error("{0}")]

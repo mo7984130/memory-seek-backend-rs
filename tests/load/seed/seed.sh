@@ -50,7 +50,7 @@ if ! "${PSQL[@]}" -tAc "SELECT to_regclass('public.auth_user');" | grep -q 'auth
     exit 1
 fi
 
-echo "[seed] schema 对齐 (schema_align.sql)..."
+echo "[seed] 创建压测补充索引 (schema_align.sql)..."
 "${PSQL[@]}" < "$(dirname "${BASH_SOURCE[0]}")/schema_align.sql"
 
 echo "[seed] 灌入数据 auth_users=$AUTH_USERS photo_users=$PHOTO_USERS photos/user=$PHOTOS_PER_USER ..."

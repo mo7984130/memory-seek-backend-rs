@@ -2,6 +2,8 @@ pub mod config;
 pub mod controller;
 pub mod error;
 pub mod exporter;
+pub mod importer;
+pub mod manifest;
 pub mod scheduler;
 pub mod service;
 pub mod state;

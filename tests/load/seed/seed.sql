@@ -77,13 +77,14 @@ WHERE p.file_id LIKE 'seed_file_%';
 
 -- 6. 人物(每 photo 用户 1 个, cover 用其第一张照片; centroid 随机 512 维)
 INSERT INTO photo_person (id, name, name_initials, cover_face_id, cover_photo_id,
-                          cover_file_id, cover_bbox, centroid, face_count, weight)
+                          cover_file_id, cover_face_score, cover_bbox, centroid, face_count, weight)
 SELECT u,
        'Person_' || u,
        'P_' || u,
        (u - 1) * :PHOTOS_PER_USER + 1,
        (u - 1) * :PHOTOS_PER_USER + 1,
        'seed_file_' || u || '_1',
+       0.95,
        '{"x1":0.1,"y1":0.1,"x2":0.6,"y2":0.9}',
        ('[' || (SELECT string_agg((random() * 2 - 1)::numeric(5,4)::text, ',')
                  FROM generate_series(1, 512)) || ']')::vector,

@@ -1,6 +1,6 @@
 [package]
 name = "backup"
-version = "0.1.7"
+version = "0.2.0"
 edition = "2024"
 
 [features]
@@ -21,6 +21,10 @@ serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
-csv.workspace = true
 tokio-cron-scheduler.workspace = true
+async-compression.workspace = true
+futures-util.workspace = true
+sqlx.workspace = true
+bytes.workspace = true
+tokio-util = { workspace = true, features = ["io"] }
 axum.workspace = true
