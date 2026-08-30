@@ -5,8 +5,12 @@ import { printSummary } from "../helpers/common.js";
 
 export { printSummary as handleSummary };
 
+// 组合场景共享 photo.js 的预登录结果；各 exec 再按当前 VU 注入会话。
+export { setup } from "./photo/photo.js";
+
 // 重新导出 exec 函数（k6 scenarios 要求顶层 export）
 export { photoExec } from "./photo/photo.js";
+export { photoReadExec } from "./photo/photo_read.js";
 export { collectionExec } from "./photo/collection.js";
 export { collectionPhotoExec } from "./photo/collection_photo.js";
 export { commentExec } from "./photo/comment.js";
@@ -15,6 +19,18 @@ export { photoLikeExec } from "./photo/photo_like.js";
 
 export const options = {
     scenarios: {
+        photo_read_service: {
+            exec: "photoReadExec",
+            executor: "ramping-vus",
+            startVUs: 0,
+            stages: [
+                { duration: "30s", target: 10 },
+                { duration: "1m", target: 10 },
+                { duration: "30s", target: 20 },
+                { duration: "1m", target: 20 },
+                { duration: "30s", target: 0 },
+            ],
+        },
         photo_service: {
             exec: "photoExec",
             executor: "ramping-vus",

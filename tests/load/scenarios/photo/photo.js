@@ -1,17 +1,19 @@
 // tests/load/scenarios/photo/photo.js
 // 照片服务压测场景（photo_service + timeline_stat_service）
 
-import { sleep } from "k6";
 import encoding from "k6/encoding";
 import {
     getPhotoUserCredentials,
     recordResult,
     printSummary,
+    buildLoadOptions,
+    setupPreLogin,
+    sessionFromData,
 } from "../../helpers/common.js";
 
 export { printSummary as handleSummary };
 
-import { initSession, logout } from "../../helpers/session.js";
+import { setSession, initSession, maybeRefreshSession } from "../../helpers/session.js";
 import {
     uploadPhoto,
     listPhotos,
@@ -36,30 +38,30 @@ function getUniqueImage() {
 
 // ── 独立运行时的 options ──
 
-export const options = {
-    stages: [
-        { duration: "30s", target: 10 },
-        { duration: "1m", target: 10 },
-        { duration: "30s", target: 20 },
-        { duration: "1m", target: 20 },
-        { duration: "30s", target: 0 },
-    ],
-    thresholds: {
-        http_req_duration: ["p(95)<1000"],
-        http_req_failed: ["rate<0.01"],
-    },
-};
+const PRE_ALLOCATED_VUS = parseInt(__ENV.PRE_ALLOCATED_VUS || "300", 10);
+
+export const options = buildLoadOptions({
+    targetRps: 30,
+    preAllocatedVUs: PRE_ALLOCATED_VUS,
+    maxVUs: 2000,
+});
+
+// 上传是显式 S3 场景；预登录不计入压测窗口，且不会在每轮迭代登出。
+export function setup() {
+    return setupPreLogin(getPhotoUserCredentials, PRE_ALLOCATED_VUS);
+}
 
 // ── 核心逻辑（独立运行和被导入时共用） ──
 
-function runPhotoFlow() {
-    const { account, password } = getPhotoUserCredentials(__VU);
-
-    // 登录
-    const session = initSession(account, password);
-    if (!session) return;
-
-    sleep(0.3);
+function runPhotoFlow(data) {
+    const session = sessionFromData(data, __VU);
+    if (session) {
+        setSession(session);
+    } else {
+        const { account, password } = getPhotoUserCredentials(__VU);
+        if (!initSession(account, password)) return;
+    }
+    maybeRefreshSession();
 
     // 1. 上传照片
     let result = uploadPhoto(getUniqueImage());
@@ -69,19 +71,13 @@ function runPhotoFlow() {
         return;
     }
 
-    sleep(0.5);
-
     // 2. 查询照片列表
     result = listPhotos(20);
     recordResult("list_photos", result);
 
-    sleep(0.5);
-
     // 3. 查询时间线统计
     result = getTimelineStats();
     recordResult("timeline_stats", result);
-
-    sleep(0.5);
 
     // 4. 再次查询照片列表（模拟用户浏览）
     for (let i = 0; i < 20; i++) {
@@ -89,22 +85,16 @@ function runPhotoFlow() {
         recordResult("list_photos", result);
     }
 
-    sleep(0.5);
-
-    // 登出
-    logout();
-
-    sleep(0.5);
 }
 
 // ── 独立运行入口 ──
 
-export default function () {
-    runPhotoFlow();
+export default function (data) {
+    runPhotoFlow(data);
 }
 
 // ── 被统一入口调用的 exec 函数 ──
 
-export function photoExec() {
-    runPhotoFlow();
+export function photoExec(data) {
+    runPhotoFlow(data);
 }

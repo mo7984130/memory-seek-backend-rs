@@ -2,7 +2,7 @@
 
 use common::time::DateTime;
 
-use super::AuditEventId;
+use crate::audit::AuditId;
 use crate::audit::AuditRecord;
 use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
@@ -88,7 +88,7 @@ crate::in_dto!(AuditQuery, "audit/", serde_default, docs = "审计流水查询�
     pub target_id: Option<i64>,
     pub actor_id: Option<UserId>,
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
-    pub cursor: Option<TimeIdCursor<AuditEventId>>,
+    pub cursor: Option<TimeIdCursor<AuditId>>,
     #[validate(range(min = 1, max = 100, message = "size 在 1 到 100 之间"))]
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     #[cfg_attr(feature = "ts", ts(optional = nullable))]
@@ -109,7 +109,7 @@ impl Default for AuditQuery {
 }
 
 crate::out_dto!(AuditItem, "audit/", docs = "审计流水响应项"; {
-    pub id: AuditEventId,
+    pub id: AuditId,
     pub event_type: String,
     pub actor_id: Option<UserId>,
     pub target_type: Option<String>,

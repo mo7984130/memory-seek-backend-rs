@@ -37,8 +37,10 @@ impl AuditRecorder {
         use types::audit::Entity;
 
         let models = events.into_iter().map(|mut event| {
-            if event.event_id == 0 {
-                event.event_id = common::utils::snowflake::next_id();
+            use types::audit::AuditId;
+
+            if event.event_id == AuditId(0) {
+                event.event_id = AuditId(common::utils::snowflake::next_id());
             }
             ActiveModel {
                 event_id: Set(event.event_id),
@@ -47,7 +49,7 @@ impl AuditRecorder {
                 target_type: Set(event.target_type),
                 target_id: Set(event.target_id),
                 detail: Set(event.detail),
-                occurred_at: Set(event.occurred_at),
+                created_at: Set(event.occurred_at),
             }
         });
 

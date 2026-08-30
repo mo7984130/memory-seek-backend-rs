@@ -50,21 +50,45 @@ mod entity {
     use super::*;
     use crate::{photo::ImageToken, user::models::UserInfo};
 
-    #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
+    #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
     #[sea_orm(table_name = "auth_user")]
     pub struct Model {
+        /// 主键ID
         #[sea_orm(primary_key)]
         pub id: UserId,
-        #[sea_orm(unique)]
+
+        /// 用户名
+        #[sea_orm(column_type = "String(StringLen::N(255))", unique)]
         pub username: String,
+
+        /// 邮箱地址
+        #[sea_orm(column_type = "String(StringLen::N(255))", unique)]
         pub email: String,
+
+        /// 加密后的密码
+        #[sea_orm(column_type = "String(StringLen::N(255))")]
         pub password: String,
+
+        /// 用户昵称
+        #[sea_orm(column_type = "String(StringLen::N(255))")]
         pub nickname: String,
+
+        /// 头像 文件ID
+        #[sea_orm(column_type = "String(StringLen::N(1023))", nullable)]
         pub avatar_file_id: Option<String>,
+
+        /// 邀请人ID
         pub inviter: UserId,
+
+        /// 刷新令牌
+        #[sea_orm(column_type = "String(StringLen::N(32))", nullable)]
         pub refresh_token: Option<String>,
+        /// 刷新令牌过期时间
         pub refresh_token_expire_at: Option<DateTime>,
+
+        /// 更新时间
         pub updated_at: DateTime,
+        /// 创建时间
         pub created_at: DateTime,
     }
 

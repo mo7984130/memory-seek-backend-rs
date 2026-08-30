@@ -18,18 +18,40 @@ mod entity {
     use crate::auth::user::UserId;
     use crate::photo::photo::PhotoId;
 
+    /// 收藏夹里面没有照片时, cover即为空
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "photo_collection")]
     pub struct Model {
+        /// 主键ID
         #[sea_orm(primary_key)]
         pub id: CollectionId,
+
+        /// 所有者
+        /// 索引用在 查询用户的收藏夹时
+        #[sea_orm(indexed)]
         pub user_id: UserId,
+
+        /// 名称
+        #[sea_orm(column_type = "String(StringLen::N(255))")]
         pub name: String,
+
+        /// 描述
+        #[sea_orm(column_type = "String(StringLen::N(255))")]
         pub description: Option<String>,
-        pub photo_count: i64,
+
+        /// 收藏的照片总数
+        pub photo_count: u64,
+
+        /// 封面照片的文件ID
         pub cover_file_id: Option<String>,
+
+        /// 封面照片的ID
         pub cover_photo_id: Option<PhotoId>,
+
+        /// 创建时间
         pub created_at: DateTime,
+
+        /// 更新时间
         pub updated_at: DateTime,
     }
 
@@ -40,7 +62,7 @@ mod entity {
         pub user_id: UserId,
         pub name: String,
         pub description: Option<String>,
-        pub photo_count: i64,
+        pub photo_count: u64,
         pub cover_file_id: Option<String>,
         pub cover_photo_id: Option<PhotoId>,
         pub created_at: DateTime,

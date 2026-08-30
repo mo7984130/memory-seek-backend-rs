@@ -2,7 +2,7 @@
 # Load test entry point — run k6 scenarios against a running server
 #
 # 压测体系分层:
-#   编排层   : ci-up / ci-down / run-all / run-once / photo-nos3 / seed
+#   编排层   : ci-up / ci-down / run-all / run-once / photo / photo-standalone / seed
 #   采集层   : collect / prometheus
 #   判定层   : judge / record-baseline
 #   报告层   : report
@@ -20,8 +20,9 @@ RUNS      ?= 3          # 每场景轮次, collect 取中位数
 INCLUDE_S3_PATHS ?= false
 SERVER_CPUS ?= 2        # 被测 server 占用核数(taskset 绑定, 控制变量)
 
-# photo 场景中不依赖 S3 的子场景(独立脚本文件名, 对应 scenarios/photo/<name>.js)
-PHOTO_NOS3_SERVICES ?= collection collection_photo comment comment_like photo_like
+# photo 模块中不依赖 S3 的子场景(独立脚本文件名, 对应 scenarios/photo/<name>.js)。
+# 默认套件覆盖照片读取/时间线、社交、人脸与人物；上传仅在 INCLUDE_S3_PATHS=true 时运行。
+PHOTO_NOS3_SERVICES ?= photo_read collection collection_photo comment comment_like photo_like face person
 
 # face/person 压测数据量(与 seed.sql 对齐)
 PHOTO_COUNT ?= 40000   # photo_photo 总数(= PHOTO_USERS * PHOTOS_PER_USER)
@@ -45,6 +46,7 @@ PERSON_CEILING_RPS ?= 100000
 PHOTO_TARGET_RPS  ?= 30
 PHOTO_CEILING_RPS ?= 100000
 # 各 photo 子场景目标迭代率(默认提高, 可用 <场景名>_TARGET_RPS 覆盖)
+PHOTO_READ_TARGET_RPS              ?= 100
 PHOTO_COLLECTION_TARGET_RPS        ?= 60
 PHOTO_COLLECTION_PHOTO_TARGET_RPS  ?= 40
 PHOTO_COMMENT_TARGET_RPS           ?= 50
@@ -78,7 +80,7 @@ OUT_DIR := $(RESULTS_DIR)/$(RUN_PREFIX)-$(RUN)
 endif
 
 .PHONY: all p95-report baseline compare clean help \
-        ci-up ci-down run-all run-once photo-nos3 seed collect max-adaptive run-max-adaptive collect-max-adaptive prometheus judge record-baseline report \
+        ci-up ci-down run-all run-once photo photo-nos3 photo-s3 photo-standalone seed collect max-adaptive run-max-adaptive collect-max-adaptive prometheus judge record-baseline report \
         face person
 
 # ── 压测(原有) ──────────────────────────────────────
@@ -103,12 +105,23 @@ user: $(OUT_DIR)       ## 用户模块压测
 		-e SUMMARY_EXPORT=$(OUT_DIR)/user_summary.json \
 		scenarios/user.js
 
-photo: $(OUT_DIR)      ## 照片模块压测(完整 photo.js, 含 S3 场景)
+photo: photo-nos3      ## 仅压测 photo 模块；默认不依赖 S3，INCLUDE_S3_PATHS=true 时附加上传场景
+	@if [ "$(INCLUDE_S3_PATHS)" = "true" ]; then \
+		$(MAKE) photo-s3 RUN=$(RUN); \
+	fi
+
+photo-s3: $(OUT_DIR)   ## photo 上传链路压测（需要可用 S3，须显式 INCLUDE_S3_PATHS=true）
+	@if [ "$(INCLUDE_S3_PATHS)" != "true" ]; then \
+		echo "photo-s3 需要 INCLUDE_S3_PATHS=true" >&2; exit 2; \
+	fi
 	k6 run \
 		-q \
 		-e BASE_URL=$(BASE_URL) \
-		-e SUMMARY_EXPORT=$(OUT_DIR)/photo_summary.json \
-		scenarios/photo.js
+		-e TARGET_RPS=$(PHOTO_TARGET_RPS) \
+		-e DURATION=$(DURATION) \
+		-e PHOTO_USERS=$(PHOTO_USERS) \
+		-e SUMMARY_EXPORT=$(OUT_DIR)/photo_upload_summary.json \
+		scenarios/photo/photo.js
 
 face: $(OUT_DIR)       ## 人脸模块压测(face_controller)
 	k6 run \
@@ -132,7 +145,7 @@ person: $(OUT_DIR)     ## 人物模块压测(person_controller)
 		-e SUMMARY_EXPORT=$(OUT_DIR)/person_summary.json \
 		scenarios/photo/person.js
 
-all: auth user photo face person  ## 运行全部压测(含 S3 场景与 face/person)
+all: auth user photo  ## 运行全部压测（photo 已包含 face/person；上传由 INCLUDE_S3_PATHS 控制）
 
 # ── 环境编排 ────────────────────────────────────────
 ci-up:                 ## 启动压测环境(容器依赖 + release server 进程, taskset 限核)
@@ -170,6 +183,7 @@ max-adaptive:          ## 单轮 SLO 驱动容量搜索
 	for spec in \
 		"auth scenarios/auth.js $(AUTH_TARGET_RPS) $(AUTH_CEILING_RPS) 5000" \
 		"user scenarios/user.js $(USER_TARGET_RPS) $(USER_CEILING_RPS) 5000" \
+		"photo_read scenarios/photo/photo_read.js $(PHOTO_READ_TARGET_RPS) $(PHOTO_CEILING_RPS) 2000" \
 		"collection scenarios/photo/collection.js $(PHOTO_COLLECTION_TARGET_RPS) $(PHOTO_CEILING_RPS) 2000" \
 		"collection_photo scenarios/photo/collection_photo.js $(PHOTO_COLLECTION_PHOTO_TARGET_RPS) $(PHOTO_CEILING_RPS) 2000" \
 		"comment scenarios/photo/comment.js $(PHOTO_COMMENT_TARGET_RPS) $(PHOTO_CEILING_RPS) 2000" \
@@ -195,21 +209,22 @@ run-max-adaptive:      ## 多轮 SLO 驱动容量搜索
 collect-max-adaptive:  ## 归一化容量搜索结论 -> results/max-adaptive-normalized/
 	$(CI_DIR)/collect_max_adaptive.sh
 
-run-once:              ## 单轮全场景压测(auth + user + photo + face + person)
+run-once:              ## 单轮全场景压测（auth + user + 完整 photo 套件）
 	$(MAKE) auth RUN=$(RUN)
 	$(MAKE) user RUN=$(RUN)
-	$(MAKE) photo-nos3 RUN=$(RUN)
-	$(MAKE) face RUN=$(RUN)
-	$(MAKE) person RUN=$(RUN)
+	$(MAKE) photo RUN=$(RUN)
 
-photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景(直接运行独立脚本)
+photo-nos3: $(OUT_DIR) ## photo 模块无 S3 压测（读取/时间线、社交、人脸、人物）
 	@set -e; for s in $(PHOTO_NOS3_SERVICES); do \
 		case "$$s" in \
+			photo_read)        trps=$(PHOTO_READ_TARGET_RPS);; \
 			collection)        trps=$(PHOTO_COLLECTION_TARGET_RPS);; \
 			collection_photo)  trps=$(PHOTO_COLLECTION_PHOTO_TARGET_RPS);; \
 			comment)           trps=$(PHOTO_COMMENT_TARGET_RPS);; \
 			comment_like)      trps=$(PHOTO_COMMENT_LIKE_TARGET_RPS);; \
 			photo_like)        trps=$(PHOTO_LIKE_TARGET_RPS);; \
+			face)              trps=$(FACE_TARGET_RPS);; \
+			person)            trps=$(PERSON_TARGET_RPS);; \
 			*)                 trps=$(PHOTO_TARGET_RPS);; \
 		esac; \
 		echo "=== photo scenario: $$s (target=$$trps) ==="; \
@@ -219,9 +234,19 @@ photo-nos3: $(OUT_DIR) ## photo 压测, 仅跑不依赖 S3 的子场景(直接�
 			-e DURATION=$(DURATION) \
 			-e PHOTOS_PER_USER=$(PHOTOS_PER_USER) \
 			-e PHOTO_USERS=$(PHOTO_USERS) \
+			-e PHOTO_COUNT=$(PHOTO_COUNT) \
+			-e FACES=$(FACES) \
+			-e PERSONS=$(PERSONS) \
 			-e SUMMARY_EXPORT=$(OUT_DIR)/photo_$${s}_summary.json \
 			scenarios/photo/$$s.js; \
 	done
+
+photo-standalone:     ## 独立启动依赖、灌种子并压测 photo 模块，结束后清理环境
+	@set -e; \
+	trap '$(MAKE) ci-down' EXIT; \
+	$(MAKE) ci-up; \
+	$(MAKE) seed; \
+	$(MAKE) photo
 
 seed:                  ## 灌入种子数据(建表 + 压测账号/照片/时间线统计)
 	$(CI_DIR)/../seed/seed.sh

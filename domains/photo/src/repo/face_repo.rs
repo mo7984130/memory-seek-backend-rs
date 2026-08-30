@@ -210,7 +210,7 @@ impl FaceRepo {
         Self::backup_face_tables(state).await?;
 
         common::db_transaction!(scoped & state.db, |txn| {
-            txn.execute(Statement::from_string(
+            txn.execute_raw(Statement::from_string(
                 DbBackend::Postgres,
                 format!(
                     "TRUNCATE TABLE {} RESTART IDENTITY CASCADE",
@@ -218,7 +218,7 @@ impl FaceRepo {
                 ),
             ))
             .await?;
-            txn.execute(Statement::from_string(
+            txn.execute_raw(Statement::from_string(
                 DbBackend::Postgres,
                 format!(
                     "TRUNCATE TABLE {} RESTART IDENTITY CASCADE",

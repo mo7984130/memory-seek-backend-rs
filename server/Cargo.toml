@@ -58,7 +58,7 @@ metrics-exporter-prometheus = "0.16"
 oss = { path = "../libs/oss", optional = true }
 
 # 数据库
-sea-orm = { workspace = true }
+sea-orm = { workspace = true  }
 redis = { workspace = true }
 deadpool-redis = { workspace = true }
 multi-level-cache.workspace = true

@@ -24,7 +24,6 @@ impl CommentLikeMapper {
             comment_id: Set(comment_id),
             user_id: Set(user_id),
             created_at: Set(now),
-            updated_at: Set(now),
             ..Default::default()
         };
 

@@ -15,10 +15,10 @@ crate::out_dto!(PhotoView, "photo/", rename = "Photo"; {
     pub id: PhotoId,
     pub user_id: UserId,
     pub name: String,
-    pub width: i32,
-    pub height: i32,
+    pub width: u32,
+    pub height: u32,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
-    pub size: i64,
+    pub size: u64,
     pub created_at: DateTime,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_collected: Option<bool>,

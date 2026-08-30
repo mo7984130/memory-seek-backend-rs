@@ -27,6 +27,9 @@ pub async fn init(cfg: &Config) -> Result<DatabaseConnection> {
             common::error::AppError::InternalServerError,
         )
     })?;
+
+    types::db_init::init_db(&db).await?;
+
     info!("数据库连接成功, max_connections: {}", cfg.max_connections);
     Ok(db)
 }

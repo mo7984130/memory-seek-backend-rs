@@ -1,7 +1,7 @@
 use crate::error::Result;
 use async_compression::tokio::bufread::ZstdDecoder;
 use sea_orm::DatabaseConnection;
-use sqlx::Acquire;
+use sqlx::{Acquire, QueryBuilder};
 use tokio::io::BufReader;
 
 pub struct BinaryCopyImporter;
@@ -13,15 +13,22 @@ impl BinaryCopyImporter {
         path_for: impl Fn(&str) -> std::path::PathBuf,
     ) -> Result<u64> {
         let mut connection = db.get_postgres_connection_pool().acquire().await?;
+
         let mut transaction = connection.begin().await?;
+
         let names = tables
             .iter()
             .map(|table| Self::quote_identifier(table))
             .collect::<Vec<_>>()
             .join(", ");
-        sqlx::query(&format!("TRUNCATE TABLE {names} RESTART IDENTITY"))
-            .execute(&mut *transaction)
-            .await?;
+
+        let mut query = QueryBuilder::<sqlx::Postgres>::new("TRUNCATE TABLE ");
+
+        query.push(&names);
+        query.push(" RESTART IDENTITY");
+
+        query.build().execute(&mut *transaction).await?;
+
         let mut rows = 0;
         for table in tables {
             let file = tokio::fs::File::open(path_for(table)).await?;

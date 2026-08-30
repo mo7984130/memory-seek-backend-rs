@@ -86,16 +86,6 @@ macro_rules! id_type {
                     .map_err(|_| $crate::error::ParseIdError(concat!("无效 ", stringify!($name))))
             }
         }
-
-        #[cfg(feature = "orm")]
-        impl sea_orm::TryFromU64 for $name {
-            fn try_from_u64(n: u64) -> Result<Self, sea_orm::DbErr> {
-                <i64 as sea_orm::TryFromU64>::try_from_u64(n).map($name)
-            }
-        }
-
-        #[cfg(feature = "orm")]
-        impl sea_orm::sea_query::value::with_array::NotU8 for $name {}
     };
     // String 主键 ID:序列化为字符串,反序列化只接受字符串
     ($name:ident, String, $ts_dir:literal) => {
@@ -157,14 +147,11 @@ macro_rules! id_type {
         }
 
         #[cfg(feature = "orm")]
-        impl sea_orm::TryFromU64 for $name {
-            fn try_from_u64(_: u64) -> Result<Self, sea_orm::DbErr> {
-                Err(sea_orm::DbErr::ConvertFromU64(stringify!($name)))
+        impl sea_orm::TryFromU64 for TimelineStatId {
+            fn try_from_u64(value: u64) -> Result<Self, sea_orm::DbErr> {
+                Ok(Self(value.to_string()))
             }
         }
-
-        #[cfg(feature = "orm")]
-        impl sea_orm::sea_query::value::with_array::NotU8 for $name {}
     };
 }
 

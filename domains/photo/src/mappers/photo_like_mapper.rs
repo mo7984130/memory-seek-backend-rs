@@ -28,7 +28,6 @@ impl PhotoLikeMapper {
             photo_id: Set(photo_id),
             user_id: Set(user_id),
             created_at: Set(current_time),
-            updated_at: Set(current_time),
             ..Default::default()
         };
 

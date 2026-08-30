@@ -11,7 +11,9 @@ use common::{
     types::CursorPage,
 };
 use sea_orm::sea_query::Expr;
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{
+    ColumnTrait, EntityTrait, ExprTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+};
 
 use types::auth::user::UserId;
 use types::cursor::TimeIdCursor;

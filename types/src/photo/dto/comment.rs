@@ -25,7 +25,7 @@ crate::out_dto!(CommentView, "photo/", rename = "Comment"; {
     pub id: CommentId,
     pub user_id: UserId,
     pub content: String,
-    pub like_count: i32,
+    pub like_count: u32,
     pub is_liked: bool,
     pub created_at: DateTime,
 });

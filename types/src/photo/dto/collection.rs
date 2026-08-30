@@ -12,7 +12,7 @@ crate::out_dto!(CollectionView, "photo/", rename = "Collection"; {
     pub name: String,
     pub description: Option<String>,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
-    pub photo_count: i64,
+    pub photo_count: u64,
     pub cover_token: Option<String>,
     /// 封面照片 ID（字符串）
     pub cover_photo_id: Option<PhotoId>,

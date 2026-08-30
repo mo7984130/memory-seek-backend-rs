@@ -165,9 +165,9 @@ impl PhotoService {
             NewPhotoRecord {
                 user_id,
                 name: metadata.name,
-                size: file_data.len() as i64,
-                width: metadata.width as i32,
-                height: metadata.height as i32,
+                size: file_data.len() as u64,
+                width: metadata.width,
+                height: metadata.height,
                 mime_type: metadata.mime_type,
                 md5: md5_hash.clone(),
                 file_id: file_id.clone(),

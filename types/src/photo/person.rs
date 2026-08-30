@@ -27,28 +27,45 @@ mod entity {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "photo_person")]
     pub struct Model {
+        /// 主键ID
         #[sea_orm(primary_key)]
         pub id: PersonId,
+
+        /// 名称
+        /// 索引, 按照人脸名称获取人物
+        #[sea_orm(indexed)]
         pub name: String,
+        /// 名称首字母
+        /// 如果名称为数字等判断不出来首字母的情况下, 为空
+        /// 索引, 按照首字母搜索人物
+        #[sea_orm(indexed)]
         pub name_initials: Option<String>,
 
+        /// 封面的人脸 ID
         pub cover_face_id: FaceId,
-        /// 封面人脸所属照片 ID(冗余自 photo_face.photo_id,避免 N+1)
+        /// 封面人脸 所属照片 ID
         pub cover_photo_id: PhotoId,
-        /// 封面照片 file_id(冗余自 photo_photo.file_id,避免 N+1)
+        /// 封面照片 file_id
         pub cover_file_id: String,
-        /// 封面人脸 score(冗余自 photo_face.score,避免 N+1)
+        /// 封面人脸 score
         pub cover_face_score: f32,
-        /// 封面人脸归一化 bbox(冗余自 photo_face.bbox,避免 N+1)
+        /// 封面人脸 bbox
         pub cover_bbox: BoundingBox,
 
-        /// score 加权向量和 Σ(score*embedding), 未归一化, 读取时 normalize
+        /// 人物的加权向量
         pub centroid: FaceEmbedding,
-        pub face_count: i64,
-        /// 该人物所有人脸 score 之和(增量维护质心的权重)
+        /// 人脸总数
+        /// 索引, 按照人脸总数排序获取人物列表
+        #[sea_orm(indexed)]
+        pub face_count: u64,
+        /// 总权重, 为人脸score之和
         pub weight: f64,
-        pub created_at: DateTime,
+
+        /// 更新时间
         pub updated_at: DateTime,
+
+        /// 创建时间
+        pub created_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -131,7 +148,7 @@ mod entity {
                     bbox: value.cover_bbox.into(),
                 },
                 centroid: value.centroid,
-                face_count: value.face_count as u64,
+                face_count: value.face_count,
                 weight: value.weight,
                 created_at: value.created_at,
                 updated_at: value.updated_at,
@@ -157,7 +174,7 @@ mod entity {
                 cover_face_score: Set(value.cover.face_score),
                 cover_file_id: Set(value.cover.file_id),
                 cover_bbox: Set(value.cover.bbox.into()),
-                face_count: Set(value.face_count as i64),
+                face_count: Set(value.face_count),
                 weight: Set(value.weight),
                 centroid: Set(value.centroid),
                 ..Default::default()

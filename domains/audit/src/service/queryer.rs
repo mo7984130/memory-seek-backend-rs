@@ -1,7 +1,6 @@
 use common::{DbConn, Result, ext::ToOk, types::CursorPage};
 use types::audit::{
-    AuditEventId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem,
-    AuditTopQuery,
+    AuditId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem, AuditTopQuery,
 };
 use types::cursor::TimeIdCursor;
 
@@ -41,7 +40,7 @@ impl AuditQueryer {
     pub async fn query_events(
         db: &impl DbConn,
         req: &AuditQuery,
-    ) -> Result<CursorPage<AuditItem, TimeIdCursor<AuditEventId>>> {
+    ) -> Result<CursorPage<AuditItem, TimeIdCursor<AuditId>>> {
         AuditMapper::query_audit_page(
             db,
             req.event_type.as_deref(),
