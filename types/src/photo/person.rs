@@ -57,7 +57,7 @@ mod entity {
         /// 人脸总数
         /// 索引, 按照人脸总数排序获取人物列表
         #[sea_orm(indexed)]
-        pub face_count: u64,
+        pub face_count: i64,
         /// 总权重, 为人脸score之和
         pub weight: f64,
 
@@ -148,7 +148,7 @@ mod entity {
                     bbox: value.cover_bbox.into(),
                 },
                 centroid: value.centroid,
-                face_count: value.face_count,
+                face_count: value.face_count as u64,
                 weight: value.weight,
                 created_at: value.created_at,
                 updated_at: value.updated_at,
@@ -174,7 +174,7 @@ mod entity {
                 cover_face_score: Set(value.cover.face_score),
                 cover_file_id: Set(value.cover.file_id),
                 cover_bbox: Set(value.cover.bbox.into()),
-                face_count: Set(value.face_count),
+                face_count: Set(value.face_count as i64),
                 weight: Set(value.weight),
                 centroid: Set(value.centroid),
                 ..Default::default()

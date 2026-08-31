@@ -35,13 +35,13 @@ mod entity {
         pub name: String,
 
         /// 文件大小(字节)
-        pub size: u64,
+        pub size: i64,
 
         /// 照片宽度(像素)
-        pub width: u32,
+        pub width: i32,
 
         /// 照片高度(像素)
-        pub height: u32,
+        pub height: i32,
 
         /// 文件 MIME 类型
         pub mime_type: String,
@@ -56,11 +56,11 @@ mod entity {
 
         /// 喜欢总数
         #[sea_orm(default_value = 0)]
-        pub like_count: u64,
+        pub like_count: i64,
 
         /// 评论总数
         #[sea_orm(default_value = 0)]
-        pub comment_count: u64,
+        pub comment_count: i64,
 
         /// 更新时间
         pub updated_at: DateTime,
@@ -123,9 +123,9 @@ mod entity {
                 id: model.id,
                 user_id: model.user_id,
                 name: model.name,
-                size: model.size,
-                width: model.width,
-                height: model.height,
+                size: model.size as u64,
+                width: model.width as u32,
+                height: model.height as u32,
                 mime_type: model.mime_type,
                 md5: model.md5,
                 file_id: model.file_id,
@@ -142,9 +142,9 @@ mod entity {
             Self {
                 user_id: Set(record.user_id),
                 name: Set(record.name),
-                size: Set(record.size),
-                width: Set(record.width),
-                height: Set(record.height),
+                size: Set(record.size as i64),
+                width: Set(record.width as i32),
+                height: Set(record.height as i32),
                 mime_type: Set(record.mime_type),
                 md5: Set(record.md5),
                 file_id: Set(record.file_id),

@@ -10,10 +10,8 @@ crate::id_type!(PhotoLikeId, "photo/");
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::ContextualResult;
     use common::time::DateTime;
     use sea_orm::entity::prelude::*;
-    use sea_orm::sea_query::Index;
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -28,36 +26,18 @@ mod entity {
         pub id: PhotoLikeId,
 
         /// 喜欢的照片
+        /// photo_id 与 user_id 组成复合唯一键
+        ///     一个照片只能被一个用户喜欢一次
+        ///     用于判断用户是否喜欢这个照片
+        #[sea_orm(unique_key = "photo_like")]
         pub photo_id: PhotoId,
 
         /// 喜欢者
+        #[sea_orm(unique_key = "photo_like")]
         pub user_id: UserId,
 
         /// 创建时间
         pub created_at: DateTime,
-    }
-
-    /// 创建索引
-    /// PhotoId 和 UserId 复合唯一索引
-    ///     一个照片只能被一个用户喜欢一次
-    ///     用于判断用户是否喜欢这个照片
-    #[common::register_async(
-        slice = crate::db_init::INIT_INDEXES,
-        ty = crate::db_init::InitIndexFn
-    )]
-    async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
-        let stmt = Index::create()
-            .name("idx_photo_like_photo_id_user_id")
-            .table(Entity)
-            .col(Column::PhotoId)
-            .col(Column::UserId)
-            .if_not_exists()
-            .unique()
-            .to_owned();
-        db.execute_raw(db.get_database_backend().build(&stmt))
-            .await?;
-
-        Ok(())
     }
 
     /// 照片点赞记录，使用强类型 ID

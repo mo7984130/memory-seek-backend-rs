@@ -27,7 +27,7 @@ mod orm {
         pub date_str: TimelineStatId,
 
         /// 照片数量
-        pub count: u64,
+        pub count: i64,
 
         /// 本月份内, 最新一张照片的时间
         pub anchor_time: DateTime,

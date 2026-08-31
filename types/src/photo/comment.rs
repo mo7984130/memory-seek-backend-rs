@@ -37,7 +37,7 @@ mod entity {
         pub content: String,
 
         /// 喜欢该评论的数量
-        pub like_count: u32,
+        pub like_count: i32,
 
         /// 修改时间
         pub updated_at: DateTime,
@@ -96,7 +96,7 @@ mod entity {
                 photo_id: model.photo_id,
                 user_id: model.user_id,
                 content: model.content,
-                like_count: model.like_count,
+                like_count: model.like_count as u32,
                 created_at: model.created_at,
                 updated_at: model.updated_at,
             }

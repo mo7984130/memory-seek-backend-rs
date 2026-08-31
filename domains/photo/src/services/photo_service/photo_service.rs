@@ -2,9 +2,14 @@ use std::{pin::Pin, sync::Arc};
 
 use bytes::Bytes;
 use common::{
-    error::contextual::ext::{ContextualResultExt, IntoContextualExt, OptionExt},
-    error::{AppError, ContextualError, contextual},
-    ext::ResultInspectErrAsync,
+    error::{
+        AppError, ContextualError,
+        contextual::{
+            self,
+            ext::{ContextualResultExt, IntoContextualExt, OptionExt},
+        },
+    },
+    ext::{ResultInspectErrAsync, ToOk},
     inc_error, metrics_name, timed,
     types::CursorPage,
     utils::MetricsTimerExt,
@@ -42,7 +47,25 @@ pub struct PhotoService;
 
 // 查询
 impl PhotoService {
-    /// 查询用户照片, 并生成包含访问令牌和点赞状态的视图.
+    #[instrument(skip_all)]
+    #[common_macros::metered]
+    pub async fn get_photo_info(
+        state: &PhotoState,
+        user_id: UserId,
+        photo_id: PhotoId,
+    ) -> Result<PhotoView> {
+        Self::load_photos_info(state, user_id, &[photo_id])
+            .await?
+            .pop()
+            .ok_or_warn(
+                "photo_not_exist",
+                "用户尝试获取一个不存在的照片的信息",
+                AppError::bad_request("照片不存在"),
+            )?
+            .to_ok()
+    }
+
+    /// 查询照片, 并生成包含访问令牌和点赞状态的视图.
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, count = %photo_ids.len())

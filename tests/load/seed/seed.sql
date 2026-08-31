@@ -85,7 +85,7 @@ SELECT u,
        (u - 1) * :PHOTOS_PER_USER + 1,
        'seed_file_' || u || '_1',
        0.95,
-       '{"x1":0.1,"y1":0.1,"x2":0.6,"y2":0.9}',
+       '[0.1,0.1,0.6,0.9]',
        ('[' || (SELECT string_agg((random() * 2 - 1)::numeric(5,4)::text, ',')
                  FROM generate_series(1, 512)) || ']')::vector,
        :FACES_PER_PERSON,

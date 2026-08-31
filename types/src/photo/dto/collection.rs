@@ -82,7 +82,6 @@ mod orm {
     use crate::auth::user::UserId;
     use crate::photo::collection::CollectionRecord;
     use crate::photo::{CollectionBriefView, ImageToken};
-    use common::utils::TokenCipher;
 
     impl From<CollectionRecord> for CollectionBriefView {
         fn from(record: CollectionRecord) -> Self {
@@ -98,15 +97,11 @@ mod orm {
         pub fn with_generate_cover_token(
             mut self,
             viewer: UserId,
-            cipher: &TokenCipher,
         ) -> common::error::contextual::Result<Self> {
             self.cover_token = self
                 .cover_token
                 .as_ref()
-                .map(|fid| {
-                    let seed = format!("{}:{}", viewer, fid);
-                    cipher.encrypt(&ImageToken::thumbnail(viewer, fid.to_string()), Some(&seed))
-                })
+                .map(|fid| ImageToken::thumbnail(viewer, fid.to_string()).encrypt())
                 .transpose()?;
             Ok(self)
         }

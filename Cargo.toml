@@ -21,7 +21,9 @@ members = [
 [profile.release]
 opt-level = 3
 debug = false
+# debug = 2
 strip = "symbols"
+# strip = false
 debug-assertions = false
 overflow-checks = false
 lto = "thin"
@@ -65,7 +67,6 @@ futures = "0.3.32"
 const_format = "0.2.35"
 image = "0.25.9"
 config = { version = "0.15.19", features = ["yaml"] }
-dotenvy = "0.15.7"
 async-trait = "0.1.89"
 
 md5 = "0.8.0"

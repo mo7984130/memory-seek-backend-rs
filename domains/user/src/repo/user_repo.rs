@@ -1,6 +1,6 @@
 use audit::{AuditEvent, AuditRecorder};
 use common::error::{ContextualError, contextual::Result};
-use common::ext::RedisExt;
+use common::ext::{RedisExt, ToOk};
 use common::utils::MetricsTimerExt;
 use common::{Pool, db_transaction, metrics_name};
 use constants::RedisKeys;
@@ -53,7 +53,7 @@ impl UserRepo {
                     let user = UserMapper::query_by_id(&self.db, user_id)
                         .await?
                         .user_not_found()?;
-                    UserInfo::from_with_token(user)
+                    UserInfo::from_with_token(user).to_ok()
                 },
             )
             .timed(metrics_name!("cache_get_or_load"))

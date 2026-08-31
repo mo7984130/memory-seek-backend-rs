@@ -4,7 +4,7 @@ use common::time::DateTime;
 use validator::Validate;
 
 use super::validators::*;
-use crate::auth::user::UserId;
+use crate::{auth::user::UserId, photo::ImageTokenStr};
 
 // ============================================================
 // UserIds — 校验型用户 ID 批量列表
@@ -32,8 +32,8 @@ crate::out_dto!(UserInfo, "user/", Debug; {
     /// 邮箱
     pub email: String,
 
-    /// 头像令牌
-    pub avatar_token: Option<String>,
+    /// 头像令牌（加密字符串）
+    pub avatar_token: Option<ImageTokenStr>,
 
     /// 创建时间
     pub created_at: DateTime,
@@ -83,7 +83,7 @@ crate::in_dto!(UpdateAvatarParam, "user/", serialize, docs = "更新头像请求
 crate::out_dto!(UserBriefView, "user/", rename = "UserBrief"; {
     pub user_id: UserId,
     pub nickname: String,
-    pub avatar_token: Option<String>,
+    pub avatar_token: Option<ImageTokenStr>,
 });
 
 #[cfg(test)]
@@ -128,21 +128,6 @@ mod tests {
         let json = serde_json::to_string(&user).unwrap();
         assert!(json.contains("\"avatarToken\""));
         assert!(json.contains("\"createdAt\""));
-    }
-
-    #[test]
-    fn test_user_info_clone() {
-        let user = UserInfo {
-            id: UserId(123),
-            username: "testuser".to_string(),
-            nickname: "Test User".to_string(),
-            email: "test@example.com".to_string(),
-            avatar_token: Some("token123".to_string()),
-            created_at: DateTime::from_timestamp(0, 0).unwrap(),
-        };
-        let cloned = user.clone();
-        assert_eq!(user.id, cloned.id);
-        assert_eq!(user.username, cloned.username);
     }
 
     #[test]

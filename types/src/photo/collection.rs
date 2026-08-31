@@ -40,7 +40,7 @@ mod entity {
         pub description: Option<String>,
 
         /// 收藏的照片总数
-        pub photo_count: u64,
+        pub photo_count: i64,
 
         /// 封面照片的文件ID
         pub cover_file_id: Option<String>,
@@ -76,7 +76,7 @@ mod entity {
                 user_id: model.user_id,
                 name: model.name,
                 description: model.description,
-                photo_count: model.photo_count,
+                photo_count: model.photo_count as u64,
                 cover_file_id: model.cover_file_id,
                 cover_photo_id: model.cover_photo_id,
                 created_at: model.created_at,

@@ -1,6 +1,6 @@
 use clap::Parser;
 use common::Result;
-use common::error::{ContextualError, contextual::ext::IntoContextualExt};
+use common::error::contextual::ext::IntoContextualExt;
 use common::time::Duration;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -38,14 +38,7 @@ async fn main() -> Result<()> {
     setup::bases::log::init();
 
     // 加载配置
-    let cfg = AppConfig::load(cli.config).map_err(|source| {
-        ContextualError::error(
-            "config_load_err",
-            "加载配置失败",
-            source,
-            common::error::AppError::InternalServerError,
-        )
-    })?;
+    let cfg = AppConfig::load(cli.config);
 
     // 初始化应用（内部会初始化日志、数据库、Redis、metrics 等）
     let app_setup = AppSetup::init(&cfg).await?;

@@ -8,8 +8,6 @@ use crate::photo::ImageToken;
 use crate::photo::photo::PhotoId;
 #[cfg(feature = "orm")]
 use crate::photo::photo::PhotoRecord;
-#[cfg(feature = "orm")]
-use common::utils::{TokenCipher, token_cipher};
 
 crate::out_dto!(PhotoView, "photo/", rename = "Photo"; {
     pub id: PhotoId,
@@ -65,7 +63,7 @@ impl PhotoView {
         viewer: UserId,
     ) -> common::error::contextual::Result<Self> {
         let file_id = record.file_id.clone();
-        Self::from(record).with_tokens(&file_id, viewer, token_cipher())
+        Self::from(record).with_tokens(&file_id, viewer)
     }
 
     #[cfg(feature = "orm")]
@@ -73,53 +71,10 @@ impl PhotoView {
         mut self,
         file_id: &str,
         viewer: UserId,
-        token_cipher: &TokenCipher,
     ) -> common::error::contextual::Result<Self> {
-        self = self.with_original_token(file_id, viewer, token_cipher)?;
-        self = self.with_thumbnail_token(file_id, viewer, token_cipher)?;
-        self = self.with_preview_token(file_id, viewer, token_cipher)?;
-        Ok(self)
-    }
-
-    #[cfg(feature = "orm")]
-    pub fn with_thumbnail_token(
-        mut self,
-        file_id: &str,
-        viewer: UserId,
-        token_cipher: &TokenCipher,
-    ) -> common::error::contextual::Result<Self> {
-        self.thumbnail_token = Some(token_cipher.encrypt(
-            &ImageToken::thumbnail(viewer, file_id),
-            Some(&format!("{}:{}", self.id, viewer)),
-        )?);
-        Ok(self)
-    }
-
-    #[cfg(feature = "orm")]
-    pub fn with_preview_token(
-        mut self,
-        file_id: &str,
-        viewer: UserId,
-        token_cipher: &TokenCipher,
-    ) -> common::error::contextual::Result<Self> {
-        self.preview_token = Some(token_cipher.encrypt(
-            &ImageToken::preview(viewer, file_id),
-            Some(&format!("{}:{}", self.id, viewer)),
-        )?);
-        Ok(self)
-    }
-
-    #[cfg(feature = "orm")]
-    pub fn with_original_token(
-        mut self,
-        file_id: &str,
-        viewer: UserId,
-        token_cipher: &TokenCipher,
-    ) -> common::error::contextual::Result<Self> {
-        self.original_token = Some(token_cipher.encrypt(
-            &ImageToken::original(viewer, file_id),
-            Some(&format!("{}:{}", self.id, viewer)),
-        )?);
+        self.original_token = Some(ImageToken::original(viewer, file_id).encrypt()?);
+        self.preview_token = Some(ImageToken::preview(viewer, file_id).encrypt()?);
+        self.thumbnail_token = Some(ImageToken::thumbnail(viewer, file_id).encrypt()?);
         Ok(self)
     }
 }
@@ -139,7 +94,7 @@ crate::in_dto!(PhotoCursorParam, "photo/", serde_default, docs = "照片游标�
 mod orm_tests {
     use super::*;
     use crate::photo::ImageTokenType;
-    use common::utils::{TokenCipherConfig, init_token_cipher};
+    use common::utils::{TokenCipher, TokenCipherConfig, init_token_cipher};
 
     fn test_cipher() -> &'static TokenCipher {
         init_token_cipher(&TokenCipherConfig {

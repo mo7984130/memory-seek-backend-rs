@@ -29,9 +29,14 @@ mod entity {
         pub id: CollectionPhotoId,
 
         /// 所属收藏夹的ID
+        /// collection_id 与 photo_id 组成复合唯一键
+        ///     一个照片只能被一个收藏夹收藏一次
+        ///     用于判断某个收藏夹中是否存在某个照片
+        #[sea_orm(unique_key = "collection_photo")]
         pub collection_id: CollectionId,
 
         /// 收藏的照片ID
+        #[sea_orm(unique_key = "collection_photo")]
         pub photo_id: PhotoId,
 
         /// 收藏夹所有者
@@ -42,26 +47,12 @@ mod entity {
     }
 
     /// 创建索引
-    /// CollectionId 和 PhotoId 复合唯一索引
-    ///     一个照片只能被一个收藏夹收藏一次
-    ///     用于判断某个收藏夹中是否存在某个照片
     /// CollectionId 和 CreatedAt 复合索引, 用于 按照收藏时间获取收藏夹里面照片时
     #[common::register_async(
         slice = crate::db_init::INIT_INDEXES,
         ty = crate::db_init::InitIndexFn
     )]
     async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
-        let stmt = Index::create()
-            .name("idx_collection_id_photo_id")
-            .table(Entity)
-            .col(Column::CollectionId)
-            .col(Column::PhotoId)
-            .if_not_exists()
-            .unique()
-            .to_owned();
-        db.execute_raw(db.get_database_backend().build(&stmt))
-            .await?;
-
         let stmt = Index::create()
             .name("idx_collection_id_created_at")
             .table(Entity)

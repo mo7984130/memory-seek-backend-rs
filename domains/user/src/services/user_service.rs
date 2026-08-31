@@ -17,7 +17,7 @@ use tokio::task::spawn_blocking;
 
 use crate::UserState;
 use types::auth::user::UserId;
-use types::photo::ImageToken;
+use types::photo::{ImageToken, ImageTokenStr};
 use types::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
     UpdateAvatarParam, UserBriefView, UserInfo,
@@ -145,7 +145,7 @@ pub async fn update_avatar(
     user_id: UserId,
     file_data: Bytes,
     req: UpdateAvatarParam,
-) -> Result<String> {
+) -> Result<ImageTokenStr> {
     // 校验图片
     let img_metadata = timed!("validate_image", {
         FileValidator::validate_image(&file_data, &req.file_name, &req.content_type).map_err(
@@ -201,7 +201,7 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token = ImageToken::encrypt_avatar_token(&new_key, user_id)?;
+    let avatar_token = ImageToken::thumbnail(user_id, new_key).into();
 
     Ok(avatar_token)
 }

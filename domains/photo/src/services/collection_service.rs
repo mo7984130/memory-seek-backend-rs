@@ -5,7 +5,6 @@ use crate::repo::CollectionRepo;
 use crate::state::PhotoState;
 use common::Result;
 use common::ext::ToOk;
-use common::utils::token_cipher;
 use types::auth::user::UserId;
 use types::photo::collection::CollectionId;
 use types::photo::dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView};
@@ -27,7 +26,7 @@ impl CollectionService {
         // 组装结果
         let result = collections
             .into_iter()
-            .map(|c| CollectionView::from(c).with_generate_cover_token(user_id, token_cipher()))
+            .map(|c| CollectionView::from(c).with_generate_cover_token(user_id))
             .collect::<common::error::contextual::Result<Vec<_>>>()?;
 
         Ok(result)

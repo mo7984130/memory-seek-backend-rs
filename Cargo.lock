@@ -5047,7 +5047,6 @@ dependencies = [
  "config",
  "constants",
  "deadpool-redis",
- "dotenvy",
  "email",
  "insight-face-rs",
  "metrics",

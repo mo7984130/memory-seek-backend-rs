@@ -13,8 +13,8 @@ mod entity {
     use super::*;
     use crate::auth::user::UserId;
     use crate::photo::comment::CommentId;
-    use common::{ContextualResult, time::DateTime};
-    use sea_orm::{entity::prelude::*, sea_query::Index};
+    use common::time::DateTime;
+    use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
@@ -25,36 +25,18 @@ mod entity {
         pub id: CommentLikeId,
 
         /// 评论ID
+        /// comment_id 与 user_id 组成复合唯一键
+        ///     一个评论只能被一个用户喜欢一次
+        ///     用于判断用户是否喜欢这个评论
+        #[sea_orm(unique_key = "comment_like")]
         pub comment_id: CommentId,
 
         /// 喜欢者ID
+        #[sea_orm(unique_key = "comment_like")]
         pub user_id: UserId,
 
         // 创建时间
         pub created_at: DateTime,
-    }
-
-    /// 创建索引
-    /// CommentId 和 UserId 复合唯一索引
-    ///     一个评论只能被一个用户喜欢一次
-    ///     用于判断用户是否喜欢这个评论
-    #[common::register_async(
-        slice = crate::db_init::INIT_INDEXES,
-        ty = crate::db_init::InitIndexFn
-    )]
-    async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
-        let stmt = Index::create()
-            .name("idx_comment_like_comment_id_user_id")
-            .table(Entity)
-            .col(Column::CommentId)
-            .col(Column::UserId)
-            .if_not_exists()
-            .unique()
-            .to_owned();
-        db.execute_raw(db.get_database_backend().build(&stmt))
-            .await?;
-
-        Ok(())
     }
 
     /// 评论点赞记录，使用强类型 ID

@@ -156,7 +156,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     .await?;
 
     // 返回 LoginResult（包含用户信息和令牌）
-    let user_info = UserInfo::from_with_token(updated_user)?;
+    let user_info = UserInfo::from_with_token(updated_user);
     Ok(LoginResponse {
         user: user_info,
         access_token: new_access_token,

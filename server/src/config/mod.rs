@@ -1,4 +1,6 @@
-use config::{Config, ConfigError, Environment, File};
+use std::path::PathBuf;
+
+use config::{Config, Environment, File};
 
 use serde::Deserialize;
 use tracing::info;
@@ -66,22 +68,33 @@ impl AppConfig {
     /// 加载配置，按优先级确定配置文件路径：
     /// 1. CLI 参数 `--config` / `-c`
     /// 2. 环境变量 `MEMORY_SEEK_CONFIG_PATH`
-    /// 3. 默认值 `config.yaml`
-    pub fn load(config_path: Option<String>) -> Result<Self, ConfigError> {
+    /// 3. 默认值 `config.yml or etc/memory-seek/config.yml`
+    pub fn load(cli_config_path: Option<String>) -> Self {
         info!("加载配置文件");
-        let _ = dotenvy::dotenv();
 
-        let config_path = config_path
-            .or_else(|| std::env::var("MEMORY_SEEK_CONFIG_PATH").ok())
-            .unwrap_or_else(|| "config.yml".to_string());
-        info!("配置文件路径: {}", config_path);
+        let config_path = if let Some(path) = cli_config_path {
+            PathBuf::from(path)
+        } else if let Ok(path) = std::env::var("MEMORY_SEEK_CONFIG_PATH") {
+            PathBuf::from(path)
+        } else {
+            let local = PathBuf::from("config.yml");
+
+            if local.exists() {
+                local
+            } else {
+                PathBuf::from("/etc/memory-seek-server/config.yml")
+            }
+        };
+
+        info!("配置文件路径: {:?}", config_path);
 
         let cfg = Config::builder()
-            .add_source(File::with_name(&config_path))
+            .add_source(File::from(config_path))
             .add_source(Environment::with_prefix("MEMORY_SEEK").separator("__"))
-            .build()?;
+            .build()
+            .expect("构建配置失败");
 
-        cfg.try_deserialize()
+        cfg.try_deserialize().expect("反序列化配置失败")
     }
 
     /// 返回服务器绑定地址和端口.
