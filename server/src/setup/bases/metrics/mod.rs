@@ -3,14 +3,15 @@ mod redis;
 mod system;
 
 use std::mem::take;
+use std::sync::Arc;
 
 use axum::{Router, middleware::from_fn, routing::get};
+use common::tokio::TaskManager;
 use common::{Pool, Result, register_async, time::Duration};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use sysinfo::System;
-use tokio::select;
 use tracing::{debug, info};
 
 use crate::{
@@ -47,7 +48,11 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     debug!("正在初始化 Prometheus 指标");
     let config = &config.metrics;
 
-    let cancel_token = setup.cancel_token.child_token();
+    let task_manager = setup
+        .registry
+        .get::<TaskManager>()
+        .miss_dep("metrics", "TaskManager")?
+        .clone();
     let upkeep_interval = Duration::from_secs(config.interval_seconds);
 
     let handle = PrometheusBuilder::new()
@@ -67,26 +72,21 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
         .miss_dep("metrics", "RedisPool")?
         .clone();
 
-    // 后台执行 recorder upkeep
+    // 常驻后台任务：指标 recorder upkeep 与周期性采集，由 TaskManager 托管。
+    // `System` 采样器跨周期复用，用互斥锁共享；等待阶段可被取消，执行阶段为瞬时同步采集。
+    let sys = Arc::new(tokio::sync::Mutex::new(System::new_all()));
     let upkeep_handle = handle.clone();
-    tokio::spawn(async move {
-        let mut tick = tokio::time::interval(upkeep_interval);
-        let mut sys = System::new_all();
-
-        loop {
-            select! {
-                _ = cancel_token.cancelled() => {
-                    tracing::info!("指标采集任务收到取消信号，正在退出");
-                    break;
-                }
-                _ = tick.tick() => {
-                    upkeep_handle.run_upkeep();
-                    sys.refresh_all();
-                    system::collect_system_metrics(&mut sys);
-                    database::collect_db_metrics(&db);
-                    redis::collect_redis_metrics(&redis);
-                }
-            }
+    task_manager.spawn_interval("metrics_upkeep", upkeep_interval, move || {
+        let sys = sys.clone();
+        let upkeep_handle = upkeep_handle.clone();
+        let db = db.clone();
+        let redis = redis.clone();
+        async move {
+            upkeep_handle.run_upkeep();
+            let mut sys = sys.lock().await;
+            system::collect_system_metrics(&mut sys);
+            database::collect_db_metrics(&db);
+            redis::collect_redis_metrics(&redis);
         }
     });
 
