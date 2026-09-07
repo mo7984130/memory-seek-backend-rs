@@ -64,14 +64,13 @@ async fn main() -> Result<()> {
             middlewares::auth::auth_middleware,
         ));
 
-        let router = router.merge(public).merge(protected);
-
-        let router = router
+        router
+            .merge(public)
+            .merge(protected)
             .layer(from_fn(middlewares::tracing_span::tracing_span))
             .layer(from_fn(middlewares::trace_id::trace_id_middleware))
             .layer(from_fn(middlewares::client_ip::client_ip_middleware))
-            .layer(middlewares::cors::layer());
-        router
+            .layer(middlewares::cors::layer())
     };
 
     // 启动服务器

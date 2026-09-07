@@ -21,4 +21,3 @@ pub async fn init(_config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     info!("TaskManager 初始化完成");
     Ok(())
 }
-

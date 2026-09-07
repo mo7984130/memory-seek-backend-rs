@@ -14,6 +14,13 @@ pub struct AppRouter {
     pub protected: Router,
     pub public: Router,
 }
+
+impl Default for AppRouter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppRouter {
     pub fn new() -> Self {
         Self {

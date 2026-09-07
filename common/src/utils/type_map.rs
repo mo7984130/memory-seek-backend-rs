@@ -7,6 +7,12 @@ pub struct TypeMap {
     values: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 
+impl Default for TypeMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeMap {
     pub fn new() -> Self {
         Self {
