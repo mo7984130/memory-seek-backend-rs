@@ -15,7 +15,7 @@ members = [
     "domains/photo",
     "domains/backup",
     "server",
-    "tools/bench-support", "tests/e2e",
+    # "tools/bench-support", "tests/e2e",
 ]
 
 [profile.release]
