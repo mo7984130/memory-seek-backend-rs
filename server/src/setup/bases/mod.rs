@@ -1,6 +1,7 @@
 pub mod database;
 pub mod log;
 pub mod redis;
+pub mod task_manager;
 
 #[cfg(feature = "_cache")]
 pub mod cache;

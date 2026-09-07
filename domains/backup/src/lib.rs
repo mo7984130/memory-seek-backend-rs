@@ -11,6 +11,5 @@ pub mod storage;
 
 pub use config::BackupConfig;
 pub use error::BackupError;
-pub use scheduler::BackupScheduler;
 pub use service::{BackupResult, BackupService};
 pub use state::BackupState;

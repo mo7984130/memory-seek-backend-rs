@@ -696,7 +696,7 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-compression",
  "audit",
@@ -712,8 +712,6 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
- "tokio-cron-scheduler",
- "tokio-util",
  "tracing",
  "types",
 ]
@@ -1118,7 +1116,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1128,6 +1126,7 @@ dependencies = [
  "bcrypt",
  "chrono",
  "common_macros",
+ "dashmap",
  "deadpool-redis",
  "hex",
  "hkdf 0.12.4",
@@ -1143,6 +1142,7 @@ dependencies = [
  "snowflaked",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tracing",
  "ts-rs",
  "validator",
@@ -1349,15 +1349,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "croner"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c344b0690c1ad1c7176fe18eb173e0c927008fdaaa256e40dfd43ddd149c0843"
-dependencies = [
- "chrono",
-]
-
-[[package]]
 name = "crossbeam-channel"
 version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1510,6 +1501,20 @@ dependencies = [
  "darling_core 0.23.0",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "dashmap"
+version = "6.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6361d5c062261c78a176addb82d4c821ae42bed6089de0e12603cd25de2059c"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
 ]
 
 [[package]]
@@ -5115,7 +5120,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.17"
+version = "0.2.0"
 dependencies = [
  "audit",
  "auth",
@@ -5815,21 +5820,6 @@ dependencies = [
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "tokio-cron-scheduler"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a5597b569b4712cf78aa0c9ae29742461b7bda1e49c2a5fdad1d79bf022f8f0"
-dependencies = [
- "chrono",
- "croner",
- "num-derive",
- "num-traits",
- "tokio",
- "tracing",
- "uuid",
 ]
 
 [[package]]

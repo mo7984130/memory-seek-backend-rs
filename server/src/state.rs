@@ -1,16 +1,14 @@
+use common::tokio::TaskManager;
 use deadpool_redis::Pool;
 use sea_orm::DatabaseConnection;
 
 use crate::setup::AppSetup;
-#[cfg(feature = "backup")]
-use crate::setup::domains::backup::BackupRuntime;
 use crate::util::MissDepError;
 
 pub struct AppState {
     pub db: DatabaseConnection,
     pub redis: Pool,
-    #[cfg(feature = "backup")]
-    pub backup_scheduler: backup::BackupScheduler,
+    pub task_manager: TaskManager,
 }
 
 impl AppState {
@@ -26,12 +24,10 @@ impl AppState {
                 .get::<Pool>()
                 .miss_dep("AppState", "RedisPool")?
                 .clone(),
-            #[cfg(feature = "backup")]
-            backup_scheduler: setup
+            task_manager: setup
                 .registry
-                .get::<BackupRuntime>()
-                .miss_dep("AppState", "BackupRuntime")?
-                .scheduler
+                .get::<TaskManager>()
+                .miss_dep("AppState", "TaskManager")?
                 .clone(),
         })
     }
