@@ -9,7 +9,7 @@ default = ["lightweight"]
 
 lightweight = []
 ts = ["dep:ts-rs"]
-orm = ["dep:sea-orm"]
+orm = ["dep:sea-orm", "dep:linkme"]
 face-engine = ["orm", "dep:insight-face-rs"]
 
 [dependencies]
@@ -24,6 +24,8 @@ base64.workspace = true
 regex.workspace = true
 
 
-sea-orm = { workspace = true, features = ["sqlx-postgres", "macros"], optional = true }
+sea-orm = { workspace = true, features = ["sqlx-postgres", "macros", "schema-sync", "entity-registry"], optional = true }
 insight-face-rs = { workspace = true, features = ["pgvector"], optional = true }
 ts-rs = { workspace = true, optional = true }
+linkme = { workspace = true, optional = true }
+tracing.workspace = true

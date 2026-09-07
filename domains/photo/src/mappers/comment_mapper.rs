@@ -4,6 +4,7 @@ use common::{
     DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
 };
+use sea_orm::ExprTrait;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
     QueryOrder, QuerySelect, sea_query::Expr,
@@ -146,7 +147,6 @@ impl CommentMapper {
             .filter(Column::UserId.eq(user_id))
             .exec_with_returning(db)
             .await?
-            .pop()
             .map(CommentRecord::from)
             .to_ok()
     }

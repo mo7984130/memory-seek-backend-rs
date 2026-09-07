@@ -3,11 +3,11 @@
 //! 提供图片访问 token 契约类型（`ImageToken` / `ImageTokenType` / `FaceBBox`），
 //! 由 `common` 下沉至 `types`，供 photo / user / auth 各域复用，并可随 DTO 一起导出 TS。
 
-use serde::{Deserialize, Serialize};
+use common::ContextualResult;
+use common::utils::token_cipher;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::auth::user::UserId;
-#[cfg(feature = "orm")]
-use common::utils::token_cipher;
 
 /// 图片类型
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
@@ -85,25 +85,39 @@ impl FaceBBox {
     }
 }
 
-/// 统一图片 Token
-#[derive(Serialize, Deserialize, Clone, Debug)]
+/// 统一图片 Token(纯数据，序列化为明文对象；需要加密时用 [`ImageTokenStr`])
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(type = "string"))]
 pub struct ImageToken {
     /// 文件路径
+    #[serde(rename = "fileId")]
     pub file_id: String,
     /// 图片类型
     #[serde(rename = "type")]
     pub token_type: ImageTokenType,
     /// 人脸边界框（归一化坐标，仅 Crop 类型需要）
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "bbox", skip_serializing_if = "Option::is_none")]
     pub bbox: Option<FaceBBox>,
     /// 原图尺寸（像素，Crop 类型需要）
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "sourceDimensions", skip_serializing_if = "Option::is_none")]
     pub source_dimensions: Option<ImageDimensions>,
     /// 浏览者用户 ID（图片访问审计主体）
+    #[serde(rename = "viewerId")]
     pub viewer_id: UserId,
 }
 
 impl ImageToken {
+    pub fn decrypt(token: &str) -> ContextualResult<Self> {
+        token_cipher().decrypt(token)
+    }
+
+    pub fn encrypt(&self) -> ContextualResult<String> {
+        // nonce seed 纳入 viewer_id：同一文件的 token 按浏览者区分，
+        // 避免“相同 nonce 加密不同明文”导致的 AES-GCM nonce 复用
+        let seed = format!("{}:{}", self.viewer_id, self.file_id);
+        token_cipher().encrypt(self, Some(&seed))
+    }
     /// 创建缩略图 token
     ///
     /// # 参数
@@ -181,28 +195,72 @@ impl ImageToken {
             viewer_id: viewer,
         }
     }
+}
 
-    /// 加密头像缩略图 token
-    ///
-    /// # 参数
-    /// - `avatar_file_id`: 头像文件 ID
-    /// - `viewer`: 浏览者用户 ID
-    ///
-    /// # 返回
-    /// 加密后的头像 token，加密失败返回 `AppError`
-    #[cfg(feature = "orm")]
-    pub fn encrypt_avatar_token(
-        avatar_file_id: &str,
-        viewer: UserId,
-    ) -> common::error::contextual::Result<String> {
-        let seed = format!("{}:{}", viewer, avatar_file_id);
-        token_cipher().encrypt(&Self::thumbnail(viewer, avatar_file_id), Some(&seed))
+/// 自动加密的图片 token 封装
+///
+/// 序列化时自动输出加密字符串，反序列化只接受加密字符串并解密还原。
+/// 内部持有 [`ImageToken`] 纯数据，适合作为 DTO 字段类型（如 `avatar_token`）。
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(type = "string"))]
+pub struct ImageTokenStr(pub ImageToken);
+
+impl ImageTokenStr {
+    /// 取出内部 token(解密后的原始数据)
+    pub fn into_inner(self) -> ImageToken {
+        self.0
+    }
+}
+
+impl Serialize for ImageTokenStr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let token = self.0.encrypt().map_err(serde::ser::Error::custom)?;
+
+        serializer.serialize_str(&token)
+    }
+}
+
+impl<'de> Deserialize<'de> for ImageTokenStr {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // 只接受加密字符串（不接受明文对象）,反序列化即解密
+        let token = String::deserialize(deserializer)?;
+
+        ImageToken::decrypt(&token)
+            .map(ImageTokenStr)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+impl From<ImageToken> for ImageTokenStr {
+    fn from(token: ImageToken) -> Self {
+        Self(token)
+    }
+}
+
+impl From<ImageTokenStr> for ImageToken {
+    fn from(wrapper: ImageTokenStr) -> Self {
+        wrapper.0
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::utils::{TokenCipherConfig, init_token_cipher};
+
+    fn init_test_cipher() {
+        init_token_cipher(&TokenCipherConfig {
+            key: "test-key-for-unit-tests".to_owned(),
+            salt: "test-salt".to_owned(),
+        });
+    }
 
     #[test]
     fn test_thumbnail_constructor() {
@@ -307,6 +365,7 @@ mod tests {
 
     #[test]
     fn test_image_token_serialize_roundtrip() {
+        init_test_cipher();
         let token = ImageToken::thumbnail(UserId(11), "file-abc");
         let json = serde_json::to_string(&token).unwrap();
         let deserialized: ImageToken = serde_json::from_str(&json).unwrap();
@@ -318,6 +377,7 @@ mod tests {
 
     #[test]
     fn test_image_token_crop_serialize_roundtrip() {
+        init_test_cipher();
         let bbox = FaceBBox {
             x1: 0.05,
             y1: 0.1,
@@ -343,25 +403,35 @@ mod tests {
     }
 
     #[test]
-    fn test_image_token_missing_viewer_fails_deserialize() {
-        let json = r#"{"fileId":"file-abc","type":"preview"}"#;
-        let result: Result<ImageToken, _> = serde_json::from_str(json);
-        assert!(result.is_err(), "缺 viewerId 的旧 token 应反序列化失败");
+    fn test_image_token_str_serializes_to_encrypted_string() {
+        init_test_cipher();
+        let token = ImageToken::preview(UserId(5), "img-1");
+        let json = serde_json::to_value(ImageTokenStr::from(token)).unwrap();
+        assert!(
+            json.is_string(),
+            "ImageTokenStr 应序列化为加密字符串, 实际为 {json}"
+        );
+        // 加密字符串可解密还原全部字段
+        let decrypted: ImageTokenStr = serde_json::from_value(json).unwrap();
+        assert_eq!(decrypted.0.file_id, "img-1");
+        assert_eq!(decrypted.0.token_type, ImageTokenType::Preview);
+        assert_eq!(decrypted.0.viewer_id, UserId(5));
     }
 
     #[test]
-    fn test_image_token_json_uses_type_field() {
+    fn test_image_token_plain_serializes_to_object() {
         let token = ImageToken::preview(UserId(5), "img-1");
+        // 纯数据 ImageToken 走派生序列化，输出明文字段对象
         let json = serde_json::to_value(&token).unwrap();
-        assert!(json.get("type").is_some());
+        assert!(json.is_object());
         assert_eq!(json["type"], "preview");
     }
 
     #[test]
-    fn test_image_token_bbox_omitted_when_none() {
-        let token = ImageToken::original(UserId(6), "img-2");
-        let json = serde_json::to_value(&token).unwrap();
-        assert!(json.get("bbox").is_none());
+    fn test_image_token_missing_viewer_fails_deserialize() {
+        let json = r#"{"fileId":"file-abc","type":"preview"}"#;
+        let result: Result<ImageToken, _> = serde_json::from_str(json);
+        assert!(result.is_err(), "缺 viewerId 的旧 token 应反序列化失败");
     }
 
     #[test]
@@ -409,11 +479,13 @@ mod orm_tests {
     }
 
     #[test]
-    fn test_encrypt_avatar_token_some() {
-        let cipher = test_cipher();
-        let token = ImageToken::encrypt_avatar_token("avatar-file-id", UserId(9)).unwrap();
+    fn test_encrypt_decrypt_roundtrip() {
+        test_cipher();
+        let token = ImageToken::thumbnail(UserId(9), "avatar-file-id")
+            .encrypt()
+            .unwrap();
         // 验证能解密回来
-        let decrypted: ImageToken = cipher.decrypt(&token).unwrap();
+        let decrypted: ImageToken = ImageToken::decrypt(&token).unwrap();
         assert_eq!(decrypted.file_id, "avatar-file-id");
         assert_eq!(decrypted.token_type, ImageTokenType::Thumbnail);
         assert_eq!(decrypted.viewer_id, UserId(9));

@@ -8,7 +8,7 @@ use sea_orm::{
     ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, Expr, Func},
 };
-use types::audit::{AuditEventId, AuditRecord};
+use types::audit::{AuditId, AuditRecord};
 use types::audit::{Column, Entity};
 
 use types::auth::user::UserId;
@@ -27,14 +27,14 @@ impl AuditMapper {
         let bucket = Expr::expr(
             Func::cust(Alias::new("date_trunc"))
                 .arg(Expr::val(trunc))
-                .arg(Expr::col((Entity, Column::OccurredAt))),
+                .arg(Expr::col((Entity, Column::CreatedAt))),
         );
         let mut query = Entity::find()
             .select_only()
             .expr_as(bucket.clone(), "bucket")
             .column_as(Column::EventId.count(), "cnt")
             .group_by(bucket)
-            .order_by_asc(Column::OccurredAt);
+            .order_by_asc(Column::CreatedAt);
         if let Some(event_type) = event_type {
             query = query.filter(Column::EventType.eq(event_type));
         }
@@ -42,10 +42,10 @@ impl AuditMapper {
             query = query.filter(Column::TargetType.eq(target_type));
         }
         if let Some(start) = start {
-            query = query.filter(Column::OccurredAt.gte(start));
+            query = query.filter(Column::CreatedAt.gte(start));
         }
         if let Some(end) = end {
-            query = query.filter(Column::OccurredAt.lte(end));
+            query = query.filter(Column::CreatedAt.lte(end));
         }
         query
             .into_tuple::<(DateTime, i64)>()
@@ -83,11 +83,11 @@ impl AuditMapper {
         target_type: Option<&str>,
         target_id: Option<i64>,
         actor_id: Option<UserId>,
-        cursor: &Option<TimeIdCursor<AuditEventId>>,
+        cursor: &Option<TimeIdCursor<AuditId>>,
         size: u64,
     ) -> Result<CursorPage<AuditRecord, ()>> {
         let mut query = Entity::find()
-            .order_by_desc(Column::OccurredAt)
+            .order_by_desc(Column::CreatedAt)
             .order_by_desc(Column::EventId)
             .limit(size + 1);
         if let Some(event_type) = event_type {
@@ -103,7 +103,7 @@ impl AuditMapper {
             query = query.filter(Column::ActorId.eq(actor_id.0));
         }
         if let Some(cursor) = cursor {
-            query = query.filter(cursor.before(Column::OccurredAt, Column::EventId));
+            query = query.filter(cursor.before(Column::CreatedAt, Column::EventId));
         }
 
         let records = query

@@ -26,7 +26,8 @@ impl TableMetadata {
             table_name
         );
         let stmt = Statement::from_string(sea_orm::DatabaseBackend::Postgres, sql);
-        let result = db.query_all(stmt).await?;
+
+        let result = db.query_all_raw(stmt).await?;
         let mut columns = Vec::new();
         for row in &result {
             if let Ok(name) = row.try_get_by::<String, _>("column_name") {
@@ -52,7 +53,7 @@ impl TableMetadata {
             table_name
         );
         let stmt = Statement::from_string(sea_orm::DatabaseBackend::Postgres, sql);
-        let result = db.query_all(stmt).await?;
+        let result = db.query_all_raw(stmt).await?;
         let mut columns = Vec::new();
         for row in &result {
             if let Ok(name) = row.try_get_by::<String, _>("column_name") {
@@ -73,7 +74,7 @@ impl TableMetadata {
         "#;
         let stmt = Statement::from_string(sea_orm::DatabaseBackend::Postgres, sql.to_string());
 
-        let result = db.query_all(stmt).await?;
+        let result = db.query_all_raw(stmt).await?;
         let mut tables = Vec::new();
 
         for row in &result {
@@ -92,7 +93,7 @@ impl TableMetadata {
             "SHOW server_version_num".to_string(),
         );
         let row = db
-            .query_one(stmt)
+            .query_one_raw(stmt)
             .await?
             .ok_or_else(|| sea_orm::DbErr::Custom("无法读取 PostgreSQL 版本".to_string()))?;
         let version = row

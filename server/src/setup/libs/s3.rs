@@ -1,7 +1,8 @@
 use oss::S3Client;
 use serde::Deserialize;
-use std::sync::Arc;
-use tracing::info;
+use tracing::{debug, info};
+
+use crate::{config::AppConfig, setup::AppSetup};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -15,12 +16,17 @@ pub struct Config {
     pub force_path_style: bool,
 }
 
-/// 根据配置初始化对象存储客户端.
-pub fn init(cfg: &Config) -> Arc<S3Client> {
-    info!("初始化 S3 客户端");
-    let client = S3Client::new(&cfg.to_oss_config());
-    info!("S3 客户端初始化成功");
-    Arc::new(client)
+#[common::register_async(
+    slice = crate::setup::libs::APP_LIBS,
+    ty = crate::setup::InitFn,
+)]
+pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> common::Result<()> {
+    debug!("初始化 S3Client lib");
+    let config = &config.s3;
+    let client = S3Client::new(&config.to_oss_config());
+    setup.registry.insert(client);
+    info!("初始化 S3Client lib 成功");
+    Ok(())
 }
 
 impl Config {

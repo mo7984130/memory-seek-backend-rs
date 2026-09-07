@@ -1,6 +1,8 @@
 use common::utils::TokenCipherConfig;
 use serde::Deserialize;
-use tracing::info;
+use tracing::{debug, info};
+
+use crate::{config::AppConfig, setup::AppSetup};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -8,12 +10,17 @@ pub struct Config {
     pub salt: String,
 }
 
-/// 根据配置初始化全局令牌加密器.
-pub fn init(cfg: &Config) {
-    info!("初始化 TokenCipher");
+#[common::register_async(
+    slice = crate::setup::libs::APP_LIBS,
+    ty = crate::setup::InitFn,
+)]
+pub async fn init(config: &AppConfig, _setup: &mut AppSetup) -> common::Result<()> {
+    debug!("初始化 TokenCipher lib");
+    let config = &config.token_cipher;
     common::utils::init_token_cipher(&TokenCipherConfig {
-        key: cfg.key.clone(),
-        salt: cfg.salt.clone(),
+        key: config.key.clone(),
+        salt: config.salt.clone(),
     });
-    info!("TokenCipher 初始化成功");
+    info!("初始化 TokenCipher lib 成功");
+    Ok(())
 }

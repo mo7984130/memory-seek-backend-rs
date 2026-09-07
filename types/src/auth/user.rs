@@ -50,21 +50,45 @@ mod entity {
     use super::*;
     use crate::{photo::ImageToken, user::models::UserInfo};
 
-    #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
+    #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
     #[sea_orm(table_name = "auth_user")]
     pub struct Model {
+        /// 主键ID
         #[sea_orm(primary_key)]
         pub id: UserId,
-        #[sea_orm(unique)]
+
+        /// 用户名
+        #[sea_orm(column_type = "String(StringLen::N(255))", unique)]
         pub username: String,
+
+        /// 邮箱地址
+        #[sea_orm(column_type = "String(StringLen::N(255))", unique)]
         pub email: String,
+
+        /// 加密后的密码
+        #[sea_orm(column_type = "String(StringLen::N(255))")]
         pub password: String,
+
+        /// 用户昵称
+        #[sea_orm(column_type = "String(StringLen::N(255))")]
         pub nickname: String,
+
+        /// 头像 文件ID
+        #[sea_orm(column_type = "String(StringLen::N(1023))", nullable)]
         pub avatar_file_id: Option<String>,
+
+        /// 邀请人ID
         pub inviter: UserId,
+
+        /// 刷新令牌
+        #[sea_orm(column_type = "String(StringLen::N(32))", nullable)]
         pub refresh_token: Option<String>,
+        /// 刷新令牌过期时间
         pub refresh_token_expire_at: Option<DateTime>,
+
+        /// 更新时间
         pub updated_at: DateTime,
+        /// 创建时间
         pub created_at: DateTime,
     }
 
@@ -114,7 +138,7 @@ mod entity {
                 username: user.username,
                 nickname: user.nickname,
                 email: user.email,
-                avatar_token: user.avatar_file_id,
+                avatar_token: None,
                 created_at: user.created_at,
             }
         }
@@ -122,18 +146,18 @@ mod entity {
 
     impl UserInfo {
         /// 为头像文件 ID 生成加密访问令牌.
-        pub fn with_avatar_token(mut self) -> common::error::contextual::Result<Self> {
-            self.avatar_token = self
-                .avatar_token
-                .as_deref()
-                .map(|key| ImageToken::encrypt_avatar_token(key, self.id))
-                .transpose()?;
-            Ok(self)
+        pub fn with_avatar_token(&mut self, file_id: String) {
+            self.avatar_token = Some(ImageToken::thumbnail(self.id, file_id).into());
         }
 
         /// 将用户记录转换为包含头像访问令牌的用户信息.
-        pub fn from_with_token(user: UserRecord) -> common::error::contextual::Result<Self> {
-            UserInfo::from(user).with_avatar_token()
+        pub fn from_with_token(user: UserRecord) -> Self {
+            let file_id = user.avatar_file_id.clone();
+            let mut this = UserInfo::from(user);
+            if let Some(file_id) = file_id {
+                this.with_avatar_token(file_id);
+            }
+            this
         }
     }
 }

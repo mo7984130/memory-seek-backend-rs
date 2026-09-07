@@ -127,7 +127,7 @@ impl AuthController {
                 )
                 .emit()
             })?
-            .parse::<i64>()
+            .parse::<UserId>()
             .map_err(|error| {
                 ContextualError::warn(
                     "x-user-id_invalid",
@@ -136,8 +136,7 @@ impl AuthController {
                     AppError::bad_request("x-user-id 必须是数字"),
                 )
                 .emit()
-            })
-            .map(UserId)?;
+            })?;
 
         let refresh_token = headers
             .get("x-refresh-token")

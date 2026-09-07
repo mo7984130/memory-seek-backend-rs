@@ -19,9 +19,7 @@ impl UserBriefRow {
     pub fn into_brief_view(self, viewer: UserId) -> Result<UserBriefView> {
         let avatar_token = self
             .avatar_file_id
-            .as_deref()
-            .map(|key| ImageToken::encrypt_avatar_token(key, viewer))
-            .transpose()?;
+            .map(|file_id| ImageToken::thumbnail(viewer, file_id).into());
 
         Ok(UserBriefView {
             user_id: self.user_id,

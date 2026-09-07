@@ -1,6 +1,6 @@
 [package]
 name = "backup"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 [features]
@@ -11,7 +11,7 @@ audit = ["audit/recording"]
 [dependencies]
 audit.path = "../audit"
 types = { path = "../../types", features = ["orm"] }
-common = { path = "../../common", features = ["axum"] }
+common = { path = "../../common", features = ["axum", "tokio"] }
 common_macros.path = "../../libs/common_macros"
 oss.path = "../../libs/oss"
 
@@ -21,10 +21,8 @@ serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
-tokio-cron-scheduler.workspace = true
 async-compression.workspace = true
 futures-util.workspace = true
 sqlx.workspace = true
 bytes.workspace = true
-tokio-util = { workspace = true, features = ["io"] }
 axum.workspace = true

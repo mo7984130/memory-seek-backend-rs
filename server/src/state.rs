@@ -1,62 +1,34 @@
-use common::Pool;
+use common::tokio::TaskManager;
+use deadpool_redis::Pool;
 use sea_orm::DatabaseConnection;
 
-#[cfg(any(feature = "s3", feature = "backup", feature = "face-engine"))]
-use std::sync::Arc;
+use crate::setup::AppSetup;
+use crate::util::MissDepError;
 
-#[cfg(feature = "email")]
-use email::EmailClient;
-
-#[cfg(feature = "s3")]
-use oss::S3Client;
-
-#[cfg(feature = "backup")]
-use backup::{BackupScheduler, BackupState};
-
-#[cfg(feature = "metrics")]
-use metrics_exporter_prometheus::PrometheusHandle;
-
-// ============ Bases ============
-pub struct AppBases {
-    pub db: DatabaseConnection,
-    pub redis: Pool,
-
-    #[cfg(feature = "metrics")]
-    pub metrics_handle: PrometheusHandle,
-}
-
-// ============ Libs ============
-pub struct AppLibs {
-    #[cfg(feature = "email")]
-    pub email_client: EmailClient,
-
-    #[cfg(feature = "s3")]
-    pub s3_client: Arc<S3Client>,
-
-    #[cfg(feature = "face-engine")]
-    pub face_engine: Arc<insight_face_rs::FaceEngine>,
-}
-
-// ============ AppState ============
 pub struct AppState {
     pub db: DatabaseConnection,
     pub redis: Pool,
+    pub task_manager: TaskManager,
+}
 
-    #[cfg(feature = "email")]
-    pub email_client: EmailClient,
-
-    #[cfg(feature = "s3")]
-    pub s3_client: Arc<S3Client>,
-
-    #[cfg(feature = "backup")]
-    pub backup_scheduler: Arc<BackupScheduler>,
-
-    #[cfg(feature = "backup")]
-    pub backup_state: Arc<BackupState>,
-
-    #[cfg(feature = "metrics")]
-    pub metrics_handle: PrometheusHandle,
-
-    #[cfg(feature = "face-engine")]
-    pub face_engine: Arc<insight_face_rs::FaceEngine>,
+impl AppState {
+    pub fn from_setup(setup: &AppSetup) -> common::Result<Self> {
+        Ok(Self {
+            db: setup
+                .registry
+                .get::<DatabaseConnection>()
+                .miss_dep("AppState", "DatabaseConnection")?
+                .clone(),
+            redis: setup
+                .registry
+                .get::<Pool>()
+                .miss_dep("AppState", "RedisPool")?
+                .clone(),
+            task_manager: setup
+                .registry
+                .get::<TaskManager>()
+                .miss_dep("AppState", "TaskManager")?
+                .clone(),
+        })
+    }
 }

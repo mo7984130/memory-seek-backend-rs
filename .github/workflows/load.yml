@@ -40,6 +40,11 @@ on:
                 required: false
                 type: number
                 default: 2
+            target_url:
+                description: "外部测试服务器完整 URL；留空则在 runner 自建环境。外部目标须含压测种子数据，且不得是生产环境"
+                required: false
+                type: string
+                default: ""
     # PR 合并到 main 后自动压测(push 事件由合并产生)
     push:
         branches: [main]
@@ -72,6 +77,8 @@ jobs:
             LOAD_SUITE: ${{ inputs.load_mode || 'both' }}
             # 被测 server 占用核数(控制变量, 默认 2)
             SERVER_CPUS: ${{ inputs.server_cpus || 2 }}
+            # 非空时只作为压测发起端，不启动服务、不灌库。
+            BASE_URL: ${{ inputs.target_url || 'http://127.0.0.1:7985' }}
             # schedule -> baseline, 其它(手动/PR) -> compare
             MODE: ${{ github.event_name == 'schedule' && 'baseline' || inputs.mode || 'compare' }}
             PR_NUMBER: ${{ inputs.pr_number != 0 && inputs.pr_number || github.event.pull_request.number || '0' }}
@@ -95,9 +102,11 @@ jobs:
                   cache-on-failure: true
 
             - name: Build (release + metrics)
+              if: inputs.target_url == ''
               run: cargo build --release --features "$FEATURES"
 
             - name: Prepare runtime libraries
+              if: inputs.target_url == ''
               run: |
                     mkdir -p target/release/libs
                     find thirdparty \( -type f -o -type l \) \
@@ -111,9 +120,11 @@ jobs:
                   k6-version: 0.57.0
 
             - name: 启动依赖容器 (PG / Redis)
+              if: inputs.target_url == ''
               run: docker compose -f tests/load/docker-compose.load.yml up -d --wait
 
             - name: 启动被测服务 (taskset 限核)
+              if: inputs.target_url == ''
               # 固定 server 占用核数(SERVER_CPUS), 控制变量: 压测对比不随 runner 核数漂移
               run: |
                   taskset -c 0-$((SERVER_CPUS - 1)) \
@@ -133,33 +144,40 @@ jobs:
                   exit 1
 
             - name: 种子数据 (建表 + 灌数据)
+              if: inputs.target_url == ''
               # 不再容错: seed 失败必须暴露(否则压测会在无表库上全量报错)
               run: make -C tests/load seed
+
+            - name: 检查外部测试服务器
+              if: inputs.target_url != ''
+              run: |
+                  curl --fail --show-error --silent --max-time 15 "$BASE_URL/health" >/dev/null
+                  echo "external load-test target is ready: $BASE_URL"
 
             - name: 全场景压测 target (${{ env.RUNS }} 轮)
               # both/target 模式跑 target 负载(对比用, 结果进基线)
               if: contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load run-all RUNS=$RUNS
+              run: make -C tests/load run-all RUNS=$RUNS BASE_URL="$BASE_URL"
 
             - name: 全场景容量搜索 (${{ env.CAPACITY_RUNS }} 轮)
               # 每档仅在上一档满足 SLO 时加压，结果写入 max-adaptive-normalized。
               if: contains(fromJSON('["both","max-adaptive"]'), env.LOAD_SUITE)
-              run: make -C tests/load run-max-adaptive RUNS=$CAPACITY_RUNS
+              run: make -C tests/load run-max-adaptive RUNS=$CAPACITY_RUNS BASE_URL="$BASE_URL"
 
             - name: 归一化 target (取中位数)
               if: contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load collect
+              run: make -C tests/load collect BASE_URL="$BASE_URL"
 
             - name: 归一化容量搜索 (取中位数)
               if: contains(fromJSON('["both","max-adaptive"]'), env.LOAD_SUITE)
-              run: make -C tests/load collect-max-adaptive
+              run: make -C tests/load collect-max-adaptive BASE_URL="$BASE_URL"
 
             - name: 服务端指标快照
-              run: make -C tests/load prometheus || true
+              run: make -C tests/load prometheus BASE_URL="$BASE_URL" || true
 
             - name: 记录基线 (baseline 模式, target 负载)
               if: env.MODE == 'baseline' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load record-baseline
+              run: make -C tests/load record-baseline BASE_URL="$BASE_URL"
 
             - name: 恢复基线缓存 (compare 模式)
               if: env.MODE == 'compare' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
@@ -171,11 +189,11 @@ jobs:
 
             - name: 判定 (compare 模式, target 负载)
               if: env.MODE == 'compare' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load judge
+              run: make -C tests/load judge BASE_URL="$BASE_URL"
 
             - name: 生成报告 (compare 模式)
               if: env.MODE == 'compare' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load report
+              run: make -C tests/load report BASE_URL="$BASE_URL"
 
             - name: 保存基线缓存 (baseline 模式, target 负载)
               if: env.MODE == 'baseline' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)

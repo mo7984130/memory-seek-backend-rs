@@ -8,8 +8,7 @@ use common::{
     types::CursorPage,
 };
 use types::audit::{
-    AuditEventId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem,
-    AuditTopQuery,
+    AuditId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem, AuditTopQuery,
 };
 use types::auth::user::{AdminId, UserId};
 use types::cursor::TimeIdCursor;
@@ -54,7 +53,7 @@ impl AuditController {
         State(state): State<Arc<AuditState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<AuditQuery>,
-    ) -> Result<R<CursorPage<AuditItem, TimeIdCursor<AuditEventId>>>> {
+    ) -> Result<R<CursorPage<AuditItem, TimeIdCursor<AuditId>>>> {
         AdminId::new(user_id)?;
         AuditQueryer::query_events(&state.db, &req).await.to_r_ok()
     }

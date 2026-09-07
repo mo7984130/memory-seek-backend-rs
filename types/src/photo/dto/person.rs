@@ -5,7 +5,7 @@ use crate::cursor::{CountIdCursor, TimeIdCursor};
 use crate::photo::models::PersonName;
 use crate::photo::person::{PersonId, PersonRecord};
 use crate::photo::photo::PhotoId;
-use crate::photo::{ImageDimensions, ImageToken};
+use crate::photo::{ImageDimensions, ImageToken, ImageTokenStr};
 
 crate::in_dto!(PersonCursorParam, "photo/", serde_default, docs = "人物列表参数(cursor 为 FaceCountIdCursor<PersonId> 的 Base64 编码, 按 face_count 倒序分页)"; {
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
@@ -47,7 +47,7 @@ crate::out_dto!(PersonView, "photo/", rename = "Person"; {
     pub name: String,
     /// 封面图 token(加密串, 经 `GET /photo/image/{token}` 访问)
     #[cfg_attr(feature = "ts", ts(type = "string"))]
-    pub cover_token: ImageToken,
+    pub cover_token: ImageTokenStr,
     pub face_count: u64
 });
 impl PersonView {
@@ -55,7 +55,8 @@ impl PersonView {
         Self {
             id: value.id,
             name: value.name,
-            cover_token: ImageToken::crop(viewer, value.cover.file_id, value.cover.bbox, dimension),
+            cover_token: ImageToken::crop(viewer, value.cover.file_id, value.cover.bbox, dimension)
+                .into(),
             face_count: value.face_count,
         }
     }

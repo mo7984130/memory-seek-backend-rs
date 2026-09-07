@@ -1,6 +1,6 @@
+use common::tokio::TaskManager;
 use sea_orm::DatabaseConnection;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::config::BackupConfig;
@@ -14,11 +14,17 @@ pub struct BackupState {
     pub config: BackupConfig,
     pub temp_dir: PathBuf,
     pub operation_lock: Mutex<()>,
+    pub task_manager: TaskManager,
 }
 
 impl BackupState {
     /// 创建备份领域状态并初始化存储组件.
-    pub fn new(db: DatabaseConnection, s3_client: Arc<S3Client>, config: BackupConfig) -> Self {
+    pub fn new(
+        db: DatabaseConnection,
+        s3_client: S3Client,
+        config: BackupConfig,
+        task_manager: TaskManager,
+    ) -> Self {
         let s3_prefix = config.s3_prefix.trim().trim_end_matches("/");
 
         let temp_dir = std::env::temp_dir().join("memory-seek-backup-tmp");
@@ -34,6 +40,7 @@ impl BackupState {
             config,
             temp_dir,
             operation_lock: Mutex::new(()),
+            task_manager,
         }
     }
 

@@ -127,14 +127,14 @@ impl TokenCipher {
                 "token_base64_decode_error",
                 "Token Base64 解码失败",
                 error,
-                AppError::InternalServerError,
+                AppError::bad_request("token不正确"),
             )
         })?;
         if combined.len() <= NONCE_LEN {
             return Err(ContextualError::error_without_source(
                 "token_too_short",
                 "Token 长度不合法",
-                AppError::InternalServerError,
+                AppError::bad_request("token不正确"),
             ));
         }
         let (nonce_bytes, ciphertext) = combined.split_at(NONCE_LEN);
@@ -144,7 +144,7 @@ impl TokenCipher {
                 "aes_gcm_decrypt_error",
                 "AES-GCM 解密失败",
                 error,
-                AppError::InternalServerError,
+                AppError::bad_request("token不正确"),
             )
         })?;
         serde_json::from_slice(&plaintext).map_err(|error| {
@@ -152,7 +152,7 @@ impl TokenCipher {
                 "token_deserialize_error",
                 "反序列化 Payload 失败",
                 error,
-                AppError::InternalServerError,
+                AppError::bad_request("token不正确"),
             )
         })
     }

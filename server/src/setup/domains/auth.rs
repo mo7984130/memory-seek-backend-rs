@@ -1,29 +1,45 @@
-use crate::state::AppState;
+use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
 use auth::AuthState;
-use axum::Router;
-use common::axum::controller_router::ControllerRouter;
+use common::{Result, axum::controller_router::ControllerRouter};
+use email::EmailClient;
+use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{debug, info};
 
 /// 注册 Auth 模块路由
-pub fn register(
-    state: &Arc<AppState>,
-    _cfg: &crate::config::AppConfig,
-) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
-    info!("注册 Auth 模块路由");
+#[common::register_async(
+    slice = crate::setup::domains::APP_DOMAINS,
+    ty = crate::setup::InitFn,
+)]
+pub async fn init(_config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
+    debug!("初始化 Auth domain");
+
+    let register = &mut setup.registry;
+    let router = &mut setup.router;
 
     // 构建 AuthState
     let auth_state = Arc::new(AuthState::new(
-        state.db.clone(),
-        state.redis.clone(),
-        state.email_client.clone(),
+        register
+            .get::<DatabaseConnection>()
+            .miss_dep("auth", "DatabaseConnection")?
+            .clone(),
+        register
+            .get::<common::Pool>()
+            .miss_dep("auth", "RedisPool")?
+            .clone(),
+        register
+            .get::<EmailClient>()
+            .miss_dep("auth", "Email Client")?
+            .clone(),
     ));
 
-    // 获取路由
+    // 添加路由
     let public_router = auth::Controller::public_routes().with_state(auth_state.clone());
     let protected_router = auth::Controller::protected_routes().with_state(auth_state);
+    router.add_public(public_router);
+    router.add_protected(protected_router);
 
-    info!("Auth 模块路由注册成功");
+    info!("初始化 Auth domain 成功");
 
-    (public_router, protected_router)
+    Ok(())
 }

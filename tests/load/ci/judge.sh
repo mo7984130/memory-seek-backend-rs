@@ -151,3 +151,8 @@ jq -r '.overall as $o |
     (.scenarios | to_entries[] | [.key, .value.verdict] | @tsv),
     ""' "$VERDICT_FILE"
 echo "[judge] 详细结果: $VERDICT_FILE"
+
+if [ "$(jq -r '.overall' "$VERDICT_FILE")" = "REGRESSION" ]; then
+    echo "[judge] 检测到性能回归" >&2
+    exit 1
+fi

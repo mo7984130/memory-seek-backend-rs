@@ -8,6 +8,7 @@ use common::axum::{
 use common::error::{AppError, ContextualError, contextual::ext::OptionExt};
 use std::sync::Arc;
 use types::auth::user::UserId;
+use types::photo::ImageTokenStr;
 
 use crate::UserState;
 use crate::services as user_service;
@@ -115,7 +116,7 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
         mut multipart: Multipart,
-    ) -> Result<R<String>> {
+    ) -> Result<R<ImageTokenStr>> {
         let field = multipart
             .next_field()
             .await

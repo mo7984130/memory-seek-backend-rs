@@ -10,9 +10,12 @@ crate::id_type!(PhotoId, "photo/");
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::time::{DateTime, now};
-    use sea_orm::ActiveValue::Set;
+    use common::{
+        ContextualResult, DbConn,
+        time::{DateTime, now},
+    };
     use sea_orm::entity::prelude::*;
+    use sea_orm::{ActiveValue::Set, sea_query::Index};
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -21,20 +24,69 @@ mod entity {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "photo_photo")]
     pub struct Model {
+        /// 主键ID
         #[sea_orm(primary_key)]
         pub id: PhotoId,
+
+        /// 上传者ID
         pub user_id: UserId,
+
+        /// 名称
         pub name: String,
+
+        /// 文件大小(字节)
         pub size: i64,
+
+        /// 照片宽度(像素)
         pub width: i32,
+
+        /// 照片高度(像素)
         pub height: i32,
+
+        /// 文件 MIME 类型
         pub mime_type: String,
+
+        /// 文件MD4哈希值
+        #[sea_orm(unique)]
         pub md5: String,
+
+        /// 存储的文件ID
+        #[sea_orm(unique)]
         pub file_id: String,
-        pub comment_count: i64,
+
+        /// 喜欢总数
+        #[sea_orm(default_value = 0)]
         pub like_count: i64,
-        pub created_at: DateTime,
+
+        /// 评论总数
+        #[sea_orm(default_value = 0)]
+        pub comment_count: i64,
+
+        /// 更新时间
         pub updated_at: DateTime,
+
+        /// 创建时间
+        pub created_at: DateTime,
+    }
+
+    #[common::register_async(
+        send,
+        slice = crate::db_init::INIT_INDEXES,
+        ty = crate::db_init::InitIndexFn
+    )]
+    async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
+        let stmt = Index::create()
+            .name("idx_photo_id_created_at")
+            .table(Entity)
+            .col(Column::CreatedAt)
+            .col(Column::Id)
+            .if_not_exists()
+            .to_owned();
+
+        db.execute_raw(db.get_database_backend().build(&stmt))
+            .await?;
+
+        Ok(())
     }
 
     /// 照片记录，使用强类型 ID
@@ -43,9 +95,9 @@ mod entity {
         pub id: PhotoId,
         pub user_id: UserId,
         pub name: String,
-        pub size: i64,
-        pub width: i32,
-        pub height: i32,
+        pub size: u64,
+        pub width: u32,
+        pub height: u32,
         pub mime_type: String,
         pub md5: String,
         pub file_id: String,
@@ -58,9 +110,9 @@ mod entity {
     pub struct NewPhotoRecord {
         pub user_id: UserId,
         pub name: String,
-        pub size: i64,
-        pub width: i32,
-        pub height: i32,
+        pub size: u64,
+        pub width: u32,
+        pub height: u32,
         pub mime_type: String,
         pub md5: String,
         pub file_id: String,
@@ -72,9 +124,9 @@ mod entity {
                 id: model.id,
                 user_id: model.user_id,
                 name: model.name,
-                size: model.size,
-                width: model.width,
-                height: model.height,
+                size: model.size as u64,
+                width: model.width as u32,
+                height: model.height as u32,
                 mime_type: model.mime_type,
                 md5: model.md5,
                 file_id: model.file_id,
@@ -91,9 +143,9 @@ mod entity {
             Self {
                 user_id: Set(record.user_id),
                 name: Set(record.name),
-                size: Set(record.size),
-                width: Set(record.width),
-                height: Set(record.height),
+                size: Set(record.size as i64),
+                width: Set(record.width as i32),
+                height: Set(record.height as i32),
                 mime_type: Set(record.mime_type),
                 md5: Set(record.md5),
                 file_id: Set(record.file_id),

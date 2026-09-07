@@ -26,10 +26,6 @@ pub enum BackupError {
     #[error("备份 S3 存储操作失败: {0}")]
     S3(#[from] oss::OssError),
 
-    /// 备份调度器（cron）失败
-    #[error("备份调度器操作失败: {0}")]
-    Scheduler(#[from] tokio_cron_scheduler::JobSchedulerError),
-
     /// 业务校验类错误（如目标表不存在）
     #[error("{0}")]
     Msg(String),

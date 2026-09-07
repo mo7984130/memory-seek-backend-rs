@@ -1,15 +1,25 @@
+use std::time::Duration;
+
+use multi_level_cache::CacheConfig;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
-#[allow(dead_code)] // 字段仅在启用 user/photo domain feature 时被消费
 pub struct Config {
-    /// 是否启用缓存。`false` 时读写全部穿透数据库，便于压测对比
     #[serde(default = "default_enabled")]
     pub enabled: bool,
     #[serde(default = "default_local_capacity")]
     pub local_capacity: u64,
     #[serde(default = "default_local_ttl_secs")]
     pub local_ttl_secs: u64,
+}
+impl Config {
+    pub fn to(&self) -> CacheConfig {
+        CacheConfig {
+            enabled: self.enabled,
+            local_capacity: self.local_capacity,
+            local_ttl: Duration::from_secs(self.local_ttl_secs),
+        }
+    }
 }
 
 impl Default for Config {

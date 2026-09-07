@@ -1,39 +1,57 @@
-use crate::config::AppConfig;
-use crate::state::AppState;
-use axum::Router;
-use common::axum::controller_router::ControllerRouter;
-use multi_level_cache::CacheConfig;
+#[cfg(feature = "face-engine")]
+use crate::setup::domains::backup::BackupRuntime;
+use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
+use common::{Result, axum::controller_router::ControllerRouter};
 use photo::PhotoState;
+use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{debug, info};
 
 /// 注册 Photo 模块路由
-pub fn register(
-    state: &Arc<AppState>,
-    _cfg: &AppConfig,
-) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
-    info!("注册 Photo 模块路由");
+#[common::register_async(
+    slice = crate::setup::domains::APP_DOMAINS,
+    ty = crate::setup::InitFn,
+)]
+pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
+    debug!("初始化 photo domain");
+
+    let register = &mut setup.registry;
+    let router = &mut setup.router;
 
     let photo_state = Arc::new(PhotoState::new(
-        state.db.clone(),
-        state.redis.clone(),
-        CacheConfig::new(
-            _cfg.cache.enabled,
-            _cfg.cache.local_capacity,
-            common::time::Duration::from_secs(_cfg.cache.local_ttl_secs),
-        ),
-        state.s3_client.clone(),
+        register
+            .get::<DatabaseConnection>()
+            .miss_dep("Photo", "DatabaseConnection")?
+            .clone(),
+        register
+            .get::<common::Pool>()
+            .miss_dep("Photo", "RedisPool")?
+            .clone(),
+        config.cache.to(),
+        register
+            .get::<oss::S3Client>()
+            .miss_dep("Photo", "S3Client")?
+            .clone(),
         #[cfg(feature = "face-engine")]
-        state.face_engine.clone(),
+        register
+            .get::<Arc<insight_face_rs::FaceEngine>>()
+            .miss_dep("Photo", "FaceEngine")?
+            .clone(),
         #[cfg(feature = "face-engine")]
-        state.backup_state.clone(),
+        register
+            .get::<BackupRuntime>()
+            .miss_dep("Photo", "BackupRuntime")?
+            .state
+            .clone(),
     ));
 
     // 获取路由
     let public_router = photo::Controller::public_routes().with_state(photo_state.clone());
     let protected_router = photo::Controller::protected_routes().with_state(photo_state);
+    router.add_public(public_router);
+    router.add_protected(protected_router);
 
-    info!("Photo 模块路由注册成功");
+    info!("初始化 Photo Domain 成功");
 
-    (public_router, protected_router)
+    Ok(())
 }

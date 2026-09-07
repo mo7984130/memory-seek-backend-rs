@@ -1,8 +1,9 @@
 use common::{Result, error::ContextualError};
 use serde::Deserialize;
 
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-use tracing::info;
+use crate::{config::AppConfig, setup::AppSetup};
+use sea_orm::{ConnectOptions, Database};
+use tracing::{debug, info};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -15,10 +16,16 @@ const fn default_max_connections() -> u32 {
 }
 
 /// 根据配置建立数据库连接并执行基础初始化.
-pub async fn init(cfg: &Config) -> Result<DatabaseConnection> {
-    info!("初始化数据库");
+#[common::register_async(
+    slice = crate::setup::bases::APP_BASES,
+    ty = crate::setup::InitFn,
+)]
+pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
+    debug!("初始化数据库");
+    let cfg = &config.database;
     let mut opt = ConnectOptions::new(&cfg.url);
     opt.max_connections(cfg.max_connections);
+
     let db = Database::connect(opt).await.map_err(|source| {
         ContextualError::error(
             "db_connect_err",
@@ -27,6 +34,11 @@ pub async fn init(cfg: &Config) -> Result<DatabaseConnection> {
             common::error::AppError::InternalServerError,
         )
     })?;
-    info!("数据库连接成功, max_connections: {}", cfg.max_connections);
-    Ok(db)
+
+    types::db_init::init_db(&db).await?;
+
+    setup.registry.insert(db);
+
+    info!("数据库连接成功");
+    Ok(())
 }

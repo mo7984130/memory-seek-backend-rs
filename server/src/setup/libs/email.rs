@@ -1,8 +1,9 @@
 use serde::Deserialize;
-use tracing::info;
+use tracing::{debug, info};
+
+use crate::{config::AppConfig, setup::AppSetup};
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 pub struct Config {
     pub server: String,
     #[serde(default = "default_port")]
@@ -17,17 +18,22 @@ fn default_port() -> u16 {
     465
 }
 
-/// 根据配置创建邮件客户端.
-pub fn init(cfg: &Config) -> email::EmailClient {
-    info!("初始化 Email 客户端");
+#[common::register_async(
+    slice = crate::setup::libs::APP_LIBS,
+    ty = crate::setup::InitFn,
+)]
+pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> common::Result<()> {
+    debug!("初始化 Email Client");
+    let config = &config.smtp;
     let client = email::EmailClient::new(
-        &cfg.server,
-        cfg.port,
-        &cfg.username,
-        &cfg.password,
-        &cfg.from_email,
-        &cfg.from_name,
+        &config.server,
+        config.port,
+        &config.username,
+        &config.password,
+        &config.from_email,
+        &config.from_name,
     );
-    info!("Email 客户端初始化成功");
-    client
+    setup.registry.insert(client);
+    info!("初始化 Email Client lib 成功");
+    Ok(())
 }

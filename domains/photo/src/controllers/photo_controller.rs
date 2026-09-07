@@ -8,19 +8,16 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
+use common::error::{AppError, ContextualError, contextual::ext::OptionExt};
 use common::{
     Result,
     axum::{
         R,
         controller_router::ControllerRouter,
         ext::ToROkExt,
-        extractors::{ValidatedJson, ValidatedQuery},
+        extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
     },
     types::CursorPage,
-};
-use common::{
-    error::{AppError, ContextualError, contextual::ext::OptionExt},
-    utils::token_cipher,
 };
 use types::photo::{
     ImageToken,
@@ -48,6 +45,7 @@ impl ControllerRouter for PhotoController {
                     .post(Self::upload)
                     .delete(Self::delete_photos),
             )
+            .route("/photo/{photo_id}", get(Self::get_photo_info))
             .route("/check-existence", post(Self::md5s_exist))
     }
 
@@ -113,6 +111,17 @@ impl PhotoController {
             .to_r_ok()
     }
 
+    /// 获取单张照片信息
+    async fn get_photo_info(
+        State(state): State<Arc<PhotoState>>,
+        Extension(user_id): Extension<UserId>,
+        ValidatedPath(photo_id): ValidatedPath<PhotoId>,
+    ) -> Result<R<PhotoView>> {
+        PhotoService::get_photo_info(&state, user_id, photo_id)
+            .await
+            .to_r_ok()
+    }
+
     /// 批量检查图片 MD5 是否已存在.
     async fn md5s_exist(
         State(state): State<Arc<PhotoState>>,
@@ -128,9 +137,7 @@ impl PhotoController {
         State(state): State<Arc<PhotoState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
-        let image_token: ImageToken = token_cipher()
-            .decrypt(&token)
-            .map_err(ContextualError::emit)?;
+        let image_token: ImageToken = ImageToken::decrypt(&token)?;
 
         let data = PhotoService::download_image(&state, image_token).await?;
 

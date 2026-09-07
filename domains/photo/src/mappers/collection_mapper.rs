@@ -12,7 +12,7 @@ use common::{
 use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DbBackend, EntityName, EntityTrait, Iden, IdenStatic,
+    ActiveModelTrait, ColumnTrait, DbBackend, EntityName, EntityTrait, ExprTrait, Iden, IdenStatic,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
 use types::photo::collection::{self, CollectionId};
@@ -61,7 +61,7 @@ impl CollectionMapper {
             [collection_id.into(), photo_ids.into(), user_id.into()],
         );
 
-        let result = db.query_one(stmt).await?.ok_or_warn(
+        let result = db.query_one_raw(stmt).await?.ok_or_warn(
             "collection_not_found",
             "收藏夹不存在",
             AppError::not_found("收藏夹不存在"),
@@ -129,9 +129,9 @@ impl CollectionMapper {
         db: &impl ConnectionTrait,
         deltas: &HashMap<CollectionId, i64>,
     ) -> Result<()> {
-        let (ids, counts): (Vec<i64>, Vec<i64>) = deltas
+        let (ids, counts): (Vec<CollectionId>, Vec<i64>) = deltas
             .iter()
-            .map(|(id, count)| (i64::from(*id), *count))
+            .map(|(id, count)| (CollectionId::from(*id), *count))
             .unzip();
 
         let table = Entity.table_name();
@@ -151,7 +151,7 @@ impl CollectionMapper {
             [ids.into(), counts.into()],
         );
 
-        db.execute(stmt).await?;
+        db.execute_raw(stmt).await?;
 
         Ok(())
     }

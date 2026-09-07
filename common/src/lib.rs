@@ -33,3 +33,6 @@ pub use error::AppError;
 pub use error::ContextualError;
 pub use error::ContextualResult;
 pub use error::Result;
+
+pub use common_macros::async_boxed;
+pub use common_macros::register_async;

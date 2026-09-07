@@ -19,10 +19,15 @@ use std::sync::Arc;
 static CHUNK_SIZE: usize = 256;
 static CONCURRENCY: usize = 16;
 
+/// S3 客户端内部共享状态.
+struct S3ClientInner {
+    bucket: Bucket,
+    public_url: String,
+}
+
 #[derive(Clone)]
 pub struct S3Client {
-    bucket: Arc<Bucket>,
-    public_url: String,
+    inner: Arc<S3ClientInner>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -66,19 +71,21 @@ impl S3Client {
             .expect("Failed to create S3 bucket");
 
         let bucket = if s3_config.force_path_style {
-            bucket.with_path_style()
+            *bucket.with_path_style()
         } else {
-            bucket
+            *bucket
         };
 
         Self {
-            bucket: Arc::from(bucket),
-            public_url: s3_config
-                .public_url
-                .clone()
-                .unwrap_or_else(|| s3_config.endpoint.clone())
-                .trim_end_matches('/')
-                .to_string(),
+            inner: Arc::new(S3ClientInner {
+                bucket,
+                public_url: s3_config
+                    .public_url
+                    .clone()
+                    .unwrap_or_else(|| s3_config.endpoint.clone())
+                    .trim_end_matches('/')
+                    .to_string(),
+            }),
         }
     }
 
@@ -101,7 +108,8 @@ impl S3Client {
         content_type: &str,
     ) -> Result<ResponseData, OssError> {
         retry_429("put", key, || async {
-            self.bucket
+            self.inner
+                .bucket
                 .put_object_with_content_type(key, data.as_ref(), content_type)
                 .await
                 .map_err(OssError::from)
@@ -124,7 +132,8 @@ impl S3Client {
             let path = path.clone();
             async move {
                 let mut file = tokio::fs::File::open(path).await?;
-                self.bucket
+                self.inner
+                    .bucket
                     .put_object_stream_with_content_type(&mut file, key, content_type)
                     .await
                     .map(|_| ())
@@ -146,7 +155,11 @@ impl S3Client {
     /// - `OssError`: OSS 删除操作失败
     pub async fn delete(&self, key: &str) -> Result<ResponseData, OssError> {
         retry_429("delete", key, || async {
-            self.bucket.delete_object(key).await.map_err(OssError::from)
+            self.inner
+                .bucket
+                .delete_object(key)
+                .await
+                .map_err(OssError::from)
         })
         .await
     }
@@ -169,7 +182,8 @@ impl S3Client {
                     .map(|chunk| async move {
                         for key in chunk {
                             retry_429("delete_batch", key.as_ref(), || async {
-                                self.bucket
+                                self.inner
+                                    .bucket
                                     .delete_object(key.as_ref())
                                     .await
                                     .map_err(OssError::from)
@@ -196,7 +210,7 @@ impl S3Client {
     /// # 返回
     /// 拼接公开域名后的完整 URL
     pub fn get_url(&self, key: &str) -> String {
-        format!("{}/{}", self.public_url, key.trim_start_matches('/'))
+        format!("{}/{}", self.inner.public_url, key.trim_start_matches('/'))
     }
 
     /// 获取文件的签名 URL（无图片处理参数）
@@ -239,7 +253,8 @@ impl S3Client {
         } else {
             None
         };
-        self.bucket
+        self.inner
+            .bucket
             .presign_get(key, expires.as_secs() as u32, custom_queries)
             .await
             .map_err(OssError::from)
@@ -258,7 +273,11 @@ impl S3Client {
     pub async fn download(&self, key: &str) -> Result<Bytes, OssError> {
         async {
             let response_data = retry_429("get", key, || async {
-                self.bucket.get_object(key).await.map_err(OssError::from)
+                self.inner
+                    .bucket
+                    .get_object(key)
+                    .await
+                    .map_err(OssError::from)
             })
             .await?;
 
@@ -274,7 +293,8 @@ impl S3Client {
     ) -> Result<impl Stream<Item = Result<Bytes, OssError>> + use<>, OssError> {
         async {
             let response = retry_429("get_stream", key, || async {
-                self.bucket
+                self.inner
+                    .bucket
                     .get_object_stream(key)
                     .await
                     .map_err(OssError::from)

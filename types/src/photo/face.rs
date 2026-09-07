@@ -22,19 +22,35 @@ mod entity {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "photo_face")]
     pub struct Model {
+        /// 主键ID
         #[sea_orm(primary_key)]
         pub id: FaceId,
+
+        /// 所在的照片ID
+        /// 索引, 用于 查询照片里面的人脸
+        #[sea_orm(indexed)]
         pub photo_id: PhotoId,
+
+        /// 所属的人物ID
+        /// 可为空, 即 无归属
+        /// 索引, 用于 查询人物的人脸
+        #[sea_orm(indexed)]
         pub person_id: Option<PersonId>,
 
+        /// BBox, 相对定位
         pub bbox: BoundingBox,
+        /// 五点定位, 相对定位
         pub landmarks: FaceLandmarks,
+        /// 置信度
         pub score: f32,
-
+        /// 向量
         pub embedding: FaceEmbedding,
 
-        pub created_at: DateTime,
+        /// 更新时间
         pub updated_at: DateTime,
+
+        /// 创建时间
+        pub created_at: DateTime,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -47,9 +63,7 @@ mod entity {
         pub photo_id: PhotoId,
         pub person_id: Option<PersonId>,
 
-        /// 归一化边界框,坐标范围 [0,1](insight-face-rs 2.x 起输出相对坐标)
         pub bbox: BoundingBox,
-        /// 归一化关键点(5 点),坐标范围 [0,1]
         pub landmarks: FaceLandmarks,
         pub score: f32,
 

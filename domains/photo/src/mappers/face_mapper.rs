@@ -6,7 +6,7 @@ use common::{
     types::CursorPage,
 };
 use sea_orm::{
-    ColumnTrait, Condition, EntityTrait, Order, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, Condition, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Expr, Query},
 };
 use types::{
