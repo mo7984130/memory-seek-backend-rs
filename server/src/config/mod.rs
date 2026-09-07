@@ -15,17 +15,17 @@ pub struct AppConfig {
     #[serde(default)]
     pub redis: crate::setup::bases::redis::Config,
 
+    #[cfg(feature = "_cache")]
     #[serde(default)]
-    #[allow(dead_code)] // 仅 user/photo domain feature 下消费
     pub cache: crate::setup::bases::cache::Config,
 
-    #[cfg(feature = "email")]
+    #[cfg(feature = "_email")]
     pub smtp: crate::setup::libs::email::Config,
 
-    #[cfg(feature = "s3")]
+    #[cfg(feature = "_s3")]
     pub s3: crate::setup::libs::s3::Config,
 
-    #[cfg(feature = "token_cipher")]
+    #[cfg(feature = "_token_cipher")]
     pub token_cipher: crate::setup::libs::token_cipher::Config,
 
     #[cfg(feature = "metrics")]

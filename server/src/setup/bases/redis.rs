@@ -1,8 +1,10 @@
-use common::{Pool, Result, error::ContextualError};
+use common::{Result, error::ContextualError};
 use serde::Deserialize;
 
 use deadpool_redis::{Config as DeadpoolConfig, PoolConfig, Runtime};
-use tracing::info;
+use tracing::{debug, info};
+
+use crate::{config::AppConfig, setup::AppSetup};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -29,11 +31,15 @@ const fn default_max_connections() -> u32 {
     16
 }
 
-/// 根据配置创建 Redis 连接池.
-pub fn init(cfg: &Config) -> Result<Pool> {
-    info!("初始化 Redis");
-    let mut redis_cfg = DeadpoolConfig::from_url(&cfg.url);
-    redis_cfg.pool = Some(PoolConfig::new(cfg.max_connections as usize));
+#[common::register_async(
+    slice = crate::setup::bases::APP_BASES,
+    ty = crate::setup::InitFn,
+)]
+pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
+    debug!("初始化 Redis");
+    let config = &config.redis;
+    let mut redis_cfg = DeadpoolConfig::from_url(&config.url);
+    redis_cfg.pool = Some(PoolConfig::new(config.max_connections as usize));
     let pool = redis_cfg
         .create_pool(Some(Runtime::Tokio1))
         .map_err(|source| {
@@ -44,6 +50,27 @@ pub fn init(cfg: &Config) -> Result<Pool> {
                 common::error::AppError::InternalServerError,
             )
         })?;
-    info!("Redis 连接成功, max_connections: {}", cfg.max_connections);
-    Ok(pool)
+    let mut conn = pool.get().await.map_err(|source| {
+        ContextualError::error(
+            "redis_conn_err",
+            "无法从连接池获取连接",
+            source,
+            common::error::AppError::InternalServerError,
+        )
+    })?;
+
+    redis::cmd("PING")
+        .query_async::<String>(&mut conn)
+        .await
+        .map_err(|source| {
+            ContextualError::error(
+                "redis_ping_err",
+                "Redis PING失败，连接不可用",
+                source,
+                common::error::AppError::InternalServerError,
+            )
+        })?;
+    setup.registry.insert(pool);
+    info!("Redis 连接成功");
+    Ok(())
 }

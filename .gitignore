@@ -38,3 +38,4 @@ tests/load/ci/logs/
 verify-test
 
 local
+tests

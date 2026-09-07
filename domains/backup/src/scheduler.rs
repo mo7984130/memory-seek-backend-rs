@@ -6,8 +6,9 @@ use tokio::sync::Mutex;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 /// 备份调度器
+#[derive(Clone)]
 pub struct BackupScheduler {
-    scheduler: Mutex<JobScheduler>,
+    scheduler: Arc<Mutex<JobScheduler>>,
 }
 
 impl BackupScheduler {
@@ -34,7 +35,7 @@ impl BackupScheduler {
         scheduler.add(job).await?;
 
         Ok(Self {
-            scheduler: Mutex::new(scheduler),
+            scheduler: Arc::new(Mutex::new(scheduler)),
         })
     }
 

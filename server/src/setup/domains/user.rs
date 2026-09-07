@@ -1,36 +1,45 @@
-use crate::config::AppConfig;
-use crate::state::AppState;
-use axum::Router;
-use common::axum::controller_router::ControllerRouter;
-use multi_level_cache::CacheConfig;
+use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
+use common::{Result, axum::controller_router::ControllerRouter};
+use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{debug, info};
 use user::UserState;
 
 /// 注册 User 模块路由
-pub fn register(
-    state: &Arc<AppState>,
-    cfg: &AppConfig,
-) -> (Router<Arc<AppState>>, Router<Arc<AppState>>) {
-    info!("注册 User 模块路由");
+#[common::register_async(
+    slice = crate::setup::domains::APP_DOMAINS,
+    ty = crate::setup::InitFn,
+)]
+pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
+    debug!("初始化 User Domain");
+
+    let register = &mut setup.registry;
+    let router = &mut setup.router;
 
     // 构建 UserState
     let user_state = Arc::new(UserState::new(
-        state.db.clone(),
-        state.redis.clone(),
-        CacheConfig::new(
-            cfg.cache.enabled,
-            cfg.cache.local_capacity,
-            common::time::Duration::from_secs(cfg.cache.local_ttl_secs),
-        ),
-        state.s3_client.clone(),
+        register
+            .get::<DatabaseConnection>()
+            .miss_dep("User", "DatabaseConnection")?
+            .clone(),
+        register
+            .get::<common::Pool>()
+            .miss_dep("User", "RedisPool")?
+            .clone(),
+        config.cache.to(),
+        register
+            .get::<oss::S3Client>()
+            .miss_dep("User", "S3Client")?
+            .clone(),
     ));
 
     // 获取路由
     let public_router = user::Controller::public_routes().with_state(user_state.clone());
     let protected_router = user::Controller::protected_routes().with_state(user_state);
+    router.add_public(public_router);
+    router.add_protected(protected_router);
 
-    info!("User 模块路由注册成功");
+    info!("初始化 User Domain 成功");
 
-    (public_router, protected_router)
+    Ok(())
 }

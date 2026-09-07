@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     error::{AppError, ContextualError, ContextualResult},
     ext::ToErr,
@@ -7,14 +9,14 @@ pub trait OptionExt<T> {
     fn ok_or_warn(
         self,
         reason: &'static str,
-        context: &'static str,
+        context: impl Into<Cow<'static, str>>,
         app_err: AppError,
     ) -> ContextualResult<T>;
 
     fn ok_or_error(
         self,
         reason: &'static str,
-        context: &'static str,
+        context: impl Into<Cow<'static, str>>,
         app_err: AppError,
     ) -> ContextualResult<T>;
 }
@@ -24,7 +26,7 @@ impl<T> OptionExt<T> for Option<T> {
     fn ok_or_warn(
         self,
         reason: &'static str,
-        context: &'static str,
+        context: impl Into<Cow<'static, str>>,
         app_err: AppError,
     ) -> ContextualResult<T> {
         match self {
@@ -37,7 +39,7 @@ impl<T> OptionExt<T> for Option<T> {
     fn ok_or_error(
         self,
         reason: &'static str,
-        context: &'static str,
+        context: impl Into<Cow<'static, str>>,
         app_err: AppError,
     ) -> ContextualResult<T> {
         match self {

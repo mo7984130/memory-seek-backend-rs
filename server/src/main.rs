@@ -1,25 +1,31 @@
+use axum::Router;
+use axum::middleware::{from_fn, from_fn_with_state};
+
 use clap::Parser;
 use common::Result;
 use common::error::contextual::ext::IntoContextualExt;
 use common::time::Duration;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
 mod config;
-mod metrics;
 mod middlewares;
 mod setup;
 mod state;
+mod util;
 
 use config::AppConfig;
 use setup::AppSetup;
 
+use crate::setup::AppRouter;
+use crate::state::AppState;
+
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-/// Memory Seek 后端服务
 #[derive(Parser)]
 #[command(name = "memory-seek-server")]
 struct Cli {
@@ -29,74 +35,44 @@ struct Cli {
 }
 
 #[tokio::main]
-/// 加载配置, 初始化应用并启动 HTTP 服务.
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // 提前初始化日志系统，确保配置加载等早期阶段也能记录错误详情
-    // 日志统一输出到 stdout/stderr，由 systemd journald 捕获管理
+    // 初始化日志
     setup::bases::log::init();
 
     // 加载配置
     let cfg = AppConfig::load(cli.config);
 
-    // 初始化应用（内部会初始化日志、数据库、Redis、metrics 等）
-    let app_setup = AppSetup::init(&cfg).await?;
+    // 初始化应用
+    let mut app_setup = AppSetup::init(&cfg).await?;
 
-    // 创建全局取消令牌，用于通知所有后台任务退出
-    let cancel_token = CancellationToken::new();
-
-    // 启动后台指标采集（传入 cancel token，采集任务会在收到取消信号后退出）
-    #[cfg(feature = "metrics")]
-    metrics::start_collector(
-        app_setup.state.db.clone(),
-        app_setup.state.redis.clone(),
-        Duration::from_secs(cfg.metrics.interval_seconds),
-        cancel_token.child_token(),
-    );
-
-    // 克隆 state 用于优雅关闭（router 会消费 app_setup.state）
-    let graceful_state = app_setup.state.clone();
+    let state = AppState::from_setup(&app_setup)?;
+    let state = Arc::new(state);
 
     // 合并路由并添加中间件
-    let app = app_setup
-        .public_router
-        .route("/health", axum::routing::get(|| async { "ok" }));
+    let router = {
+        let router = Router::new()
+            .route("/health", axum::routing::get(|| async { "ok" }))
+            .route("/hello", axum::routing::get(|| async { "hello" }));
+        app_setup.router.add_public(router);
 
-    // Prometheus metrics 由主服务暴露，不再单独监听端口
-    #[cfg(feature = "metrics")]
-    let app = app.route(
-        "/metrics",
-        axum::routing::get(crate::metrics::render_metrics),
-    );
+        let AppRouter { protected, public } = app_setup.router;
+        let router = Router::new();
+        let protected = protected.layer(from_fn_with_state(
+            Arc::clone(&state),
+            middlewares::auth::auth_middleware,
+        ));
 
-    let app = app
-        .merge(
-            app_setup
-                .protected_router
-                .layer(axum::middleware::from_fn_with_state(
-                    app_setup.state.clone(),
-                    middlewares::auth::auth_middleware,
-                )),
-        )
-        .layer(middlewares::cors::layer());
+        let router = router.merge(public).merge(protected);
 
-    #[cfg(feature = "metrics")]
-    let app = app.layer(axum::middleware::from_fn(
-        middlewares::metrics::metrics_middleware,
-    ));
-
-    let app = app
-        .layer(axum::middleware::from_fn(
-            middlewares::tracing_span::tracing_span,
-        ))
-        .layer(axum::middleware::from_fn(
-            middlewares::trace_id::trace_id_middleware,
-        ))
-        .layer(axum::middleware::from_fn(
-            middlewares::client_ip::client_ip_middleware,
-        ))
-        .with_state(app_setup.state);
+        let router = router
+            .layer(from_fn(middlewares::tracing_span::tracing_span))
+            .layer(from_fn(middlewares::trace_id::trace_id_middleware))
+            .layer(from_fn(middlewares::client_ip::client_ip_middleware))
+            .layer(middlewares::cors::layer());
+        router
+    };
 
     // 启动服务器
     tracing::info!("尝试监听{}端口", cfg.server.port);
@@ -105,11 +81,11 @@ async fn main() -> Result<()> {
         .into_contextual()?;
     tracing::info!("Server listening on {}", cfg.server_addr());
 
-    let shutdown_signal = shutdown_signal(graceful_state, cancel_token);
+    let shutdown_signal = shutdown_signal(Arc::clone(&state), app_setup.cancel_token);
 
     axum::serve(
         listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
+        router.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(shutdown_signal)
     .await

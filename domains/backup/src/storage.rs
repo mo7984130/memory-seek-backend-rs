@@ -3,7 +3,6 @@ use crate::error::BackupError;
 use crate::manifest::{BackupManifest, FILE_NAME};
 use oss::S3Client;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 pub use types::backup::{BackupSource, BackupTier};
 
@@ -11,13 +10,13 @@ pub use types::backup::{BackupSource, BackupTier};
 #[derive(Clone)]
 pub struct BackupStorage {
     local_path: PathBuf,
-    s3_client: Arc<S3Client>,
+    s3_client: S3Client,
     s3_prefix: String,
 }
 
 impl BackupStorage {
     /// 创建本地与对象存储备份的统一存储入口.
-    pub fn new(local_path: PathBuf, s3_client: Arc<S3Client>, s3_prefix: String) -> Self {
+    pub fn new(local_path: PathBuf, s3_client: S3Client, s3_prefix: String) -> Self {
         Self {
             local_path,
             s3_client,

@@ -70,6 +70,7 @@ mod entity {
     }
 
     #[common::register_async(
+        send,
         slice = crate::db_init::INIT_INDEXES,
         ty = crate::db_init::InitIndexFn
     )]

@@ -4,10 +4,10 @@
 ///
 /// # 示例
 /// ```no_run
-/// use common::{Result, db_transaction};
+/// use common::{ContextualResult, db_transaction};
 /// use sea_orm::DatabaseConnection;
 ///
-/// async fn update(db: &DatabaseConnection) -> Result<()> {
+/// async fn update(db: &DatabaseConnection) -> ContextualResult<()> {
 ///     db_transaction!(db, |txn| {
 ///         let _ = txn;
 ///         Ok(())

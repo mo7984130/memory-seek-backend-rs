@@ -15,7 +15,7 @@ members = [
     "domains/photo",
     "domains/backup",
     "server",
-    "tools/bench-support",
+    "tools/bench-support", "tests/e2e",
 ]
 
 [profile.release]
@@ -106,3 +106,6 @@ clap = { version = "4.5", features = ["derive"] }
 
 # 中文转拼音(人物姓名首字母)
 pinyin = "0.11.0"
+
+metrics-exporter-prometheus = "0.18.3"
+sysinfo = "0.39.6"

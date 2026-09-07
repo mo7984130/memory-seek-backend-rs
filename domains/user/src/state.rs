@@ -2,7 +2,6 @@ use common::Pool;
 use multi_level_cache::CacheConfig;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
-use std::sync::Arc;
 
 use crate::repo::UserRepo;
 
@@ -11,7 +10,7 @@ pub struct UserState {
     /// 用户数据访问仓储，封装数据库与三级缓存
     pub repo: UserRepo,
     pub redis: Pool,
-    pub s3_client: Arc<S3Client>,
+    pub s3_client: S3Client,
 }
 
 impl UserState {
@@ -29,7 +28,7 @@ impl UserState {
         db: DatabaseConnection,
         redis: Pool,
         cache_config: CacheConfig,
-        s3_client: Arc<S3Client>,
+        s3_client: S3Client,
     ) -> Self {
         Self {
             repo: UserRepo::new(db, redis.clone(), cache_config),

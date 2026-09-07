@@ -1,45 +1,13 @@
-#[cfg(feature = "email")]
+#[cfg(feature = "_email")]
 pub mod email;
 #[cfg(feature = "face-engine")]
 pub mod face_engine;
-#[cfg(feature = "s3")]
+#[cfg(feature = "_s3")]
 pub mod s3;
-#[cfg(feature = "token_cipher")]
+#[cfg(feature = "_token_cipher")]
 pub mod token_cipher;
 
-use common::Result;
+use crate::setup::InitFn;
 
-use crate::config::AppConfig;
-use crate::state::AppLibs;
-
-pub struct AppLibsInit;
-
-impl AppLibsInit {
-    #[allow(unused_variables)]
-    pub async fn init(cfg: &AppConfig) -> Result<AppLibs> {
-        // 初始化 TokenCipher
-        #[cfg(feature = "token_cipher")]
-        token_cipher::init(&cfg.token_cipher);
-
-        // 初始化 Email 客户端
-        #[cfg(feature = "email")]
-        let email_client = email::init(&cfg.smtp);
-
-        // 初始化 S3（如果启用）
-        #[cfg(feature = "s3")]
-        let s3_client = s3::init(&cfg.s3);
-
-        // 初始化人脸模型
-        #[cfg(feature = "face-engine")]
-        let face_engine = face_engine::init(&cfg.face_engine);
-
-        Ok(AppLibs {
-            #[cfg(feature = "email")]
-            email_client,
-            #[cfg(feature = "s3")]
-            s3_client,
-            #[cfg(feature = "face-engine")]
-            face_engine,
-        })
-    }
-}
+#[linkme::distributed_slice]
+pub static APP_LIBS: [InitFn];

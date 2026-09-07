@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "0.1.16"
+version = "0.1.17"
 edition = "2024"
 
 [[bin]]
@@ -8,21 +8,37 @@ name = "memory-seek-server"
 path = "src/main.rs"
 
 [features]
+# ============================================================
+# 对外功能开关:部署时通过 --features 按需开启(可多选)
+#   业务域:auth / user / photo / audit / backup
+#   能力:   metrics / face-engine / audit-recording
+# ============================================================
 default = []
-token_cipher = []
-auth = ["dep:auth", "email", "token_cipher"]
-user = ["dep:user", "s3", "token_cipher"]
-photo = ["dep:photo", "s3", "token_cipher"]
-
-email = ["dep:email"]
-metrics = ["common/metrics", "dep:metrics", "photo?/metrics", "user?/metrics", "auth?/metrics", "backup?/metrics"]
-s3 = ["dep:oss"]
-backup = ["dep:backup", "s3"]
-# 审计查询 API 作为独立 domain 注册，不决定是否写入审计事件。
-audit = ["dep:audit", "audit/controller"]
-# 启用所有已加载业务 domain 的审计事件写入，不改变其 HTTP API。
-audit-recording = ["auth?/audit", "user?/audit", "photo?/audit", "backup?/audit"]
+auth = ["dep:auth", "_email", "_token_cipher"]
+user = ["dep:user", "_s3", "_token_cipher", "_cache"]
+photo = ["dep:photo", "_s3", "_token_cipher", "_cache"]
+audit = ["dep:audit"]
+backup = ["dep:backup", "_s3"]
+metrics = [
+    "common/metrics",
+    "dep:metrics",
+    "dep:sysinfo",
+    "dep:metrics-exporter-prometheus",
+    "photo?/metrics",
+    "user?/metrics",
+    "auth?/metrics",
+    "backup?/metrics",
+]
 face-engine = ["dep:insight-face-rs", "photo/face", "backup"]
+audit-recording = ["auth?/audit", "user?/audit", "photo?/audit", "backup?/audit"]
+
+# ============================================================
+# 内部实现开关:仅由对外开关自动启用,请勿直接开启
+# ============================================================
+_email = ["dep:email"]
+_s3 = ["dep:oss"]
+_token_cipher = []
+_cache = ["dep:multi-level-cache"]
 
 [dependencies]
 tokio = { workspace = true }
@@ -38,7 +54,7 @@ auth = { path = "../domains/auth", features = ["controller"], optional = true }
 user = { path = "../domains/user", features = ["controller"], optional = true }
 photo = { path = "../domains/photo", features = ["controller"], optional = true }
 backup = { path = "../domains/backup", optional = true }
-audit = { path = "../domains/audit", optional = true }
+audit = { path = "../domains/audit", features = ["controller"], optional = true }
 
 # 基础设施
 common = { path = "../common", features = ["axum", "tokio"] }
@@ -50,8 +66,8 @@ clap = { workspace = true }
 
 # 性能监控
 metrics = { workspace = true, optional = true }
-sysinfo = "0.31"
-metrics-exporter-prometheus = "0.16"
+sysinfo = { workspace = true, optional = true }
+metrics-exporter-prometheus = { workspace = true, optional = true }
 
 # S3
 oss = { path = "../libs/oss", optional = true }
@@ -60,10 +76,11 @@ oss = { path = "../libs/oss", optional = true }
 sea-orm = { workspace = true  }
 redis = { workspace = true }
 deadpool-redis = { workspace = true }
-multi-level-cache.workspace = true
+multi-level-cache = { workspace = true, optional = true }
 
 # UUID
 uuid = { workspace = true }
 metrics-tracing-context = "0.18.1"
 insight-face-rs = { optional = true, workspace = true }
 tikv-jemallocator = "0.7.0"
+linkme.workspace = true

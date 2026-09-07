@@ -1,3 +1,4 @@
+#[cfg(feature = "face")]
 use std::sync::Arc;
 
 use common::{Pool, types::CursorPage};
@@ -29,7 +30,7 @@ pub struct PhotoState {
     pub(crate) cache_photo_dimensions: MultiLevelCache<(u32, u32), ContextualError>,
     pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     pub redis: Pool,
-    pub s3_client: Arc<S3Client>,
+    pub s3_client: S3Client,
     #[cfg(feature = "face")]
     pub face_engine: Arc<insight_face_rs::FaceEngine>,
     #[cfg(feature = "face")]
@@ -42,7 +43,7 @@ impl PhotoState {
         db: DatabaseConnection,
         redis: Pool,
         cache_config: CacheConfig,
-        s3_client: Arc<S3Client>,
+        s3_client: S3Client,
         #[cfg(feature = "face")] face_engine: Arc<insight_face_rs::FaceEngine>,
         #[cfg(feature = "face")] backup_state: Arc<BackupState>,
     ) -> Self {

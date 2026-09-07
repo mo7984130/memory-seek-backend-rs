@@ -49,6 +49,7 @@ mod entity {
     /// 创建索引
     /// CollectionId 和 CreatedAt 复合索引, 用于 按照收藏时间获取收藏夹里面照片时
     #[common::register_async(
+        send,
         slice = crate::db_init::INIT_INDEXES,
         ty = crate::db_init::InitIndexFn
     )]
