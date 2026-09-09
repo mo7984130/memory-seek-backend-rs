@@ -43,8 +43,15 @@ struct MailHogContent {
 
 impl Context {
     /// 查询 MailHog 中发给指定邮箱的最新一封邮件, 提取正文验证码。
-    /// 未找到时返回 `HttpError::Status(404)`。
+    /// 未找到时返回 `HttpError::Status`(404)。
     pub async fn mailhog_latest_code(&self, email: &str) -> Result<String, HttpError> {
+        let not_found = || {
+            HttpError::status(
+                reqwest::StatusCode::NOT_FOUND,
+                reqwest::Method::GET,
+                &self.mailhog.base_url,
+            )
+        };
         let messages = self
             .mailhog
             .get("/api/v2/messages")
@@ -58,7 +65,7 @@ impl Context {
                 m.to.iter()
                     .any(|t| format!("{}@{}", t.mailbox, t.domain) == email)
             })
-            .ok_or(HttpError::Status(reqwest::StatusCode::NOT_FOUND))?
+            .ok_or_else(not_found)?
             .content
             .body;
         // MailHog 的 Content.Body 为 MIME base64(76 字符换行), 解码前需去除空白
@@ -67,8 +74,8 @@ impl Context {
             .decode(cleaned)
             .ok()
             .and_then(|b| String::from_utf8(b).ok())
-            .ok_or(HttpError::Status(reqwest::StatusCode::NOT_FOUND))?;
-        extract_code(&body).ok_or(HttpError::Status(reqwest::StatusCode::NOT_FOUND))
+            .ok_or_else(not_found)?;
+        extract_code(&body).ok_or_else(not_found)
     }
 
     /// 轮询 MailHog 直到取到验证码(邮件异步投递), 超时(约 4s)返回 404。
@@ -79,7 +86,11 @@ impl Context {
             }
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
-        Err(HttpError::Status(reqwest::StatusCode::NOT_FOUND))
+        Err(HttpError::status(
+            reqwest::StatusCode::NOT_FOUND,
+            reqwest::Method::GET,
+            &self.mailhog.base_url,
+        ))
     }
 
     /// 读取 server 实际存储到 Redis 的邮箱验证码(与邮件中的比对)。
