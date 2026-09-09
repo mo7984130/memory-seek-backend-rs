@@ -87,11 +87,12 @@ impl Scenario for RefreshInvalidTokenScenario {
 
     type Output = ErrR;
 
-    async fn run(ctx: &Self::Ctx, _task: &TaskIndex) -> Result<Self::Output, Self::Error> {
+    async fn run(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Output, Self::Error> {
+        // loadtest_{index+1} 的 id = index + 2(种子 id 从 2 开始, admin 占 id=1)
+        let user_id = task.index + 2;
         ctx.client
             .request(reqwest::Method::POST, "/auth/token")
-            // loadtest_1 的 id = 1 + 1 = 2
-            .header("x-user-id", "2")
+            .header("x-user-id", &user_id.to_string())
             .header("x-refresh-token", "forged_refresh_token")
             .json_unwrap(&json!({}))
             .send()

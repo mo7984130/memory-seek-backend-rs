@@ -6,6 +6,9 @@ server:
 database:
     url: "postgres://memory_seek_test:memory_seek_test@localhost:54329/memory_seek_test"
 
+redis:
+    url: "redis://localhost:63799"
+
 # MailHog(收件验证码): docker-compose 已映射 8025
 mailhog:
     url: "http://localhost:8025"

@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use base64::Engine;
+use deadpool_redis::redis::AsyncCommands;
 use memseek_test::ctxlibs;
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
@@ -9,6 +10,7 @@ pub struct Context {
     pub client: ctxlibs::http_client::Client,
     pub db: DatabaseConnection,
     pub mailhog: ctxlibs::http_client::Client,
+    pub redis: deadpool_redis::Pool,
 }
 
 pub use ctxlibs::http_client::HttpError;
@@ -78,6 +80,13 @@ impl Context {
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
         Err(HttpError::Status(reqwest::StatusCode::NOT_FOUND))
+    }
+
+    /// 读取 server 实际存储到 Redis 的邮箱验证码(与邮件中的比对)。
+    pub async fn redis_email_code(&self, email: &str) -> Option<String> {
+        let mut conn = self.redis.get().await.ok()?;
+        let key = constants::redis_keys::auth::email_verify_code(email);
+        conn.get(&key).await.ok().flatten()
     }
 }
 

@@ -19,6 +19,9 @@ pub struct E2eConfig {
     pub database: DatabaseConfig,
 
     #[serde(default)]
+    pub redis: RedisConfig,
+
+    #[serde(default)]
     pub mailhog: MailhogConfig,
 
     #[serde(default)]
@@ -45,6 +48,24 @@ impl Default for ServerConfig {
 #[derive(Debug, Deserialize)]
 pub struct DatabaseConfig {
     pub url: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RedisConfig {
+    #[serde(default = "default_redis_url")]
+    pub url: String,
+}
+
+impl Default for RedisConfig {
+    fn default() -> Self {
+        Self {
+            url: default_redis_url(),
+        }
+    }
+}
+
+fn default_redis_url() -> String {
+    "redis://127.0.0.1:6379".to_string()
 }
 
 #[derive(Debug, Deserialize)]

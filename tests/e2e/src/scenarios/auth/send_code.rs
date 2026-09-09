@@ -28,10 +28,17 @@ impl Scenario for SendCodeScenario {
         _task: &TaskIndex,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        // 轮询等待邮件到达(异步投递)
+        // 轮询等待邮件到达, 并校验邮件正文 code 与 server 实际存储(Redis)的一致
         for _ in 0..10 {
-            if let Ok(code) = ctx.mailhog_latest_code(output).await {
-                return Ok(!code.is_empty());
+            let mail_code = match ctx.mailhog_latest_code(output).await {
+                Ok(code) => code,
+                Err(_) => {
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    continue;
+                }
+            };
+            if let Some(stored) = ctx.redis_email_code(output).await {
+                return Ok(mail_code == stored);
             }
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }

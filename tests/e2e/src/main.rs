@@ -1,4 +1,5 @@
 use clap::Parser;
+use deadpool_redis::{Config as RedisConfig, PoolConfig, Runtime};
 use e2e::{config::E2eConfig, context::Context, preprea};
 use memseek_test::{
     ctxlibs::http_client::Client,
@@ -29,10 +30,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 加载配置(与 server 一致: CLI > E2E_CONFIG_PATH > 默认路径)
     let cfg = E2eConfig::load(cli.config);
 
+    let mut redis_cfg = RedisConfig::from_url(&cfg.redis.url);
+    redis_cfg.pool = Some(PoolConfig::new(16));
+    let redis = redis_cfg.create_pool(Some(Runtime::Tokio1))?;
+
     let ctx = Context {
         client: Client::new(cfg.base_url())?,
         db: Database::connect(&cfg.database.url).await?,
         mailhog: Client::new(cfg.mailhog.url)?,
+        redis,
     };
     // 前置准备: 灌入种子数据(先清空再灌入)
     let ctx = preprea::init(ctx, &cfg.seed).await?;
