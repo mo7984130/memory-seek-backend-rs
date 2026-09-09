@@ -1,0 +1,18 @@
+# e2e 测试配置文件(读取逻辑与 server 一致: CLI --config > E2E_CONFIG_PATH > 默认路径)
+server:
+    host: 127.0.0.1
+    port: 7985
+
+database:
+    url: "postgres://memory_seek_test:memory_seek_test@localhost:54329/memory_seek_test"
+
+# MailHog(收件验证码): docker-compose 已映射 8025
+mailhog:
+    url: "http://localhost:8025"
+
+# 种子数据量(preprea::init 灌入; 环境变量 E2E__SEED__* 可覆盖)
+seed:
+    auth_users: 10000
+    photo_users: 2000
+    photos_per_user: 20
+    faces_per_person: 5

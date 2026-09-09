@@ -1,0 +1,84 @@
+services:
+    postgres:
+        image: docker.1panel.live/pgvector/pgvector:pg16
+        container_name: memory-seek-test-pg
+        environment:
+            POSTGRES_USER: memory_seek_test
+            POSTGRES_PASSWORD: memory_seek_test
+            POSTGRES_DB: memory_seek_test
+        ports:
+            - "54329:5432"
+        tmpfs:
+            - /var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U memory_seek_test -d memory_seek_test"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+            start_period: 10s
+
+    postgres-init:
+        image: docker.1panel.live/pgvector/pgvector:pg16
+        container_name: memory-seek-test-pg-init
+        depends_on:
+            postgres:
+                condition: service_healthy
+        environment:
+            PGPASSWORD: memory_seek_test
+        restart: "no"
+        command:
+            - psql
+            - -h
+            - postgres
+            - -U
+            - memory_seek_test
+            - -d
+            - memory_seek_test
+            - -c
+            - CREATE EXTENSION IF NOT EXISTS vector;
+
+    valkey:
+        image: docker.1panel.live/valkey/valkey:8-alpine
+        container_name: memory-seek-test-valkey
+        command: ["valkey-server", "--save", "", "--appendonly", "no"]
+        ports:
+            - "63799:6379"
+        tmpfs:
+            - /data
+
+    mailhog:
+        image: docker.1panel.live/mailhog/mailhog
+        container_name: memory-seek-test-mailhog
+        ports:
+            - "1025:1025"
+            - "8025:8025"
+
+    rustfs:
+        image: docker.1panel.live/rustfs/rustfs:1.0.0-rc.4
+        container_name: memory-seek-test-rustfs
+        command: /data
+        environment:
+            RUSTFS_ACCESS_KEY: memory_seek_test
+            RUSTFS_SECRET_KEY: memory_seek_test
+        ports:
+            - "9000:9000"
+        tmpfs:
+            # rootless podman 的 tmpfs 默认属主是宿主 uid(=容器内 root),权限 750,
+            # 而镜像以非 root 用户 rustfs(uid 10001)运行,写 /data 会 Permission denied,
+            # 因此显式指定 mode=1777 与 Docker 默认 tmpfs 语义一致。
+            - /data:mode=1777
+
+    rustfs-init:
+        image: docker.1panel.live/minio/mc:latest
+        container_name: memory-seek-test-rustfs-init
+        depends_on:
+            - rustfs
+        entrypoint: >
+            /bin/sh -c "
+            until mc alias set local http://rustfs:9000 memory_seek_test memory_seek_test; do
+                echo 'waiting for RustFS...';
+                sleep 1;
+            done;
+            mc mb --ignore-existing local/memory-seek-test;
+            echo 'bucket created';
+            "

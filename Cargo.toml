@@ -15,6 +15,7 @@ members = [
     "domains/photo",
     "domains/backup",
     "server",
+    "tests/e2e",
     # "tools/bench-support", "tests/e2e",
 ]
 
