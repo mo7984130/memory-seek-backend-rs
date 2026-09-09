@@ -12,8 +12,15 @@ use types::user::UserInfo;
 
 use crate::context::Context;
 
-/// 注册成功: 先发验证码, 从 MailHog 读回真实验证码再注册。
-/// 数据用 `e2e_{index}` 唯一命名, Times 须 ≤ 并发度保证每任务只跑一次。
+/// 注册成功: preset 每任务发送验证码并读回, 每轮 run 只做注册。
+/// 数据用 `e2e_reg_{index}` 唯一命名, Times 须 ≤ 并发度保证每任务只跑一次。
+#[derive(Default)]
+pub struct RegisterPreset {
+    pub username: String,
+    pub email: String,
+    pub code: String,
+}
+
 #[derive(Default)]
 pub struct RegisterScenario;
 impl Scenario for RegisterScenario {
@@ -23,29 +30,40 @@ impl Scenario for RegisterScenario {
 
     type Output = SucR<UserInfo>;
 
-    async fn run(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Output, Self::Error> {
-        // 独立命名空间, 避免与 SendCode 场景共用邮箱读到旧邮件
+    type Preset = RegisterPreset;
+
+    /// 预置: 发验证码 + 从 MailHog 读回真实验证码(独立命名空间避免读旧邮件)
+    async fn preset(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Preset, Self::Error> {
         let username = format!("e2e_reg_{}", task.index);
         let email = format!("e2e_reg_{}@test.com", task.index);
 
-        // 前置: 发送邮箱验证码
         ctx.client
             .post("/auth/verification-codes", json!({ "email": email }))
             .await?;
-        // 从 MailHog 读回验证码(轮询等待异步投递)
         let code = ctx.wait_mailhog_code(&email).await?;
+        Ok(RegisterPreset {
+            username,
+            email,
+            code,
+        })
+    }
 
+    async fn run(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        preset: &Self::Preset,
+    ) -> Result<Self::Output, Self::Error> {
         ctx.client
             .post(
                 "/auth/register",
                 json!({
-                    "username": username,
-                    "email": email,
+                    "username": preset.username,
+                    "email": preset.email,
                     "password": "Test123456",
                     "confirmPassword": "Test123456",
                     "nickname": "E2E",
                     "inviterCode": "DRIFTC",
-                    "emailVerifyCode": code,
+                    "emailVerifyCode": preset.code,
                 }),
             )
             .await?
@@ -56,12 +74,13 @@ impl Scenario for RegisterScenario {
 
     async fn validate(
         ctx: &Self::Ctx,
-        task: &TaskIndex,
+        _task: &TaskIndex,
+        preset: &Self::Preset,
         _output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         // 回查: 新用户确实落库
         let exists = auth::user::Entity::find()
-            .filter(auth::user::Column::Username.eq(format!("e2e_reg_{}", task.index)))
+            .filter(auth::user::Column::Username.eq(&preset.username))
             .exists(&ctx.db)
             .await
             .unwrap();
@@ -81,7 +100,13 @@ impl Scenario for RegisterInvalidCodeScenario {
 
     type Output = ErrR;
 
-    async fn run(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Output, Self::Error> {
+    type Preset = ();
+
+    async fn run(
+        ctx: &Self::Ctx,
+        task: &TaskIndex,
+        _preset: &Self::Preset,
+    ) -> Result<Self::Output, Self::Error> {
         ctx.client
             .post_raw(
                 "/auth/register",
@@ -104,6 +129,7 @@ impl Scenario for RegisterInvalidCodeScenario {
     async fn validate(
         _ctx: &Self::Ctx,
         _task: &TaskIndex,
+        _preset: &Self::Preset,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         Ok(output.code == 400)

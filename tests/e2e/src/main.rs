@@ -2,11 +2,11 @@ use clap::Parser;
 use deadpool_redis::{Config as RedisConfig, PoolConfig, Runtime};
 use e2e::{config::E2eConfig, context::Context, preprea};
 use memseek_test::{
+    Report,
     ctxlibs::http_client::Client,
     manager::{ManagerConfig, ScenarioManager},
 };
 use sea_orm::Database;
-use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt};
 
 #[derive(Parser)]
@@ -46,7 +46,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let report = ScenarioManager::new(ManagerConfig::new(32))
         .run_all(&ctx)
         .await;
-    info!("{:#?}", report);
+    println!(
+        "{}",
+        report.report_with(memseek_test::ReportOptions {
+            color: true,
+            bar_width: 20
+        })
+    );
 
     Ok(())
 }

@@ -8,12 +8,22 @@ use types::auth::{self, LoginResponse, RefreshAccessTokenResponse, user::UserId}
 
 use crate::context::Context;
 
-/// 刷新 access_token: 登录拿 refresh_token 后调用刷新, 校验确实签发了新 token。
-pub struct RefreshOutput {
+/// 刷新 access_token: preset 每任务登录一次拿凭据, 每轮 run 只做刷新,
+/// 校验确实签发了新 token 且 refresh_token 未被破坏。
+pub struct RefreshPreset {
     pub user_id: UserId,
     pub refresh_token: String,
     pub old_access_token: String,
-    pub new_access_token: String,
+}
+
+impl Default for RefreshPreset {
+    fn default() -> Self {
+        Self {
+            user_id: UserId(0),
+            refresh_token: String::new(),
+            old_access_token: String::new(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -23,10 +33,12 @@ impl Scenario for RefreshScenario {
 
     type Error = HttpError;
 
-    type Output = RefreshOutput;
+    type Output = SucR<RefreshAccessTokenResponse>;
 
-    async fn run(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Output, Self::Error> {
-        // 前置: 登录获取凭据
+    type Preset = RefreshPreset;
+
+    /// 预置: 每任务登录一次, 产出凭据供本轮刷新使用
+    async fn preset(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Preset, Self::Error> {
         let login: SucR<LoginResponse> = ctx
             .client
             .post(
@@ -36,38 +48,43 @@ impl Scenario for RefreshScenario {
             .await?
             .json()
             .await?;
+        Ok(RefreshPreset {
+            user_id: login.data.user.id,
+            refresh_token: login.data.refresh_token,
+            old_access_token: login.data.access_token,
+        })
+    }
 
+    async fn run(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        preset: &Self::Preset,
+    ) -> Result<Self::Output, Self::Error> {
         // 刷新: 凭据从请求头读取
-        let resp: SucR<RefreshAccessTokenResponse> = ctx
-            .client
+        ctx.client
             .request(reqwest::Method::POST, "/auth/token")
-            .header("x-user-id", &login.data.user.id.to_string())
-            .header("x-refresh-token", &login.data.refresh_token)
+            .header("x-user-id", &preset.user_id.to_string())
+            .header("x-refresh-token", &preset.refresh_token)
             .json_unwrap(&json!({}))
             .send()
             .await?
             .json()
-            .await?;
-
-        Ok(RefreshOutput {
-            user_id: login.data.user.id,
-            refresh_token: login.data.refresh_token,
-            old_access_token: login.data.access_token,
-            new_access_token: resp.data.access_token,
-        })
+            .await
+            .map_err(HttpError::from)
     }
 
     async fn validate(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
+        preset: &Self::Preset,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         // 确实签发了新 access_token
-        let issued_new = output.new_access_token != output.old_access_token;
+        let issued_new = output.data.access_token != preset.old_access_token;
         // refresh_token 未被破坏: 库中仍与登录时一致
         let token_intact = auth::user::Entity::find()
-            .filter(auth::user::Column::Id.eq(output.user_id))
-            .filter(auth::user::Column::RefreshToken.eq(&output.refresh_token))
+            .filter(auth::user::Column::Id.eq(preset.user_id))
+            .filter(auth::user::Column::RefreshToken.eq(&preset.refresh_token))
             .exists(&ctx.db)
             .await
             .unwrap();
@@ -87,7 +104,13 @@ impl Scenario for RefreshInvalidTokenScenario {
 
     type Output = ErrR;
 
-    async fn run(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Output, Self::Error> {
+    type Preset = ();
+
+    async fn run(
+        ctx: &Self::Ctx,
+        task: &TaskIndex,
+        _preset: &Self::Preset,
+    ) -> Result<Self::Output, Self::Error> {
         // loadtest_{index+1} 的 id = index + 2(种子 id 从 2 开始, admin 占 id=1)
         let user_id = task.index + 2;
         ctx.client
@@ -105,6 +128,7 @@ impl Scenario for RefreshInvalidTokenScenario {
     async fn validate(
         _ctx: &Self::Ctx,
         _task: &TaskIndex,
+        _preset: &Self::Preset,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         Ok(output.code == 401)

@@ -5,7 +5,8 @@ use serde_json::json;
 
 use crate::context::Context;
 
-/// 发送邮箱验证码: 校验 MailHog 确实收到邮件(真实链路投递)。
+/// 发送邮箱验证码: 校验 MailHog 确实收到邮件, 且邮件 code 与 server
+/// 实际存储(Redis)的一致(真实链路投递)。
 #[derive(Default)]
 pub struct SendCodeScenario;
 impl Scenario for SendCodeScenario {
@@ -15,7 +16,13 @@ impl Scenario for SendCodeScenario {
 
     type Output = String;
 
-    async fn run(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Output, Self::Error> {
+    type Preset = ();
+
+    async fn run(
+        ctx: &Self::Ctx,
+        task: &TaskIndex,
+        _preset: &Self::Preset,
+    ) -> Result<Self::Output, Self::Error> {
         let email = format!("e2e_{}@test.com", task.index);
         ctx.client
             .post("/auth/verification-codes", json!({ "email": email }))
@@ -26,6 +33,7 @@ impl Scenario for SendCodeScenario {
     async fn validate(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
+        _preset: &Self::Preset,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         // 轮询等待邮件到达, 并校验邮件正文 code 与 server 实际存储(Redis)的一致
