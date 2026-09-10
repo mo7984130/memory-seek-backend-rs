@@ -29,16 +29,35 @@ pub async fn metrics_middleware(request: Request, next: Next) -> Response {
     let response = next.run(request).await;
 
     let status_class = format!("{}xx", response.status().as_u16() / 100);
-    record(&method, &route, &status_class, start.elapsed());
+    record(
+        &method,
+        &route,
+        classify_module(&route),
+        &status_class,
+        start.elapsed(),
+    );
     response
 }
 
+/// 按路由前缀归类模块（低基数：模块数量固定）。
+/// 未知前缀（`/health`、`/hello`、未匹配等）归 `other`。
+fn classify_module(route: &str) -> &'static str {
+    match route.split('/').nth(1) {
+        Some("auth") => "auth",
+        Some("user") => "user",
+        Some("photo") => "photo",
+        Some("admin") => "audit", // /admin/audits
+        _ => "other",
+    }
+}
+
 /// 写入单次请求的聚合指标.
-fn record(method: &str, route: &str, status_class: &str, elapsed: Duration) {
+fn record(method: &str, route: &str, module: &str, status_class: &str, elapsed: Duration) {
     metrics::counter!(
         "server.http.requests_total",
         "method" => method.to_string(),
         "route" => route.to_string(),
+        "module" => module.to_string(),
         "status_class" => status_class.to_string()
     )
     .increment(1);
@@ -46,7 +65,31 @@ fn record(method: &str, route: &str, status_class: &str, elapsed: Duration) {
     metrics::histogram!(
         "server.http.duration_seconds",
         "method" => method.to_string(),
-        "route" => route.to_string()
+        "route" => route.to_string(),
+        "module" => module.to_string()
     )
     .record(elapsed.as_secs_f64());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::classify_module;
+
+    #[test]
+    fn classifies_known_modules_by_route_prefix() {
+        assert_eq!(classify_module("/auth/login"), "auth");
+        assert_eq!(classify_module("/auth/token"), "auth");
+        assert_eq!(classify_module("/user/me"), "user");
+        assert_eq!(classify_module("/photo/:id"), "photo");
+        assert_eq!(classify_module("/photo/face/:id"), "photo");
+        assert_eq!(classify_module("/admin/audits"), "audit");
+    }
+
+    #[test]
+    fn falls_back_to_other_for_system_routes() {
+        assert_eq!(classify_module("/health"), "other");
+        assert_eq!(classify_module("/hello"), "other");
+        assert_eq!(classify_module("unmatched"), "other");
+        assert_eq!(classify_module(""), "other");
+    }
 }

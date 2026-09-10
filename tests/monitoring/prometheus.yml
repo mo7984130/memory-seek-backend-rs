@@ -1,0 +1,16 @@
+global:
+    scrape_interval: 5s
+    evaluation_interval: 2s
+
+scrape_configs:
+    # 监控你的 Rust 后端
+    # - job_name: "memory-seek-server"
+    #   scheme: https
+    #   metrics_path: /api/metrics
+    #   static_configs:
+    #       - targets: ["memory-seek.driftcloud.cn"]
+
+    - job_name: "memory-seek-server-test"
+      scheme: http
+      static_configs:
+        - targets: ["host.containers.internal:7985"]

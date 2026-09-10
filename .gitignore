@@ -17,9 +17,10 @@ memo.md
 tags
 dist
 
-docs
+docs/*
 !docs/sql
 !docs/dashboards
+
 
 Dockerfile
 build.sh
@@ -38,8 +39,10 @@ tests/load/ci/logs/
 verify-test
 
 local
-# 测试基础设施: 仅白名单入库(e2e / 配置), 其余(模型、负载产物等)不入库
+# 测试基础设施: 仅白名单入库(e2e / 配置 / 监控), 其余(模型、负载产物等)不入库
 tests/*
 !tests/e2e/
 !tests/config.yml
 !tests/docker-compose.yml
+!tests/monitoring/
+tests/monitoring/data/

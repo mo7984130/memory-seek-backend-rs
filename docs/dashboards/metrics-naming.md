@@ -92,13 +92,17 @@ photo:face_compute:photo_download:duration_seconds_count
 
 | 指标名 | 类型 | Labels | 含义 |
 |--------|------|--------|------|
-| `server.http.requests_total` | counter | `method`、`route`、`status_class` | 请求量 |
-| `server.http.duration_seconds` | histogram | `method`、`route` | 请求耗时（秒） |
+| `server.http.requests_total` | counter | `method`、`route`、`module`、`status_class` | 请求量 |
+| `server.http.duration_seconds` | histogram | `method`、`route`、`module` | 请求耗时（秒） |
 | `server.http.in_flight` | gauge | - | 当前在途请求数 |
 
-- `route` 取自 `axum::extract::MatchedPath`（路由 pattern，如 `/api/v1/photos/:id`），
+- `route` 取自 `axum::extract::MatchedPath`（路由 pattern，如 `/photos/:id`），
   未匹配时回退为 `unmatched`。**禁止**将真实 ID 等动态值写入标签。
-- 低基数标签白名单：`method`、`route`（pattern）、`status_class`、`kind`、`op`、`mode`。
+- `module` 按路由前缀归类（`classify_module`，低基数、固定词表）：
+  `/auth/*` → `auth`、`/user/*` → `user`、`/photo/*` → `photo`、
+  `/admin/*` → `audit`，其余（`/health`、`/hello`、`unmatched` 等）→ `other`。
+  模块 dashboard 的 HTTP 行按 `module` 过滤，全局视图（system dashboard）不过滤。
+- 低基数标签白名单：`method`、`route`（pattern）、`module`、`status_class`、`kind`、`op`、`mode`。
 - Prometheus 导出名：`server_http_requests_total`、`server_http_duration_seconds_bucket`。
   点号系统指标的 counter 统一以 `_total` 结尾，满足 Prometheus 命名约定（消除
   Grafana PromQL 对 `rate()` 目标的 counter 类型警告）；业务冒号指标保留原名。
@@ -273,8 +277,8 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 | `redis.connections.idle` | `redis_connections_idle` | gauge | Redis 连接池空闲连接 |
 | `redis.connections.waiting` | `redis_connections_waiting` | gauge | Redis 连接池等待连接 |
 | `server.build_info` | `server_build_info` | gauge=1 | labels：`version` / `commit`，用于版本追踪 |
-| `server.http.requests_total` | `server_http_requests_total` | counter | labels：`method` / `route` / `status_class`，HTTP 请求量 |
-| `server.http.duration_seconds` | `server_http_duration_seconds` | histogram | labels：`method` / `route`，HTTP 请求耗时 |
+| `server.http.requests_total` | `server_http_requests_total` | counter | labels：`method` / `route` / `module` / `status_class`，HTTP 请求量 |
+| `server.http.duration_seconds` | `server_http_duration_seconds` | histogram | labels：`method` / `route` / `module`，HTTP 请求耗时 |
 | `server.http.in_flight` | `server_http_in_flight` | gauge | 在途请求数 |
 
 ### 采集周期与分桶
@@ -296,6 +300,8 @@ db / redis / s3 / smtp / validation / auth / not_found / conflict / internal
 
 ## 更新记录
 
+- 2026-09-10: HTTP 请求级指标新增 `module` 标签（按路由前缀归类：auth / user / photo /
+  audit，未知归 other），模块 dashboard 的 HTTP 行按 `module` 过滤。
 - 2026-08-01: 重构命名规范。废弃 summary 式 `duration_quantile`，改用原生 histogram
   （`{name}_bucket/_sum/_count`）；业务指标统一为 `{crate}:{func}:{step}`，操作名来自
   tracing span；补齐 photo 模块 `#[tracing::instrument]`；人脸计算指标迁移为

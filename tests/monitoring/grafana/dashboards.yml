@@ -1,0 +1,15 @@
+apiVersion: 1
+
+providers:
+  - name: 'memory-seek-dashboards'
+    orgId: 1
+    folder: 'MemorySeek'  # Grafana 中显示的文件夹名称(自动创建)
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false  # UI 改动会被 provision 覆盖,保证仓库为唯一事实来源
+    updateIntervalSeconds: 30  # 每30秒检查一次文件变化
+    options:
+      path: /var/lib/grafana/dashboards
+      # 文件直接放在根目录,不使用子目录映射文件夹;
+      # foldersFromFilesStructure 开启时根目录文件会丢失 folder 归属,故关闭
+      foldersFromFilesStructure: false

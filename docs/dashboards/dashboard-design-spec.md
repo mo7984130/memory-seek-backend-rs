@@ -57,15 +57,18 @@
 
 | 面板 | 类型 | 查询 |
 |------|------|------|
-| `HTTP QPS` | timeseries | `sum(rate(server_http_requests_total[5m])) by (route)` |
-| `HTTP 错误率` | timeseries | `sum(rate(server_http_requests_total{status_class="5xx"}[5m])) / sum(rate(server_http_requests_total[5m])) * 100` |
-| `HTTP 延迟 (P50/P95/P99)` | timeseries | `histogram_quantile(0.95, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000` |
+| `HTTP QPS` | timeseries | `sum(rate(server_http_requests_total{module="<模块>"}[5m])) by (route)` |
+| `HTTP 错误率` | timeseries | `sum(rate(server_http_requests_total{status_class="5xx",module="<模块>"}[5m])) / sum(rate(server_http_requests_total{module="<模块>"}[5m])) * 100` |
+| `HTTP 延迟 (P99)` | timeseries | `histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module="<模块>"}[5m])) by (le, route)) * 1000` |
 
+> `<模块>` 为 dashboard 所属模块（auth / user / photo），由 metrics 中间件的 `module`
+> 标签提供（按路由前缀归类，详见 metrics-naming.md）。**system dashboard 的 HTTP 行
+> 不加 `module` 过滤**，保留全局视角。
+>
+> HTTP 延迟面板仅保留 **P99 汇总**（图例 `{{route}}`）；P50/P95/P99 的详细分位数
+> 见各操作下方的耗时面板。
 > 系统指标的点号转下划线；counter 以 `_total` 结尾（`server_http_requests_total`），
 > 满足 Prometheus 命名约定。业务冒号指标保留原名。
->
-> 多 target 面板的 `refId` 必须唯一：HTTP 延迟面板的 P50/P95/P99 三个查询依次使用
-> `A` / `B` / `C`，否则 Grafana 报 "multiple queries using the same RefId"。
 
 #### 错误分布面板（埋了 `errors:{kind}` 的操作）
 
@@ -240,15 +243,22 @@
 
 ### Legend
 
+图例不可见（`showLegend: false`），面板只保留曲线本身；
+系列的对应关系与数值通过悬停 tooltip 查看：
+
 ```json
 {
   "legend": {
-    "calcs": ["lastNotNull"],
+    "calcs": [],
     "displayMode": "list",
+    "showLegend": false,
     "placement": "bottom"
   }
 }
 ```
+
+> **注意**：不要使用 `displayMode: "hidden"`——Grafana 13.2.1 对其存在渲染 bug
+> （数据链路正常但面板显示 NoData）。用 `list + showLegend: false` 实现同样的隐藏效果。
 
 ### Tooltip
 
@@ -283,6 +293,11 @@ Auth 模块监控
 
 ## 更新记录
 
+- 2026-09-10: HTTP 请求汇总行改为按 `module` 标签过滤（模块 dashboard 只看自己的请求；
+  system 保留全局）；metrics 中间件新增 `module` 标签；dashboard 开始由 jsonnet 模板生成。
+- 2026-09-10: HTTP 延迟面板收敛为 P99 单查询（详细分位数见各操作的耗时面板）。
+- 2026-09-10: 图例不可见（`showLegend: false` + `displayMode: list`），不再展示系列名与
+  `Last *` 统计值；`displayMode: hidden` 在 Grafana 13.2.1 存在 NoData 渲染 bug，禁用。
 - 2026-06-18: 初始版本，统一 auth/user/photo 三个模块的 dashboard 设计
 - 2026-06-19: 默认时间范围改为 5 分钟，刷新间隔改为 5 秒
 - 2026-06-19: 移除并发度相关设计（底部汇总区、并发度 target/override、单位/阈值定义）

@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# 注意:此文件挂载到 provisioning/datasources/ 目录,只能包含 datasource 配置;
+# dashboard provider 在 dashboards.yml(挂载到 provisioning/dashboards/)中单独管理
+datasources:
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus:9090
+      # 固定 uid,与 dashboard JSON 中引用的 datasource uid 保持一致
+      # (dashboard 文件内 datasource.uid 为 "Prometheus",不匹配会导致面板报错)
+      uid: Prometheus
+      isDefault: true
+      editable: false
