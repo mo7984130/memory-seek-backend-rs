@@ -46,3 +46,4 @@ tests/*
 !tests/docker-compose.yml
 !tests/monitoring/
 tests/monitoring/data/
+build
