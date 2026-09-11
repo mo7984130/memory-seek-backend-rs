@@ -122,15 +122,9 @@ impl Context {
         self.s3.download(key).await.ok().map(|b| b.to_vec())
     }
 
-    /// 对象确实不存在(404), 区别于网络 / 限流等其它错误。
+    /// 对象确实不存在; 用 list 判定, 避免 GET/HEAD 对 404 的重试与告警。
     pub async fn s3_missing(&self, key: &str) -> bool {
-        matches!(
-            self.s3.download(key).await,
-            Err(oss::OssError::Inner(s3::error::S3Error::HttpFailWithBody(
-                404,
-                _
-            )))
-        )
+        matches!(self.s3.exists(key).await, Ok(false))
     }
 }
 

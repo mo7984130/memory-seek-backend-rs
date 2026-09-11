@@ -13,8 +13,6 @@ base64.workspace = true
 reqwest.workspace = true
 deadpool-redis.workspace = true
 hex.workspace = true
-# 直接用 rust-s3 的错误类型区分对象不存在(404)与网络错误
-s3.workspace = true
 constants = { path = "../../domains/constants" }
 oss = { path = "../../libs/oss" }
 tokio = { workspace = true, features = ["macros"] }

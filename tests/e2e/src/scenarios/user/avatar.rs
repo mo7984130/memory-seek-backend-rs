@@ -1,6 +1,7 @@
 use std::sync::LazyLock;
 
 use common::axum::{ErrR, SucR};
+use memseek_test::ctxlibs::http_client::multipart::{Form, Part};
 use memseek_test::{
     TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
 };
@@ -16,26 +17,16 @@ use super::session::{Session, login, user_account};
 /// 1x1 PNG fixture(取自 `file_validator` 单测, 可被 `FileValidator::validate_image` 解析).
 static PNG_1X1: &str = "89504E470D0A1A0A0000000D4948445200000001000000010802000000907753DE0000000C4944415408D763F8FF7F0005FE02FE0DC444830000000049454E44AE426082";
 
-const BOUNDARY: &str = "----memseek-e2e-boundary";
-
 /// 内置 PNG 字节(懒解码).
 static PNG_BYTES: LazyLock<Vec<u8>> =
     LazyLock::new(|| hex::decode(PNG_1X1).expect("内置 PNG fixture 非法"));
 
-/// 构造 multipart/form-data 请求体与对应的 `Content-Type` 头.
-///
-/// `Client` 未提供 `.multipart()`, 故按 RFC 格式手工拼装单字段表单.
-fn multipart_image(filename: &str, content_type: &str, data: &[u8]) -> (String, Vec<u8>) {
-    let mut body = Vec::new();
-    body.extend_from_slice(format!("--{BOUNDARY}\r\n").as_bytes());
-    body.extend_from_slice(
-        format!("Content-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n")
-            .as_bytes(),
-    );
-    body.extend_from_slice(format!("Content-Type: {content_type}\r\n\r\n").as_bytes());
-    body.extend_from_slice(data);
-    body.extend_from_slice(format!("\r\n--{BOUNDARY}--\r\n").as_bytes());
-    (format!("multipart/form-data; boundary={BOUNDARY}"), body)
+/// 构造单文件 multipart 表单(用库重新导出的 `reqwest::multipart` 类型).
+fn file_form(filename: &str, content_type: &str, data: Vec<u8>) -> Result<Form, HttpError> {
+    let part = Part::bytes(data)
+        .file_name(filename.to_string())
+        .mime_str(content_type)?;
+    Ok(Form::new().part("file", part))
 }
 
 /// 上传头像: 落库 key 与响应 token 一致, 且 S3 对象存在、内容与上传一致.
@@ -60,12 +51,11 @@ impl Scenario for UploadAvatarScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let (content_type, body) = multipart_image("avatar.png", "image/png", &PNG_BYTES);
+        let form = file_form("avatar.png", "image/png", PNG_BYTES.clone())?;
         ctx.client
             .request(reqwest::Method::PUT, "/user/avatar")
             .header("Authorization", &setup.auth_header())
-            .header("content-type", &content_type)
-            .body(body)
+            .multipart(form)
             .send()
             .await?
             .json::<Self::Output>()
@@ -129,13 +119,12 @@ impl Scenario for UploadAvatarReplaceScenario {
         let session = login(ctx, &user_account(task.index)).await?;
 
         // 第一次上传, 记录旧头像 key
-        let (content_type, body) = multipart_image("old.png", "image/png", &PNG_BYTES);
+        let form = file_form("old.png", "image/png", PNG_BYTES.clone())?;
         let resp: SucR<ImageTokenStr> = ctx
             .client
             .request(reqwest::Method::PUT, "/user/avatar")
             .header("Authorization", &session.auth_header())
-            .header("content-type", &content_type)
-            .body(body)
+            .multipart(form)
             .send()
             .await?
             .json()
@@ -152,12 +141,11 @@ impl Scenario for UploadAvatarReplaceScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let (content_type, body) = multipart_image("new.png", "image/png", &PNG_BYTES);
+        let form = file_form("new.png", "image/png", PNG_BYTES.clone())?;
         ctx.client
             .request(reqwest::Method::PUT, "/user/avatar")
             .header("Authorization", &setup.session.auth_header())
-            .header("content-type", &content_type)
-            .body(body)
+            .multipart(form)
             .send()
             .await?
             .json::<Self::Output>()
@@ -217,12 +205,11 @@ impl Scenario for UploadAvatarInvalidFileScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let (content_type, body) = multipart_image("evil.txt", "text/plain", b"not an image");
+        let form = file_form("evil.txt", "text/plain", b"not an image".to_vec())?;
         ctx.client
             .request(reqwest::Method::PUT, "/user/avatar")
             .header("Authorization", &setup.auth_header())
-            .header("content-type", &content_type)
-            .body(body)
+            .multipart(form)
             .send()
             .await?
             .json::<Self::Output>()
@@ -297,20 +284,6 @@ mod tests {
         assert_eq!(
             &PNG_BYTES[..8],
             &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]
-        );
-    }
-
-    #[test]
-    fn multipart_body_carries_filename_and_payload() {
-        let (content_type, body) = multipart_image("a.png", "image/png", &PNG_BYTES);
-        assert!(content_type.starts_with("multipart/form-data; boundary="));
-
-        let text = String::from_utf8_lossy(&body);
-        assert!(text.contains("name=\"file\"; filename=\"a.png\""));
-        assert!(text.contains("Content-Type: image/png"));
-        assert!(
-            body.windows(PNG_BYTES.len())
-                .any(|window| window == PNG_BYTES.as_slice())
         );
     }
 }
