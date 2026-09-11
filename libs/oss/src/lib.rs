@@ -286,6 +286,34 @@ impl S3Client {
         .await
     }
 
+    /// 判断对象是否存在。
+    ///
+    /// 通过 list(前缀 = key) 判定, 而非 GET / HEAD: 对象不存在时 list 仍返回
+    /// 成功(空结果), 不会触发底层 rust-s3 对 404 的重试与告警。
+    ///
+    /// # 参数
+    /// - `key`: 文件路径/键名
+    ///
+    /// # 返回
+    /// 对象存在返回 `true`, 不存在返回 `false`
+    ///
+    /// # 错误
+    /// - `OssError`: OSS 列举操作失败
+    pub async fn exists(&self, key: &str) -> Result<bool, OssError> {
+        let key = key.trim_start_matches('/');
+        let results = self
+            .inner
+            .bucket
+            .list(key.to_string(), None)
+            .await
+            .map_err(OssError::from)?;
+
+        Ok(results
+            .iter()
+            .flat_map(|result| result.contents.iter())
+            .any(|object| object.key.as_str() == key))
+    }
+
     /// 获取对象存储的流式下载响应.
     pub async fn get_download_stream_response(
         &self,
