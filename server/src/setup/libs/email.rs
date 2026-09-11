@@ -12,6 +12,9 @@ pub struct Config {
     pub password: String,
     pub from_email: String,
     pub from_name: String,
+    /// 明文 SMTP 传输(测试环境如 MailHog 不支持 TLS 时置 true)
+    #[serde(default)]
+    pub plain: bool,
 }
 /// 返回 SMTP 默认端口.
 fn default_port() -> u16 {
@@ -32,6 +35,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> common::Result<()
         &config.password,
         &config.from_email,
         &config.from_name,
+        config.plain,
     );
     setup.registry.insert(client);
     info!("初始化 Email Client lib 成功");

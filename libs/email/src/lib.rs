@@ -19,11 +19,13 @@ impl EmailClient {
     ///
     /// # 参数
     /// - `server`: SMTP 服务器地址
-    /// - `port`: SMTP 端口号（465 使用 SSL，其他使用 STARTTLS）
+    /// - `port`: SMTP 端口号
     /// - `user`: SMTP 用户名
     /// - `pass`: SMTP 密码
     /// - `from_email`: 发件人邮箱地址
     /// - `from_name`: 发件人显示名称
+    /// - `plain`: 明文传输(测试环境如 MailHog 不支持 TLS 时使用);
+    ///   否则 465 端口走 SSL, 其它端口走 STARTTLS
     ///
     /// # 返回
     /// 初始化完成的 `EmailClient` 实例
@@ -34,11 +36,18 @@ impl EmailClient {
         pass: &str,
         from_email: &str,
         from_name: &str,
+        plain: bool,
     ) -> Self {
         let creds = Credentials::new(user.to_string(), pass.to_string());
 
-        // 根据端口判断加密方式：
-        let transport = if port == 465 {
+        // 根据端口与传输模式决定加密方式：
+        let transport = if plain {
+            // 明文：MailHog 等测试 SMTP
+            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(server)
+                .port(port)
+                .credentials(creds)
+                .build()
+        } else if port == 465 {
             AsyncSmtpTransport::<Tokio1Executor>::relay(server)
                 .expect("无法解析 SMTP 服务器地址")
                 .port(port)
