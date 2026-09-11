@@ -511,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "auth"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "audit",
  "axum",
@@ -1062,7 +1062,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1626,7 +1626,7 @@ dependencies = [
 
 [[package]]
 name = "email"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "common",
  "lettre",
@@ -5149,7 +5149,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "audit",
  "auth",
