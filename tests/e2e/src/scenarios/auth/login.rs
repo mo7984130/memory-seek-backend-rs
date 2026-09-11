@@ -21,12 +21,12 @@ impl Scenario for LoginScenario {
 
     type Output = SucR<LoginResponse>;
 
-    type Preset = ();
+    type Setup = ();
 
     async fn run(
         ctx: &Self::Ctx,
         task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
             .post(
@@ -42,7 +42,7 @@ impl Scenario for LoginScenario {
     async fn validate(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         auth::user::Entity::find()
@@ -67,12 +67,12 @@ impl Scenario for LoginWrongPasswordScenario {
 
     type Output = ErrR;
 
-    type Preset = ();
+    type Setup = ();
 
     async fn run(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
             .post_raw(
@@ -88,7 +88,7 @@ impl Scenario for LoginWrongPasswordScenario {
     async fn validate(
         _ctx: &Self::Ctx,
         _task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         Ok(output.code == 400)
@@ -110,12 +110,12 @@ impl Scenario for LoginUnknownAccountScenario {
 
     type Output = ErrR;
 
-    type Preset = ();
+    type Setup = ();
 
     async fn run(
         ctx: &Self::Ctx,
         task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
             .post_raw(
@@ -131,7 +131,7 @@ impl Scenario for LoginUnknownAccountScenario {
     async fn validate(
         _ctx: &Self::Ctx,
         _task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         Ok(output.code == 400)

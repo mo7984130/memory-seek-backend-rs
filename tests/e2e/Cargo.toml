@@ -1,6 +1,6 @@
 [package]
 name = "e2e"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 
 [dependencies]
@@ -12,7 +12,11 @@ serde_json.workspace = true
 base64.workspace = true
 reqwest.workspace = true
 deadpool-redis.workspace = true
+hex.workspace = true
+# 直接用 rust-s3 的错误类型区分对象不存在(404)与网络错误
+s3.workspace = true
 constants = { path = "../../domains/constants" }
+oss = { path = "../../libs/oss" }
 tokio = { workspace = true, features = ["macros"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

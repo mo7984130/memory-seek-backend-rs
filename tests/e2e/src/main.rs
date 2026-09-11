@@ -30,6 +30,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 加载配置(与 server 一致: CLI > E2E_CONFIG_PATH > 默认路径)
     let cfg = E2eConfig::load(cli.config);
 
+    // 初始化全局 token 加密器: 必须与 server 的 token_cipher 一致,
+    // 否则响应中的 avatar_token(ImageTokenStr)无法解密, 反序列化会失败
+    common::utils::init_token_cipher(&common::utils::TokenCipherConfig {
+        key: cfg.token_cipher.key.clone(),
+        salt: cfg.token_cipher.salt.clone(),
+    });
+
     let mut redis_cfg = RedisConfig::from_url(&cfg.redis.url);
     redis_cfg.pool = Some(PoolConfig::new(16));
     let redis = redis_cfg.create_pool(Some(Runtime::Tokio1))?;
@@ -39,20 +46,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         db: Database::connect(&cfg.database.url).await?,
         mailhog: Client::new(cfg.mailhog.url)?,
         redis,
+        s3: oss::S3Client::new(&cfg.s3.to_oss()),
     };
     // 前置准备: 灌入种子数据(先清空再灌入)
     let ctx = preprea::init(ctx, &cfg.seed).await?;
 
-    let report = ScenarioManager::new(ManagerConfig::new(32))
-        .run_all(&ctx)
-        .await;
-    println!(
-        "{}",
-        report.report_with(memseek_test::ReportOptions {
-            color: true,
-            bar_width: 20
-        })
-    );
+    // 并发由 Manager 统一管理; 功能验证由各场景自己的 Times(n) 决定
+    let manager = ScenarioManager::new(ManagerConfig::new(32).install_ctrl_c());
+    let reports = manager.run_all(&ctx).await;
+    for report in &reports {
+        println!("{}", report.report_with_color());
+    }
 
     Ok(())
 }

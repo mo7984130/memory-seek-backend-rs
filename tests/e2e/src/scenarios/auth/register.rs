@@ -3,7 +3,10 @@ use common::{
     ext::ToOk,
 };
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::HttpError,
+    register_scenario,
+    scenario::{Scenario, SetupMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, SelectExt};
 use serde_json::json;
@@ -12,10 +15,10 @@ use types::user::UserInfo;
 
 use crate::context::Context;
 
-/// 注册成功: preset 每任务发送验证码并读回, 每轮 run 只做注册。
-/// 数据用 `e2e_reg_{index}` 唯一命名, Times 须 ≤ 并发度保证每任务只跑一次。
+/// 注册成功: Round 模式下每轮 run 前 setup 发送验证码并从 MailHog 读回,
+/// 每轮使用全新的账号+验证码(验证码注册后即失效, 不可跨轮复用)。
 #[derive(Default)]
-pub struct RegisterPreset {
+pub struct RegisterSetup {
     pub username: String,
     pub email: String,
     pub code: String,
@@ -30,18 +33,20 @@ impl Scenario for RegisterScenario {
 
     type Output = SucR<UserInfo>;
 
-    type Preset = RegisterPreset;
+    type Setup = RegisterSetup;
+
+    const SETUP_MODE: SetupMode = SetupMode::Round;
 
     /// 预置: 发验证码 + 从 MailHog 读回真实验证码(独立命名空间避免读旧邮件)
-    async fn preset(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Preset, Self::Error> {
-        let username = format!("e2e_reg_{}", task.index);
-        let email = format!("e2e_reg_{}@test.com", task.index);
+    async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
+        let username = format!("e2e_reg_{}_{}", task.index, task.round);
+        let email = format!("e2e_reg_{}_{}@test.com", task.index, task.round);
 
         ctx.client
             .post("/auth/verification-codes", json!({ "email": email }))
             .await?;
         let code = ctx.wait_mailhog_code(&email).await?;
-        Ok(RegisterPreset {
+        Ok(RegisterSetup {
             username,
             email,
             code,
@@ -51,19 +56,19 @@ impl Scenario for RegisterScenario {
     async fn run(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
-        preset: &Self::Preset,
+        setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
             .post(
                 "/auth/register",
                 json!({
-                    "username": preset.username,
-                    "email": preset.email,
+                    "username": setup.username,
+                    "email": setup.email,
                     "password": "Test123456",
                     "confirmPassword": "Test123456",
                     "nickname": "E2E",
                     "inviterCode": "DRIFTC",
-                    "emailVerifyCode": preset.code,
+                    "emailVerifyCode": setup.code,
                 }),
             )
             .await?
@@ -75,12 +80,12 @@ impl Scenario for RegisterScenario {
     async fn validate(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
-        preset: &Self::Preset,
+        setup: &Self::Setup,
         _output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         // 回查: 新用户确实落库
         let exists = auth::user::Entity::find()
-            .filter(auth::user::Column::Username.eq(&preset.username))
+            .filter(auth::user::Column::Username.eq(&setup.username))
             .exists(&ctx.db)
             .await
             .unwrap();
@@ -100,12 +105,12 @@ impl Scenario for RegisterInvalidCodeScenario {
 
     type Output = ErrR;
 
-    type Preset = ();
+    type Setup = ();
 
     async fn run(
         ctx: &Self::Ctx,
         task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
             .post_raw(
@@ -129,7 +134,7 @@ impl Scenario for RegisterInvalidCodeScenario {
     async fn validate(
         _ctx: &Self::Ctx,
         _task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         Ok(output.code == 400)

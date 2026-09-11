@@ -24,6 +24,8 @@ s3:
   access_key: "memory_seek_test"
   secret_key: "memory_seek_test"
   region: "us-east-1"
+  # rustfs 需 path-style 寻址(否则客户端按 virtual-host 拼接 bucket 子域)
+  force_path_style: true
 
 token_cipher:
   key: "test"

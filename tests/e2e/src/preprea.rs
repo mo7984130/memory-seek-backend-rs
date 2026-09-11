@@ -19,15 +19,16 @@ use crate::context::Context;
 const PASS_HASH: &str = "$argon2id$v=19$m=16384,t=2,p=1$T5U+IfQVViaUNr7dhPHmww$CCUS5IsGLNeg0//M+1Iyuwe1izIKPB0oyRud71qofLY";
 
 /// 种子 SQL 语句(占位符 `:NAME` 由 [`SeedConfig`] 替换, 对应原 seed.sh 的 sed 注入)。
-/// 前 4 条为清空(仅种子数据, 保留 admin 等非种子数据), 后 8 条为灌入。
-/// id 规划(避开 admin id=1): auth 用户 id = g+1; photo 用户 id = AUTH_USERS+g+1。
-const SEED_STATEMENTS: [&str; 12] = [
+/// 前 4 条为清空(仅种子数据, 保留 admin 等非种子数据), 后 10 条为灌入。
+/// id 规划(避开 admin id=1): auth 用户 id = g+1; photo 用户 id = AUTH_USERS+g+1;
+/// user 模块测试池 id = AUTH_USERS + PHOTO_USERS + g(+1)。
+const SEED_STATEMENTS: [&str; 14] = [
     // 1. 清空人脸/人物表(纯 seed 表, 无外键约束, TRUNCATE 重建保证 id 从头开始)
     "TRUNCATE photo_face, photo_person RESTART IDENTITY",
     // 2. 清空种子照片元数据
     "DELETE FROM photo_photo WHERE file_id LIKE 'seed_file_%'",
-    // 3. 清空种子账号(保 admin), e2e 自建账号一并清理保证可重复运行
-    "DELETE FROM auth_user WHERE username LIKE 'loadtest_%' OR username LIKE 'e2e_%'",
+    // 3. 清空种子账号(保 admin), e2e 自建/测试池账号一并清理保证可重复运行
+    "DELETE FROM auth_user WHERE username LIKE 'loadtest_%' OR username LIKE 'e2e_%' OR username LIKE 'uit_%'",
     // 4. 清空当前月时间线统计(由种子数据重建)
     "DELETE FROM photo_timeline_stat WHERE date_str = to_char(now(), 'YYYY-MM')",
     // 5. auth 种子用户
@@ -116,7 +117,31 @@ const SEED_STATEMENTS: [&str; 12] = [
         updated_at = now()
     WHERE f.photo_id BETWEEN 1 AND :PHOTO_COUNT
       AND ((f.photo_id - 1) % :PHOTOS_PER_USER) + 1 <= :FACES_PER_PERSON",
-    // 12. 重置 auth_user 主键序列: 种子显式插入 id 不会推进 BIGSERIAL,
+    // 12. user 模块测试用户池(通用): 供 me/nickname/avatar/logout 及改密负例登录
+    "
+    INSERT INTO auth_user (id, username, email, password, nickname, inviter, created_at, updated_at)
+    SELECT (:AUTH_USERS + :PHOTO_USERS + g + 1),
+           'uit_user_' || g,
+           'uit_user_' || g || '@test.com',
+           ':PASS_HASH',
+           'UitUser',
+           0,
+           now(),
+           now()
+    FROM generate_series(1, :UIT_USERS) AS g",
+    // 13. user 模块测试用户池(改密正例): 改密后旧密码失效, 必须独立于通用池
+    "
+    INSERT INTO auth_user (id, username, email, password, nickname, inviter, created_at, updated_at)
+    SELECT (:AUTH_USERS + :PHOTO_USERS + :UIT_USERS + g + 1),
+           'uit_pwd_' || g,
+           'uit_pwd_' || g || '@test.com',
+           ':PASS_HASH',
+           'UitPwd',
+           0,
+           now(),
+           now()
+    FROM generate_series(1, :UIT_USERS) AS g",
+    // 14. 重置 auth_user 主键序列: 种子显式插入 id 不会推进 BIGSERIAL,
     //     不重置会导致后续业务插入 nextval 撞上种子 id
     "SELECT setval(pg_get_serial_sequence('auth_user', 'id'), (SELECT max(id) FROM auth_user))",
 ];
@@ -174,5 +199,6 @@ fn expand(sql: &str, seed: &SeedConfig) -> String {
         .replace(":PHOTO_USERS", &seed.photo_users.to_string())
         .replace(":PHOTOS_PER_USER", &seed.photos_per_user.to_string())
         .replace(":FACES_PER_PERSON", &seed.faces_per_person.to_string())
+        .replace(":UIT_USERS", &seed.uit_users.to_string())
         .replace(":PHOTO_COUNT", &seed.photo_count().to_string())
 }

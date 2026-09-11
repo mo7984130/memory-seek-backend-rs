@@ -1593,7 +1593,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "e2e"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -1601,8 +1601,11 @@ dependencies = [
  "config",
  "constants",
  "deadpool-redis",
+ "hex",
  "memseek-test",
+ "oss",
  "reqwest 0.12.28",
+ "rust-s3",
  "sea-orm",
  "serde",
  "serde_json",
@@ -3087,7 +3090,7 @@ dependencies = [
 
 [[package]]
 name = "memseek-test"
-version = "0.8.0"
+version = "0.13.0"
 dependencies = [
  "futures",
  "hdrhistogram",
@@ -6253,7 +6256,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "audit",
  "axum",

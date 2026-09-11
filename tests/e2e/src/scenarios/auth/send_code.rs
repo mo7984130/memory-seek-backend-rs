@@ -16,12 +16,12 @@ impl Scenario for SendCodeScenario {
 
     type Output = String;
 
-    type Preset = ();
+    type Setup = ();
 
     async fn run(
         ctx: &Self::Ctx,
         task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         let email = format!("e2e_{}@test.com", task.index);
         ctx.client
@@ -33,7 +33,7 @@ impl Scenario for SendCodeScenario {
     async fn validate(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         // 轮询等待邮件到达, 并校验邮件正文 code 与 server 实际存储(Redis)的一致

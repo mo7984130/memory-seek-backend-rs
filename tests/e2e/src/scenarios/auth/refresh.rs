@@ -8,15 +8,15 @@ use types::auth::{self, LoginResponse, RefreshAccessTokenResponse, user::UserId}
 
 use crate::context::Context;
 
-/// 刷新 access_token: preset 每任务登录一次拿凭据, 每轮 run 只做刷新,
+/// 刷新 access_token: setup 每任务登录一次拿凭据, 每轮 run 只做刷新,
 /// 校验确实签发了新 token 且 refresh_token 未被破坏。
-pub struct RefreshPreset {
+pub struct RefreshSetup {
     pub user_id: UserId,
     pub refresh_token: String,
     pub old_access_token: String,
 }
 
-impl Default for RefreshPreset {
+impl Default for RefreshSetup {
     fn default() -> Self {
         Self {
             user_id: UserId(0),
@@ -35,10 +35,10 @@ impl Scenario for RefreshScenario {
 
     type Output = SucR<RefreshAccessTokenResponse>;
 
-    type Preset = RefreshPreset;
+    type Setup = RefreshSetup;
 
     /// 预置: 每任务登录一次, 产出凭据供本轮刷新使用
-    async fn preset(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Preset, Self::Error> {
+    async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let login: SucR<LoginResponse> = ctx
             .client
             .post(
@@ -48,7 +48,7 @@ impl Scenario for RefreshScenario {
             .await?
             .json()
             .await?;
-        Ok(RefreshPreset {
+        Ok(RefreshSetup {
             user_id: login.data.user.id,
             refresh_token: login.data.refresh_token,
             old_access_token: login.data.access_token,
@@ -58,13 +58,13 @@ impl Scenario for RefreshScenario {
     async fn run(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
-        preset: &Self::Preset,
+        setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         // 刷新: 凭据从请求头读取
         ctx.client
             .request(reqwest::Method::POST, "/auth/token")
-            .header("x-user-id", &preset.user_id.to_string())
-            .header("x-refresh-token", &preset.refresh_token)
+            .header("x-user-id", &setup.user_id.to_string())
+            .header("x-refresh-token", &setup.refresh_token)
             .json_unwrap(&json!({}))
             .send()
             .await?
@@ -76,15 +76,15 @@ impl Scenario for RefreshScenario {
     async fn validate(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
-        preset: &Self::Preset,
+        setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         // 确实签发了新 access_token
-        let issued_new = output.data.access_token != preset.old_access_token;
+        let issued_new = output.data.access_token != setup.old_access_token;
         // refresh_token 未被破坏: 库中仍与登录时一致
         let token_intact = auth::user::Entity::find()
-            .filter(auth::user::Column::Id.eq(preset.user_id))
-            .filter(auth::user::Column::RefreshToken.eq(&preset.refresh_token))
+            .filter(auth::user::Column::Id.eq(setup.user_id))
+            .filter(auth::user::Column::RefreshToken.eq(&setup.refresh_token))
             .exists(&ctx.db)
             .await
             .unwrap();
@@ -104,12 +104,12 @@ impl Scenario for RefreshInvalidTokenScenario {
 
     type Output = ErrR;
 
-    type Preset = ();
+    type Setup = ();
 
     async fn run(
         ctx: &Self::Ctx,
         task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         // loadtest_{index+1} 的 id = index + 2(种子 id 从 2 开始, admin 占 id=1)
         let user_id = task.index + 2;
@@ -128,7 +128,7 @@ impl Scenario for RefreshInvalidTokenScenario {
     async fn validate(
         _ctx: &Self::Ctx,
         _task: &TaskIndex,
-        _preset: &Self::Preset,
+        _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         Ok(output.code == 401)

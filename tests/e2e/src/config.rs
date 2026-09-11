@@ -24,6 +24,12 @@ pub struct E2eConfig {
     #[serde(default)]
     pub mailhog: MailhogConfig,
 
+    /// 对象存储(头像回查), 需与 server 运行时 s3 段一致
+    pub s3: S3Config,
+
+    /// 图片 token 加密配置, 必须与 server 的 token_cipher 一致
+    pub token_cipher: TokenCipherConfig,
+
     #[serde(default)]
     pub seed: SeedConfig,
 }
@@ -87,6 +93,39 @@ fn default_mailhog_url() -> String {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct S3Config {
+    pub endpoint: String,
+    pub access_key: String,
+    pub secret_key: String,
+    pub region: String,
+    pub bucket: String,
+    pub public_url: Option<String>,
+    #[serde(default)]
+    pub force_path_style: bool,
+}
+
+impl S3Config {
+    /// 转换为 `oss` 库的客户端配置.
+    pub fn to_oss(&self) -> oss::S3Config {
+        oss::S3Config {
+            endpoint: self.endpoint.clone(),
+            access_key: self.access_key.clone(),
+            secret_key: self.secret_key.clone(),
+            region: self.region.clone(),
+            bucket: self.bucket.clone(),
+            public_url: self.public_url.clone(),
+            force_path_style: self.force_path_style,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TokenCipherConfig {
+    pub key: String,
+    pub salt: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct SeedConfig {
     #[serde(default = "default_auth_users")]
     pub auth_users: u64,
@@ -96,6 +135,9 @@ pub struct SeedConfig {
     pub photos_per_user: u64,
     #[serde(default = "default_faces_per_person")]
     pub faces_per_person: u64,
+    /// user 模块专属测试用户池大小(uit_user_* / uit_pwd_*), 需 >= Manager 并发度
+    #[serde(default = "default_uit_users")]
+    pub uit_users: u64,
 }
 
 impl Default for SeedConfig {
@@ -105,6 +147,7 @@ impl Default for SeedConfig {
             photo_users: default_photo_users(),
             photos_per_user: default_photos_per_user(),
             faces_per_person: default_faces_per_person(),
+            uit_users: default_uit_users(),
         }
     }
 }
@@ -133,6 +176,9 @@ const fn default_photos_per_user() -> u64 {
 const fn default_faces_per_person() -> u64 {
     5
 }
+const fn default_uit_users() -> u64 {
+    32
+}
 
 impl E2eConfig {
     /// 加载配置, 按优先级确定配置文件路径:
@@ -147,13 +193,15 @@ impl E2eConfig {
         } else if let Ok(path) = std::env::var("E2E_CONFIG_PATH") {
             PathBuf::from(path)
         } else {
-            let local = PathBuf::from("e2e.config.yml");
-
-            if local.exists() {
-                local
-            } else {
-                PathBuf::from("tests/e2e.config.yml")
-            }
+            // 依次探测: 运行目录 > 仓库根 tests/e2e/ 下的默认配置
+            [
+                PathBuf::from("e2e.config.yml"),
+                PathBuf::from("tests/e2e.config.yml"),
+                PathBuf::from("tests/e2e/e2e.config.yml"),
+            ]
+            .into_iter()
+            .find(|path| path.exists())
+            .unwrap_or_else(|| PathBuf::from("tests/e2e/e2e.config.yml"))
         };
 
         info!("配置文件路径: {:?}", config_path);
