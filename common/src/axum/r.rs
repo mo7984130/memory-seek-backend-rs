@@ -1,5 +1,5 @@
 use axum::{Json, http::StatusCode, response::IntoResponse};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// 统一 API 响应格式
 ///
@@ -15,6 +15,19 @@ pub struct R<T> {
     pub msg: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SucR<T> {
+    pub code: u16,
+    pub data: T,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ErrR {
+    pub code: u16,
+    pub msg: String,
 }
 
 impl<T> R<T>

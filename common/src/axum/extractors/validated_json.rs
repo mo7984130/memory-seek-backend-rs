@@ -1,9 +1,6 @@
 use crate::{
     axum::extractors::handle_validation_error,
-    error::{
-        AppError,
-        contextual::ext::{IntoContextualExt, ResultContextualExt},
-    },
+    error::{AppError, ContextualError, contextual::ext::ResultContextualExt},
 };
 use axum::{
     body::Bytes,
@@ -32,7 +29,14 @@ where
             bytes = Bytes::from_static(b"{}");
         }
 
-        let value: T = serde_json::from_slice(&bytes).into_contextual()?;
+        let value: T = serde_json::from_slice(&bytes).map_err(|error| {
+            ContextualError::warn(
+                "validated_json_deserialize_error",
+                "解析请求体失败",
+                error,
+                AppError::bad_request("请求体格式错误"),
+            )
+        })?;
 
         value.validate().map_err(handle_validation_error)?;
 
