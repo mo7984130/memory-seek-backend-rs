@@ -8,7 +8,7 @@ use audit::{AuditEvent, AuditRecorder};
 use common::ext::ToOk;
 use common::time::{Duration, now};
 use common::utils::table_metadata::TableMetadata;
-use common::{Result, inc_counter, inc_error};
+use common::{Result, inc_counter};
 use serde_json::json;
 use std::sync::Arc;
 use types::auth::user::AdminId;
@@ -39,6 +39,9 @@ impl BackupMode {
 }
 
 impl BackupService {
+    /// 从指定备份恢复数据。
+    #[common_macros::metered(name = "restore")]
+    #[tracing::instrument(name = "restore", skip_all, fields(run_id = %run_id))]
     pub async fn restore(
         state: Arc<BackupState>,
         admin: AdminId,
@@ -112,6 +115,7 @@ impl BackupService {
     }
     /// 执行定时备份，并在完成后清理过期备份。
     #[common_macros::metered(name = "scheduled")]
+    #[tracing::instrument(name = "scheduled", skip_all)]
     pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult> {
         let tables = Self::configured_tables(&state).await?;
         let mut result = Self::execute(state.clone(), tables, BackupMode::Scheduled).await?;
@@ -119,7 +123,6 @@ impl BackupService {
         match state.storage.cleanup_gfs(&state.config.scheduled).await {
             Ok(removed) => result.cleaned = removed,
             Err(error) => {
-                inc_error!("scheduled", "cleanup");
                 tracing::error!(error = %error, "GFS 清理失败");
             }
         }
@@ -133,6 +136,7 @@ impl BackupService {
 
     /// 执行管理员触发的全表手动备份。
     #[common_macros::metered(name = "manual")]
+    #[tracing::instrument(name = "manual", skip_all)]
     pub async fn execute_manual(state: Arc<BackupState>, admin: AdminId) -> Result<BackupResult> {
         let tables = Self::configured_tables(&state).await?;
         let result = Self::execute(state.clone(), tables, BackupMode::Manual).await?;
@@ -205,10 +209,6 @@ impl BackupService {
                         Ok(()) => result.exported += 1,
                         Err(error) => {
                             result.failed += 1;
-                            match mode {
-                                BackupMode::Scheduled => inc_error!("scheduled", "save"),
-                                BackupMode::Manual => inc_error!("manual", "save"),
-                            }
                             tracing::error!(run_id = %run_id, table = %table_name, error = %error, "保存备份失败");
                         }
                     }
@@ -216,10 +216,6 @@ impl BackupService {
                 }
                 Err(error) => {
                     result.failed += 1;
-                    match mode {
-                        BackupMode::Scheduled => inc_error!("scheduled", "export"),
-                        BackupMode::Manual => inc_error!("manual", "export"),
-                    }
                     tracing::error!(run_id = %run_id, table = %table_name, error = %error, "导出备份失败");
                 }
             }

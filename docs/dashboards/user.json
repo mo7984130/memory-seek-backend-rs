@@ -382,8 +382,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(user:get_user_info:db_query_sum[5m]) / rate(user:get_user_info:db_query_count[5m]) * 1000",
-          "legendFormat": "数据库查询",
+          "expr": "rate(user:get_user_info:cache_get_or_load_sum[5m]) / rate(user:get_user_info:cache_get_or_load_count[5m]) * 1000",
+          "legendFormat": "缓存读取",
           "refId": "A"
         }
       ],
@@ -975,9 +975,27 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(user:change_nickname:redis_delete_sum[5m]) / rate(user:change_nickname:redis_delete_count[5m]) * 1000",
-          "legendFormat": "Redis 删除",
+          "expr": "rate(user:change_nickname:db_transaction_sum[5m]) / rate(user:change_nickname:db_transaction_count[5m]) * 1000",
+          "legendFormat": "数据库事务",
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(user:change_nickname:cache_invalidate_sum[5m]) / rate(user:change_nickname:cache_invalidate_count[5m]) * 1000",
+          "legendFormat": "缓存失效",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(user:change_nickname:cache_invalidate_single_sum[5m]) / rate(user:change_nickname:cache_invalidate_single_count[5m]) * 1000",
+          "legendFormat": "缓存失效 (单条)",
+          "refId": "D"
         }
       ],
       "title": "修改昵称子步骤耗时",
@@ -1294,9 +1312,18 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(user:update_avatar:redis_delete_sum[5m]) / rate(user:update_avatar:redis_delete_count[5m]) * 1000",
-          "legendFormat": "Redis 删除",
+          "expr": "rate(user:update_avatar:cache_invalidate_sum[5m]) / rate(user:update_avatar:cache_invalidate_count[5m]) * 1000",
+          "legendFormat": "缓存失效",
           "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(user:update_avatar:cache_invalidate_single_sum[5m]) / rate(user:update_avatar:cache_invalidate_single_count[5m]) * 1000",
+          "legendFormat": "缓存失效 (单条)",
+          "refId": "E"
         },
         {
           "datasource": {
@@ -1305,7 +1332,7 @@
           },
           "expr": "rate(user:update_avatar:s3_delete_sum[5m]) / rate(user:update_avatar:s3_delete_count[5m]) * 1000",
           "legendFormat": "S3 删除旧文件",
-          "refId": "E"
+          "refId": "F"
         }
       ],
       "title": "上传头像子步骤耗时",
@@ -1631,9 +1658,36 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(user:change_password:db_update_sum[5m]) / rate(user:change_password:db_update_count[5m]) * 1000",
-          "legendFormat": "数据库更新",
+          "expr": "rate(user:change_password:db_transaction_sum[5m]) / rate(user:change_password:db_transaction_count[5m]) * 1000",
+          "legendFormat": "数据库事务",
           "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(user:change_password:redis_delete_sum[5m]) / rate(user:change_password:redis_delete_count[5m]) * 1000",
+          "legendFormat": "Redis 删除",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(user:change_password:cache_invalidate_sum[5m]) / rate(user:change_password:cache_invalidate_count[5m]) * 1000",
+          "legendFormat": "缓存失效",
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(user:change_password:cache_invalidate_single_sum[5m]) / rate(user:change_password:cache_invalidate_single_count[5m]) * 1000",
+          "legendFormat": "缓存失效 (单条)",
+          "refId": "H"
         }
       ],
       "title": "修改密码子步骤耗时",
@@ -1923,8 +1977,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(user:logout:db_update_sum[5m]) / rate(user:logout:db_update_count[5m]) * 1000",
-          "legendFormat": "数据库更新",
+          "expr": "rate(user:logout:db_transaction_sum[5m]) / rate(user:logout:db_transaction_count[5m]) * 1000",
+          "legendFormat": "数据库事务",
           "refId": "A"
         },
         {
@@ -1941,9 +1995,18 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(user:logout:redis_delete_cache_sum[5m]) / rate(user:logout:redis_delete_cache_count[5m]) * 1000",
-          "legendFormat": "Redis 删除缓存",
+          "expr": "rate(user:logout:cache_invalidate_sum[5m]) / rate(user:logout:cache_invalidate_count[5m]) * 1000",
+          "legendFormat": "缓存失效",
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(user:logout:cache_invalidate_single_sum[5m]) / rate(user:logout:cache_invalidate_single_count[5m]) * 1000",
+          "legendFormat": "缓存失效 (单条)",
+          "refId": "D"
         }
       ],
       "title": "登出子步骤耗时",
@@ -2233,8 +2296,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(user:get_user_info_batch:redis_cache_sum[5m]) / rate(user:get_user_info_batch:redis_cache_count[5m]) * 1000",
-          "legendFormat": "Redis 缓存",
+          "expr": "rate(user:get_user_info_batch:cache_get_or_load_batch_sum[5m]) / rate(user:get_user_info_batch:cache_get_or_load_batch_count[5m]) * 1000",
+          "legendFormat": "缓存批量读取",
           "refId": "A"
         }
       ],

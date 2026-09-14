@@ -501,17 +501,19 @@ dependencies = [
 
 [[package]]
 name = "audit"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "axum",
  "common",
+ "common_macros",
  "sea-orm",
+ "tracing",
  "types",
 ]
 
 [[package]]
 name = "auth"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "audit",
  "axum",
@@ -690,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-compression",
  "audit",
@@ -1062,7 +1064,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1625,7 +1627,7 @@ dependencies = [
 
 [[package]]
 name = "email"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "common",
  "lettre",
@@ -3639,7 +3641,7 @@ dependencies = [
 
 [[package]]
 name = "oss"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "common",
@@ -3830,7 +3832,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "audit",
@@ -5150,7 +5152,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "audit",
  "auth",
@@ -6257,7 +6259,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.1.22"
+version = "0.2.0"
 dependencies = [
  "audit",
  "axum",

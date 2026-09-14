@@ -44,6 +44,7 @@ impl TimelineStatService {
     name = "timeline_stat_create",
 )]
 impl TimelineStatService {
+    #[tracing::instrument(name = "upload_photo", skip_all)]
     async fn on_after_photo_upload(
         &self,
         state: Arc<PhotoState>,

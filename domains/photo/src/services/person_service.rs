@@ -49,6 +49,7 @@ impl PersonService {
     }
 
     #[common_macros::metered(name = "person_full_scan")]
+    #[instrument(name = "person_full_scan", skip_all, fields(admin_user_id = %admin))]
     /// 执行全量扫描, 重建人物聚类和人脸归属.
     pub async fn inner_full_scan(state: Arc<PhotoState>, admin: AdminId) -> Result<()> {
         let user_id = admin.into_inner();
@@ -166,6 +167,7 @@ impl PersonService {
     }
 
     #[common_macros::metered(name = "person_secondary_cluster")]
+    #[instrument(name = "person_secondary_cluster", skip_all, fields(admin_id = %admin))]
     /// 执行未分配人脸与人物质心的匹配和归属更新.
     async fn inner_assign_unassigned_faces(
         state: Arc<PhotoState>,
@@ -409,6 +411,7 @@ impl PersonService {
 // 删除
 impl PersonService {
     /// 删除人物（高危操作，仅管理员）: 清空其所有人脸归属后删除人物
+    #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(admin_user_id = %admin, person_id = %person_id)

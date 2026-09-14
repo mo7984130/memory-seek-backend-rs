@@ -1,11 +1,11 @@
 [package]
 name = "auth"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics"]
+metrics = ["common/metrics", "email/metrics"]
 controller = ["dep:axum", "common/axum"]
 audit = ["audit/recording"]
 

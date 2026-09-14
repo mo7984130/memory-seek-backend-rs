@@ -81,6 +81,9 @@ impl EmailClient {
     /// # 错误
     /// - `ContextualError`: 由调用 service 记录并转换为 `AppError`
     pub async fn send_message(&self, to: &str, subject: &str, body: String) -> Result<()> {
+        // 操作级指标：email:send:attempts / duration_seconds / success
+        common::metrics_group!("send");
+
         let email = Message::builder()
             .from(
                 format!("{} <{}>", self.from_name, self.from_email)
@@ -105,11 +108,15 @@ impl EmailClient {
                 AppError::InternalServerError,
             )?;
 
-        self.transport.send(email).await.context_err(
+        let send_result = self.transport.send(email).await.context_err(
             "email_send_err",
             "邮件服务商发送失败",
             AppError::InternalServerError,
-        )?;
+        );
+
+        send_result?;
+
+        common::metrics_success!("send");
 
         Ok(())
     }

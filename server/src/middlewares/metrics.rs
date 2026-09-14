@@ -42,11 +42,17 @@ pub async fn metrics_middleware(request: Request, next: Next) -> Response {
 /// 按路由前缀归类模块（低基数：模块数量固定）。
 /// 未知前缀（`/health`、`/hello`、未匹配等）归 `other`。
 fn classify_module(route: &str) -> &'static str {
-    match route.split('/').nth(1) {
+    let mut segments = route.split('/');
+    let _ = segments.next(); // 前导空串
+    match segments.next() {
         Some("auth") => "auth",
         Some("user") => "user",
         Some("photo") => "photo",
-        Some("admin") => "audit", // /admin/audits
+        // /admin/backup/* → backup；其余 /admin/*（如 /admin/audits）→ audit
+        Some("admin") => match segments.next() {
+            Some("backup") => "backup",
+            _ => "audit",
+        },
         _ => "other",
     }
 }
@@ -83,6 +89,8 @@ mod tests {
         assert_eq!(classify_module("/photo/:id"), "photo");
         assert_eq!(classify_module("/photo/face/:id"), "photo");
         assert_eq!(classify_module("/admin/audits"), "audit");
+        assert_eq!(classify_module("/admin/backup/trigger"), "backup");
+        assert_eq!(classify_module("/admin/backup/restore"), "backup");
     }
 
     #[test]

@@ -11,8 +11,6 @@
 //                写法一(histogram 不带后缀):'db_query'
 //                写法二(histogram 带显式后缀):'validate_image:duration_seconds'
 //              label —— 图例中文名
-//   errors   可选;存在 `{func}:errors:{kind}` 指标时填写 kind 列表,
-//            生成器会追加"错误分布"面板
 {
   auth: {
     crate: 'auth',
@@ -68,7 +66,7 @@
         name: '获取用户信息',
         func: 'get_user_info',
         steps: [
-          { metric: 'db_query', label: '数据库查询' },
+          { metric: 'cache_get_or_load', label: '缓存读取' },
         ],
       },
       {
@@ -85,7 +83,9 @@
         func: 'change_nickname',
         steps: [
           { metric: 'db_update', label: '数据库更新' },
-          { metric: 'redis_delete', label: 'Redis 删除' },
+          { metric: 'db_transaction', label: '数据库事务' },
+          { metric: 'cache_invalidate', label: '缓存失效' },
+          { metric: 'cache_invalidate_single', label: '缓存失效 (单条)' },
         ],
       },
       {
@@ -97,7 +97,8 @@
           { metric: 'validate_image:duration_seconds', label: '图片校验' },
           { metric: 's3_upload', label: 'S3 上传' },
           { metric: 'db_transaction', label: '数据库事务' },
-          { metric: 'redis_delete', label: 'Redis 删除' },
+          { metric: 'cache_invalidate', label: '缓存失效' },
+          { metric: 'cache_invalidate_single', label: '缓存失效 (单条)' },
           { metric: 's3_delete', label: 'S3 删除旧文件' },
         ],
       },
@@ -110,7 +111,11 @@
           { metric: 'acquire_permit', label: '获取信号量' },
           { metric: 'verify_password', label: '密码验证' },
           { metric: 'hash_password', label: '密码哈希' },
-          { metric: 'db_update', label: '数据库更新' },
+          { metric: 'db_transaction', label: '数据库事务' },
+          // 登出清理(内部复用 do_logout)
+          { metric: 'redis_delete', label: 'Redis 删除' },
+          { metric: 'cache_invalidate', label: '缓存失效' },
+          { metric: 'cache_invalidate_single', label: '缓存失效 (单条)' },
         ],
       },
       {
@@ -118,9 +123,10 @@
         name: '登出',
         func: 'logout',
         steps: [
-          { metric: 'db_update', label: '数据库更新' },
+          { metric: 'db_transaction', label: '数据库事务' },
           { metric: 'redis_delete', label: 'Redis 删除' },
-          { metric: 'redis_delete_cache', label: 'Redis 删除缓存' },
+          { metric: 'cache_invalidate', label: '缓存失效' },
+          { metric: 'cache_invalidate_single', label: '缓存失效 (单条)' },
         ],
       },
       {
@@ -128,8 +134,316 @@
         name: '批量获取用户信息',
         func: 'get_user_info_batch',
         steps: [
-          { metric: 'redis_cache', label: 'Redis 缓存' },
+          { metric: 'cache_get_or_load_batch', label: '缓存批量读取' },
         ],
+      },
+    ],
+  },
+
+  photo: {
+    crate: 'photo',
+    ops: [
+      {
+        rowTitle: '查询照片列表 (get_photo_cursor_page)',
+        name: '查询照片列表',
+        func: 'get_photo_cursor_page',
+        steps: [
+          { metric: 'find_cursor_page_ids', label: '查询分页 ID' },
+          { metric: 'load_photos_info', label: '加载照片信息' },
+        ],
+      },
+      {
+        rowTitle: '上传照片 (upload_photo)',
+        name: '上传照片',
+        func: 'upload_photo',
+        steps: [
+          { metric: 'validate_photo:duration_seconds', label: '图片校验' },
+          { metric: 'md5_hash:duration_seconds', label: 'MD5 计算' },
+          { metric: 's3_upload', label: 'S3 上传' },
+          { metric: 'db_insert', label: '数据库插入' },
+          { metric: 'cache_get_or_load', label: '缓存读取' },
+          { metric: 'cache_put', label: '缓存写入' },
+          { metric: 'cache_invalidate', label: '缓存失效' },
+        ],
+      },
+      {
+        rowTitle: '检查照片去重 (exists_by_md5_batch)',
+        name: '检查照片去重',
+        func: 'exists_by_md5_batch',
+        steps: [],
+      },
+      {
+        rowTitle: '删除照片 (delete_photos)',
+        name: '删除照片',
+        func: 'delete_photos',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+          { metric: 's3_delete_batch', label: 'S3 批量删除' },
+          { metric: 'cache_invalidate', label: '缓存失效' },
+          { metric: 'cache_invalidate_dimensions', label: '缓存失效 (尺寸)' },
+          { metric: 'cache_invalidate_timeline', label: '缓存失效 (时间线)' },
+        ],
+      },
+      {
+        rowTitle: '获取图片 (download_image)',
+        name: '获取图片',
+        func: 'download_image',
+        steps: [
+          { metric: 's3_download_process', label: 'S3 下载处理' },
+          { metric: 's3_download_stream', label: 'S3 流式下载' },
+        ],
+      },
+      {
+        rowTitle: '获取收藏夹列表 (get_collection_list)',
+        name: '获取收藏夹列表',
+        func: 'get_collection_list',
+        steps: [
+          { metric: 'query_by_user_id', label: '按用户查询' },
+        ],
+      },
+      {
+        rowTitle: '创建收藏夹 (create_collection)',
+        name: '创建收藏夹',
+        func: 'create_collection',
+        steps: [
+          { metric: 'db_insert', label: '数据库插入' },
+        ],
+      },
+      {
+        rowTitle: '修改收藏夹 (update_collection_info)',
+        name: '修改收藏夹',
+        func: 'update_collection_info',
+        steps: [
+          { metric: 'db_update', label: '数据库更新' },
+        ],
+      },
+      {
+        rowTitle: '删除收藏夹 (delete_collection)',
+        name: '删除收藏夹',
+        func: 'delete_collection',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '获取照片收藏夹 (get_collections_by_photo)',
+        name: '获取照片收藏夹',
+        func: 'get_collections_by_photo',
+        steps: [],
+      },
+      {
+        rowTitle: '获取收藏夹照片 (get_collection_photos)',
+        name: '获取收藏夹照片',
+        func: 'get_collection_photos',
+        steps: [
+          { metric: 'query_photo_ids', label: '查询照片 ID' },
+          { metric: 'load_photos_info', label: '加载照片信息' },
+        ],
+      },
+      {
+        rowTitle: '添加收藏夹照片 (add_collection_photos)',
+        name: '添加收藏夹照片',
+        func: 'add_collection_photos',
+        steps: [
+          { metric: 'auth_check', label: '权限校验' },
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '移除收藏夹照片 (remove_collection_photos)',
+        name: '移除收藏夹照片',
+        func: 'remove_collection_photos',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '发表评论 (publish_comment)',
+        name: '发表评论',
+        func: 'publish_comment',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '获取评论列表 (get_comment_cursor_page)',
+        name: '获取评论列表',
+        func: 'get_comment_cursor_page',
+        steps: [
+          { metric: 'query_hot_comments', label: '热门评论查询' },
+          { metric: 'query_by_photo_id', label: '评论列表查询' },
+          { metric: 'query_is_like', label: '点赞状态查询' },
+        ],
+      },
+      {
+        rowTitle: '删除评论 (delete_comment)',
+        name: '删除评论',
+        func: 'delete_comment',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '点赞 (like_comment)',
+        name: '点赞',
+        func: 'like_comment',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '取消点赞 (unlike_comment)',
+        name: '取消点赞',
+        func: 'unlike_comment',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '点赞照片 (like_photo)',
+        name: '点赞照片',
+        func: 'like_photo',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '取消点赞照片 (unlike_photo)',
+        name: '取消点赞照片',
+        func: 'unlike_photo',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '查询点赞照片 (get_user_liked_photos)',
+        name: '查询点赞照片',
+        func: 'get_user_liked_photos',
+        steps: [
+          { metric: 'query_ids', label: '查询点赞 ID' },
+        ],
+      },
+      {
+        rowTitle: '重命名人物 (rename_person)',
+        name: '重命名人物',
+        func: 'rename_person',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '合并人物 (merge_person)',
+        name: '合并人物',
+        func: 'merge_person',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+          { metric: 'cache_get_or_load', label: '缓存读取' },
+        ],
+      },
+      {
+        rowTitle: '获取人物列表 (get_persons)',
+        name: '获取人物列表',
+        func: 'get_persons',
+        steps: [
+          { metric: 'query_page', label: '分页查询' },
+        ],
+      },
+      {
+        rowTitle: '搜索人物 (search_persons)',
+        name: '搜索人物',
+        func: 'search_persons',
+        steps: [
+          { metric: 'query_search', label: '搜索查询' },
+        ],
+      },
+      {
+        rowTitle: '修改人脸归属 (change_face_belonging)',
+        name: '修改人脸归属',
+        func: 'change_face_belonging',
+        steps: [],
+      },
+      {
+        rowTitle: '删除人脸 (delete_face)',
+        name: '删除人脸',
+        func: 'delete_face',
+        steps: [],
+      },
+      {
+        rowTitle: '批量删除人脸 (delete_faces_batch)',
+        name: '批量删除人脸',
+        func: 'delete_faces_batch',
+        steps: [],
+      },
+      {
+        rowTitle: '人脸计算 (face_compute)',
+        name: '人脸计算',
+        func: 'face_compute',
+        steps: [
+          { metric: 'query', label: '批次查询' },
+          { metric: 'download_batch', label: '批量下载' },
+          { metric: 'photo_download', label: '单图下载' },
+          { metric: 'photo_decode', label: '图片解码' },
+          { metric: 'photo_detect', label: '单图检测' },
+          { metric: 'insert', label: '写入数据库' },
+        ],
+      },
+      {
+        rowTitle: '时间线统计 (get_monthly_stats)',
+        name: '时间线统计',
+        func: 'get_monthly_stats',
+        steps: [
+          { metric: 'cache_get_or_load', label: '缓存读取' },
+        ],
+      },
+      {
+        rowTitle: '获取照片信息 (get_photo_info)',
+        name: '获取照片信息',
+        func: 'get_photo_info',
+        steps: [],
+      },
+      {
+        rowTitle: '获取人物照片 (get_person_photos)',
+        name: '获取人物照片',
+        func: 'get_person_photos',
+        steps: [
+          { metric: 'query_photo_ids', label: '查询照片 ID' },
+          { metric: 'load_photos_info', label: '加载照片信息' },
+        ],
+      },
+      {
+        rowTitle: '获取照片人脸 (get_faces_by_photo_id)',
+        name: '获取照片人脸',
+        func: 'get_faces_by_photo_id',
+        steps: [],
+      },
+      {
+        rowTitle: '获取未分配人脸照片 (get_unassigned_face_photos)',
+        name: '获取未分配人脸照片',
+        func: 'get_unassigned_face_photos',
+        steps: [
+          { metric: 'query_unassigned_face_photo_ids', label: '查询未分配人脸照片 ID' },
+          { metric: 'load_photos_info', label: '加载照片信息' },
+        ],
+      },
+      {
+        rowTitle: '删除人物 (delete_person)',
+        name: '删除人物',
+        func: 'delete_person',
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
+      },
+      {
+        rowTitle: '人物全量扫描 (person_full_scan)',
+        name: '人物全量扫描',
+        func: 'person_full_scan',
+        steps: [],
+      },
+      {
+        rowTitle: '人物二次聚类 (person_secondary_cluster)',
+        name: '人物二次聚类',
+        func: 'person_secondary_cluster',
+        steps: [],
       },
     ],
   },

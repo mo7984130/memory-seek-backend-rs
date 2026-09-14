@@ -2,7 +2,36 @@
 
 ## 概述
 
-本规范定义了 Grafana Dashboard 的统一设计标准，确保各模块（auth、user、photo）的监控面板风格一致、布局清晰。
+本规范定义 Grafana Dashboard 的统一设计标准，确保各 dashboard（auth / user / photo /
+cache / system）风格一致、布局清晰，且面板查询的指标名与代码一致。
+
+## 生成链路（唯一事实来源）
+
+Dashboard 由 jsonnet 生成，**禁止手改生成产物**：
+
+| 文件 | 角色 |
+|------|------|
+| `jsonnet/lib/ops.libsonnet` | 业务操作清单（唯一事实来源）：每个可观测操作一条 |
+| `jsonnet/lib/panels.libsonnet` | 面板模板：HTTP 汇总行 + 每操作标准三件套 |
+| `jsonnet/<module>.jsonnet` | 各 dashboard 装配（布局参数、面板 id、row y 坐标） |
+| `jsonnet/generate.sh` | 渲染：`sh generate.sh`，输出到 `docs/dashboards/<module>.json` |
+
+`ops.libsonnet` 条目 schema：
+
+```jsonnet
+{
+  rowTitle: '获取照片列表 (get_collection_photos)', // row 标题
+  name: '获取照片列表',                              // 面板标题前缀
+  func: 'get_collection_photos',                     // 指标 {func} 段
+  steps: [
+    { metric: 'query_photo_ids', label: '查询照片 ID' },             // 写法一
+    { metric: 'validate_image:duration_seconds', label: '图片校验' }, // 写法二
+  ],
+}
+```
+
+现状：`auth` / `user` / `photo` / `cache` / `system` 五个 dashboard 均已由 jsonnet 生成
+（`generate.sh` 覆盖全部）。
 
 ## 命名规范
 
@@ -10,10 +39,10 @@
 
 - 使用冒号 `:` 分隔层级：`{crate}:{func}:{step}`
 - 计时指标为原生 histogram，Prometheus 导出为 `{name}_bucket` / `{name}_sum` / `{name}_count`
-- 示例：`auth:login:attempts`、`auth:login:duration_seconds`、`user:get_user_info:db_query`
+- 示例：`auth:login:attempts`、`auth:login:duration_seconds`、`user:get_user_info:cache_get_or_load`
 - 系统指标使用点号层级，导出后变为下划线（`system.cpu.usage` → `system_cpu_usage`）
 
-完整清单见 [metrics-naming.md](./metrics-naming.md)。
+完整清单与埋点契约见 [metrics-naming.md](./metrics-naming.md)。
 
 ### Row 标题
 
@@ -69,18 +98,6 @@
 > 见各操作下方的耗时面板。
 > 系统指标的点号转下划线；counter 以 `_total` 结尾（`server_http_requests_total`），
 > 满足 Prometheus 命名约定。业务冒号指标保留原名。
-
-#### 错误分布面板（埋了 `errors:{kind}` 的操作）
-
-操作若存在 `{crate}:{func}:errors:*` 指标，追加第四个面板（可选，与前三面板同行下方或并排）：
-
-```json
-{
-  "targets": [
-    { "expr": "sum(rate(<metric>:errors:*[5m])) by (kind)", "legendFormat": "{{kind}}" }
-  ]
-}
-```
 
 ---
 
@@ -203,8 +220,12 @@
 |----------|------|------|
 | 耗时 | `ms` | 原始值（秒）经 `* 1000` 换算 |
 | 子步骤耗时 | `ms` | 原始值（秒）经 `* 1000` 换算 |
+| 缓存耗时 | `ms` | L1 / L2 / DB 统一 `* 1000`（**禁止**用 `* 1000000` 展示 µs） |
 | QPS | `reqps` | 每秒请求数 |
 | 成功率 | `percent` | 百分比（不设上限） |
+
+> 所有耗时类指标的后端原始单位都是**秒**，面板展示统一为 `ms`，查询一律 `* 1000`；
+> 不允许出现 µs 等其他单位，避免同一 dashboard 内单位混用。
 
 ---
 
@@ -291,8 +312,30 @@ Auth 模块监控
 
 ---
 
+## 新增 / 修改检查清单
+
+新增一个可观测操作的面板：
+
+1. 确认 `metrics-naming.md` 已登记该操作的指标。
+2. 在 `jsonnet/lib/ops.libsonnet` 对应模块追加条目（`crate` / `rowTitle` / `name` /
+   `func` / `steps`），`steps.metric` 严格对应代码中的指标名。
+3. 执行 `sh docs/dashboards/jsonnet/generate.sh` 重新渲染。
+4. 校验生成的 JSON：指标名、单位（耗时 `ms`）、阈值、图例隐藏符合本规范。
+
+新增一个 dashboard：
+
+1. 在 `jsonnet/<module>.jsonnet` 装配（复用 `lib/panels.libsonnet` 与 `lib/ops.libsonnet`）。
+2. 顶部放 `HTTP 请求 (http)` row；模块 dashboard 加 `module="<模块>"` 过滤，system 不加。
+3. 执行 `sh generate.sh`，并将新产物纳入版本控制。
+
+---
+
 ## 更新记录
 
+- 2026-09-12: 移除错误分类系统，不再生成错误分布面板（删除 ops 的 `errors` 字段与
+  对应面板规范）；补充「生成链路（唯一事实来源）」与 ops 条目 schema；耗时单位统一为
+  `ms`、禁止 µs（修正 cache 面板单位混用）；新增新增/修改检查清单；修正示例中的失效
+  指标名。
 - 2026-09-10: HTTP 请求汇总行改为按 `module` 标签过滤（模块 dashboard 只看自己的请求；
   system 保留全局）；metrics 中间件新增 `module` 标签；dashboard 开始由 jsonnet 模板生成。
 - 2026-09-10: HTTP 延迟面板收敛为 P99 单查询（详细分位数见各操作的耗时面板）。

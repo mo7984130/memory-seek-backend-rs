@@ -44,26 +44,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -74,8 +64,7 @@
             ]
           },
           "unit": "reqps"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -97,15 +86,15 @@
           "sort": "none"
         }
       },
-      "title": "HTTP QPS",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "sum(rate(server_http_requests_total[5m])) by (route)",
           "legendFormat": "{{route}}",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "HTTP QPS",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -118,26 +107,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -156,8 +135,7 @@
             ]
           },
           "unit": "percent"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -179,15 +157,15 @@
           "sort": "none"
         }
       },
-      "title": "HTTP 错误率",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "sum(rate(server_http_requests_total{status_class=\"5xx\"}[5m])) / sum(rate(server_http_requests_total[5m])) * 100",
           "legendFormat": "错误率",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "HTTP 错误率",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -200,26 +178,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -230,8 +198,7 @@
             ]
           },
           "unit": "ms"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -253,8 +220,6 @@
           "sort": "none"
         }
       },
-      "title": "HTTP 延迟 (P50/P95/P99)",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "histogram_quantile(0.5, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000",
@@ -271,7 +236,9 @@
           "legendFormat": "{{route}} P99",
           "refId": "C"
         }
-      ]
+      ],
+      "title": "HTTP 延迟 (P50/P95/P99)",
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -297,26 +264,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -335,8 +292,7 @@
             ]
           },
           "unit": "percent"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -358,15 +314,15 @@
           "sort": "none"
         }
       },
-      "title": "系统 CPU 使用率",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "system_cpu_usage",
           "legendFormat": "CPU",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "系统 CPU 使用率",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -379,26 +335,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -409,8 +355,7 @@
             ]
           },
           "unit": "percent"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -432,15 +377,15 @@
           "sort": "none"
         }
       },
-      "title": "进程 CPU 使用率",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "system_cpu_process_usage",
           "legendFormat": "进程 CPU",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "进程 CPU 使用率",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -452,7 +397,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -470,10 +415,8 @@
               }
             ]
           },
-          "unit": "short",
-          "decimals": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 8,
@@ -530,26 +473,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -560,8 +493,7 @@
             ]
           },
           "unit": "percent"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -583,15 +515,15 @@
           "sort": "none"
         }
       },
-      "title": "系统内存使用",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "system_memory_used / system_memory_total * 100",
           "legendFormat": "内存使用率",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "系统内存使用",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -604,26 +536,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -634,8 +556,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -657,15 +578,15 @@
           "sort": "none"
         }
       },
-      "title": "系统总内存",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "system_memory_total",
           "legendFormat": "总内存",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "系统总内存",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -678,26 +599,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -708,8 +619,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -731,15 +641,15 @@
           "sort": "none"
         }
       },
-      "title": "进程内存使用",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "system_memory_process_usage",
           "legendFormat": "进程内存",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "进程内存使用",
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -765,26 +675,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -795,8 +695,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -818,15 +717,15 @@
           "sort": "none"
         }
       },
-      "title": "磁盘总容量",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "system_disk_total",
           "legendFormat": "总容量",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "磁盘总容量",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -839,26 +738,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -869,8 +758,7 @@
             ]
           },
           "unit": "decbytes"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -892,15 +780,15 @@
           "sort": "none"
         }
       },
-      "title": "磁盘已用",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "system_disk_used",
           "legendFormat": "已用",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "磁盘已用",
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -926,26 +814,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -956,8 +834,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -979,15 +856,15 @@
           "sort": "none"
         }
       },
-      "title": "活跃连接数",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "database_connections_active",
           "legendFormat": "活跃",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "活跃连接数",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -1000,26 +877,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1030,8 +897,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1053,15 +919,15 @@
           "sort": "none"
         }
       },
-      "title": "空闲连接数",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "database_connections_idle",
           "legendFormat": "空闲",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "空闲连接数",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -1073,7 +939,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1091,10 +957,8 @@
               }
             ]
           },
-          "unit": "short",
-          "decimals": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1151,26 +1015,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1181,8 +1035,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1204,15 +1057,15 @@
           "sort": "none"
         }
       },
-      "title": "活跃连接数",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "redis_connections_active",
           "legendFormat": "活跃",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "活跃连接数",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -1225,26 +1078,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1255,8 +1098,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1278,15 +1120,15 @@
           "sort": "none"
         }
       },
-      "title": "空闲连接数",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "redis_connections_idle",
           "legendFormat": "空闲",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "空闲连接数",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -1299,26 +1141,16 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
             "lineInterpolation": "smooth",
             "lineWidth": 2,
-            "pointSize": 5,
             "showPoints": "auto",
-            "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             }
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1329,8 +1161,7 @@
             ]
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1352,15 +1183,15 @@
           "sort": "none"
         }
       },
-      "title": "等待连接数",
-      "type": "timeseries",
       "targets": [
         {
           "expr": "redis_connections_waiting",
           "legendFormat": "等待",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "等待连接数",
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -1385,7 +1216,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1403,10 +1234,8 @@
               }
             ]
           },
-          "unit": "short",
-          "decimals": 0
-        },
-        "overrides": []
+          "unit": "short"
+        }
       },
       "gridPos": {
         "h": 8,
@@ -1456,6 +1285,5 @@
   "timepicker": {},
   "timezone": "",
   "title": "系统监控",
-  "uid": "system-monitoring",
-  "version": 2
+  "uid": "system-monitoring"
 }

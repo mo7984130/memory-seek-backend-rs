@@ -7,9 +7,9 @@ use common::Result;
 use common::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt, OptionExt};
 use common::error::{AppError, ContextualError};
 use common::ext::{RedisExt, ResultInspectErrAsync, ToOk};
+use common::metrics_name;
 use common::time::{after, now};
 use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
-use common::{inc_error, metrics_name};
 use constants::RedisKeys;
 use constants::redis_keys;
 use std::sync::LazyLock;
@@ -72,11 +72,12 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
                 .await
                 .into_contextual()
                 .emit_if_err();
-            return inc_error!("auth" => ContextualError::warn_without_source(
+            return Err(ContextualError::warn_without_source(
                 "account_not_found",
                 "用户登陆时账号不存在",
                 AppError::bad_request("账号或者密码错误"),
-            ).emit());
+            )
+            .emit());
         }
     };
 
@@ -100,11 +101,12 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         let verify_result = result?;
 
         if !verify_result.0 {
-            return inc_error!("auth" => ContextualError::warn_without_source(
+            return Err(ContextualError::warn_without_source(
                 "invalid_password",
                 "用户登录时密码错误",
                 AppError::bad_request("账号或者密码错误"),
-            ).emit());
+            )
+            .emit());
         }
 
         verify_result.1
@@ -145,6 +147,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         new_refresh_token.clone(),
         new_refresh_token_expires_at,
     )
+    .timed(metrics_name!("db_update"))
     .await
     .inspect_err_async(|_| async {
         state
@@ -192,21 +195,19 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         email = %req.email,
         nickname = %req.nickname,
         inviter_code = %req.inviter_code,
-        email_code_prefix = %&req.email_verify_code[..2]
+        email_code_prefix = %req.email_verify_code.chars().take(2).collect::<String>()
     )
 )]
 pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInfo> {
     // 校验邮箱验证码
     verify_email_verify_code(state, &req.email, &req.email_verify_code)
         .timed(metrics_name!("verify_email_code"))
-        .await
-        .inspect_err(|_| inc_error!("validation"))?;
+        .await?;
 
     // 校验邀请码
     let inviter_id = verify_inviter_code(state, &req.inviter_code)
         .timed(metrics_name!("verify_inviter_code"))
-        .await
-        .inspect_err(|_| inc_error!("validation"))?;
+        .await?;
 
     // 加密密码
     let password = req.password;
@@ -245,6 +246,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     state
         .redis
         .del(&redis_keys::auth::email_verify_code(&user_model.email))
+        .timed(metrics_name!("redis_delete"))
         .await
         .into_contextual()?;
 
@@ -290,7 +292,11 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
 
     // 发送邮件
     {
-        let _permit = EMAIL_SEND_SEM.acquire().await.into_contextual()?;
+        let _permit = EMAIL_SEND_SEM
+            .acquire()
+            .timed(metrics_name!("acquire_permit"))
+            .await
+            .into_contextual()?;
 
         let html_body = format!(
             "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 {} 分钟。</p>",

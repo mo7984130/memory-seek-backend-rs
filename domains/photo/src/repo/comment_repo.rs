@@ -5,7 +5,9 @@ use common::{
     db_transaction,
     error::contextual::ext::{ContextualResultExt, OptionExt},
     error::{AppError, ContextualError, contextual::Result},
+    metrics_name,
     types::CursorPage,
+    utils::MetricsTimerExt,
 };
 use types::{
     auth::user::UserId,
@@ -46,6 +48,7 @@ impl CommentRepo {
                 HOT_COMMENT_MIN_LIKES,
                 HOT_COMMENT_MAX_COUNT,
             )
+            .timed(metrics_name!("query_hot_comments"))
             .await?
         } else {
             Vec::new()
@@ -63,6 +66,7 @@ impl CommentRepo {
             req.cursor.as_ref(),
             req.size,
         )
+        .timed(metrics_name!("query_by_photo_id"))
         .await?;
 
         // 获取评论是否喜欢
@@ -75,6 +79,7 @@ impl CommentRepo {
                 .map(|comment| comment.id)
                 .collect(),
         )
+        .timed(metrics_name!("query_is_like"))
         .await?;
 
         Ok((hot_comments, comments, liked))
@@ -101,6 +106,7 @@ impl CommentRepo {
             .await?;
             Ok(comment)
         })
+        .timed(metrics_name!("db_transaction"))
         .await?;
         PhotoRepo::invalidate_photo_info(state, photo_id).await;
         Ok(comment)
@@ -145,13 +151,16 @@ impl CommentRepo {
             .await?;
             Ok(comment.photo_id)
         })
+        .timed(metrics_name!("db_transaction"))
         .await?;
         PhotoRepo::invalidate_photo_info(state, photo_id).await;
         Ok(())
     }
 
     pub async fn ensure_exist(state: &PhotoState, comment_id: CommentId) -> Result<()> {
-        CommentMapper::ensure_exist(&state.db, comment_id).await
+        CommentMapper::ensure_exist(&state.db, comment_id)
+            .timed(metrics_name!("db_query"))
+            .await
     }
 
     /// like评论.
@@ -183,6 +192,7 @@ impl CommentRepo {
             .await?;
             Ok(())
         })
+        .timed(metrics_name!("db_transaction"))
         .await
     }
 
@@ -214,6 +224,7 @@ impl CommentRepo {
             .await?;
             Ok(())
         })
+        .timed(metrics_name!("db_transaction"))
         .await
     }
 }

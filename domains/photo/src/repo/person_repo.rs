@@ -4,9 +4,11 @@ use audit::{AuditEvent, AuditRecorder};
 use common::db_transaction;
 use common::error::{ContextualError, contextual::Result};
 use common::ext::ToOk;
+use common::metrics_name;
 use common::types::CursorPage;
 use common::types::HasChanged::Changed;
 use common::utils::DbUtils;
+use common::utils::MetricsTimerExt;
 use serde_json::json;
 use types::auth::user::{AdminId, UserId};
 use types::cursor::CountIdCursor;
@@ -51,6 +53,7 @@ impl PersonRepo {
             .await?;
             Ok(())
         })
+        .timed(metrics_name!("db_transaction"))
         .await?;
         Ok(())
     }
@@ -103,6 +106,7 @@ impl PersonRepo {
 
             Ok(person)
         })
+        .timed(metrics_name!("db_transaction"))
         .await?
         .to_ok()
     }
@@ -113,7 +117,9 @@ impl PersonRepo {
         person: PersonRecord,
         faces: Vec<FaceRecord>,
     ) -> Result<()> {
-        PersonMapper::add_faces(&state.db, person, &faces).await?;
+        PersonMapper::add_faces(&state.db, person, &faces)
+            .timed(metrics_name!("db_update"))
+            .await?;
         Ok(())
     }
 }
@@ -121,7 +127,9 @@ impl PersonRepo {
 // 查询
 impl PersonRepo {
     pub async fn query_all(state: &PhotoState) -> Result<Vec<PersonRecord>> {
-        PersonMapper::query_all(&state.db).await
+        PersonMapper::query_all(&state.db)
+            .timed(metrics_name!("query_all"))
+            .await
     }
 
     pub async fn query_page(
@@ -129,7 +137,9 @@ impl PersonRepo {
         cursor: Option<CountIdCursor<PersonId>>,
         size: u64,
     ) -> Result<CursorPage<PersonRecord, ()>> {
-        PersonMapper::query_page(&state.db, cursor, size).await
+        PersonMapper::query_page(&state.db, cursor, size)
+            .timed(metrics_name!("query_page"))
+            .await
     }
 
     /// 按关键词查询人物分页.
@@ -139,19 +149,25 @@ impl PersonRepo {
         cursor: Option<PersonId>,
         size: u64,
     ) -> Result<CursorPage<types::photo::person::PersonRecord, ()>> {
-        PersonMapper::query_search(&state.db, keyword, cursor, size).await
+        PersonMapper::query_search(&state.db, keyword, cursor, size)
+            .timed(metrics_name!("query_search"))
+            .await
     }
 
     pub async fn load_faces_with_photo_files(
         state: &PhotoState,
     ) -> Result<(Vec<FaceRecord>, HashMap<PhotoId, String>)> {
-        let faces = FaceMapper::query_all(&state.db).await?;
+        let faces = FaceMapper::query_all(&state.db)
+            .timed(metrics_name!("query_faces"))
+            .await?;
         let ids = faces
             .iter()
             .map(|face| face.photo_id)
             .collect::<HashSet<_>>();
 
-        let files = PhotoMapper::query_id_and_file_id_by_ids(&state.db, &ids).await?;
+        let files = PhotoMapper::query_id_and_file_id_by_ids(&state.db, &ids)
+            .timed(metrics_name!("query_photo_files"))
+            .await?;
         Ok((faces, files))
     }
 }
@@ -182,6 +198,7 @@ impl PersonRepo {
             .await?;
             Ok(())
         })
+        .timed(metrics_name!("db_transaction"))
         .await?;
 
         Ok(())

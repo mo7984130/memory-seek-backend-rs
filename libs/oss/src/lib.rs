@@ -2,6 +2,8 @@ mod error;
 pub use error::OssError;
 
 mod retry;
+#[cfg(feature = "metrics")]
+use retry::metric_name;
 use retry::retry_429;
 
 use bytes::Bytes;
@@ -246,6 +248,11 @@ impl S3Client {
         expires: Duration,
         process: Option<String>,
     ) -> Result<String, OssError> {
+        #[cfg(feature = "metrics")]
+        let _timer = common::utils::MetricsTimer::start(metric_name("sign", "duration_seconds"));
+        #[cfg(feature = "metrics")]
+        common::metrics::counter!(metric_name("sign", "requests")).increment(1);
+
         let custom_queries = if let Some(p) = process {
             let mut queries = HashMap::new();
             queries.insert("x-oss-process".to_string(), p);
@@ -253,11 +260,20 @@ impl S3Client {
         } else {
             None
         };
-        self.inner
+
+        match self
+            .inner
             .bucket
             .presign_get(key, expires.as_secs() as u32, custom_queries)
             .await
-            .map_err(OssError::from)
+        {
+            Ok(url) => Ok(url),
+            Err(error) => {
+                #[cfg(feature = "metrics")]
+                common::metrics::counter!(metric_name("sign", "errors")).increment(1);
+                Err(OssError::from(error))
+            }
+        }
     }
 
     /// 下载文件
@@ -300,13 +316,26 @@ impl S3Client {
     /// # 错误
     /// - `OssError`: OSS 列举操作失败
     pub async fn exists(&self, key: &str) -> Result<bool, OssError> {
+        #[cfg(feature = "metrics")]
+        let _timer = common::utils::MetricsTimer::start(metric_name("exists", "duration_seconds"));
+        #[cfg(feature = "metrics")]
+        common::metrics::counter!(metric_name("exists", "requests")).increment(1);
+
         let key = key.trim_start_matches('/');
-        let results = self
+        let results = match self
             .inner
             .bucket
             .list(key.to_string(), None)
             .await
-            .map_err(OssError::from)?;
+            .map_err(OssError::from)
+        {
+            Ok(results) => results,
+            Err(error) => {
+                #[cfg(feature = "metrics")]
+                common::metrics::counter!(metric_name("exists", "errors")).increment(1);
+                return Err(error);
+            }
+        };
 
         Ok(results
             .iter()

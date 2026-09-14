@@ -47,7 +47,9 @@ impl PhotoLikeService {
 
         // 加载照片详细信息
         let photo_ids = page.records.iter().map(|(id, _)| *id).collect::<Vec<_>>();
-        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids).await?;
+        let photos = PhotoService::load_photos_info(state, user_id, &photo_ids)
+            .timed(metrics_name!("load_photos_info"))
+            .await?;
 
         page.replace_records(photos).to_ok()
     }
