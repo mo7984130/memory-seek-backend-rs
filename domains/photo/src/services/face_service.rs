@@ -183,7 +183,7 @@ impl FaceService {
                 .context_err(
                     "decode_image_error",
                     "解码图片失败",
-                    AppError::InternalServerError,
+                    AppError::bad_request("解码图片失败, 请上传正确的照片"),
                 )
         })
         .await
