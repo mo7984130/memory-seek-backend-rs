@@ -25,7 +25,7 @@
 - `skip_all` + `fields` 显式记录;不记录 `req` 整体。
 - 字段命名无前缀、语义化(`account` / `count`);一律 `字段 = %值` 显式写法,禁止裸 `fields(user_id)`。
 - 敏感字段脱敏:密码不记录,验证码只记前缀(`email_code_prefix`)。
-- 函数名过泛或冲突时用 `#[instrument(name = "...")]` 显式命名(命名规范见 `docs/dashboards/metrics-naming.md`)。
+- 函数名过泛或冲突时用 `#[instrument(name = "...")]` 显式命名(命名规范见 `tests/monitoring/dashboards/metrics-naming.md`)。
 
 ## metrics
 

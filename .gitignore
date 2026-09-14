@@ -17,12 +17,6 @@ memo.md
 tags
 dist
 
-docs/*
-!docs/dashboards
-!docs/e2e-testing-conventions.md
-!docs/service-conventions.md
-
-
 Dockerfile
 build.sh
 

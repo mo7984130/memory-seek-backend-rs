@@ -398,8 +398,8 @@ HTTP 视角仍由 `server.http.*{module="audit"}` 覆盖（`/admin/audits`；`/a
 2. 子步骤：`.timed(metrics_name!("{step}"))`（写法一）或 `timed!("{step}", ...)`（写法二）。
 3. 需要瞬时值时用 `set_gauge!` / `GaugeGuard`。
 4. 在本文「完整指标清单」登记该操作的全部指标。
-5. 在 `docs/dashboards/jsonnet/lib/ops.libsonnet` 追加该操作，再执行
-   `sh docs/dashboards/jsonnet/generate.sh`。
+5. 在 `tests/monitoring/dashboards/jsonnet/lib/ops.libsonnet` 追加该操作，再执行
+   `sh tests/monitoring/dashboards/jsonnet/generate.sh`。
 
 新增一个业务域：
 

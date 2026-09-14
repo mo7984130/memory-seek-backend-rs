@@ -14,7 +14,7 @@ Dashboard 由 jsonnet 生成，**禁止手改生成产物**：
 | `jsonnet/lib/ops.libsonnet` | 业务操作清单（唯一事实来源）：每个可观测操作一条 |
 | `jsonnet/lib/panels.libsonnet` | 面板模板：HTTP 汇总行 + 每操作标准三件套 |
 | `jsonnet/<module>.jsonnet` | 各 dashboard 装配（布局参数、面板 id、row y 坐标） |
-| `jsonnet/generate.sh` | 渲染：`sh generate.sh`，输出到 `docs/dashboards/<module>.json` |
+| `jsonnet/generate.sh` | 渲染：`sh generate.sh`，输出到 `tests/monitoring/dashboards/<module>.json` |
 
 `ops.libsonnet` 条目 schema：
 
@@ -319,7 +319,7 @@ Auth 模块监控
 1. 确认 `metrics-naming.md` 已登记该操作的指标。
 2. 在 `jsonnet/lib/ops.libsonnet` 对应模块追加条目（`crate` / `rowTitle` / `name` /
    `func` / `steps`），`steps.metric` 严格对应代码中的指标名。
-3. 执行 `sh docs/dashboards/jsonnet/generate.sh` 重新渲染。
+3. 执行 `sh tests/monitoring/dashboards/jsonnet/generate.sh` 重新渲染。
 4. 校验生成的 JSON：指标名、单位（耗时 `ms`）、阈值、图例隐藏符合本规范。
 
 新增一个 dashboard：

@@ -3,7 +3,7 @@
 `tests/e2e`(Rust) 以**功能正确性**为目标:真实 HTTP 调用 + 副作用回查(DB / Redis / MailHog)。
 性能与容量归 `tests/load`(k6),两者不混用。
 
-配套文档:`docs/service-conventions.md`(埋点)、`docs/dashboards/metrics-naming.md`(指标命名)。
+配套文档:`docs/service-conventions.md`(埋点)、`tests/monitoring/dashboards/metrics-naming.md`(指标命名)。
 
 ## 目录与运行
 

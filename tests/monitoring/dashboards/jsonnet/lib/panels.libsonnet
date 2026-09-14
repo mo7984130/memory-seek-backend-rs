@@ -1,5 +1,5 @@
 // 面板模板库:HTTP 汇总行 + 每操作标准三件套(耗时 / 子步骤耗时 / 调用量成功率)
-// 样式与 docs/dashboards/dashboard-design-spec.md 保持一致
+// 样式与 tests/monitoring/dashboards/dashboard-design-spec.md 保持一致
 local g = import '../g.libsonnet';
 
 {
