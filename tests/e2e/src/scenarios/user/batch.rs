@@ -57,7 +57,7 @@ impl Scenario for GetUserInfoBatchScenario {
     async fn validate(
         ctx: &Self::Ctx,
         _task: &TaskIndex,
-        _setup: &Self::Setup,
+        setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         let items = &output.data;
@@ -67,13 +67,27 @@ impl Scenario for GetUserInfoBatchScenario {
         }
 
         for view in items.iter().flatten() {
-            let db_ok = auth::user::Entity::find()
+            let user = auth::user::Entity::find()
                 .filter(auth::user::Column::Id.eq(view.user_id))
                 .one(&ctx.db)
                 .await
-                .unwrap()
-                .is_some_and(|u| u.nickname == view.nickname);
-            if !db_ok {
+                .unwrap();
+            let Some(user) = user else {
+                return Ok(false);
+            };
+            if user.nickname != view.nickname {
+                return Ok(false);
+            }
+
+            // 头像 token 的 viewer 应为请求者, 且与库中头像一致
+            let avatar_ok = match &view.avatar_token {
+                Some(token) => {
+                    token.0.viewer_id == setup.user_id
+                        && user.avatar_file_id.as_deref() == Some(token.0.file_id.as_str())
+                }
+                None => user.avatar_file_id.is_none(),
+            };
+            if !avatar_ok {
                 return Ok(false);
             }
         }

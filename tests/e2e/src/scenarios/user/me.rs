@@ -54,12 +54,23 @@ impl Scenario for MeScenario {
             .await
             .unwrap();
 
-        Ok(output.data.id == setup.user_id
-            && db_user.is_some_and(|u| {
-                u.username == output.data.username
-                    && u.email == output.data.email
-                    && u.nickname == output.data.nickname
-            }))
+        let Some(user) = db_user else {
+            return Ok(false);
+        };
+
+        let fields_ok = user.username == output.data.username
+            && user.email == output.data.email
+            && user.nickname == output.data.nickname;
+        // 头像 token 须与库中头像一致(含 viewer 绑定); 无头像时响应也应为 None
+        let avatar_ok = match &output.data.avatar_token {
+            Some(token) => {
+                token.0.viewer_id == setup.user_id
+                    && user.avatar_file_id.as_deref() == Some(token.0.file_id.as_str())
+            }
+            None => user.avatar_file_id.is_none(),
+        };
+
+        Ok(output.data.id == setup.user_id && fields_ok && avatar_ok)
     }
 }
 

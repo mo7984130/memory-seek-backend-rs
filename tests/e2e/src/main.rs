@@ -54,9 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 并发由 Manager 统一管理; 功能验证由各场景自己的 Times(n) 决定
     let manager = ScenarioManager::new(ManagerConfig::new(32).install_ctrl_c());
     let reports = manager.run_all(&ctx).await;
-    for report in &reports {
-        println!("{}", report.report_with_color());
-    }
+    println!("{}", reports.report_with_color());
 
     Ok(())
 }
