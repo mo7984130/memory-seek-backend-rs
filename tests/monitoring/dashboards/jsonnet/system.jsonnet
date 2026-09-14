@@ -80,12 +80,11 @@ local panels = [
       { color: 'red', value: 5 },
     ])
   ),
+  // 延迟只看 P99 汇总(详细分位数见各业务操作的耗时面板)
   seriesPanel(
-    'HTTP 延迟 (P50/P95/P99)', 1003, 16, 1, 8, 'ms',
+    'HTTP 延迟 (P99)', 1003, 16, 1, 8, 'ms',
     [
-      { expr: 'histogram_quantile(0.5, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000', legend: '{{route}} P50' },
-      { expr: 'histogram_quantile(0.95, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000', legend: '{{route}} P95' },
-      { expr: 'histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000', legend: '{{route}} P99' },
+      { expr: 'histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000', legend: '{{route}}' },
     ]
   ),
 
