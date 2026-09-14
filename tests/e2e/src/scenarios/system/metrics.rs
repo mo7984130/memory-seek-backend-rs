@@ -1,8 +1,9 @@
 //! Prometheus 指标暴露:`GET /metrics`(公开路由)。
 //!
-//! 目的:防埋点回归 —— 登录会记录 `auth:{func}:attempts`, 断言指标文本里存在
-//! 服务级与领域级关键前缀。断言用**前缀子串**而非完整名, 以兼容
-//! Prometheus exporter 对 `.`/`:` 的替换与 counter 的 `_total` 后缀。
+//! 目的:防埋点回归 —— 登录会记录 `auth:login:attempts`, 断言指标文本里存在
+//! 服务级与领域级关键前缀。断言用**前缀子串**而非完整名:
+//! exporter 只把非法字符(如 `.`)换成 `_`, 而 `:` 在 Prometheus 中合法会保留
+//! (如 `server_build_info` vs `auth:login:attempts`), counter 另带 `_total` 后缀。
 
 use memseek_test::{
     TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
@@ -46,8 +47,8 @@ impl Scenario for MetricsScenario {
         // 服务级:构建信息(启动时上报)与 HTTP 请求计数(中间件记录, 登录请求已触发)
         let server_ok =
             output.contains("server_build_info") && output.contains("server_http_requests");
-        // 领域级:登录成功会记录 `auth:login:attempts` / `auth:login:success`
-        let domain_ok = output.contains("auth_login");
+        // 领域级:登录成功会记录 `auth:login:attempts` / `auth:login:success`(保留冒号)
+        let domain_ok = output.contains("auth:login");
         Ok(server_ok && domain_ok)
     }
 }

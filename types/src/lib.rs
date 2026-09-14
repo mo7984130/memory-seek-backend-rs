@@ -11,13 +11,13 @@ pub mod validators;
 #[cfg(feature = "orm")]
 pub mod db_init;
 
-/// 回归: 实体的 `created_at` / `updated_at` 都必须带 DB 默认值(`CURRENT_TIMESTAMP`)。
+/// 回归: 实体中"插入时会省略"的 NOT NULL 列都必须带 DB 默认值。
 ///
-/// 背景: 手写 INSERT / ActiveModel 漏填时间戳列时会触发 not-null 约束
-/// (见 `photo_collection_photo` 的修复); 有了列默认值这类遗漏才安全。
-/// schema sync 只增不改, 已存在的表需用 `docs/sql/add_timestamp_defaults.sql` 对齐。
+/// 背景: 手写 INSERT / ActiveModel 漏填这些列时会触发 not-null 约束
+/// (见 `photo_collection_photo.created_at` 与 `photo_comment.like_count` 的修复)。
+/// schema sync 只增不改, 已存在的表需用 `docs/sql/` 下的脚本对齐。
 #[cfg(all(test, feature = "orm"))]
-mod timestamp_default_tests {
+mod column_default_tests {
     use sea_orm::ColumnTrait;
 
     fn has_default<C: ColumnTrait>(column: C) -> bool {
@@ -54,6 +54,11 @@ mod timestamp_default_tests {
         #[cfg(feature = "face-engine")]
         assert!(has_default(crate::photo::person::Column::UpdatedAt));
         assert!(has_default(crate::photo::timeline_stat::Column::UpdatedAt));
+    }
+
+    #[test]
+    fn comment_like_count_has_default() {
+        assert!(has_default(crate::photo::comment::Column::LikeCount));
     }
 
     /// schema sync 用同一路径生成 CREATE TABLE, 因此直接断言 DDL 里的默认值。

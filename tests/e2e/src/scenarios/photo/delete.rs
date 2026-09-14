@@ -79,8 +79,17 @@ impl Scenario for DeletePhotoScenario {
             .await
             .unwrap()
             .is_none();
-        let s3_gone = ctx.s3_missing(&setup.file_id).await;
-        Ok(gone && s3_gone)
+        if !gone {
+            return Ok(false);
+        }
+        // S3 对象由异步事件消费者删除(最终一致), 需轮询等待消失
+        for _ in 0..20 {
+            if ctx.s3_missing(&setup.file_id).await {
+                return Ok(true);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        Ok(false)
     }
 }
 

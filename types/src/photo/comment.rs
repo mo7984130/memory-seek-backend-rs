@@ -37,6 +37,7 @@ mod entity {
         pub content: String,
 
         /// 喜欢该评论的数量
+        #[sea_orm(default_value = 0)]
         pub like_count: i32,
 
         /// 修改时间

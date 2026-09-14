@@ -40,8 +40,11 @@ pub async fn session(ctx: &Context, index: usize) -> Result<Session, HttpError> 
     login(ctx, &account(index)).await
 }
 
-/// 1x1 PNG fixture(取自 `file_validator` 单测, 可被 `FileValidator::validate_image` 解析)。
-static PNG_1X1: &str = "89504E470D0A1A0A0000000D4948445200000001000000010802000000907753DE0000000C4944415408D763F8FF7F0005FE02FE0DC444830000000049454E44AE426082";
+/// 1x1 PNG fixture(结构合法、可完整解码; 三个 chunk 的 CRC 均正确)。
+///
+/// 必须是能真正解码的图片: `FileValidator` 只读文件头/尺寸(IHDR)即放行,
+/// 但 face 管线会用 `image::load_from_memory` 做完整解码。
+static PNG_1X1: &str = "89504E470D0A1A0A0000000D4948445200000001000000010802000000907753DE0000000C4944415478DA63F8CFC0000003010100F70341430000000049454E44AE426082";
 
 /// 内置 PNG 字节(懒解码)。
 pub static PNG_BYTES: LazyLock<Vec<u8>> =
@@ -60,8 +63,8 @@ pub fn unique_tag(task: &TaskIndex) -> String {
 
 /// 构造任务唯一的 PNG:在 IEND 之后追加唯一标记。
 ///
-/// PNG 解码器读取到首个 IDAT 即停止(`image` crate 的 `into_dimensions`),
-/// 追加的尾部字节不影响 IHDR 解析与尺寸校验, 但会改变内容从而改变 MD5。
+/// 解码器读取到 IEND 即停止(`image` crate 的完整解码同样如此), 追加的尾部字节
+/// 不影响解码与尺寸校验, 但会改变内容从而改变 MD5。
 pub fn unique_png(tag: &str) -> Vec<u8> {
     let mut data = PNG_BYTES.clone();
     data.extend_from_slice(b"\x00e2e:");
