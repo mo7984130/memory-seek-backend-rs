@@ -43,8 +43,8 @@ impl CollectionMapper {
         let sql = format!(
             r#"
                 WITH ins AS (
-                    INSERT INTO "{collection_photo_table_name}" ("{cp_collection_id}", "{cp_photo_id}", "{cp_user_id}")
-                    SELECT $1, unnest($2::bigint[]), $3
+                    INSERT INTO "{collection_photo_table_name}" ("created_at", "{cp_collection_id}", "{cp_photo_id}", "{cp_user_id}")
+                    SELECT now(), $1, unnest($2::bigint[]), $3
                     ON CONFLICT ("{cp_collection_id}", "{cp_photo_id}") DO NOTHING
                     RETURNING 1
                 )
