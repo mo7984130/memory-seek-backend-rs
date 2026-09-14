@@ -1,7 +1,6 @@
 # e2e 测试配置文件(读取逻辑与 server 一致: CLI --config > E2E_CONFIG_PATH > 默认路径)
 server:
-    host: 127.0.0.1
-    port: 7985
+    url: "http://127.0.0.1:7985"
 
 database:
     url: "postgres://memory_seek_test:memory_seek_test@localhost:54329/memory_seek_test"
