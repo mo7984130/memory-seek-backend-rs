@@ -45,7 +45,7 @@ jobs:
 
             - name: 启动被测服务
               # tests/config.yml 的 face_engine 模型路径为 `./models/...`,
-              # 故以 tests/ 为工作目录启动; 端口 7985 与 e2e.config.yml 一致。
+              # 故以 tests/ 为工作目录启动; 端口 7985 与 example.e2e.config.yml 一致。
               env:
                   LD_LIBRARY_PATH: ../target/debug/libs
               run: |
@@ -65,7 +65,10 @@ jobs:
 
             - name: 运行 e2e
               # preprea 会灌入种子并清理上轮 e2e 数据, 场景串行执行
-              run: cargo run -p e2e -- -c tests/e2e/e2e.config.yml
+              # 本地 e2e.config.yml 不入库, 由示例复制生成
+              run: |
+                  cp tests/e2e/example.e2e.config.yml tests/e2e/e2e.config.yml
+                  cargo run -p e2e -- -c tests/e2e/e2e.config.yml
 
             - name: 失败诊断
               if: failure()

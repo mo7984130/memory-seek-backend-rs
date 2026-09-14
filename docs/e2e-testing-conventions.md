@@ -20,6 +20,8 @@ tests/e2e/src/
 docker compose -f tests/docker-compose.yml up -d --wait
 # server 需完整 features(photo 表依赖 face-engine); CWD=tests 以解析模型相对路径
 ( cd tests && ../target/debug/memory-seek-server --config config.yml ) &
+# 首次运行需从示例复制配置(本地 e2e.config.yml 不入库)
+cp tests/e2e/example.e2e.config.yml tests/e2e/e2e.config.yml
 cargo run -p e2e -- -c tests/e2e/e2e.config.yml
 ```
 

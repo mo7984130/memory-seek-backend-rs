@@ -41,4 +41,6 @@ tests/*
 !tests/docker-compose.yml
 !tests/monitoring/
 tests/monitoring/data/
+# 本地 e2e 配置(从 example.e2e.config.yml 复制), 不入库
+tests/e2e/e2e.config.yml
 build
