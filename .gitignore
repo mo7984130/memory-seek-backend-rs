@@ -18,8 +18,9 @@ tags
 dist
 
 docs/*
-!docs/sql
 !docs/dashboards
+!docs/e2e-testing-conventions.md
+!docs/service-conventions.md
 
 
 Dockerfile

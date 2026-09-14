@@ -15,7 +15,7 @@ pub mod db_init;
 ///
 /// 背景: 手写 INSERT / ActiveModel 漏填这些列时会触发 not-null 约束
 /// (见 `photo_collection_photo.created_at` 与 `photo_comment.like_count` 的修复)。
-/// schema sync 只增不改, 已存在的表需用 `docs/sql/` 下的脚本对齐。
+/// schema sync 只增不改, 已存在的表需手工 `ALTER` 对齐(见 `docs/service-conventions.md` 的 schema 小节)。
 #[cfg(all(test, feature = "orm"))]
 mod column_default_tests {
     use sea_orm::ColumnTrait;
