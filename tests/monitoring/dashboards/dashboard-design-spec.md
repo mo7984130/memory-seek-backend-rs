@@ -14,7 +14,7 @@ Dashboard 由 jsonnet 生成，**禁止手改生成产物**：
 | `jsonnet/lib/ops.libsonnet` | 业务操作清单（唯一事实来源）：每个可观测操作一条 |
 | `jsonnet/lib/panels.libsonnet` | 面板模板：HTTP 汇总行 + 每操作标准三件套 |
 | `jsonnet/<module>.jsonnet` | 各 dashboard 装配（布局参数、面板 id、row y 坐标） |
-| `jsonnet/generate.sh` | 渲染：`sh generate.sh`，输出到 `tests/monitoring/dashboards/<module>.json` |
+| `jsonnet/generate.sh` | 渲染:`sh generate.sh`, 输出到 `tests/monitoring/grafana/dashboards/<module>.json`(Grafana provisioning 目录) |
 
 `ops.libsonnet` 条目 schema：
 
