@@ -111,6 +111,7 @@ mod entity {
         /// 创建时间
         /// 索引, 用于 按时间排序获取事件列表
         #[sea_orm(indexed)]
+        #[sea_orm(default_expr = "sea_orm::sea_query::Expr::current_timestamp()")]
         pub created_at: DateTime,
     }
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -62,9 +62,11 @@ mod entity {
         pub weight: f64,
 
         /// 更新时间
+        #[sea_orm(default_expr = "sea_orm::sea_query::Expr::current_timestamp()")]
         pub updated_at: DateTime,
 
         /// 创建时间
+        #[sea_orm(default_expr = "sea_orm::sea_query::Expr::current_timestamp()")]
         pub created_at: DateTime,
     }
 
