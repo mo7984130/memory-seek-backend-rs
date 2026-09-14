@@ -1595,7 +1595,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "e2e"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -1604,6 +1604,7 @@ dependencies = [
  "constants",
  "deadpool-redis",
  "hex",
+ "md5",
  "memseek-test",
  "oss",
  "reqwest 0.12.28",
@@ -3832,7 +3833,7 @@ dependencies = [
 
 [[package]]
 name = "photo"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-trait",
  "audit",
@@ -5152,7 +5153,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "audit",
  "auth",

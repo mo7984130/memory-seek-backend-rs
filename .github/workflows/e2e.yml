@@ -1,0 +1,80 @@
+name: E2E
+
+# 端到端测试(PG / valkey / MailHog / rustfs + 完整 features 的 server)。
+#
+# 暂以 workflow_dispatch 手动触发: e2e 依赖 ONNX 模型、rustfs/MailHog 与
+# `tests/docker-compose.yml`(使用镜像加速前缀), 首次接入需在 runner 上
+# 实跑验证通过后, 再按需补 `push`/`pull_request`/`schedule` 触发。
+on:
+    workflow_dispatch:
+
+jobs:
+    e2e:
+        name: 端到端测试
+        runs-on: ubuntu-latest
+        env:
+            # server 需要 photo 表(依赖 face-engine)与 /metrics
+            FEATURES: metrics,auth,user,photo,face-engine
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  # ONNX 模型经 git-lfs 托管, 必须拉取真实文件
+                  lfs: true
+
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@stable
+
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  cache-on-failure: true
+
+            - name: Build server
+              run: cargo build --features "$FEATURES"
+
+            - name: Prepare runtime libraries
+              # insight-face-rs 以 load-dynamic 方式加载 onnxruntime, 需随二进制放置 .so
+              run: |
+                  mkdir -p target/debug/libs
+                  find thirdparty \( -type f -o -type l \) \
+                    \( -name "*.so" -o -name "*.so.*" \) \
+                    -exec cp -a {} target/debug/libs/ \;
+
+            - name: 启动依赖容器 (PG / valkey / MailHog / rustfs)
+              run: docker compose -f tests/docker-compose.yml up -d --wait
+
+            - name: 启动被测服务
+              # tests/config.yml 的 face_engine 模型路径为 `./models/...`,
+              # 故以 tests/ 为工作目录启动; 端口 7985 与 e2e.config.yml 一致。
+              env:
+                  LD_LIBRARY_PATH: ../target/debug/libs
+              run: |
+                  ( cd tests && exec ../target/debug/memory-seek-server --config config.yml ) \
+                    > server.log 2>&1 &
+                  echo $! > server.pid
+                  for i in $(seq 1 60); do
+                      if curl -sf http://127.0.0.1:7985/health >/dev/null; then
+                          echo "server ready"
+                          exit 0
+                      fi
+                      sleep 1
+                  done
+                  echo "server failed to start"
+                  tail -100 server.log
+                  exit 1
+
+            - name: 运行 e2e
+              # preprea 会灌入种子并清理上轮 e2e 数据, 场景串行执行
+              run: cargo run -p e2e -- -c tests/e2e/e2e.config.yml
+
+            - name: 失败诊断
+              if: failure()
+              run: |
+                  echo "===== server.log (tail 200) ====="
+                  tail -200 server.log || true
+
+            - name: 清理
+              if: always()
+              run: |
+                  if [ -f server.pid ]; then kill "$(cat server.pid)" 2>/dev/null || true; fi
+                  docker compose -f tests/docker-compose.yml down -v || true

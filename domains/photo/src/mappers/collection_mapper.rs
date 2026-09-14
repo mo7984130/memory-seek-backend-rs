@@ -129,10 +129,8 @@ impl CollectionMapper {
         db: &impl ConnectionTrait,
         deltas: &HashMap<CollectionId, i64>,
     ) -> Result<()> {
-        let (ids, counts): (Vec<CollectionId>, Vec<i64>) = deltas
-            .iter()
-            .map(|(id, count)| (CollectionId::from(*id), *count))
-            .unzip();
+        let (ids, counts): (Vec<CollectionId>, Vec<i64>) =
+            deltas.iter().map(|(id, count)| (*id, *count)).unzip();
 
         let table = Entity.table_name();
         let col_id = Column::Id.as_str();

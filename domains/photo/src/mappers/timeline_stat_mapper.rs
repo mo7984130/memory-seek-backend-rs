@@ -27,10 +27,9 @@ impl TimelineStatMapper {
             .col_expr(
                 Column::AnchorTime,
                 Expr::expr(Func::greatest([
-                    Expr::col(Column::AnchorTime).into(),
+                    Expr::col(Column::AnchorTime),
                     Expr::value(created_at),
-                ]))
-                .into(),
+                ])),
             )
             .col_expr(Column::UpdatedAt, Expr::value(now()))
             .filter(Column::DateStr.eq(date_str))
@@ -96,7 +95,7 @@ impl TimelineStatMapper {
                     .arg(0i64)
                     .into(),
             )
-            .col_expr(Column::UpdatedAt, Expr::current_timestamp().into())
+            .col_expr(Column::UpdatedAt, Expr::current_timestamp())
             .filter(Column::DateStr.is_in(date_strs))
             .exec(db)
             .await?;
