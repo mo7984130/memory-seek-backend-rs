@@ -15,7 +15,6 @@ use constants::redis_keys;
 use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task::{self, spawn_blocking};
-use tracing::info;
 use types::auth::user::UserId;
 use types::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
@@ -158,8 +157,6 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
             .emit_if_err();
     })
     .await?;
-
-    info!("{}:{} 登陆成功", updated_user.id, updated_user.username);
 
     // 返回 LoginResult（包含用户信息和令牌）
     let user_info = UserInfo::from_with_token(updated_user);
