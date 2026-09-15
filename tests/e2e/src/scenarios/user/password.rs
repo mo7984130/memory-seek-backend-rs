@@ -1,6 +1,9 @@
 use common::axum::{ErrR, SucR};
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::HttpError,
+    register_scenario,
+    scenario::{Scenario, SetupMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
@@ -24,6 +27,10 @@ impl Scenario for ChangePasswordScenario {
     type Output = SucR<()>;
 
     type Setup = Session;
+
+    // 改密会改变账号密码状态, Round 模式下每轮 setup 重新登录,
+    // validate 中将密码还原回 PASSWORD 以便下一轮复用.
+    const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         login(ctx, &pwd_account(task.index)).await
@@ -55,6 +62,26 @@ impl Scenario for ChangePasswordScenario {
         setup: &Self::Setup,
         _output: &Self::Output,
     ) -> Result<bool, Self::Error> {
+        // 0. 先用新密码重新登录, 再把密码还原回 PASSWORD,
+        //    保证 Round 模式下下一轮 setup 仍可用旧密码登录.
+        let restored = match login_with(ctx, &pwd_account(task.index), NEW_PASSWORD).await {
+            Ok(session) => {
+                let resp = ctx
+                    .client
+                    .request(reqwest::Method::PATCH, "/user/password")
+                    .header("Authorization", &session.auth_header())
+                    .json_unwrap(&json!({
+                        "oldPassword": NEW_PASSWORD,
+                        "newPassword": PASSWORD,
+                        "confirmPassword": PASSWORD,
+                    }))
+                    .send_checked()
+                    .await;
+                resp.is_ok()
+            }
+            Err(_) => false,
+        };
+
         // 1. 旧 access_token 已失效(改密成功后服务端调用了 logout)
         let after = ctx
             .client
@@ -75,19 +102,11 @@ impl Scenario for ChangePasswordScenario {
             .unwrap()
             .is_some_and(|u| u.refresh_token.is_none());
 
-        // 3. 新密码可重新登录
-        let relogin = login_with(ctx, &pwd_account(task.index), NEW_PASSWORD)
-            .await
-            .is_ok();
-
-        Ok(revoked && refresh_cleared && relogin)
+        Ok(revoked && refresh_cleared && restored)
     }
 }
 
-register_scenario!(
-    ChangePasswordScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(ChangePasswordScenario);
 
 /// 旧密码错误: 期望 400.
 #[derive(Default)]
@@ -136,10 +155,7 @@ impl Scenario for ChangePasswordWrongOldScenario {
     }
 }
 
-register_scenario!(
-    ChangePasswordWrongOldScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(ChangePasswordWrongOldScenario);
 
 /// 两次输入不一致: 期望 400(请求体校验阶段拦截).
 #[derive(Default)]
@@ -188,10 +204,7 @@ impl Scenario for ChangePasswordMismatchScenario {
     }
 }
 
-register_scenario!(
-    ChangePasswordMismatchScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(ChangePasswordMismatchScenario);
 
 /// 未携带认证头: 期望 401.
 #[derive(Default)]
@@ -235,7 +248,4 @@ impl Scenario for ChangePasswordUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    ChangePasswordUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(ChangePasswordUnauthorizedScenario);

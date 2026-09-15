@@ -12,9 +12,19 @@ pub const PASSWORD: &str = "Test123456";
 /// 改密正例使用的新密码.
 pub const NEW_PASSWORD: &str = "NewPass123";
 
-/// 通用池账号(me / nickname / avatar / logout 及改密负例).
+/// 通用池账号(nickname / avatar / logout 及改密负例).
 pub fn user_account(index: usize) -> String {
     format!("uit_user_{}", index + 1)
+}
+
+/// me 专用池账号(仅 MeScenario 使用, 与写场景隔离避免并发竞态).
+pub fn me_account(index: usize) -> String {
+    format!("uit_me_{}", index + 1)
+}
+
+/// logout 专用池账号(仅 LogoutScenario 使用, 登出会清除会话, 隔离避免踢掉共享池 token).
+pub fn logout_account(index: usize) -> String {
+    format!("uit_logout_{}", index + 1)
 }
 
 /// 改密正例专用池账号.
@@ -59,10 +69,9 @@ pub async fn login_with(
 ) -> Result<Session, HttpError> {
     let resp: SucR<LoginResponse> = ctx
         .client
-        .post(
-            "/auth/login",
-            json!({ "account": account, "password": password }),
-        )
+        .request(reqwest::Method::POST, "/auth/login")
+        .json_unwrap(&json!({ "account": account, "password": password }))
+        .send_checked()
         .await?
         .json()
         .await?;

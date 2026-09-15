@@ -22,7 +22,7 @@ const PASS_HASH: &str = "$argon2id$v=19$m=16384,t=2,p=1$T5U+IfQVViaUNr7dhPHmww$C
 /// 前 6 条清理 e2e 自建的相册/评论/点赞与上传照片(保证可重复运行), 其后为清空+灌入。
 /// id 规划(避开 admin id=1): auth 用户 id = g+1; photo 用户 id = AUTH_USERS+g+1;
 /// user 模块测试池 id = AUTH_USERS + PHOTO_USERS + g(+1)。
-const SEED_STATEMENTS: [&str; 20] = [
+const SEED_STATEMENTS: [&str; 22] = [
     // 1. 清理 e2e 自建的评论点赞
     "DELETE FROM photo_comment_like",
     // 2. 清理 e2e 自建的评论
@@ -154,7 +154,33 @@ const SEED_STATEMENTS: [&str; 20] = [
            now(),
            now()
     FROM generate_series(1, :UIT_USERS) AS g",
-    // 20. 重置 auth_user 主键序列: 种子显式插入 id 不会推进 BIGSERIAL,
+    // 20. user 模块测试用户池(me 专用): 仅 MeScenario 使用,
+    //     与 nickname/avatar/logout 等写场景隔离, 避免并发竞态
+    "
+    INSERT INTO auth_user (id, username, email, password, nickname, inviter, created_at, updated_at)
+    SELECT (:AUTH_USERS + :PHOTO_USERS + :UIT_USERS + :UIT_USERS + g + 1),
+           'uit_me_' || g,
+           'uit_me_' || g || '@test.com',
+           ':PASS_HASH',
+           'UitMe',
+           0,
+           now(),
+           now()
+    FROM generate_series(1, :UIT_USERS) AS g",
+    // 21. user 模块测试用户池(logout 专用): 登出会清除会话, 必须独立于共享池,
+    //     避免周期性踢掉同池其它场景的 token
+    "
+    INSERT INTO auth_user (id, username, email, password, nickname, inviter, created_at, updated_at)
+    SELECT (:AUTH_USERS + :PHOTO_USERS + :UIT_USERS + :UIT_USERS + :UIT_USERS + g + 1),
+           'uit_logout_' || g,
+           'uit_logout_' || g || '@test.com',
+           ':PASS_HASH',
+           'UitLogout',
+           0,
+           now(),
+           now()
+    FROM generate_series(1, :UIT_USERS) AS g",
+    // 22. 重置 auth_user 主键序列: 种子显式插入 id 不会推进 BIGSERIAL,
     //     不重置会导致后续业务插入 nextval 撞上种子 id
     "SELECT setval(pg_get_serial_sequence('auth_user', 'id'), (SELECT max(id) FROM auth_user))",
 ];

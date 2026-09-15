@@ -8,7 +8,7 @@ use types::user::UserInfo;
 
 use crate::context::Context;
 
-use super::session::{Session, login, user_account};
+use super::session::{Session, login, me_account};
 
 /// 获取当前用户信息: 响应必须与库中记录一致.
 #[derive(Default)]
@@ -24,7 +24,7 @@ impl Scenario for MeScenario {
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        login(ctx, &me_account(task.index)).await
     }
 
     async fn run(
@@ -74,7 +74,7 @@ impl Scenario for MeScenario {
     }
 }
 
-register_scenario!(MeScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(MeScenario);
 
 /// 未携带认证头: 期望 401.
 #[derive(Default)]
@@ -95,7 +95,8 @@ impl Scenario for MeUnauthorizedScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .get_raw("/user/me")
+            .request(reqwest::Method::GET, "/user/me")
+            .send()
             .await?
             .json::<Self::Output>()
             .await
@@ -112,10 +113,7 @@ impl Scenario for MeUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    MeUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(MeUnauthorizedScenario);
 
 /// 伪造 access_token(用户存在但 token 不匹配): 期望 401.
 #[derive(Default)]
@@ -156,7 +154,4 @@ impl Scenario for MeForgedTokenScenario {
     }
 }
 
-register_scenario!(
-    MeForgedTokenScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(MeForgedTokenScenario);

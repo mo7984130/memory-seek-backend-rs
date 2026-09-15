@@ -48,7 +48,7 @@ impl Scenario for LoginScenario {
         -> Result<bool, Self::Error> { /* 只断言副作用: DB / Redis / MailHog / S3 */ }
 }
 
-register_scenario!(LoginScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(LoginScenario);
 ```
 
 - 命名:`{端点}Scenario`;负例加语义后缀(`LoginWrongPasswordScenario`)。
@@ -57,7 +57,9 @@ register_scenario!(LoginScenario, mode = memseek_test::RunMode::Times(32));
 
 ## 运行模式与并发
 
-`ManagerConfig::new(concurrency)`(当前 32)全局控制并发;`register_scenario!(mode = ...)` 声明默认模式。
+`ManagerConfig::new(concurrency)`(当前 4)控制并发;执行模式由 Manager 全局设置
+(`with_run_mode(RunMode::Times(32))`),覆盖所有场景,注册时不再声明 `mode = ...`。
+单个场景如需特殊模式,可在 `register_scenario!` 里显式指定并被 Manager 的 mode 覆盖。
 
 - **功能验证一律 `Times(n)`,不用 `Duration`**;`n` 是**全局总次数**,按并发分片,
   `task.index ∈ 0..concurrency` 是**任务号而非轮次**(同任务各轮 index 相同)。

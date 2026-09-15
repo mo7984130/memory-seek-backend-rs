@@ -1,8 +1,10 @@
+use std::time::Duration;
+
 use clap::Parser;
 use deadpool_redis::{Config as RedisConfig, PoolConfig, Runtime};
 use e2e::{config::E2eConfig, context::Context, preprea};
 use memseek_test::{
-    Report,
+    Report, RunMode,
     ctxlibs::http_client::Client,
     manager::{ManagerConfig, ScenarioManager},
 };
@@ -51,9 +53,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 前置准备: 灌入种子数据(先清空再灌入)
     let ctx = preprea::init(ctx, &cfg.seed).await?;
 
-    // 并发由 Manager 统一管理; 功能验证由各场景自己的 Times(n) 决定
-    let manager = ScenarioManager::new(ManagerConfig::new(32).install_ctrl_c());
+    // 并发与执行模式均由 Manager 统一管理; 全局 mode 覆盖所有场景注册
+    let manager = ScenarioManager::new(
+        ManagerConfig::new(16)
+            .with_run_mode(RunMode::Duration(Duration::from_secs(120)))
+            .with_tui()
+            .install_ctrl_c(),
+    );
     let reports = manager.run_all(&ctx).await;
+    // let reports = manager.run_one("LoginScenario", &ctx).await.unwrap();
     println!("{}", reports.report_with_color());
 
     Ok(())

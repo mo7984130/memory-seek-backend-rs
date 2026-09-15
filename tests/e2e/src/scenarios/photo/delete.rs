@@ -2,7 +2,10 @@
 
 use common::axum::{ErrR, SucR};
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::HttpError,
+    register_scenario,
+    scenario::{Scenario, SetupMode},
 };
 use sea_orm::EntityTrait;
 use serde_json::json;
@@ -34,6 +37,8 @@ impl Scenario for DeletePhotoScenario {
     type Output = SucR<()>;
 
     type Setup = DeleteSetup;
+
+    const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
@@ -93,7 +98,7 @@ impl Scenario for DeletePhotoScenario {
     }
 }
 
-register_scenario!(DeletePhotoScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(DeletePhotoScenario);
 
 /// 空照片列表: 期望 400(参数校验失败)。
 #[derive(Default)]
@@ -138,10 +143,7 @@ impl Scenario for DeletePhotosEmptyScenario {
     }
 }
 
-register_scenario!(
-    DeletePhotosEmptyScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(DeletePhotosEmptyScenario);
 
 /// 未携带认证头: 期望 401。
 #[derive(Default)]
@@ -162,7 +164,8 @@ impl Scenario for DeletePhotosUnauthorizedScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .delete_raw("/photo")
+            .request(reqwest::Method::DELETE, "/photo")
+            .send()
             .await?
             .json::<Self::Output>()
             .await
@@ -179,7 +182,4 @@ impl Scenario for DeletePhotosUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    DeletePhotosUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(DeletePhotosUnauthorizedScenario);

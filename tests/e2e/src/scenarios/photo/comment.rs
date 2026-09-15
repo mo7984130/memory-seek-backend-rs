@@ -3,7 +3,10 @@
 use common::axum::{ErrR, SucR};
 use common::types::CursorPage;
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::HttpError,
+    register_scenario,
+    scenario::{Scenario, SetupMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
@@ -103,10 +106,7 @@ impl Scenario for PublishCommentScenario {
     }
 }
 
-register_scenario!(
-    PublishCommentScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(PublishCommentScenario);
 
 /// 空内容评论: 期望 400(参数校验失败)。
 #[derive(Default)]
@@ -154,10 +154,7 @@ impl Scenario for PublishCommentEmptyScenario {
     }
 }
 
-register_scenario!(
-    PublishCommentEmptyScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(PublishCommentEmptyScenario);
 
 /// 评论列表前置:登录 + 目标照片 + 前置评论。
 #[derive(Default)]
@@ -230,7 +227,7 @@ impl Scenario for GetCommentsScenario {
     }
 }
 
-register_scenario!(GetCommentsScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(GetCommentsScenario);
 
 /// 删除评论前置:登录 + 目标照片 + 前置评论。
 #[derive(Default)]
@@ -252,6 +249,8 @@ impl Scenario for DeleteCommentScenario {
     type Output = SucR<()>;
 
     type Setup = CommentDeleteSetup;
+
+    const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let base = comment_setup(ctx, task).await?;
@@ -304,7 +303,4 @@ impl Scenario for DeleteCommentScenario {
     }
 }
 
-register_scenario!(
-    DeleteCommentScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(DeleteCommentScenario);

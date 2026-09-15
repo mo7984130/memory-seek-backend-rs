@@ -2,7 +2,10 @@
 
 use common::axum::{ErrR, SucR};
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::HttpError,
+    register_scenario,
+    scenario::{Scenario, SetupMode},
 };
 use sea_orm::EntityTrait;
 use types::photo::dto::photo::PhotoView;
@@ -39,6 +42,8 @@ impl Scenario for UploadPhotoScenario {
     type Output = SucR<PhotoView>;
 
     type Setup = UploadSetup;
+
+    const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         prepare(ctx, task).await
@@ -95,7 +100,7 @@ impl Scenario for UploadPhotoScenario {
     }
 }
 
-register_scenario!(UploadPhotoScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(UploadPhotoScenario);
 
 /// 重复上传同一内容: 期望 400(命中 md5 去重)。
 #[derive(Default)]
@@ -144,10 +149,7 @@ impl Scenario for UploadDuplicatePhotoScenario {
     }
 }
 
-register_scenario!(
-    UploadDuplicatePhotoScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(UploadDuplicatePhotoScenario);
 
 /// 非法文件: 期望 400(文件校验失败)。
 #[derive(Default)]
@@ -193,10 +195,7 @@ impl Scenario for UploadInvalidFileScenario {
     }
 }
 
-register_scenario!(
-    UploadInvalidFileScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(UploadInvalidFileScenario);
 
 /// 未携带认证头: 期望 401。
 #[derive(Default)]
@@ -237,7 +236,4 @@ impl Scenario for UploadUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    UploadUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(UploadUnauthorizedScenario);

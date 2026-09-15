@@ -1,6 +1,9 @@
 use common::axum::{ErrR, SucR};
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::HttpError,
+    register_scenario,
+    scenario::{Scenario, SetupMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
@@ -8,7 +11,7 @@ use types::auth;
 
 use crate::context::Context;
 
-use super::session::{Session, login, user_account};
+use super::session::{Session, login, logout_account};
 
 /// 登出: Redis access_token 删除、refresh_token 清空、旧 token 复用被拒.
 #[derive(Default)]
@@ -23,8 +26,10 @@ impl Scenario for LogoutScenario {
 
     type Setup = Session;
 
+    const SETUP_MODE: SetupMode = SetupMode::Round;
+
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        login(ctx, &logout_account(task.index)).await
     }
 
     async fn run(
@@ -77,7 +82,7 @@ impl Scenario for LogoutScenario {
     }
 }
 
-register_scenario!(LogoutScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(LogoutScenario);
 
 /// 未携带认证头: 期望 401.
 #[derive(Default)]
@@ -98,7 +103,9 @@ impl Scenario for LogoutUnauthorizedScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .post_raw("/user/logout", json!({}))
+            .request(reqwest::Method::POST, "/user/logout")
+            .json_unwrap(&json!({}))
+            .send()
             .await?
             .json::<Self::Output>()
             .await
@@ -115,7 +122,4 @@ impl Scenario for LogoutUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    LogoutUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(LogoutUnauthorizedScenario);

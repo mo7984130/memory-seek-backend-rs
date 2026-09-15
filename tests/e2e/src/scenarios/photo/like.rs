@@ -6,7 +6,10 @@
 use common::axum::SucR;
 use common::types::CursorPage;
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::HttpError,
+    register_scenario,
+    scenario::{Scenario, SetupMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
@@ -62,9 +65,21 @@ impl Scenario for LikePhotoScenario {
 
     type Setup = LikePhotoSetup;
 
+    const SETUP_MODE: SetupMode = SetupMode::Round;
+
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
         let photo = seed_photo(ctx, 2).await.ok_or_else(super::seed_missing)?;
+        // 种子照片跨轮复用: 先取消点赞, 确保本轮处于未点赞状态.
+        let _ = ctx
+            .client
+            .request(
+                reqwest::Method::DELETE,
+                &format!("/photo/photos/{}/like", photo.id),
+            )
+            .header("Authorization", &session.auth_header())
+            .send_checked()
+            .await;
         Ok(LikePhotoSetup {
             session,
             photo_id: photo.id.0,
@@ -106,7 +121,7 @@ impl Scenario for LikePhotoScenario {
     }
 }
 
-register_scenario!(LikePhotoScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(LikePhotoScenario);
 
 /// 取消点赞照片前置:登录 + 照片 + 已点赞。
 #[derive(Default)]
@@ -127,6 +142,8 @@ impl Scenario for UnlikePhotoScenario {
     type Output = SucR<()>;
 
     type Setup = UnlikePhotoSetup;
+
+    const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
@@ -181,7 +198,7 @@ impl Scenario for UnlikePhotoScenario {
     }
 }
 
-register_scenario!(UnlikePhotoScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(UnlikePhotoScenario);
 
 /// 点赞列表前置:登录 + 照片 + 已点赞。
 #[derive(Default)]
@@ -246,10 +263,7 @@ impl Scenario for GetLikedPhotosScenario {
     }
 }
 
-register_scenario!(
-    GetLikedPhotosScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetLikedPhotosScenario);
 
 /// 点赞评论前置:登录 + 目标评论(种子照片 u=7)。
 #[derive(Default)]
@@ -270,6 +284,8 @@ impl Scenario for LikeCommentScenario {
     type Output = SucR<()>;
 
     type Setup = LikeCommentSetup;
+
+    const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
@@ -316,7 +332,7 @@ impl Scenario for LikeCommentScenario {
     }
 }
 
-register_scenario!(LikeCommentScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(LikeCommentScenario);
 
 /// 取消点赞评论前置:登录 + 已点赞目标评论(种子照片 u=8)。
 #[derive(Default)]
@@ -337,6 +353,8 @@ impl Scenario for UnlikeCommentScenario {
     type Output = SucR<()>;
 
     type Setup = UnlikeCommentSetup;
+
+    const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
@@ -391,7 +409,4 @@ impl Scenario for UnlikeCommentScenario {
     }
 }
 
-register_scenario!(
-    UnlikeCommentScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(UnlikeCommentScenario);

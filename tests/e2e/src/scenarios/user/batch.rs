@@ -33,9 +33,10 @@ impl Scenario for GetUserInfoBatchScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        // 取 3 个确定存在的目标用户 id(通用池), 外加一个必然不存在的 id
+        // 取 3 个确定存在的目标用户 id(只读专用池 uit_me, 无人并发写昵称/头像),
+        // 外加一个必然不存在的 id
         let targets = auth::user::Entity::find()
-            .filter(auth::user::Column::Username.is_in(["uit_user_1", "uit_user_2", "uit_user_3"]))
+            .filter(auth::user::Column::Username.is_in(["uit_me_1", "uit_me_2", "uit_me_3"]))
             .all(&ctx.db)
             .await
             .unwrap();
@@ -96,10 +97,7 @@ impl Scenario for GetUserInfoBatchScenario {
     }
 }
 
-register_scenario!(
-    GetUserInfoBatchScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetUserInfoBatchScenario);
 
 /// 空 id 列表: 期望 400.
 #[derive(Default)]
@@ -144,10 +142,7 @@ impl Scenario for GetUserInfoBatchEmptyScenario {
     }
 }
 
-register_scenario!(
-    GetUserInfoBatchEmptyScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetUserInfoBatchEmptyScenario);
 
 /// 超过 1024 个 id: 期望 400.
 #[derive(Default)]
@@ -193,10 +188,7 @@ impl Scenario for GetUserInfoBatchTooManyScenario {
     }
 }
 
-register_scenario!(
-    GetUserInfoBatchTooManyScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetUserInfoBatchTooManyScenario);
 
 /// 未携带认证头: 期望 401.
 #[derive(Default)]
@@ -217,7 +209,9 @@ impl Scenario for GetUserInfoBatchUnauthorizedScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .post_raw("/user/batch", json!({ "userIds": [1] }))
+            .request(reqwest::Method::POST, "/user/batch")
+            .json_unwrap(&json!({ "userIds": [1] }))
+            .send()
             .await?
             .json::<Self::Output>()
             .await
@@ -234,7 +228,4 @@ impl Scenario for GetUserInfoBatchUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    GetUserInfoBatchUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetUserInfoBatchUnauthorizedScenario);

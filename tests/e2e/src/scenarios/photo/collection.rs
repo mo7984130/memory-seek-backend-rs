@@ -2,7 +2,10 @@
 
 use common::axum::{ErrR, SucR};
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::HttpError,
+    register_scenario,
+    scenario::{Scenario, SetupMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
@@ -93,10 +96,7 @@ impl Scenario for CreateCollectionScenario {
     }
 }
 
-register_scenario!(
-    CreateCollectionScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(CreateCollectionScenario);
 
 /// 空名称创建: 期望 400(参数校验失败)。
 #[derive(Default)]
@@ -141,10 +141,7 @@ impl Scenario for CreateCollectionInvalidNameScenario {
     }
 }
 
-register_scenario!(
-    CreateCollectionInvalidNameScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(CreateCollectionInvalidNameScenario);
 
 /// 收藏夹列表: 包含前置创建的收藏夹。
 #[derive(Default)]
@@ -188,10 +185,7 @@ impl Scenario for GetCollectionsScenario {
     }
 }
 
-register_scenario!(
-    GetCollectionsScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetCollectionsScenario);
 
 /// 更新收藏夹: 名称落库生效。
 #[derive(Default)]
@@ -243,10 +237,7 @@ impl Scenario for UpdateCollectionScenario {
     }
 }
 
-register_scenario!(
-    UpdateCollectionScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(UpdateCollectionScenario);
 
 /// 删除收藏夹: 记录消失。
 #[derive(Default)]
@@ -260,6 +251,8 @@ impl Scenario for DeleteCollectionScenario {
     type Output = SucR<()>;
 
     type Setup = CollectionSetup;
+
+    const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         create_setup(ctx, task).await
@@ -298,10 +291,7 @@ impl Scenario for DeleteCollectionScenario {
     }
 }
 
-register_scenario!(
-    DeleteCollectionScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(DeleteCollectionScenario);
 
 /// 相册添加照片前置:登录 + 种子照片 + 前置收藏夹。
 /// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
@@ -383,7 +373,4 @@ impl Scenario for AddPhotosToCollectionScenario {
     }
 }
 
-register_scenario!(
-    AddPhotosToCollectionScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(AddPhotosToCollectionScenario);
