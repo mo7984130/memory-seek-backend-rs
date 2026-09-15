@@ -43,8 +43,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     redis_cfg.pool = Some(PoolConfig::new(16));
     let redis = redis_cfg.create_pool(Some(Runtime::Tokio1))?;
 
+    // 业务请求统一 5s 超时: 快速暴露慢接口与挂死场景
+    let client = Client::from_reqwest(
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()?,
+        cfg.base_url(),
+    )?;
+
     let ctx = Context {
-        client: Client::new(cfg.base_url())?,
+        client,
         db: Database::connect(&cfg.database.url).await?,
         mailhog: Client::new(cfg.mailhog.url)?,
         redis,
