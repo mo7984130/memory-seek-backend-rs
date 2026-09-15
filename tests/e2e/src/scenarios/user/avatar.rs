@@ -3,7 +3,10 @@ use std::sync::LazyLock;
 use common::axum::{ErrR, SucR};
 use memseek_test::ctxlibs::http_client::multipart::{Form, Part};
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::{HttpError, reqwest},
+    register_scenario,
+    scenario::Scenario,
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;

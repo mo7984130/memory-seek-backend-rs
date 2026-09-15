@@ -5,7 +5,7 @@ use deadpool_redis::{Config as RedisConfig, PoolConfig, Runtime};
 use e2e::{config::E2eConfig, context::Context, preprea};
 use memseek_test::{
     Report, RunMode,
-    ctxlibs::http_client::Client,
+    ctxlibs::http_client::{Client, reqwest},
     manager::{ManagerConfig, ScenarioManager},
 };
 use sea_orm::Database;

@@ -1,7 +1,10 @@
 //! 图片下载:`GET /photo/{token}`(公开路由)。
 
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::{HttpError, reqwest},
+    register_scenario,
+    scenario::Scenario,
 };
 use types::photo::dto::photo::PhotoView;
 

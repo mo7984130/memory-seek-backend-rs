@@ -6,7 +6,10 @@
 //! (如 `server_build_info` vs `auth:login:attempts`), counter 另带 `_total` 后缀。
 
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::{HttpError, reqwest},
+    register_scenario,
+    scenario::Scenario,
 };
 
 use crate::context::Context;

@@ -1,5 +1,8 @@
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::{HttpError, reqwest},
+    register_scenario,
+    scenario::Scenario,
 };
 use serde_json::json;
 

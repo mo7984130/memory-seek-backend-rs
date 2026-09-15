@@ -19,8 +19,8 @@ use std::sync::LazyLock;
 
 use common::axum::SucR;
 use memseek_test::TaskIndex;
-use memseek_test::ctxlibs::http_client::HttpError;
 use memseek_test::ctxlibs::http_client::multipart::{Form, Part};
+use memseek_test::ctxlibs::http_client::{HttpError, reqwest};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use types::auth::user::UserId;
 use types::photo::dto::photo::PhotoView;

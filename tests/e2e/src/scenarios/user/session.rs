@@ -1,7 +1,7 @@
 //! user 模块场景共享的会话预置: 受保护端点所需的登录凭证.
 
 use common::axum::SucR;
-use memseek_test::ctxlibs::http_client::HttpError;
+use memseek_test::ctxlibs::http_client::{HttpError, reqwest};
 use serde_json::json;
 use types::auth::{LoginResponse, user::UserId};
 

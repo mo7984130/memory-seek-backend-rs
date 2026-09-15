@@ -14,7 +14,7 @@ pub struct Context {
     pub s3: oss::S3Client,
 }
 
-pub use ctxlibs::http_client::HttpError;
+pub use ctxlibs::http_client::{HttpError, reqwest};
 
 // MailHog API v2 响应结构(字段为 PascalCase, 仅取需要的字段)
 #[derive(Debug, Deserialize)]

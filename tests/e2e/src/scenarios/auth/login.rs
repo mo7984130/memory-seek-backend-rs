@@ -3,7 +3,10 @@ use common::{
     ext::ToOk,
 };
 use memseek_test::{
-    TaskIndex, ctxlibs::http_client::HttpError, register_scenario, scenario::Scenario,
+    TaskIndex,
+    ctxlibs::http_client::{HttpError, reqwest},
+    register_scenario,
+    scenario::Scenario,
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, SelectExt};
 use serde_json::json;

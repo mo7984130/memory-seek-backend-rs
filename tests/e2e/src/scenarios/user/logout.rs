@@ -1,7 +1,7 @@
 use common::axum::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
-    ctxlibs::http_client::HttpError,
+    ctxlibs::http_client::{HttpError, reqwest},
     register_scenario,
     scenario::{Scenario, SetupMode},
 };
