@@ -8,9 +8,7 @@ fn main() {
 
     println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/libs");
 
-    // 注入 git commit，供 `server.build_info` 指标使用。
-    // 优先级: CI 环境变量 GITHUB_SHA(提交即变) > 本地 git > unknown。
-    // `rerun-if-env-changed` 保证 CI 中即使命中构建缓存, 新提交也会重跑本脚本。
+    // 注入 git commit
     println!("cargo:rerun-if-env-changed=GITHUB_SHA");
     let commit = std::env::var("GITHUB_SHA")
         .ok()
