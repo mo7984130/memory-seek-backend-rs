@@ -247,6 +247,13 @@ impl PhotoService {
         // 查询属于用户的照片
         let photos =
             PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &req.photo_ids).await?;
+        if photos.len() != req.photo_ids.len() {
+            Err(ContextualError::warn_without_source(
+                "user_del_not_belong_photo",
+                "用户尝试删除不属于自己的照片 或 照片不存在",
+                AppError::bad_request("无法删除不属于自己的照片 或 照片不存在"),
+            ))?;
+        }
         let mut ctx = PhotoDeleteContext { user_id, photos };
         run_photo_delete_pipeline(&state.db, &mut ctx)
             .await
