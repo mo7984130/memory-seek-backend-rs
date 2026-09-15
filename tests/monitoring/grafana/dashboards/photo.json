@@ -87,8 +87,8 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(server_http_requests_total{module=\"photo\"}[5m])) by (route)",
-          "legendFormat": "{{route}}",
+          "expr": "sum(rate(server_http_requests_total{module=\"photo\"}[5m])) by (route, method) > 0",
+          "legendFormat": "{{method}} {{route}}",
           "refId": "A"
         }
       ],
@@ -149,8 +149,8 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(server_http_requests_total{status_class=\"5xx\",module=\"photo\"}[5m])) / sum(rate(server_http_requests_total{module=\"photo\"}[5m])) * 100",
-          "legendFormat": "错误率",
+          "expr": "sum(rate(server_http_requests_total{status_class=\"5xx\",module=\"photo\"}[5m])) by (route, method) / sum(rate(server_http_requests_total{module=\"photo\"}[5m])) by (route, method) * 100",
+          "legendFormat": "{{method}} {{route}}",
           "refId": "A"
         }
       ],
@@ -211,8 +211,8 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module=\"photo\"}[5m])) by (le, route)) * 1000",
-          "legendFormat": "{{route}}",
+          "expr": "histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module=\"photo\"}[5m])) by (le, route, method)) * 1000",
+          "legendFormat": "{{method}} {{route}}",
           "refId": "A"
         }
       ],

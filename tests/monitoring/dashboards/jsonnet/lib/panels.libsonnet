@@ -82,8 +82,8 @@ local g = import '../g.libsonnet';
     + ts.queryOptions.withDatasource('prometheus', DS_UID)
     + ts.queryOptions.withTargets([
       self.bareTarget(
-        'sum(rate(server_http_requests_total{module="' + module + '"}[5m])) by (route)',
-        '{{route}}',
+        'sum(rate(server_http_requests_total{module="' + module + '"}[5m])) by (route, method) > 0',
+        '{{method}} {{route}}',
         'A'
       ),
     ])
@@ -99,8 +99,8 @@ local g = import '../g.libsonnet';
     + ts.queryOptions.withDatasource('prometheus', DS_UID)
     + ts.queryOptions.withTargets([
       self.bareTarget(
-        'sum(rate(server_http_requests_total{status_class="5xx",module="' + module + '"}[5m])) / sum(rate(server_http_requests_total{module="' + module + '"}[5m])) * 100',
-        '错误率',
+        'sum(rate(server_http_requests_total{status_class="5xx",module="' + module + '"}[5m])) by (route, method) / sum(rate(server_http_requests_total{module="' + module + '"}[5m])) by (route, method) * 100',
+        '{{method}} {{route}}',
         'A'
       ),
     ])
@@ -117,8 +117,8 @@ local g = import '../g.libsonnet';
     + ts.queryOptions.withDatasource('prometheus', DS_UID)
     + ts.queryOptions.withTargets([
       self.bareTarget(
-        'histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module="' + module + '"}[5m])) by (le, route)) * 1000',
-        '{{route}}',
+        'histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module="' + module + '"}[5m])) by (le, route, method)) * 1000',
+        '{{method}} {{route}}',
         'A'
       ),
     ])

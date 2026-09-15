@@ -15,13 +15,9 @@ local thresholds(steps) =
 
 local green = thresholds([{ color: 'green', value: null }]);
 
-// 可见图例(底部)+ lastNotNull 统计,与现状一致
-local legend =
-  ts.options.legend.withCalcs(['lastNotNull'])
-  + ts.options.legend.withDisplayMode('list')
-  + ts.options.legend.withPlacement('bottom')
-  + ts.options.tooltip.withMode('single')
-  + ts.options.tooltip.withSort('none');
+// 图例不可见(showLegend: false),与设计规范及模块 dashboard 一致;
+// 不用 displayMode: hidden(grafana 13.2.1 NoData 渲染 bug)
+local legend = p.withLegendTooltip();
 
 // 多查询 timeseries 面板(targets 为 [{expr, legend}] 列表)
 local seriesPanel(title, id, x, y, w, unit, targets, targetThresholds=green) =
@@ -69,7 +65,7 @@ local panels = [
   p.row('HTTP 请求 (http)', 1004, 0),
   seriesPanel(
     'HTTP QPS', 1001, 0, 1, 8, 'reqps',
-    [{ expr: 'sum(rate(server_http_requests_total[5m])) by (route)', legend: '{{route}}' }]
+    [{ expr: 'sum(rate(server_http_requests_total[5m])) by (route, method) > 0', legend: '{{method}} {{route}}' }]
   ),
   seriesPanel(
     'HTTP 错误率', 1002, 8, 1, 8, 'percent',
@@ -84,7 +80,7 @@ local panels = [
   seriesPanel(
     'HTTP 延迟 (P99)', 1003, 16, 1, 8, 'ms',
     [
-      { expr: 'histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route)) * 1000', legend: '{{route}}' },
+      { expr: 'histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket[5m])) by (le, route, method)) * 1000', legend: '{{method}} {{route}}' },
     ]
   ),
 

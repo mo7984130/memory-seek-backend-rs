@@ -86,15 +86,18 @@ Dashboard 由 jsonnet 生成，**禁止手改生成产物**：
 
 | 面板 | 类型 | 查询 |
 |------|------|------|
-| `HTTP QPS` | timeseries | `sum(rate(server_http_requests_total{module="<模块>"}[5m])) by (route)` |
-| `HTTP 错误率` | timeseries | `sum(rate(server_http_requests_total{status_class="5xx",module="<模块>"}[5m])) / sum(rate(server_http_requests_total{module="<模块>"}[5m])) * 100` |
-| `HTTP 延迟 (P99)` | timeseries | `histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module="<模块>"}[5m])) by (le, route)) * 1000` |
+| `HTTP QPS` | timeseries | `sum(rate(server_http_requests_total{module="<模块>"}[5m])) by (route, method) > 0` |
+| `HTTP 错误率` | timeseries | `sum(rate(server_http_requests_total{status_class="5xx",module="<模块>"}[5m])) by (route, method) / sum(rate(server_http_requests_total{module="<模块>"}[5m])) by (route, method) * 100` |
+| `HTTP 延迟 (P99)` | timeseries | `histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module="<模块>"}[5m])) by (le, route, method)) * 1000` |
 
 > `<模块>` 为 dashboard 所属模块（auth / user / photo），由 metrics 中间件的 `module`
 > 标签提供（按路由前缀归类，详见 metrics-naming.md）。**system dashboard 的 HTTP 行
 > 不加 `module` 过滤**，保留全局视角。
 >
-> HTTP 延迟面板仅保留 **P99 汇总**（图例 `{{route}}`）；P50/P95/P99 的详细分位数
+> 三个面板均按 `route` + `method` 分组（图例 `{{method}} {{route}}`，如 `GET /photo/:id`），
+> 区分同一路径下的不同请求方式；QPS 面板以 `> 0` 过滤零流量序列，错误率面板只对实际有请求的
+> route+method 组合出图，均不显示无流量的图例项。
+> HTTP 延迟面板仅保留 **P99 汇总**；P50/P95/P99 的详细分位数
 > 见各操作下方的耗时面板。
 > 系统指标的点号转下划线；counter 以 `_total` 结尾（`server_http_requests_total`），
 > 满足 Prometheus 命名约定。业务冒号指标保留原名。
@@ -332,6 +335,9 @@ Auth 模块监控
 
 ## 更新记录
 
+- 2026-09-15: HTTP 请求汇总行（QPS / 错误率 / 延迟）改为按 `route` + `method` 分组，图例
+  `{{method}} {{route}}`，区分同一路径下的不同请求方式；QPS 面板过滤零流量序列；system dashboard
+  图例改为不可见，与模块 dashboard 一致。
 - 2026-09-12: 移除错误分类系统，不再生成错误分布面板（删除 ops 的 `errors` 字段与
   对应面板规范）；补充「生成链路（唯一事实来源）」与 ops 条目 schema；耗时单位统一为
   `ms`、禁止 µs（修正 cache 面板单位混用）；新增新增/修改检查清单；修正示例中的失效
