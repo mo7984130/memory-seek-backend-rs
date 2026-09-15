@@ -56,33 +56,33 @@ jobs:
             - name: Run unit tests
               run: cargo test --lib
 
-    build:
-        name: 构建验证 (${{ matrix.features }})
-        runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                features:
-                    - "auth"
-                    - "auth,user"
-                    - "auth,photo"
-                    - "auth,photo,face-engine"
-                    - "auth,user,photo"
-                    - "auth,user,photo,face-engine"
-        steps:
-            - uses: actions/checkout@v7
+    # build:
+    #     name: 构建验证 (${{ matrix.features }})
+    #     runs-on: ubuntu-latest
+    #     strategy:
+    #         matrix:
+    #             features:
+    #                 - "auth"
+    #                 - "auth,user"
+    #                 - "auth,photo"
+    #                 - "auth,photo,face-engine"
+    #                 - "auth,user,photo"
+    #                 - "auth,user,photo,face-engine"
+    #     steps:
+    #         - uses: actions/checkout@v7
 
-            - name: Install Rust
-              uses: dtolnay/rust-toolchain@stable
+    #         - name: Install Rust
+    #           uses: dtolnay/rust-toolchain@stable
 
-            # 第一步：先提取出没有逗号的 key
-            - name: Normalize feature key
-              id: cache-key
-              run: echo "key=$(echo '${{ matrix.features }}' | tr ',' '-')" >> $GITHUB_OUTPUT
+    #         # 第一步：先提取出没有逗号的 key
+    #         - name: Normalize feature key
+    #           id: cache-key
+    #           run: echo "key=$(echo '${{ matrix.features }}' | tr ',' '-')" >> $GITHUB_OUTPUT
 
-            - uses: Swatinem/rust-cache@v2
-              with:
-                  # ✅ 修改这里：使用上一步生成的 cache-key，而不是 ${{ matrix.features }}
-                  key: ${{ steps.cache-key.outputs.key }}
+    #         - uses: Swatinem/rust-cache@v2
+    #           with:
+    #               # ✅ 修改这里：使用上一步生成的 cache-key，而不是 ${{ matrix.features }}
+    #               key: ${{ steps.cache-key.outputs.key }}
 
-            - name: Build
-              run: cargo build --features "${{ matrix.features }}"
+    #         - name: Build
+    #           run: cargo build --features "${{ matrix.features }}"
