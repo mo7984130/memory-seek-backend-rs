@@ -16,14 +16,13 @@ members = [
     "domains/backup",
     "server",
     "tests/e2e",
-    # "tools/bench-support", "tests/e2e",
 ]
 
 [profile.release]
 opt-level = 3
 debug = false
-# debug = 2
 strip = "symbols"
+# debug = 2
 # strip = false
 debug-assertions = false
 overflow-checks = false
