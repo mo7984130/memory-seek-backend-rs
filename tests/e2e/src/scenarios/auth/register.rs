@@ -43,7 +43,9 @@ impl Scenario for RegisterScenario {
         let email = format!("e2e_reg_{}_{}@test.com", task.index, task.round);
 
         ctx.client
-            .post("/auth/verification-codes", json!({ "email": email }))
+            .request(reqwest::Method::POST, "/auth/verification-codes")
+            .json_unwrap(&json!({ "email": email }))
+            .send_checked()
             .await?;
         let code = ctx.wait_mailhog_code(&email).await?;
         Ok(RegisterSetup {
@@ -59,18 +61,17 @@ impl Scenario for RegisterScenario {
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .post(
-                "/auth/register",
-                json!({
-                    "username": setup.username,
-                    "email": setup.email,
-                    "password": "Test123456",
-                    "confirmPassword": "Test123456",
-                    "nickname": "E2E",
-                    "inviterCode": "DRIFTC",
-                    "emailVerifyCode": setup.code,
-                }),
-            )
+            .request(reqwest::Method::POST, "/auth/register")
+            .json_unwrap(&json!({
+                "username": setup.username,
+                "email": setup.email,
+                "password": "Test123456",
+                "confirmPassword": "Test123456",
+                "nickname": "E2E",
+                "inviterCode": "DRIFTC",
+                "emailVerifyCode": setup.code,
+            }))
+            .send_checked()
             .await?
             .json::<Self::Output>()
             .await?
@@ -93,7 +94,7 @@ impl Scenario for RegisterScenario {
     }
 }
 
-register_scenario!(RegisterScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(RegisterScenario);
 
 /// 注册失败 - 邮箱验证码错误: 期望 400。
 #[derive(Default)]
@@ -113,18 +114,17 @@ impl Scenario for RegisterInvalidCodeScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .post_raw(
-                "/auth/register",
-                json!({
-                    "username": format!("e2e_inv_{}", task.index),
-                    "email": format!("e2e_inv_{}@test.com", task.index),
-                    "password": "Test123456",
-                    "confirmPassword": "Test123456",
-                    "nickname": "E2E",
-                    "inviterCode": "DRIFTC",
-                    "emailVerifyCode": "000000",
-                }),
-            )
+            .request(reqwest::Method::POST, "/auth/register")
+            .json_unwrap(&json!({
+                "username": format!("e2e_inv_{}", task.index),
+                "email": format!("e2e_inv_{}@test.com", task.index),
+                "password": "Test123456",
+                "confirmPassword": "Test123456",
+                "nickname": "E2E",
+                "inviterCode": "DRIFTC",
+                "emailVerifyCode": "000000",
+            }))
+            .send()
             .await?
             .json::<Self::Output>()
             .await
@@ -141,7 +141,4 @@ impl Scenario for RegisterInvalidCodeScenario {
     }
 }
 
-register_scenario!(
-    RegisterInvalidCodeScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(RegisterInvalidCodeScenario);

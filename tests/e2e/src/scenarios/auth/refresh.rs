@@ -41,10 +41,12 @@ impl Scenario for RefreshScenario {
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let login: SucR<LoginResponse> = ctx
             .client
-            .post(
-                "/auth/login",
-                json!({ "account": format!("loadtest_{}", task.index + 1), "password": "Test123456" }),
-            )
+            .request(reqwest::Method::POST, "/auth/login")
+            .json_unwrap(&json!({
+                "account": format!("loadtest_{}", task.index + 1),
+                "password": "Test123456"
+            }))
+            .send_checked()
             .await?
             .json()
             .await?;
@@ -92,7 +94,7 @@ impl Scenario for RefreshScenario {
     }
 }
 
-register_scenario!(RefreshScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(RefreshScenario);
 
 /// 刷新失败 - 伪造 refresh_token: 期望 401。
 #[derive(Default)]
@@ -135,7 +137,4 @@ impl Scenario for RefreshInvalidTokenScenario {
     }
 }
 
-register_scenario!(
-    RefreshInvalidTokenScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(RefreshInvalidTokenScenario);

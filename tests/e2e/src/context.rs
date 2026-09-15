@@ -56,7 +56,11 @@ impl Context {
     pub async fn mailhog_latest_code(&self, email: &str) -> Result<String, HttpError> {
         let messages = self
             .mailhog
-            .get("/api/v2/messages?limit=100&order=desc")
+            .request(
+                reqwest::Method::GET,
+                "/api/v2/messages?limit=100&order=desc",
+            )
+            .send_checked()
             .await?
             .json::<MailHogMessages>()
             .await?;

@@ -91,10 +91,7 @@ impl Scenario for GetPhotoInfoScenario {
     }
 }
 
-register_scenario!(
-    GetPhotoInfoScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetPhotoInfoScenario);
 
 /// 获取不存在的照片: 期望 400(照片不存在)。
 #[derive(Default)]
@@ -138,7 +135,4 @@ impl Scenario for GetPhotoInfoNotFoundScenario {
     }
 }
 
-register_scenario!(
-    GetPhotoInfoNotFoundScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetPhotoInfoNotFoundScenario);

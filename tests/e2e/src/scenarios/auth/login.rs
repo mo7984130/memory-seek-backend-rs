@@ -29,10 +29,12 @@ impl Scenario for LoginScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .post(
-                "/auth/login",
-                json!({ "account": format!("loadtest_{}", task.index + 1), "password": "Test123456" }),
-            )
+            .request(reqwest::Method::POST, "/auth/login")
+            .json_unwrap(&json!({
+                "account": format!("loadtest_{}", task.index + 1),
+                "password": "Test123456"
+            }))
+            .send_checked()
             .await?
             .json::<Self::Output>()
             .await?
@@ -55,7 +57,7 @@ impl Scenario for LoginScenario {
     }
 }
 
-register_scenario!(LoginScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(LoginScenario);
 
 /// 登录失败 - 密码错误: 期望 400 业务错误。
 #[derive(Default)]
@@ -75,10 +77,9 @@ impl Scenario for LoginWrongPasswordScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .post_raw(
-                "/auth/login",
-                json!({ "account": "loadtest_1", "password": "WrongPass1" }),
-            )
+            .request(reqwest::Method::POST, "/auth/login")
+            .json_unwrap(&json!({ "account": "loadtest_1", "password": "WrongPass1" }))
+            .send()
             .await?
             .json::<Self::Output>()
             .await
@@ -95,10 +96,7 @@ impl Scenario for LoginWrongPasswordScenario {
     }
 }
 
-register_scenario!(
-    LoginWrongPasswordScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(LoginWrongPasswordScenario);
 
 /// 登录失败 - 账号不存在: 期望 400(与密码错误响应一致, 防用户枚举)。
 #[derive(Default)]
@@ -118,10 +116,12 @@ impl Scenario for LoginUnknownAccountScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .post_raw(
-                "/auth/login",
-                json!({ "account": format!("nobody_{}", task.index), "password": "Test123456" }),
-            )
+            .request(reqwest::Method::POST, "/auth/login")
+            .json_unwrap(&json!({
+                "account": format!("nobody_{}", task.index),
+                "password": "Test123456"
+            }))
+            .send()
             .await?
             .json::<Self::Output>()
             .await
@@ -138,7 +138,4 @@ impl Scenario for LoginUnknownAccountScenario {
     }
 }
 
-register_scenario!(
-    LoginUnknownAccountScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(LoginUnknownAccountScenario);

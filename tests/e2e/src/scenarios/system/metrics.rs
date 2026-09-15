@@ -35,7 +35,13 @@ impl Scenario for MetricsScenario {
         _task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        Ok(ctx.client.get("/metrics").await?.text().await?)
+        Ok(ctx
+            .client
+            .request(reqwest::Method::GET, "/metrics")
+            .send_checked()
+            .await?
+            .text()
+            .await?)
     }
 
     async fn validate(
@@ -53,4 +59,4 @@ impl Scenario for MetricsScenario {
     }
 }
 
-register_scenario!(MetricsScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(MetricsScenario);

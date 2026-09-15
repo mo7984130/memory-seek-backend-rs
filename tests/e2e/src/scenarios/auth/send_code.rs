@@ -25,7 +25,9 @@ impl Scenario for SendCodeScenario {
     ) -> Result<Self::Output, Self::Error> {
         let email = format!("e2e_{}@test.com", task.index);
         ctx.client
-            .post("/auth/verification-codes", json!({ "email": email }))
+            .request(reqwest::Method::POST, "/auth/verification-codes")
+            .json_unwrap(&json!({ "email": email }))
+            .send_checked()
             .await?;
         Ok(email)
     }
@@ -54,4 +56,4 @@ impl Scenario for SendCodeScenario {
     }
 }
 
-register_scenario!(SendCodeScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(SendCodeScenario);

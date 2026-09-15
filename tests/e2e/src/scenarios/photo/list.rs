@@ -92,10 +92,7 @@ impl Scenario for GetPhotosCursorScenario {
     }
 }
 
-register_scenario!(
-    GetPhotosCursorScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetPhotosCursorScenario);
 
 /// 未携带认证头: 期望 401。
 #[derive(Default)]
@@ -116,7 +113,8 @@ impl Scenario for GetPhotosCursorUnauthorizedScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .get_raw("/photo")
+            .request(reqwest::Method::GET, "/photo")
+            .send()
             .await?
             .json::<Self::Output>()
             .await
@@ -133,10 +131,7 @@ impl Scenario for GetPhotosCursorUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    GetPhotosCursorUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GetPhotosCursorUnauthorizedScenario);
 
 /// 不存在的 MD5 占位(种子 md5 为 32 位纯数字, 不会与之相等)。
 const MISSING_MD5: &str = "e2e_missing_md5_000000000000000000";
@@ -196,7 +191,7 @@ impl Scenario for Md5sExistScenario {
     }
 }
 
-register_scenario!(Md5sExistScenario, mode = memseek_test::RunMode::Times(32));
+register_scenario!(Md5sExistScenario);
 
 /// 时间线统计: 至少包含当前月份且计数为正。
 #[derive(Default)]
@@ -246,7 +241,4 @@ impl Scenario for TimelineStatsScenario {
     }
 }
 
-register_scenario!(
-    TimelineStatsScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(TimelineStatsScenario);

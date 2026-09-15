@@ -91,10 +91,7 @@ impl Scenario for UploadAvatarScenario {
     }
 }
 
-register_scenario!(
-    UploadAvatarScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(UploadAvatarScenario);
 
 #[derive(Default)]
 pub struct ReplaceSetup {
@@ -178,10 +175,7 @@ impl Scenario for UploadAvatarReplaceScenario {
     }
 }
 
-register_scenario!(
-    UploadAvatarReplaceScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(UploadAvatarReplaceScenario);
 
 /// 非法文件类型: 期望 400(文件校验失败).
 #[derive(Default)]
@@ -227,10 +221,7 @@ impl Scenario for UploadAvatarInvalidFileScenario {
     }
 }
 
-register_scenario!(
-    UploadAvatarInvalidFileScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(UploadAvatarInvalidFileScenario);
 
 /// 未携带认证头: 期望 401.
 #[derive(Default)]
@@ -270,10 +261,7 @@ impl Scenario for UploadAvatarUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    UploadAvatarUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(UploadAvatarUnauthorizedScenario);
 
 #[cfg(test)]
 mod tests {

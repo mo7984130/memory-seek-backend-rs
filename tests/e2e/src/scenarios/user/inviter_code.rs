@@ -57,10 +57,7 @@ impl Scenario for GenerateInviterCodeScenario {
     }
 }
 
-register_scenario!(
-    GenerateInviterCodeScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GenerateInviterCodeScenario);
 
 /// 未携带认证头: 期望 401.
 #[derive(Default)]
@@ -81,7 +78,9 @@ impl Scenario for GenerateInviterCodeUnauthorizedScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .post_raw("/user/inviter-code", json!({}))
+            .request(reqwest::Method::POST, "/user/inviter-code")
+            .json_unwrap(&json!({}))
+            .send()
             .await?
             .json::<Self::Output>()
             .await
@@ -98,7 +97,4 @@ impl Scenario for GenerateInviterCodeUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    GenerateInviterCodeUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(GenerateInviterCodeUnauthorizedScenario);

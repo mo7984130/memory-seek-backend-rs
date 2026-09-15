@@ -48,7 +48,11 @@ impl Scenario for DownloadOriginalScenario {
     ) -> Result<Self::Output, Self::Error> {
         let resp = ctx
             .client
-            .get(&format!("/photo/{}", setup.original_token))
+            .request(
+                reqwest::Method::GET,
+                &format!("/photo/{}", setup.original_token),
+            )
+            .send_checked()
             .await?;
         Ok(resp.bytes().await?.to_vec())
     }
@@ -63,10 +67,7 @@ impl Scenario for DownloadOriginalScenario {
     }
 }
 
-register_scenario!(
-    DownloadOriginalScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(DownloadOriginalScenario);
 
 /// 非法 token: 期望非 2xx(token 解密失败)。
 #[derive(Default)]
@@ -88,7 +89,8 @@ impl Scenario for DownloadInvalidTokenScenario {
     ) -> Result<Self::Output, Self::Error> {
         Ok(ctx
             .client
-            .get_raw("/photo/not_a_valid_image_token")
+            .request(reqwest::Method::GET, "/photo/not_a_valid_image_token")
+            .send()
             .await?
             .status()
             .as_u16())
@@ -104,7 +106,4 @@ impl Scenario for DownloadInvalidTokenScenario {
     }
 }
 
-register_scenario!(
-    DownloadInvalidTokenScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(DownloadInvalidTokenScenario);

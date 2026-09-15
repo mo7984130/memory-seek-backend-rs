@@ -72,10 +72,7 @@ impl Scenario for ChangeNicknameScenario {
     }
 }
 
-register_scenario!(
-    ChangeNicknameScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(ChangeNicknameScenario);
 
 /// 昵称含非法字符: 期望 400.
 #[derive(Default)]
@@ -120,10 +117,7 @@ impl Scenario for ChangeNicknameInvalidScenario {
     }
 }
 
-register_scenario!(
-    ChangeNicknameInvalidScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(ChangeNicknameInvalidScenario);
 
 /// 未携带认证头: 期望 401.
 #[derive(Default)]
@@ -163,7 +157,4 @@ impl Scenario for ChangeNicknameUnauthorizedScenario {
     }
 }
 
-register_scenario!(
-    ChangeNicknameUnauthorizedScenario,
-    mode = memseek_test::RunMode::Times(32)
-);
+register_scenario!(ChangeNicknameUnauthorizedScenario);
