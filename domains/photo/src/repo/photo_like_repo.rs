@@ -2,8 +2,10 @@ use audit::{AuditEvent, AuditRecorder};
 use common::{
     db_transaction,
     error::{AppError, ContextualError, contextual::Result},
+    metrics_name,
     time::DateTime,
     types::CursorPage,
+    utils::MetricsTimerExt,
 };
 use types::{
     auth::user::UserId,
@@ -45,6 +47,7 @@ impl PhotoLikeRepo {
             .await?;
             Ok(())
         })
+        .timed(metrics_name!("db_transaction"))
         .await?;
 
         PhotoRepo::cache_photo_like_status(state, user_id, photo_id, true).await;
@@ -77,6 +80,7 @@ impl PhotoLikeRepo {
             .await?;
             Ok(())
         })
+        .timed(metrics_name!("db_transaction"))
         .await?;
         PhotoRepo::cache_photo_like_status(state, user_id, photo_id, false).await;
         PhotoRepo::invalidate_photo_info(state, photo_id).await;
@@ -89,6 +93,8 @@ impl PhotoLikeRepo {
         user_id: UserId,
         req: &LikedPhotosQuery,
     ) -> Result<CursorPage<(PhotoId, DateTime), TimeIdCursor<PhotoId>>> {
-        PhotoLikeMapper::query_user_liked_photo_ids(&state.db, user_id, &req.cursor, req.size).await
+        PhotoLikeMapper::query_user_liked_photo_ids(&state.db, user_id, &req.cursor, req.size)
+            .timed(metrics_name!("query_ids"))
+            .await
     }
 }

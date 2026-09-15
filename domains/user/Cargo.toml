@@ -1,11 +1,11 @@
 [package]
 name = "user"
-version = "0.1.21"
+version = "0.2.0"
 edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "multi-level-cache/metrics"]
+metrics = ["common/metrics", "multi-level-cache/metrics", "oss/metrics"]
 controller = ["dep:axum", "common/axum"]
 audit = ["audit/recording"]
 

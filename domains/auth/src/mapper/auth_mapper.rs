@@ -1,8 +1,8 @@
-use common::ext::ToOk;
+use common::ext::{Apply, ToOk};
 use common::{
     DbConn,
     error::{AppError, ContextualError, contextual::Result},
-    time::DateTime,
+    time::{DateTime, now},
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, DbErr, EntityTrait,
@@ -29,18 +29,21 @@ pub struct RefreshTokenValidation {
 impl AuthMapper {
     /// 插入用户及其认证记录.
     pub async fn insert(db: &impl DbConn, param: AuthInsertParam) -> Result<UserRecord> {
-        let model = ActiveModel {
+        ActiveModel {
             username: Set(param.username),
             email: Set(param.email),
             password: Set(param.password),
             nickname: Set(param.nickname),
             inviter: Set(param.inviter),
+            created_at: Set(now()),
+            updated_at: Set(now()),
             ..Default::default()
         }
         .insert(db)
         .await
-        .map_err(Self::handle_user_insert_err)?;
-        Ok(UserRecord::from(model))
+        .map_err(Self::handle_user_insert_err)?
+        .apply(UserRecord::from)
+        .to_ok()
     }
 
     /// 将 SeaORM 插入用户时的 DbErr 转换为 AppError

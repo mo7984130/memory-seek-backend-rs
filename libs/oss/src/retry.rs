@@ -9,6 +9,12 @@ use std::future::Future;
 
 use crate::error::OssError;
 
+/// 构造 OSS 指标名：`{crate}:{op}:{step}`。
+#[cfg(feature = "metrics")]
+pub(crate) fn metric_name(op: &str, step: &str) -> String {
+    format!("{}:{}:{}", env!("CARGO_PKG_NAME"), op, step)
+}
+
 /// 429 指数退避延迟表：第 1~4 次失败分别等待 100ms / 500ms / 2s / 5s
 pub const RETRY_DELAYS: [Duration; 4] = [
     Duration::from_millis(100),
@@ -37,13 +43,22 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, OssError>>,
 {
+    // 每个 op 调用埋 requests / duration_seconds，重试与失败分别埋 retries / errors。
+    #[cfg(feature = "metrics")]
+    let _timer = common::utils::MetricsTimer::start(metric_name(op, "duration_seconds"));
+    #[cfg(feature = "metrics")]
+    common::metrics::counter!(metric_name(op, "requests")).increment(1);
+    #[cfg(not(feature = "metrics"))]
     let _ = op;
+
     let mut attempts = 0usize;
     loop {
         match f().await {
             Ok(value) => return Ok(value),
             Err(err) if err.is_rate_limited() && attempts < delays.len() => {
                 let delay = delays[attempts];
+                #[cfg(feature = "metrics")]
+                common::metrics::counter!(metric_name(op, "retries")).increment(1);
                 tracing::debug!(
                     key = %key,
                     attempt = attempts + 1,
@@ -54,7 +69,11 @@ where
                 tokio::time::sleep(delay).await;
                 attempts += 1;
             }
-            Err(err) => return Err(err),
+            Err(err) => {
+                #[cfg(feature = "metrics")]
+                common::metrics::counter!(metric_name(op, "errors")).increment(1);
+                return Err(err);
+            }
         }
     }
 }

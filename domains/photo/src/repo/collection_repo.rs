@@ -4,7 +4,9 @@ use common::{
     error::contextual::ext::UintExt,
     error::{AppError, ContextualError, contextual::Result},
     ext::ToErr,
+    metrics_name,
     types::CursorPage,
+    utils::MetricsTimerExt,
 };
 use types::photo::{
     collection::CollectionRecord,
@@ -32,7 +34,9 @@ impl CollectionRepo {
         user_id: UserId,
         photo_id: PhotoId,
     ) -> Result<Vec<CollectionId>> {
-        CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.db, user_id, photo_id).await
+        CollectionPhotoMapper::query_collection_ids_by_photo_id(&state.db, user_id, photo_id)
+            .timed(metrics_name!("query_by_photo_id"))
+            .await
     }
 
     /// 查询收藏夹id 和 描述
@@ -40,7 +44,9 @@ impl CollectionRepo {
         state: &PhotoState,
         ids: &[CollectionId],
     ) -> Result<Vec<(CollectionId, String)>> {
-        CollectionMapper::query_id_and_name_by_ids(&state.db, ids).await
+        CollectionMapper::query_id_and_name_by_ids(&state.db, ids)
+            .timed(metrics_name!("query_collection_briefs"))
+            .await
     }
 
     /// 游标查询收藏夹中的照片Id
@@ -57,6 +63,7 @@ impl CollectionRepo {
             req.cursor.as_ref(),
             req.size,
         )
+        .timed(metrics_name!("query_photo_ids"))
         .await
     }
 
@@ -65,7 +72,9 @@ impl CollectionRepo {
         user_id: UserId,
         collection_id: CollectionId,
     ) -> Result<()> {
-        CollectionMapper::ensure_belong(&state.db, user_id, collection_id).await
+        CollectionMapper::ensure_belong(&state.db, user_id, collection_id)
+            .timed(metrics_name!("ensure_belong"))
+            .await
     }
 
     pub async fn ensure_belong_with_return(
@@ -73,7 +82,9 @@ impl CollectionRepo {
         user_id: UserId,
         collection_id: CollectionId,
     ) -> Result<CollectionRecord> {
-        CollectionMapper::ensure_belong_with_return(&state.db, user_id, collection_id).await
+        CollectionMapper::ensure_belong_with_return(&state.db, user_id, collection_id)
+            .timed(metrics_name!("ensure_belong_with_return"))
+            .await
     }
 
     /// 添加相册照片
@@ -110,6 +121,7 @@ impl CollectionRepo {
             .await?;
             Ok(count)
         })
+        .timed(metrics_name!("db_transaction"))
         .await
     }
     /// 移除收藏夹照片.
@@ -167,6 +179,7 @@ impl CollectionRepo {
             .await?;
             Ok(rows)
         })
+        .timed(metrics_name!("db_transaction"))
         .await
     }
 
@@ -175,7 +188,9 @@ impl CollectionRepo {
         state: &PhotoState,
         user_id: UserId,
     ) -> Result<Vec<CollectionRecord>> {
-        CollectionMapper::query_by_user_id(&state.db, user_id).await
+        CollectionMapper::query_by_user_id(&state.db, user_id)
+            .timed(metrics_name!("query_by_user_id"))
+            .await
     }
 
     /// 创建收藏夹.
@@ -198,6 +213,7 @@ impl CollectionRepo {
             .await?;
             Ok(collection)
         })
+        .timed(metrics_name!("db_insert"))
         .await
     }
 
@@ -229,6 +245,7 @@ impl CollectionRepo {
                 .to_err();
             }
         })
+        .timed(metrics_name!("db_update"))
         .await?;
 
         Ok(())
@@ -263,6 +280,7 @@ impl CollectionRepo {
             .await?;
             Ok(())
         })
+        .timed(metrics_name!("db_transaction"))
         .await
     }
 }

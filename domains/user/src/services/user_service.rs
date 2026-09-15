@@ -182,6 +182,7 @@ pub async fn update_avatar(
             state
                 .s3_client
                 .delete(&new_key)
+                .timed(metrics_name!("s3_delete"))
                 .await
                 .into_contextual()
                 .emit_if_err();
@@ -270,7 +271,7 @@ pub async fn change_password(
         .await?;
 
     // 登出. 清除token
-    logout(state, user_id).await?;
+    do_logout(state, user_id).await?;
 
     Ok(())
 }
@@ -292,6 +293,14 @@ pub async fn change_password(
     fields(user_id = %user_id)
 )]
 pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
+    do_logout(state, user_id).await
+}
+
+/// 登出清理逻辑。
+///
+/// 不携带操作级指标，供 `logout` 与 `change_password` 复用，避免内部调用重复计入
+/// `user:logout:*`。
+async fn do_logout(state: &UserState, user_id: UserId) -> Result<()> {
     state.repo.logout(user_id).await?;
 
     Ok(())

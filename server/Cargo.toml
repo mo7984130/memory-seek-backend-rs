@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "0.2.0"
+version = "0.4.1"
 edition = "2024"
 
 [[bin]]
@@ -28,6 +28,9 @@ metrics = [
     "user?/metrics",
     "auth?/metrics",
     "backup?/metrics",
+    "audit?/metrics",
+    "oss?/metrics",
+    "email?/metrics",
 ]
 face-engine = ["dep:insight-face-rs", "photo/face", "backup"]
 audit-recording = ["auth?/audit", "user?/audit", "photo?/audit", "backup?/audit"]

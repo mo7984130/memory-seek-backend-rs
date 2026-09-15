@@ -1,4 +1,5 @@
-use common::{DbConn, Result, ext::ToOk, types::CursorPage};
+use common::utils::MetricsTimerExt;
+use common::{DbConn, Result, ext::ToOk, metrics_name, types::CursorPage};
 use types::audit::{
     AuditId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem, AuditTopQuery,
 };
@@ -9,6 +10,8 @@ use crate::mapper::AuditMapper;
 pub struct AuditQueryer;
 
 impl AuditQueryer {
+    #[common_macros::metered]
+    #[tracing::instrument(skip_all)]
     pub async fn query_stats(
         db: &impl DbConn,
         req: &AuditStatsQuery,
@@ -21,15 +24,19 @@ impl AuditQueryer {
             req.end,
             req.granularity.as_trunc(),
         )
+        .timed(metrics_name!("db_query"))
         .await?
         .into_iter()
         .map(|(bucket, count)| AuditStatsItem { bucket, count })
         .collect())
     }
 
+    #[common_macros::metered]
+    #[tracing::instrument(skip_all)]
     pub async fn query_top(db: &impl DbConn, req: &AuditTopQuery) -> Result<Vec<AuditTopItem>> {
         Ok(
             AuditMapper::query_top_targets(db, &req.event_type, &req.target_type, req.limit)
+                .timed(metrics_name!("db_query"))
                 .await?
                 .into_iter()
                 .map(|(target_id, count)| AuditTopItem { target_id, count })
@@ -37,6 +44,8 @@ impl AuditQueryer {
         )
     }
 
+    #[common_macros::metered]
+    #[tracing::instrument(skip_all)]
     pub async fn query_events(
         db: &impl DbConn,
         req: &AuditQuery,
@@ -50,6 +59,7 @@ impl AuditQueryer {
             &req.cursor,
             req.size,
         )
+        .timed(metrics_name!("db_query"))
         .await?
         .map_records(|records| records.into_iter().map(AuditItem::from).collect())
         .with_next_cursor(|record| TimeIdCursor {

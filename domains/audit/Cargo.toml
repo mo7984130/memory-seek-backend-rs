@@ -1,19 +1,24 @@
 [package]
 name = "audit"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 [features]
 default = []
 recording = ["common/snowflake"]
+metrics = ["common/metrics"]
 controller = ["dep:axum", "common/axum"]
 
 [dependencies]
-common = { path = "../../common", features = ["snowflake"] }
+common = { path = "../../common", features = ["snowflake", "metrics"] }
 types = { path = "../../types", features = ["orm"] }
+common_macros.path = "../../libs/common_macros"
 
 # controller 需要
 axum = { workspace = true, optional = true }
 
 # mapper 需要
 sea-orm = { workspace = true }
+
+# metrics 埋点需要
+tracing.workspace = true

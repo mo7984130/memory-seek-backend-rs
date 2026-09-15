@@ -3,8 +3,9 @@ use common::{
     DbConn as ConnectionTrait, db_transaction,
     error::{AppError, ContextualError, contextual::Result},
     ext::ToOk,
+    metrics_name,
     types::CursorPage,
-    utils::DbUtils,
+    utils::{DbUtils, MetricsTimerExt},
 };
 use sea_orm::{DbBackend, EntityName, Statement};
 use types::{
@@ -28,7 +29,9 @@ pub struct FaceRepo;
 impl FaceRepo {
     /// 批量插入人脸.
     pub async fn insert_faces(state: &PhotoState, faces: Vec<NewFaceRecord>) -> Result<()> {
-        FaceMapper::inserts(&state.db, faces).await?;
+        FaceMapper::inserts(&state.db, faces)
+            .timed(metrics_name!("db_insert"))
+            .await?;
 
         Ok(())
     }
@@ -102,6 +105,7 @@ impl FaceRepo {
 
             Ok(())
         })
+        .timed(metrics_name!("db_transaction"))
         .await?;
 
         Ok(())
@@ -116,7 +120,9 @@ impl FaceRepo {
         size: u64,
         previous_id: PhotoId,
     ) -> Result<Vec<(PhotoId, String)>> {
-        FaceMapper::query_face_compute_photos(&state.db, full, size, previous_id).await
+        FaceMapper::query_face_compute_photos(&state.db, full, size, previous_id)
+            .timed(metrics_name!("query"))
+            .await
     }
 
     /// 查询人脸及其人物名称
@@ -124,13 +130,16 @@ impl FaceRepo {
         state: &PhotoState,
         photo_id: PhotoId,
     ) -> Result<(Vec<FaceRecord>, std::collections::HashMap<PersonId, String>)> {
-        let faces = FaceMapper::query_by_photo_id(&state.db, photo_id).await?;
+        let faces = FaceMapper::query_by_photo_id(&state.db, photo_id)
+            .timed(metrics_name!("query_by_photo_id"))
+            .await?;
         let ids = faces
             .iter()
             .filter_map(|face| face.person_id)
             // 去重
             .collect::<std::collections::HashSet<_>>();
         let names = PersonMapper::query_id_and_name_by_ids(&state.db, ids)
+            .timed(metrics_name!("query_id_and_name_by_ids"))
             .await?
             .into_iter()
             .collect();
@@ -139,7 +148,9 @@ impl FaceRepo {
 
     /// 查询未分配人脸的人脸记录.
     pub async fn lock_unassigned_faces(state: &PhotoState) -> Result<Vec<FaceRecord>> {
-        FaceMapper::lock_unassigned_faces(&state.db).await
+        FaceMapper::lock_unassigned_faces(&state.db)
+            .timed(metrics_name!("query_unassigned_faces"))
+            .await
     }
 
     /// 游标查询包含未分配人脸的照片 ID.
@@ -152,6 +163,7 @@ impl FaceRepo {
             param.cursor.clone(),
             param.size,
         )
+        .timed(metrics_name!("query_unassigned_face_photo_ids"))
         .await
     }
 
@@ -161,7 +173,9 @@ impl FaceRepo {
         person_id: PersonId,
         req: &PersonPhotoCursorParam,
     ) -> Result<CursorPage<PhotoId, ()>> {
-        FaceMapper::query_person_photo_ids(&state.db, person_id, req.cursor.clone(), req.size).await
+        FaceMapper::query_person_photo_ids(&state.db, person_id, req.cursor.clone(), req.size)
+            .timed(metrics_name!("query_photo_ids"))
+            .await
     }
 }
 
@@ -200,6 +214,7 @@ impl FaceRepo {
             .await?;
             Ok(affected)
         })
+        .timed(metrics_name!("db_transaction"))
         .await?
         .to_ok()
     }
@@ -228,6 +243,7 @@ impl FaceRepo {
             .await?;
             Ok(())
         })
+        .timed(metrics_name!("db_transaction"))
         .await?;
 
         Ok(())
@@ -239,6 +255,7 @@ impl FaceRepo {
             state.backup_state.clone(),
             &[face::Entity.table_name(), person::Entity.table_name()],
         )
+        .timed(metrics_name!("backup"))
         .await
         .map_err(|error| {
             ContextualError::error(

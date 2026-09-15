@@ -15,14 +15,14 @@ members = [
     "domains/photo",
     "domains/backup",
     "server",
-    # "tools/bench-support", "tests/e2e",
+    "tests/e2e",
 ]
 
 [profile.release]
 opt-level = 3
 debug = false
-# debug = 2
 strip = "symbols"
+# debug = 2
 # strip = false
 debug-assertions = false
 overflow-checks = false
@@ -83,9 +83,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 s3 = { package = "rust-s3", version = "0.37", default-features = false, features = ["tokio-rustls-tls", "fail-on-err"] }
 bytes = "1.10"
 linkme = "0.3"
-
-# 性能测试
-criterion = { version = "0.5", features = ["async_tokio"] }
 
 # Snowflake ID
 snowflaked = { version = "1.0.3", features = ["sync"] }

@@ -19,7 +19,9 @@ pub struct TimelineStatRepo;
 impl TimelineStatRepo {
     /// 记录新上传照片对应月份的时间线统计。
     pub async fn record_uploaded_photo(state: &PhotoState, created_at: DateTime) -> Result<()> {
-        TimelineStatMapper::incr_stat(&state.db, created_at).await?;
+        TimelineStatMapper::incr_stat(&state.db, created_at)
+            .timed(metrics_name!("db_update"))
+            .await?;
         Self::invalidate_cache(state).await;
         Ok(())
     }
@@ -29,7 +31,9 @@ impl TimelineStatRepo {
         txn: &DatabaseTransaction,
         created_ats: &[&DateTime],
     ) -> Result<()> {
-        TimelineStatMapper::decr_by_created_ats(txn, created_ats).await
+        TimelineStatMapper::decr_by_created_ats(txn, created_ats)
+            .timed(metrics_name!("db_update"))
+            .await
     }
 
     /// 获取统计。
@@ -66,6 +70,7 @@ impl TimelineStatRepo {
 )]
 impl TimelineStatRepo {
     /// 删除照片后失效月度统计缓存。
+    #[tracing::instrument(name = "delete_photos", skip_all)]
     async fn on_after_photo_delete(
         &self,
         state: Arc<PhotoState>,

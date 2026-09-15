@@ -36,6 +36,7 @@ mod entity {
         pub user_id: UserId,
 
         // 创建时间
+        #[sea_orm(default_expr = "sea_orm::sea_query::Expr::current_timestamp()")]
         pub created_at: DateTime,
     }
 

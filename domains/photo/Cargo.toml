@@ -1,11 +1,11 @@
 [package]
 name = "photo"
-version = "0.2.4"
+version = "0.3.4"
 edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "multi-level-cache/metrics"]
+metrics = ["common/metrics", "multi-level-cache/metrics", "oss/metrics"]
 controller = ["dep:axum", "common/axum"]
 audit = ["audit/recording"]
 face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]

@@ -1,5 +1,4 @@
 pub mod inc_counter;
-pub mod inc_error;
 pub mod metrics_group;
 pub mod metrics_name;
 pub mod metrics_success;

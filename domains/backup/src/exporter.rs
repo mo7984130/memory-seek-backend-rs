@@ -17,6 +17,10 @@ impl BinaryCopyExporter {
         table_name: &str,
         output_dir: &Path,
     ) -> Result<PathBuf> {
+        // 数据层计时：`backup:{op}:export`（{op} 取调用方 span 名，scheduled/manual）。
+        #[cfg(feature = "metrics")]
+        let _timer = common::utils::MetricsTimer::start(common::metrics_name!("export"));
+
         let output_path = output_dir.join(format!("{table_name}.copy.zst"));
 
         if let Some(parent) = output_path.parent() {

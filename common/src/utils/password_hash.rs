@@ -160,13 +160,19 @@ impl HashAlgorithm {
 
     /// 执行恒定时间的 dummy 验证，防止基于时序的用户枚举攻击
     ///
-    /// 当用户不存在时调用此方法，使响应时间与密码错误时保持一致，
+    /// 用户不存在时调用此方法，使响应时间与密码错误时保持一致，
     /// 从而阻止攻击者通过响应时间差异枚举有效用户
     pub fn dummy_verify() {
-        let _ = bcrypt::verify(
-            "dummy",
-            "$2b$12$QIgiYYcKC7dCwqhEmAX.duD4QA1t5Hgr9HAsmiawNdkXCdxZ8Dvea",
-        );
+        // 与真实验证路径(constants::PasswordHasher: argon2id m=16384, t=2, p=1)对齐,
+        // 对假密码做一次实际哈希, 使耗时与“验证真实存在用户密码”一致。
+        // 注意: 不能改用更慢/更快的算法(如 bcrypt cost 12),
+        // 否则时序差异反而暴露账号是否存在。
+        let _ = Self::Argon2id(Argon2idConfig {
+            m_cost: 16 * 1024,
+            t_cost: 2,
+            p_cost: 1,
+        })
+        .hash("dummy");
     }
 }
 

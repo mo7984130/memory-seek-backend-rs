@@ -10,7 +10,7 @@ use common::{
         },
     },
     ext::{ResultInspectErrAsync, ToOk},
-    inc_error, metrics_name, timed,
+    metrics_name, timed,
     types::CursorPage,
     utils::MetricsTimerExt,
 };
@@ -55,6 +55,7 @@ impl PhotoService {
         photo_id: PhotoId,
     ) -> Result<PhotoView> {
         Self::load_photos_info(state, user_id, &[photo_id])
+            .timed(metrics_name!("load_photos_info"))
             .await?
             .pop()
             .ok_or_warn(
@@ -139,7 +140,6 @@ impl PhotoService {
         let metadata = {
             timed!("validate_photo", {
                 FileValidator::validate_image(&file_data, &req.file_name, &req.content_type)
-                    .inspect_err(|_| inc_error!("validation"))
                     .map_err(|error| {
                         ContextualError::warn_without_source(
                             "file_validation_error",
@@ -165,11 +165,12 @@ impl PhotoService {
         };
         // MD5 去重校验
         if PhotoRepo::exists_by_md5(state.as_ref(), &md5_hash).await? {
-            return inc_error!("conflict" => ContextualError::warn_without_source(
+            return Err(ContextualError::warn_without_source(
                 "upload_photo:img_exist",
                 "图片已存在",
                 AppError::bad_request("图片已存在"),
-            ).emit());
+            )
+            .emit());
         }
 
         // 上传文件
@@ -179,7 +180,6 @@ impl PhotoService {
             .upload(&file_id, &file_data, &metadata.mime_type)
             .timed(metrics_name!("s3_upload"))
             .await
-            .inspect_err(|_| inc_error!("s3"))
             .into_contextual()?;
 
         // 更新数据库
@@ -207,7 +207,6 @@ impl PhotoService {
                 .emit_if_err();
         })
         .await
-        .inspect_err(|_| inc_error!("db"))
         .into_contextual()?;
 
         // 发布事件
@@ -248,6 +247,13 @@ impl PhotoService {
         // 查询属于用户的照片
         let photos =
             PhotoMapper::query_by_user_id_and_ids(&state.db, user_id, &req.photo_ids).await?;
+        if photos.len() != req.photo_ids.len() {
+            Err(ContextualError::warn_without_source(
+                "user_del_not_belong_photo",
+                "用户尝试删除不属于自己的照片 或 照片不存在",
+                AppError::bad_request("无法删除不属于自己的照片 或 照片不存在"),
+            ))?;
+        }
         let mut ctx = PhotoDeleteContext { user_id, photos };
         run_photo_delete_pipeline(&state.db, &mut ctx)
             .await
@@ -305,6 +311,7 @@ impl PhotoService {
 )]
 impl PhotoService {
     /// 删除照片后。
+    #[instrument(name = "delete_photos", skip_all)]
     async fn on_after_photo_delete(
         &self,
         state: Arc<PhotoState>,
@@ -336,6 +343,7 @@ impl PhotoService {
 )]
 impl PhotoService {
     /// 发布照片上传后的缓存失效事件.
+    #[instrument(name = "upload_photo", skip_all)]
     async fn on_after_photo_upload(
         &self,
         state: Arc<PhotoState>,

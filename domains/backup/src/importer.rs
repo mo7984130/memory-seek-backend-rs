@@ -12,6 +12,10 @@ impl BinaryCopyImporter {
         tables: &[String],
         path_for: impl Fn(&str) -> std::path::PathBuf,
     ) -> Result<u64> {
+        // 数据层计时：`backup:restore:restore_local`。
+        #[cfg(feature = "metrics")]
+        let _timer = common::utils::MetricsTimer::start(common::metrics_name!("restore_local"));
+
         let mut connection = db.get_postgres_connection_pool().acquire().await?;
 
         let mut transaction = connection.begin().await?;

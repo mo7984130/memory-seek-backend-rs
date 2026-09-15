@@ -37,7 +37,8 @@ impl PhotoRepo {
         user_id: UserId,
         photo_ids: &[PhotoId],
     ) -> Result<(Vec<Option<PhotoRecord>>, HashSet<PhotoId>)> {
-        let (photos, cached_photo_likes) = tokio::join!(
+        let (photos, cached_photo_likes) =
+            tokio::join!(
             // 获取照片记录
             state.cache_photo_info.get_or_load_batch(
                 photo_ids,
@@ -45,7 +46,8 @@ impl PhotoRepo {
                 PHOTO_CACHE_TTL,
                 |miss_ids| async move { PhotoMapper::query_by_ids(&state.db, &miss_ids).await },
                 |photo| photo.id,
-            ),
+            )
+            .timed(metrics_name!("cache_get_or_load_batch")),
             // 获取是否被喜欢
             state.cache_photo_like.get_or_load_batch(
                 photo_ids,
@@ -65,7 +67,8 @@ impl PhotoRepo {
                         .to_ok()
                 },
                 |cached| cached.photo_id,
-            ),
+            )
+            .timed(metrics_name!("cache_get_or_load_batch")),
         );
         let photos = photos?;
         let liked_photo_ids = cached_photo_likes?
@@ -93,6 +96,7 @@ impl PhotoRepo {
                 CachedPhotoLike { photo_id, is_liked },
                 PHOTO_CACHE_TTL,
             )
+            .timed(metrics_name!("cache_put"))
             .await
             .into_contextual()
             .emit_if_err();
@@ -104,6 +108,7 @@ impl PhotoRepo {
         state
             .cache_photo_info
             .invalidate(&key)
+            .timed(metrics_name!("cache_invalidate"))
             .await
             .into_contextual()
             .emit_if_err();
@@ -130,6 +135,7 @@ impl PhotoRepo {
                     )
                     .await
                 })
+                .timed(metrics_name!("cache_get_or_load"))
                 .await?;
             Self::resize_cached_first_page(page, size)
         } else {
@@ -140,6 +146,7 @@ impl PhotoRepo {
                 req.direction,
                 req.anchor_time,
             )
+            .timed(metrics_name!("db_query"))
             .await?
         };
 
@@ -185,22 +192,29 @@ impl PhotoRepo {
             .await?;
             Ok(photo)
         })
+        .timed(metrics_name!("db_insert"))
         .await
     }
 
     pub async fn ensure_exist(state: &PhotoState, photo_id: PhotoId) -> Result<()> {
-        PhotoMapper::ensure_exist(&state.db, photo_id).await
+        PhotoMapper::ensure_exist(&state.db, photo_id)
+            .timed(metrics_name!("db_query"))
+            .await
     }
 
     /// 批量查询图片 MD5 是否存在.
     pub async fn exists_by_md5_batch(state: &PhotoState, md5s: &[String]) -> Result<Vec<bool>> {
-        let existing = PhotoMapper::exists_by_md5_batch(&state.db, md5s).await?;
+        let existing = PhotoMapper::exists_by_md5_batch(&state.db, md5s)
+            .timed(metrics_name!("db_query"))
+            .await?;
         Ok(md5s.iter().map(|md5| existing.contains(md5)).collect())
     }
 
     /// 查询单个图片 MD5 是否存在.
     pub async fn exists_by_md5(state: &PhotoState, md5: &str) -> Result<bool> {
-        PhotoMapper::exists_by_md5(&state.db, md5).await
+        PhotoMapper::exists_by_md5(&state.db, md5)
+            .timed(metrics_name!("db_query"))
+            .await
     }
 
     /// 处理照片上传完成后的照片域缓存更新.
@@ -247,11 +261,16 @@ impl PhotoRepo {
             .collect::<Vec<_>>();
 
         let _ = tokio::join!(
-            state.cache_photo_info.invalidate_batch(&photo_keys),
+            state
+                .cache_photo_info
+                .invalidate_batch(&photo_keys)
+                .timed(metrics_name!("cache_invalidate")),
             state
                 .cache_photo_dimensions
-                .invalidate_batch(&dimension_keys),
-            Self::invalidate_photo_cursor_ids(state),
+                .invalidate_batch(&dimension_keys)
+                .timed(metrics_name!("cache_invalidate_dimensions")),
+            Self::invalidate_photo_cursor_ids(state)
+                .timed(metrics_name!("cache_invalidate_cursor_ids")),
         );
     }
 }

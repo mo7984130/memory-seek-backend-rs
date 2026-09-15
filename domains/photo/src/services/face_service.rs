@@ -7,7 +7,7 @@ use common::{
     error::contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt},
     error::{AppError, contextual},
     ext::ToOk,
-    inc_counter, inc_error, metrics_name, set_gauge,
+    inc_counter, metrics_name, set_gauge,
     types::CursorPage,
     utils::{GaugeGuard, MetricsTimer, MetricsTimerExt},
 };
@@ -44,13 +44,6 @@ impl FaceService {
     /// 人脸计算.
     /// 全量时, 备份并且清空表, 从头开始
     /// 增量时, 备份表, 靠是否有photo无face来判断
-    #[tracing::instrument(
-        skip_all,
-        fields(
-            user_id = %admin,
-            full = %full
-        )
-    )]
     pub async fn compute(state: Arc<PhotoState>, admin: AdminId, full: bool) -> Result<()> {
         let user_id = admin.into_inner();
         let admin = AdminId::new(user_id)?;
@@ -173,7 +166,6 @@ impl FaceService {
             .s3_client
             .download_with_process(file_id, "image/resize,m_lfit,w_1920,h_1920")
             .await
-            .inspect_err(|_| inc_error!("download"))
             .into_contextual()?;
 
         let img = Self::decode_photo(bytes).await?;
@@ -191,13 +183,12 @@ impl FaceService {
                 .context_err(
                     "decode_image_error",
                     "解码图片失败",
-                    AppError::InternalServerError,
+                    AppError::bad_request("解码图片失败, 请上传正确的照片"),
                 )
         })
         .await
-        .inspect_err(|_| inc_error!("decode"))
         .into_contextual()?;
-        Ok(decode_result.inspect_err(|_| inc_error!("decode"))?)
+        Ok(decode_result?)
     }
 
     /// 在阻塞线程中执行人脸检测并返回检测结果.
@@ -214,9 +205,8 @@ impl FaceService {
             Ok(faces)
         })
         .await
-        .inspect_err(|_| inc_error!("detect"))
         .into_contextual()?;
-        Ok(detect_result.inspect_err(|_| inc_error!("detect"))?)
+        Ok(detect_result?)
     }
 
     /// 批量写入检测到的人脸记录.
@@ -227,7 +217,6 @@ impl FaceService {
         } else {
             FaceRepo::insert_faces(state, faces)
                 .await
-                .inspect_err(|_| inc_error!("insert"))
                 .into_contextual()?;
         }
         debug!("插入完成");
@@ -249,6 +238,8 @@ impl FaceService {
         person_id: Option<PersonId>,
         user_id: UserId,
     ) -> Result<()> {
+        // 事务耗时由 FaceRepo 内的 `.timed(metrics_name!("db_transaction"))` 记录
+        // （其当前 span 即本函数，指标为 photo:change_face_belonging:db_transaction），此处不再重复计时。
         FaceRepo::change_face_belonging(state, face_id, person_id, user_id).await?;
         Ok(())
     }
@@ -322,8 +313,8 @@ impl FaceService {
 
     /// 批量删除人脸
     /// 仅可以删除无归属的人脸
-    #[common_macros::metered]
-    #[tracing::instrument(skip_all, fields(count = %face_ids.len()))]
+    #[common_macros::metered(name = "delete_faces_batch")]
+    #[tracing::instrument(name = "delete_faces_batch", skip_all, fields(count = %face_ids.len()))]
     pub async fn delete_faces(
         state: &PhotoState,
         face_ids: FaceIds,
@@ -345,6 +336,7 @@ impl FaceService {
     name = "face_recognition",
 )]
 impl FaceService {
+    #[tracing::instrument(name = "face_compute", skip_all)]
     async fn on_after_photo_upload(
         &self,
         state: Arc<PhotoState>,

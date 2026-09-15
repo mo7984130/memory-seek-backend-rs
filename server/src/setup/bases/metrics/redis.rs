@@ -6,7 +6,9 @@ use metrics::gauge;
 /// deadpool-redis 提供 status() 方法获取连接池状态
 pub fn collect_redis_metrics(pool: &Pool) {
     let status = pool.status();
-    gauge!("redis.connections.active").set(status.size as f64);
-    gauge!("redis.connections.idle").set(status.available as f64);
+    // deadpool 的 `size` 为连接总数（含空闲），active 需扣除空闲，与 database 连接池语义对齐。
+    let idle = status.available;
+    gauge!("redis.connections.active").set(status.size.saturating_sub(idle) as f64);
+    gauge!("redis.connections.idle").set(idle as f64);
     gauge!("redis.connections.waiting").set(status.waiting as f64);
 }

@@ -61,6 +61,9 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
         .install_recorder()
         .expect("安装 Prometheus 指标记录器失败");
 
+    // 构建版本信息只上报一次（gauge 会持续保留）。
+    system::emit_build_info();
+
     let db = setup
         .registry
         .get::<DatabaseConnection>()
