@@ -80,7 +80,7 @@ impl CommentMapper {
 
 // 查询
 impl CommentMapper {
-    /// 查询照片的热门评论.
+    /// 查询媒体的热门评论.
     pub async fn query_hot_comments(
         db: &impl ConnectionTrait,
         media_id: MediaId,
@@ -100,7 +100,7 @@ impl CommentMapper {
             .to_ok()
     }
 
-    /// 分页查询照片评论.
+    /// 分页查询媒体评论.
     pub async fn query_by_media_id(
         db: &impl ConnectionTrait,
         media_id: MediaId,
@@ -151,7 +151,7 @@ impl CommentMapper {
             .to_ok()
     }
 
-    /// 删除指定照片的全部评论并返回评论 ID.
+    /// 删除指定媒体的全部评论并返回评论 ID.
     pub async fn delete_by_media_ids(
         db: &impl ConnectionTrait,
         media_ids: &[MediaId],

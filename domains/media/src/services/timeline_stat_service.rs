@@ -15,7 +15,7 @@ impl TimelineStatService {
     }
 }
 
-// 照片删除时
+// 媒体删除时
 #[step_derive::declare_transaction_step(
     ctx = crate::services::media_service::MediaDeleteContext,
     slice = crate::services::media_service::MEDIA_DELETE_STEPS,
@@ -24,7 +24,7 @@ impl TimelineStatService {
     method = on_media_delete,
 )]
 impl TimelineStatService {
-    /// 删除照片后扣减对应月份的时间线统计.
+    /// 删除媒体后扣减对应月份的时间线统计.
     async fn on_media_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
@@ -36,7 +36,7 @@ impl TimelineStatService {
     }
 }
 
-// 在照片上传之后
+// 在媒体上传之后
 // 添加时间线统计
 #[step_derive::declare_event_consumer(
     state = crate::state::MediaState,

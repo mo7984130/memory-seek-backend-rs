@@ -1,4 +1,4 @@
-//! 照片列表 / MD5 查存在 / 时间线统计。
+//! 媒体列表 / MD5 查存在 / 时间线统计。
 
 use common::axum::{ErrR, SucR};
 use common::types::CursorPage;
@@ -22,14 +22,14 @@ use super::{Session, db_current_month, seed_media, session, token_viewer};
 /// 分页校验用页大小。
 const PAGE_SIZE: u64 = 10;
 
-/// 游标分页前置:登录 + 以最旧种子照片构造游标(走 keyset 分支, 不依赖首屏缓存)。
+/// 游标分页前置:登录 + 以最旧种子媒体构造游标(走 keyset 分支, 不依赖首屏缓存)。
 #[derive(Default)]
 pub struct CursorSetup {
     pub session: Session,
     pub cursor: String,
 }
 
-/// 获取照片游标页: 走 `direction=prev` + 游标(keyset)分支, 校验分页契约。
+/// 获取媒体游标页: 走 `direction=prev` + 游标(keyset)分支, 校验分页契约。
 #[derive(Default)]
 pub struct GetMediasCursorScenario;
 
@@ -139,14 +139,14 @@ register_scenario!(GetMediasCursorUnauthorizedScenario);
 /// 不存在的 MD5 占位(种子 md5 为 32 位纯数字, 不会与之相等)。
 const MISSING_MD5: &str = "e2e_missing_md5_000000000000000000";
 
-/// MD5 查存在前置:登录 + 取一张种子照片的真实 md5。
+/// MD5 查存在前置:登录 + 取一张种子媒体的真实 md5。
 #[derive(Default)]
 pub struct Md5Setup {
     pub session: Session,
     pub md5: String,
 }
 
-/// 批量查 MD5: 种子照片命中、随机 MD5 落空。
+/// 批量查 MD5: 种子媒体命中、随机 MD5 落空。
 #[derive(Default)]
 pub struct Md5sExistScenario;
 

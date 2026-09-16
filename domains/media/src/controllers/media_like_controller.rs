@@ -44,7 +44,7 @@ impl ControllerRouter for MediaLikeController {
 
 // 创建
 impl MediaLikeController {
-    /// 为照片点赞.
+    /// 为媒体点赞.
     async fn like(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,
@@ -58,7 +58,7 @@ impl MediaLikeController {
 
 // 删除
 impl MediaLikeController {
-    /// 取消照片点赞.
+    /// 取消媒体点赞.
     async fn unlike(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,
@@ -72,7 +72,7 @@ impl MediaLikeController {
 
 // 查询
 impl MediaLikeController {
-    /// 返回当前用户点赞过的照片分页.
+    /// 返回当前用户点赞过的媒体分页.
     async fn get_user_liked_medias(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,

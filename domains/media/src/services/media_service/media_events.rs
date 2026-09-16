@@ -2,7 +2,7 @@
 use bytes::Bytes;
 use types::media::media::MediaRecord;
 
-/// 照片主记录落库后发布的事件，供时间线、人脸等后续服务消费。
+/// 媒体主记录落库后发布的事件，供时间线、人脸等后续服务消费。
 pub struct AfterMediaUpload {
     pub media: MediaRecord,
     /// 保留原始字节，供启用 `face` 后的人脸识别订阅者消费。
@@ -18,7 +18,7 @@ step_derive::declare_async_event!(
     "after_media_upload",
 );
 
-/// 照片及其文件删除后发布的事件，供缓存等后续服务消费。
+/// 媒体及其文件删除后发布的事件，供缓存等后续服务消费。
 pub struct AfterMediaDelete {
     pub medias: Vec<MediaRecord>,
 }

@@ -113,7 +113,7 @@ impl CommentRepo {
     }
 
     /// 删除评论.
-    /// 同时修改 评论like 和 照片评论计数
+    /// 同时修改 评论like 和 媒体评论计数
     pub(crate) async fn delete_comment(
         state: &MediaState,
         user_id: UserId,
@@ -129,7 +129,7 @@ impl CommentRepo {
                     AppError::bad_request("删除评论失败"),
                 )?;
 
-            // 更新照片评论计数
+            // 更新媒体评论计数
             // 错误仅记录
             MediaMapper::update_comment_count_delta(txn, comment.media_id, -1)
                 .await

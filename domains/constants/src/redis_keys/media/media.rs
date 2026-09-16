@@ -3,13 +3,13 @@ use types::{
     media::{dto::media::PageDirection, media::MediaId},
 };
 
-/// 生成照片信息的 Redis 缓存键
+/// 生成媒体信息的 Redis 缓存键
 ///
 /// 缓存内容为 `MediaRecord`，不含按浏览者签发的 token（token 在读取时按浏览者
-/// 动态生成），因此键只按照片拆分，同一照片所有浏览者共享一份缓存。
+/// 动态生成），因此键只按媒体拆分，同一媒体所有浏览者共享一份缓存。
 ///
 /// # 参数
-/// - `media_id`: 照片 ID
+/// - `media_id`: 媒体 ID
 ///
 /// # 返回
 /// 格式为 `p:p:i:{media_id}` 的缓存键
@@ -19,12 +19,12 @@ pub fn media_info(media_id: MediaId) -> String {
     format!("m:m:i:{}", media_id)
 }
 
-/// 生成照片尺寸缓存的 Redis 缓存键
+/// 生成媒体尺寸缓存的 Redis 缓存键
 ///
-/// 缓存内容为 `(width, height)` 元组，按 file_id 拆分（尺寸是照片的静态元数据）。
+/// 缓存内容为 `(width, height)` 元组，按 file_id 拆分（尺寸是媒体的静态元数据）。
 ///
 /// # 参数
-/// - `file_id`: 照片文件 ID
+/// - `file_id`: 媒体文件 ID
 ///
 /// # 返回
 /// 格式为 `p:p:d:{file_id}` 的缓存键
@@ -34,9 +34,9 @@ pub fn media_dimensions(file_id: &str) -> String {
     format!("m:m:d:{}", file_id)
 }
 
-/// 生成用户对照片点赞状态的 Redis 缓存键。
+/// 生成用户对媒体点赞状态的 Redis 缓存键。
 ///
-/// 点赞状态取决于浏览者，因此键同时包含用户和照片 ID。
+/// 点赞状态取决于浏览者，因此键同时包含用户和媒体 ID。
 ///
 /// # 返回
 /// 格式为 `p:p:l:{user_id}:{media_id}` 的缓存键
@@ -46,7 +46,7 @@ pub fn media_is_liked(user_id: UserId, media_id: MediaId) -> String {
     format!("m:m:l:{}:{}", user_id, media_id)
 }
 
-/// 生成照片首屏 ID 列表的 Redis 缓存键。
+/// 生成媒体首屏 ID 列表的 Redis 缓存键。
 ///
 /// 缓存存储每个方向允许的最大首屏，调用方再按实际页大小截断，因此键无需包含
 /// `size` 且能被上传、删除操作准确失效。

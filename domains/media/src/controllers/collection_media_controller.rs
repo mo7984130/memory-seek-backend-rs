@@ -54,9 +54,9 @@ impl ControllerRouter for CollectionMediaController {
     }
 }
 
-// 查询照片所属收藏夹
+// 查询媒体所属收藏夹
 impl CollectionMediaController {
-    /// 查询指定照片所属的相册.
+    /// 查询指定媒体所属的相册.
     async fn get_collections_by_media(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,
@@ -70,7 +70,7 @@ impl CollectionMediaController {
 
 // 创建
 impl CollectionMediaController {
-    /// 批量将照片加入相册.
+    /// 批量将媒体加入相册.
     async fn add_batch(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,
@@ -91,7 +91,7 @@ impl CollectionMediaController {
 
 // 查询
 impl CollectionMediaController {
-    /// 按游标返回相册中的照片.
+    /// 按游标返回相册中的媒体.
     async fn get_cursor_page(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,
@@ -109,7 +109,7 @@ impl CollectionMediaController {}
 
 // 删除
 impl CollectionMediaController {
-    /// 从相册移除单张照片.
+    /// 从相册移除单张媒体.
     async fn remove(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,
@@ -126,7 +126,7 @@ impl CollectionMediaController {
         Ok(()).to_r_ok()
     }
 
-    /// 批量从相册移除照片.
+    /// 批量从相册移除媒体.
     async fn remove_batch(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,

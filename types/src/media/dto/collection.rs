@@ -14,7 +14,7 @@ crate::out_dto!(CollectionView, "media/", rename = "Collection"; {
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub media_count: u64,
     pub cover_token: Option<String>,
-    /// 封面照片 ID（字符串）
+    /// 封面媒体 ID（字符串）
     pub cover_media_id: Option<MediaId>,
     pub created_at: DateTime,
 });
@@ -40,12 +40,12 @@ crate::in_dto!(CollectionUpdateParam, "media/"; {
 
 pub const COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 
-/// 返回相册照片分页的默认页大小.
+/// 返回相册媒体分页的默认页大小.
 fn collection_media_cursor_page_default_size() -> u64 {
     COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }
 
-crate::in_dto!(CollectionMediaCursorPageParam, "media/", docs = "收藏夹照片游标参数（cursor 为 TimeIdCursor<MediaId> 的 Base64 编码）"; {
+crate::in_dto!(CollectionMediaCursorPageParam, "media/", docs = "收藏夹媒体游标参数（cursor 为 TimeIdCursor<MediaId> 的 Base64 编码）"; {
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
     pub cursor: Option<TimeIdCursor<MediaId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]

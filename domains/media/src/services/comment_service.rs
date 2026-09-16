@@ -19,7 +19,7 @@ pub(crate) struct CommentService;
 
 // 创建
 impl CommentService {
-    /// 发布照片评论.
+    /// 发布媒体评论.
     #[common_macros::metered(name = "publish_comment")]
     #[tracing::instrument(
         name = "publish_comment",
@@ -32,7 +32,7 @@ impl CommentService {
         media_id: MediaId,
         req: CommentPublishParam,
     ) -> Result<CommentView> {
-        // 确认照片存在
+        // 确认媒体存在
         MediaRepo::ensure_exist(state, media_id).await?;
 
         let comment = CommentRepo::publish_comment(state, user_id, media_id, req).await?;
@@ -46,7 +46,7 @@ impl CommentService {}
 
 // 查询
 impl CommentService {
-    /// 获取照片评论列表.
+    /// 获取媒体评论列表.
     #[common_macros::metered(name = "get_comment_cursor_page")]
     #[tracing::instrument(
         name = "get_comment_cursor_page",
@@ -99,7 +99,7 @@ impl CommentService {
     }
 }
 
-// 当照片删除时
+// 当媒体删除时
 // 删除评论 和 评论点赞
 #[step_derive::declare_transaction_step(
     ctx = crate::services::media_service::MediaDeleteContext,

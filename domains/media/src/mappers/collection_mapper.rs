@@ -22,9 +22,9 @@ use types::{auth::user::UserId, media::collection::*};
 
 // 创建
 impl CollectionMapper {
-    // 添加收藏夹照片
+    // 添加收藏夹媒体
     // 会同时修改collection 和 collection_media 两个表
-    // 返回插入后的照片总数
+    // 返回插入后的媒体总数
     pub async fn add_medias_batch(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -124,7 +124,7 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 批量更新多个收藏夹的照片计数.
+    /// 批量更新多个收藏夹的媒体计数.
     pub async fn update_media_count_delta_batch(
         db: &impl ConnectionTrait,
         deltas: &HashMap<CollectionId, i64>,
@@ -154,7 +154,7 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 增量更新照片计数.
+    /// 增量更新媒体计数.
     pub async fn update_media_count_delta(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,

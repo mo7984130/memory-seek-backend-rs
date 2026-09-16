@@ -17,7 +17,7 @@ const TIMELINE_STAT_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
 pub struct TimelineStatRepo;
 
 impl TimelineStatRepo {
-    /// 记录新上传照片对应月份的时间线统计。
+    /// 记录新上传媒体对应月份的时间线统计。
     pub async fn record_uploaded_media(state: &MediaState, created_at: DateTime) -> Result<()> {
         TimelineStatMapper::incr_stat(&state.db, created_at)
             .timed(metrics_name!("db_update"))
@@ -61,7 +61,7 @@ impl TimelineStatRepo {
     }
 }
 
-// 在照片删除之后
+// 在媒体删除之后
 #[step_derive::declare_event_consumer(
     state = crate::state::MediaState,
     event = crate::services::media_service::AfterMediaDelete,
@@ -69,7 +69,7 @@ impl TimelineStatRepo {
     name = "timeline_stat_cache_invalidation",
 )]
 impl TimelineStatRepo {
-    /// 删除照片后失效月度统计缓存。
+    /// 删除媒体后失效月度统计缓存。
     #[tracing::instrument(name = "delete_medias", skip_all)]
     async fn on_after_media_delete(
         &self,

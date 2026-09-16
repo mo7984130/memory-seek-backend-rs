@@ -27,7 +27,7 @@ mod entity {
         #[sea_orm(primary_key)]
         pub id: CommentId,
 
-        /// 评论的照片
+        /// 评论的媒体
         pub media_id: MediaId,
 
         /// 评论者
@@ -50,8 +50,8 @@ mod entity {
     }
 
     /// 创建索引
-    /// MediaId 和 CreatedAt 复合索引, 用于 查询照片的评论
-    /// MediaId 和 LikeCount 复合索引, 用于 查询照片的热门评论
+    /// MediaId 和 CreatedAt 复合索引, 用于 查询媒体的评论
+    /// MediaId 和 LikeCount 复合索引, 用于 查询媒体的热门评论
     #[common::register_async(
         send,
         slice = crate::db_init::INIT_INDEXES,

@@ -100,7 +100,7 @@ impl MediaController {
         Ok(media).to_r_ok()
     }
 
-    /// 游标获取照片列表.
+    /// 游标获取媒体列表.
     async fn get_medias_cursor(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,
@@ -111,7 +111,7 @@ impl MediaController {
             .to_r_ok()
     }
 
-    /// 获取单张照片信息
+    /// 获取单张媒体信息
     async fn get_media_info(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,
@@ -162,7 +162,7 @@ impl MediaController {
         Ok(resp)
     }
 
-    /// 删除当前用户指定的照片及其对象存储文件.
+    /// 删除当前用户指定的媒体及其对象存储文件.
     async fn delete_medias(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,

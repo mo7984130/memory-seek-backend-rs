@@ -28,7 +28,7 @@ use crate::state::MediaState;
 pub(crate) struct CollectionRepo;
 
 impl CollectionRepo {
-    /// 查询照片所属的收藏夹
+    /// 查询媒体所属的收藏夹
     pub(crate) async fn query_collection_ids_by_media(
         state: &MediaState,
         user_id: UserId,
@@ -49,7 +49,7 @@ impl CollectionRepo {
             .await
     }
 
-    /// 游标查询收藏夹中的照片Id
+    /// 游标查询收藏夹中的媒体Id
     pub(crate) async fn query_collection_media_ids(
         state: &MediaState,
         user_id: UserId,
@@ -87,7 +87,7 @@ impl CollectionRepo {
             .await
     }
 
-    /// 添加相册照片
+    /// 添加相册媒体
     pub(crate) async fn add_collection_medias(
         state: &MediaState,
         user_id: UserId,
@@ -95,7 +95,7 @@ impl CollectionRepo {
         media_ids: &MediaIds,
     ) -> Result<u64> {
         db_transaction!(scoped & state.db, |txn| {
-            // 添加照片
+            // 添加媒体
             let count = CollectionMapper::add_medias_batch(
                 txn,
                 user_id,
@@ -124,7 +124,7 @@ impl CollectionRepo {
         .timed(metrics_name!("db_transaction"))
         .await
     }
-    /// 移除收藏夹照片.
+    /// 移除收藏夹媒体.
     pub(crate) async fn remove_collection_medias(
         state: &MediaState,
         user_id: UserId,
@@ -137,7 +137,7 @@ impl CollectionRepo {
                 .cover_media_id
                 .is_some_and(|id| media_ids.contains(&id));
 
-            // 删除收藏夹照片
+            // 删除收藏夹媒体
             let rows = CollectionMediaMapper::delete_by_collection_id_and_media_ids(
                 txn,
                 user_id,
@@ -148,7 +148,7 @@ impl CollectionRepo {
 
             // 计算封面
             if cover_removed {
-                // 获取第一张照片
+                // 获取第一张媒体
                 if let Some(media_id) = CollectionMediaMapper::query_media_id_by_collection_id(
                     txn,
                     user_id,
@@ -268,7 +268,7 @@ impl CollectionRepo {
                     AppError::bad_request("删除收藏夹失败"),
                 )?;
 
-            // 删除收藏夹照片
+            // 删除收藏夹媒体
             CollectionMediaMapper::delete_by_collection_id(txn, id, user_id).await?;
 
             AuditRecorder::append(

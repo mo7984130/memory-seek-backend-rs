@@ -18,7 +18,7 @@ use types::media::{dto::timeline_stat::MonthStat, timeline_stat::*};
 pub(crate) struct TimelineStatMapper;
 
 impl TimelineStatMapper {
-    /// 将指定月份的照片统计增加一个单位.
+    /// 将指定月份的媒体统计增加一个单位.
     pub async fn incr_stat(db: &impl ConnectionTrait, created_at: DateTime) -> Result<()> {
         let date_str = to_date_str(&created_at);
         // 先更新
@@ -60,7 +60,7 @@ impl TimelineStatMapper {
         Ok(())
     }
 
-    /// 按照片创建时间批量扣减月份统计.
+    /// 按媒体创建时间批量扣减月份统计.
     pub async fn decr_by_created_ats(
         db: &impl ConnectionTrait,
         created_ats: &[&DateTime],

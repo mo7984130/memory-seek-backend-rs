@@ -51,7 +51,7 @@ impl From<MediaRecord> for MediaView {
 }
 
 impl MediaView {
-    /// 写入当前用户对照片的点赞状态.
+    /// 写入当前用户对媒体的点赞状态.
     pub fn with_liked(mut self, is_liked: bool) -> Self {
         self.is_liked = Some(is_liked);
         self
@@ -79,7 +79,7 @@ impl MediaView {
     }
 }
 
-crate::in_dto!(MediaCursorParam, "media/", serde_default, docs = "照片游标参数（cursor 为 TimeIdCursor<MediaId> 的 Base64 编码）"; {
+crate::in_dto!(MediaCursorParam, "media/", serde_default, docs = "媒体游标参数（cursor 为 TimeIdCursor<MediaId> 的 Base64 编码）"; {
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
     pub cursor: Option<TimeIdCursor<MediaId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]

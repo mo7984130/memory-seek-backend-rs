@@ -21,7 +21,7 @@ use crate::context::Context;
 
 use super::{Session, seed_media, session};
 
-/// 在指定照片下发布评论, 返回视图。
+/// 在指定媒体下发布评论, 返回视图。
 async fn publish(
     ctx: &Context,
     session: &Session,
@@ -39,7 +39,7 @@ async fn publish(
         .map_err(HttpError::from)
 }
 
-/// 评论前置:登录 + 目标照片(种子照片 u=6)。
+/// 评论前置:登录 + 目标媒体(种子媒体 u=6)。
 /// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
 #[derive(Default)]
 pub struct CommentSetup {
@@ -56,7 +56,7 @@ async fn comment_setup(ctx: &Context, task: &TaskIndex) -> Result<CommentSetup, 
     })
 }
 
-/// 发布评论: 落库归属/内容正确, 照片评论数递增。
+/// 发布评论: 落库归属/内容正确, 媒体评论数递增。
 #[derive(Default)]
 pub struct PublishCommentScenario;
 
@@ -156,7 +156,7 @@ impl Scenario for PublishCommentEmptyScenario {
 
 register_scenario!(PublishCommentEmptyScenario);
 
-/// 评论列表前置:登录 + 目标照片 + 前置评论。
+/// 评论列表前置:登录 + 目标媒体 + 前置评论。
 #[derive(Default)]
 pub struct CommentListSetup {
     pub session: Session,
@@ -229,7 +229,7 @@ impl Scenario for GetCommentsScenario {
 
 register_scenario!(GetCommentsScenario);
 
-/// 删除评论前置:登录 + 目标照片 + 前置评论。
+/// 删除评论前置:登录 + 目标媒体 + 前置评论。
 #[derive(Default)]
 pub struct CommentDeleteSetup {
     pub session: Session,

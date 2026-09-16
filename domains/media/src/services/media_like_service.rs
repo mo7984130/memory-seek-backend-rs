@@ -13,7 +13,7 @@ pub(crate) struct MediaLikeService;
 
 // 创建
 impl MediaLikeService {
-    /// 为照片点赞.
+    /// 为媒体点赞.
     #[common_macros::metered(name = "like_media")]
     #[tracing::instrument(
         name = "like_media",
@@ -29,7 +29,7 @@ impl MediaLikeService {
 
 // 查询
 impl MediaLikeService {
-    /// 查询用户点赞的照片列表
+    /// 查询用户点赞的媒体列表
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_user_liked_medias(
@@ -37,7 +37,7 @@ impl MediaLikeService {
         user_id: UserId,
         req: LikedMediasQuery,
     ) -> Result<CursorPage<MediaView, TimeIdCursor<MediaId>>> {
-        // 查询用户点赞的照片ID列表和点赞时间
+        // 查询用户点赞的媒体ID列表和点赞时间
         let page = MediaLikeRepo::query_liked_media_ids(state, user_id, &req)
             .timed(metrics_name!("query_ids"))
             .await?;
@@ -45,7 +45,7 @@ impl MediaLikeService {
             return Ok(CursorPage::empty());
         }
 
-        // 加载照片详细信息
+        // 加载媒体详细信息
         let media_ids = page.records.iter().map(|(id, _)| *id).collect::<Vec<_>>();
         let medias = MediaService::load_medias_info(state, user_id, &media_ids)
             .timed(metrics_name!("load_medias_info"))
@@ -71,7 +71,7 @@ impl MediaLikeService {
     }
 }
 
-// 照片删除时
+// 媒体删除时
 #[step_derive::declare_transaction_step(
     ctx = crate::services::media_service::MediaDeleteContext,
     slice = crate::services::media_service::MEDIA_DELETE_STEPS,
@@ -80,7 +80,7 @@ impl MediaLikeService {
     method = on_media_delete,
 )]
 impl MediaLikeService {
-    /// 清理照片删除后失效的点赞记录.
+    /// 清理媒体删除后失效的点赞记录.
     async fn on_media_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,

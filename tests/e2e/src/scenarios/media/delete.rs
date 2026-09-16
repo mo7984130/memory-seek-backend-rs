@@ -1,4 +1,4 @@
-//! 照片删除:`DELETE /media`。
+//! 媒体删除:`DELETE /media`。
 
 use common::axum::{ErrR, SucR};
 use memseek_test::{
@@ -25,7 +25,7 @@ pub struct DeleteSetup {
     pub file_id: String,
 }
 
-/// 删除他人照片应被忽略, 这里验证"删除自己的照片"闭环: 库记录与 S3 对象同时消失。
+/// 删除他人媒体应被忽略, 这里验证"删除自己的媒体"闭环: 库记录与 S3 对象同时消失。
 #[derive(Default)]
 pub struct DeleteMediaScenario;
 
@@ -100,7 +100,7 @@ impl Scenario for DeleteMediaScenario {
 
 register_scenario!(DeleteMediaScenario);
 
-/// 空照片列表: 期望 400(参数校验失败)。
+/// 空媒体列表: 期望 400(参数校验失败)。
 #[derive(Default)]
 pub struct DeleteMediasEmptyScenario;
 

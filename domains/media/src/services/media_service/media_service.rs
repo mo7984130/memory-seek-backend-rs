@@ -60,13 +60,13 @@ impl MediaService {
             .pop()
             .ok_or_warn(
                 "media_not_exist",
-                "用户尝试获取一个不存在的照片的信息",
-                AppError::bad_request("照片不存在"),
+                "用户尝试获取一个不存在的媒体的信息",
+                AppError::bad_request("媒体不存在"),
             )?
             .to_ok()
     }
 
-    /// 查询照片, 并生成包含访问令牌和点赞状态的视图.
+    /// 查询媒体, 并生成包含访问令牌和点赞状态的视图.
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, count = %media_ids.len())
@@ -76,7 +76,7 @@ impl MediaService {
         user_id: UserId,
         media_ids: &[MediaId],
     ) -> Result<Vec<MediaView>> {
-        // 获取照片记录 和 是否喜欢的id
+        // 获取媒体记录 和 是否喜欢的id
         let (medias, liked_media_ids) =
             MediaRepo::load_media_records(state, user_id, media_ids).await?;
 
@@ -92,7 +92,7 @@ impl MediaService {
         Ok(views)
     }
 
-    /// 游标获取照片列表.
+    /// 游标获取媒体列表.
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_media_cursor_page(
@@ -124,7 +124,7 @@ impl MediaService {
 }
 
 impl MediaService {
-    /// 校验图片, 计算 MD5, 上传文件并写入照片主记录.
+    /// 校验图片, 计算 MD5, 上传文件并写入媒体主记录.
     #[common_macros::metered]
     #[instrument(
         skip_all,
@@ -233,7 +233,7 @@ impl MediaService {
         Ok(MediaRepo::exists_by_md5_batch(state, &req.md5s).await?)
     }
 
-    /// 删除照片.
+    /// 删除媒体.
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
@@ -244,14 +244,14 @@ impl MediaService {
         user_id: UserId,
         req: DeleteMediasParam,
     ) -> Result<()> {
-        // 查询属于用户的照片
+        // 查询属于用户的媒体
         let medias =
             MediaMapper::query_by_user_id_and_ids(&state.db, user_id, &req.media_ids).await?;
         if medias.len() != req.media_ids.len() {
             Err(ContextualError::warn_without_source(
                 "user_del_not_belong_media",
-                "用户尝试删除不属于自己的照片 或 照片不存在",
-                AppError::bad_request("无法删除不属于自己的照片 或 照片不存在"),
+                "用户尝试删除不属于自己的媒体 或 媒体不存在",
+                AppError::bad_request("无法删除不属于自己的媒体 或 媒体不存在"),
             ))?;
         }
         let mut ctx = MediaDeleteContext { user_id, medias };
@@ -260,7 +260,7 @@ impl MediaService {
             .map_err(|error| {
                 ContextualError::error(
                     "media_delete_pipeline",
-                    "执行照片删除事务失败",
+                    "执行媒体删除事务失败",
                     error.to_string(),
                     error,
                 )
@@ -273,7 +273,7 @@ impl MediaService {
     }
 }
 
-/// 删除照片主表记录(受外键约束,`is_final` 使其恒在管道最后执行)
+/// 删除媒体主表记录(受外键约束,`is_final` 使其恒在管道最后执行)
 #[step_derive::declare_transaction_step(
     ctx = crate::services::media_service::MediaDeleteContext,
     slice = crate::services::media_service::MEDIA_DELETE_STEPS,
@@ -283,7 +283,7 @@ impl MediaService {
     method = on_media_delete,
 )]
 impl MediaService {
-    /// 执行照片删除管道的最后一步, 删除照片主表记录.
+    /// 执行媒体删除管道的最后一步, 删除媒体主表记录.
     async fn on_media_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
@@ -311,14 +311,14 @@ impl MediaService {
     name = "media_delete_cache_invalidation",
 )]
 impl MediaService {
-    /// 删除照片后。
+    /// 删除媒体后。
     #[instrument(name = "delete_medias", skip_all)]
     async fn on_after_media_delete(
         &self,
         state: Arc<MediaState>,
         event: Arc<AfterMediaDelete>,
     ) -> common::Result<()> {
-        // 删除照片文件
+        // 删除媒体文件
         let file_ids = event
             .medias
             .iter()
@@ -343,7 +343,7 @@ impl MediaService {
     name = "media_cursor_cache_invalidation",
 )]
 impl MediaService {
-    /// 发布照片上传后的缓存失效事件.
+    /// 发布媒体上传后的缓存失效事件.
     #[instrument(name = "upload_media", skip_all)]
     async fn on_after_media_upload(
         &self,

@@ -26,12 +26,12 @@ const MEDIA_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 /// 首屏缓存统一保存 API 允许的最大页，避免 `size` 不在缓存键中造成结果串页。
 const MEDIA_CURSOR_CACHE_SIZE: u64 = 1024;
 
-/// 照片领域数据访问仓储，统一封装数据库与多级缓存。
+/// 媒体领域数据访问仓储，统一封装数据库与多级缓存。
 pub struct MediaRepo;
 
 impl MediaRepo {
-    /// 加载照片记录.
-    /// 返回照片记录 和 是否被喜欢的照片Id
+    /// 加载媒体记录.
+    /// 返回媒体记录 和 是否被喜欢的媒体Id
     pub async fn load_media_records(
         state: &MediaState,
         user_id: UserId,
@@ -39,7 +39,7 @@ impl MediaRepo {
     ) -> Result<(Vec<Option<MediaRecord>>, HashSet<MediaId>)> {
         let (medias, cached_media_likes) =
             tokio::join!(
-            // 获取照片记录
+            // 获取媒体记录
             state.cache_media_info.get_or_load_batch(
                 media_ids,
                 |id| RedisKeys::media::media::media_info(*id),
@@ -81,7 +81,7 @@ impl MediaRepo {
         Ok((medias, liked_media_ids))
     }
 
-    /// 缓存照片喜欢状态.
+    /// 缓存媒体喜欢状态.
     pub(super) async fn cache_media_like_status(
         state: &MediaState,
         user_id: UserId,
@@ -102,7 +102,7 @@ impl MediaRepo {
             .emit_if_err();
     }
 
-    /// 照片聚合字段变更后失效详情缓存。
+    /// 媒体聚合字段变更后失效详情缓存。
     pub(super) async fn invalidate_media_info(state: &MediaState, media_id: MediaId) {
         let key = RedisKeys::media::media::media_info(media_id);
         state
@@ -114,7 +114,7 @@ impl MediaRepo {
             .emit_if_err();
     }
 
-    /// 游标查询照片id.
+    /// 游标查询媒体id.
     pub async fn query_media_cursor_ids(
         state: &MediaState,
         req: MediaCursorParam,
@@ -153,7 +153,7 @@ impl MediaRepo {
         Ok(media_ids)
     }
 
-    /// 失效照片游标 ID 缓存.
+    /// 失效媒体游标 ID 缓存.
     async fn invalidate_media_cursor_ids(state: &MediaState) {
         let keys = [
             RedisKeys::media::media::media_cursor_page_ids(PageDirection::Next).to_owned(),
@@ -178,7 +178,7 @@ impl MediaRepo {
         page
     }
 
-    /// 插入照片.
+    /// 插入媒体.
     pub async fn insert_media(state: &MediaState, media: NewMediaRecord) -> Result<Model> {
         db_transaction!(contextual & state.db, |txn| {
             let media: ActiveModel = media.into();
@@ -217,7 +217,7 @@ impl MediaRepo {
             .await
     }
 
-    /// 处理照片上传完成后的照片域缓存更新.
+    /// 处理媒体上传完成后的媒体域缓存更新.
     pub async fn after_media_upload(state: &MediaState) {
         Self::invalidate_media_cursor_ids(state)
             .timed(metrics_name!("cache_invalidate"))
@@ -238,7 +238,7 @@ impl MediaRepo {
                     .ok_or_warn(
                         "media_not_found",
                         "裁剪图片不存在",
-                        AppError::bad_request("照片不存在"),
+                        AppError::bad_request("媒体不存在"),
                     )
             })
             .timed(metrics_name!("cache_get_or_load"))
@@ -249,7 +249,7 @@ impl MediaRepo {
             })
     }
 
-    /// 失效照片删除后受影响的照片和人物缓存.
+    /// 失效媒体删除后受影响的媒体和人物缓存.
     pub async fn invalidate_deleted_medias(state: &MediaState, medias: &[MediaRecord]) {
         let media_keys = medias
             .iter()

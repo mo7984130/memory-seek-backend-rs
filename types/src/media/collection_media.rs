@@ -30,12 +30,12 @@ mod entity {
 
         /// 所属收藏夹的ID
         /// collection_id 与 media_id 组成复合唯一键
-        ///     一个照片只能被一个收藏夹收藏一次
-        ///     用于判断某个收藏夹中是否存在某个照片
+        ///     一个媒体只能被一个收藏夹收藏一次
+        ///     用于判断某个收藏夹中是否存在某个媒体
         #[sea_orm(unique_key = "collection_media")]
         pub collection_id: CollectionId,
 
-        /// 收藏的照片ID
+        /// 收藏的媒体ID
         #[sea_orm(unique_key = "collection_media")]
         pub media_id: MediaId,
 
@@ -48,7 +48,7 @@ mod entity {
     }
 
     /// 创建索引
-    /// CollectionId 和 CreatedAt 复合索引, 用于 按照收藏时间获取收藏夹里面照片时
+    /// CollectionId 和 CreatedAt 复合索引, 用于 按照收藏时间获取收藏夹里面媒体时
     #[common::register_async(
         send,
         slice = crate::db_init::INIT_INDEXES,
@@ -68,7 +68,7 @@ mod entity {
         Ok(())
     }
 
-    /// 收藏夹照片记录，使用强类型 ID
+    /// 收藏夹媒体记录，使用强类型 ID
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     pub struct CollectionMediaRecord {
         pub id: CollectionMediaId,

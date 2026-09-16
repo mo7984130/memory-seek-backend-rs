@@ -1,8 +1,8 @@
 //! media 模块 e2e 场景。
 //!
-//! 覆盖照片资源的读写闭环(上传 / 列表 / 详情 / 下载 / 删除)与
+//! 覆盖媒体资源的读写闭环(上传 / 列表 / 详情 / 下载 / 删除)与
 //! 相册、评论、点赞等子资源。共享 helper 集中在本文件:
-//! - 账号:复用 `preprea` 灌入的 `loadtest_media_*` 种子池(每账号预置 20 张照片);
+//! - 账号:复用 `preprea` 灌入的 `loadtest_media_*` 种子池(每账号预置 20 张媒体);
 //! - 内容唯一:上传内容按任务追加唯一标记,规避 `media_media.md5` 全局唯一约束;
 //! - 数据隔离:场景自建的相册/评论/点赞由 `preprea` 在灌种子前清理。
 
@@ -85,7 +85,7 @@ pub fn md5_hex(data: &[u8]) -> String {
     format!("{:x}", md5::compute(data))
 }
 
-/// 上传一张图片, 返回照片视图。
+/// 上传一张图片, 返回媒体视图。
 pub async fn upload(
     ctx: &Context,
     session: &Session,
@@ -104,9 +104,9 @@ pub async fn upload(
         .map_err(HttpError::from)
 }
 
-/// 按 `seed_file_{user_ordinal}_1` 精确取一张种子照片。
+/// 按 `seed_file_{user_ordinal}_1` 精确取一张种子媒体。
 ///
-/// 种子照片的 `file_id` 规则见 `preprea.rs`, 直接用 file_id 定位可避免依赖自增 id
+/// 种子媒体的 `file_id` 规则见 `preprea.rs`, 直接用 file_id 定位可避免依赖自增 id
 /// (id 会随每次重新灌种子持续增长)。
 pub async fn seed_media(ctx: &Context, user_ordinal: u64) -> Option<media_entity::Model> {
     media_entity::Entity::find()

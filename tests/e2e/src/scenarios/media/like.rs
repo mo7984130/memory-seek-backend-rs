@@ -1,6 +1,6 @@
 //! 点赞:`/media/medias/{media_id}/like` 与 `/media/comment/{comment_id}/like`。
 //!
-//! 各场景使用不同的种子照片(file_id 里的 user ordinal 前缀不同), 避免同一
+//! 各场景使用不同的种子媒体(file_id 里的 user ordinal 前缀不同), 避免同一
 //! (user, media) 在不同场景重复点赞触发 400。
 
 use common::axum::SucR;
@@ -25,7 +25,7 @@ use crate::context::Context;
 
 use super::{Session, seed_media, session};
 
-/// 在照片下发表评论(用于评论点赞场景), 返回评论 id(原始 i64)。
+/// 在媒体下发表评论(用于评论点赞场景), 返回评论 id(原始 i64)。
 async fn publish_comment(
     ctx: &Context,
     session: &Session,
@@ -45,14 +45,14 @@ async fn publish_comment(
     Ok(view.id.0)
 }
 
-/// 照片点赞前置。
+/// 媒体点赞前置。
 #[derive(Default)]
 pub struct LikeMediaSetup {
     pub session: Session,
     pub media_id: i64,
 }
 
-/// 点赞照片: 点赞记录落库。
+/// 点赞媒体: 点赞记录落库。
 #[derive(Default)]
 pub struct LikeMediaScenario;
 
@@ -70,7 +70,7 @@ impl Scenario for LikeMediaScenario {
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
         let media = seed_media(ctx, 2).await.ok_or_else(super::seed_missing)?;
-        // 种子照片跨轮复用: 先取消点赞, 确保本轮处于未点赞状态.
+        // 种子媒体跨轮复用: 先取消点赞, 确保本轮处于未点赞状态.
         let _ = ctx
             .client
             .request(
@@ -123,14 +123,14 @@ impl Scenario for LikeMediaScenario {
 
 register_scenario!(LikeMediaScenario);
 
-/// 取消点赞照片前置:登录 + 照片 + 已点赞。
+/// 取消点赞媒体前置:登录 + 媒体 + 已点赞。
 #[derive(Default)]
 pub struct UnlikeMediaSetup {
     pub session: Session,
     pub media_id: i64,
 }
 
-/// 取消点赞照片: 点赞记录消失。
+/// 取消点赞媒体: 点赞记录消失。
 #[derive(Default)]
 pub struct UnlikeMediaScenario;
 
@@ -200,14 +200,14 @@ impl Scenario for UnlikeMediaScenario {
 
 register_scenario!(UnlikeMediaScenario);
 
-/// 点赞列表前置:登录 + 照片 + 已点赞。
+/// 点赞列表前置:登录 + 媒体 + 已点赞。
 #[derive(Default)]
 pub struct LikedMediasSetup {
     pub session: Session,
     pub media_id: i64,
 }
 
-/// 点赞照片分页: 包含前置点赞的照片。
+/// 点赞媒体分页: 包含前置点赞的媒体。
 #[derive(Default)]
 pub struct GetLikedMediasScenario;
 
@@ -265,7 +265,7 @@ impl Scenario for GetLikedMediasScenario {
 
 register_scenario!(GetLikedMediasScenario);
 
-/// 点赞评论前置:登录 + 目标评论(种子照片 u=7)。
+/// 点赞评论前置:登录 + 目标评论(种子媒体 u=7)。
 #[derive(Default)]
 pub struct LikeCommentSetup {
     pub session: Session,
@@ -334,7 +334,7 @@ impl Scenario for LikeCommentScenario {
 
 register_scenario!(LikeCommentScenario);
 
-/// 取消点赞评论前置:登录 + 已点赞目标评论(种子照片 u=8)。
+/// 取消点赞评论前置:登录 + 已点赞目标评论(种子媒体 u=8)。
 #[derive(Default)]
 pub struct UnlikeCommentSetup {
     pub session: Session,

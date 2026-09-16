@@ -22,7 +22,7 @@ use crate::{
 pub(crate) struct MediaLikeRepo;
 
 impl MediaLikeRepo {
-    /// 点赞照片.
+    /// 点赞媒体.
     pub(crate) async fn like(state: &MediaState, user_id: UserId, media_id: MediaId) -> Result<()> {
         db_transaction!(scoped & state.db, |txn| {
             // 确认存在
@@ -31,7 +31,7 @@ impl MediaLikeRepo {
             if !MediaLikeMapper::insert(txn, user_id, media_id).await? {
                 return Err(ContextualError::error_without_source(
                     "media_already_liked",
-                    "照片已经点赞过",
+                    "媒体已经点赞过",
                     AppError::bad_request("已经点赞过"),
                 ));
             }
@@ -66,7 +66,7 @@ impl MediaLikeRepo {
             if !MediaLikeMapper::delete(txn, user_id, media_id).await? {
                 return Err(ContextualError::error_without_source(
                     "media_not_liked",
-                    "照片尚未点赞",
+                    "媒体尚未点赞",
                     AppError::bad_request("还未点赞"),
                 ));
             }
@@ -87,7 +87,7 @@ impl MediaLikeRepo {
         Ok(())
     }
 
-    /// 查询用户点赞过的照片 ID.
+    /// 查询用户点赞过的媒体 ID.
     pub(crate) async fn query_liked_media_ids(
         state: &MediaState,
         user_id: UserId,

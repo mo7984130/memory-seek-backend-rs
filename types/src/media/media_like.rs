@@ -25,10 +25,10 @@ mod entity {
         #[sea_orm(primary_key)]
         pub id: MediaLikeId,
 
-        /// 喜欢的照片
+        /// 喜欢的媒体
         /// media_id 与 user_id 组成复合唯一键
-        ///     一个照片只能被一个用户喜欢一次
-        ///     用于判断用户是否喜欢这个照片
+        ///     一个媒体只能被一个用户喜欢一次
+        ///     用于判断用户是否喜欢这个媒体
         #[sea_orm(unique_key = "media_like")]
         pub media_id: MediaId,
 
@@ -41,7 +41,7 @@ mod entity {
         pub created_at: DateTime,
     }
 
-    /// 照片点赞记录，使用强类型 ID
+    /// 媒体点赞记录，使用强类型 ID
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     pub struct MediaLikeRecord {
         pub id: MediaLikeId,

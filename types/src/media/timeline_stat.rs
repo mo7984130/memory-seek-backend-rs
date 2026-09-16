@@ -26,10 +26,10 @@ mod orm {
         #[sea_orm(primary_key, auto_increment = false)]
         pub date_str: TimelineStatId,
 
-        /// 照片数量
+        /// 媒体数量
         pub count: i64,
 
-        /// 本月份内, 最新一张照片的时间
+        /// 本月份内, 最新一张媒体的时间
         pub anchor_time: DateTime,
 
         /// 修改时间

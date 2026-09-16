@@ -293,7 +293,7 @@ impl Scenario for DeleteCollectionScenario {
 
 register_scenario!(DeleteCollectionScenario);
 
-/// 相册添加照片前置:登录 + 种子照片 + 前置收藏夹。
+/// 相册添加媒体前置:登录 + 种子媒体 + 前置收藏夹。
 /// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
 #[derive(Default)]
 pub struct AddMediasSetup {
@@ -302,7 +302,7 @@ pub struct AddMediasSetup {
     pub media_id: i64,
 }
 
-/// 相册批量添加照片: 关联记录落库, 计数与新增数正确。
+/// 相册批量添加媒体: 关联记录落库, 计数与新增数正确。
 #[derive(Default)]
 pub struct AddMediasToCollectionScenario;
 

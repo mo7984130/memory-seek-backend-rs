@@ -20,7 +20,7 @@ pub(crate) struct CollectionMediaService;
 
 // 查询
 impl CollectionMediaService {
-    /// 获取包含指定照片的所有收藏夹
+    /// 获取包含指定媒体的所有收藏夹
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
@@ -47,7 +47,7 @@ impl CollectionMediaService {
         Ok(collections)
     }
 
-    /// 按游标查询相册中的照片, 并补充照片视图信息.
+    /// 按游标查询相册中的媒体, 并补充媒体视图信息.
     #[common_macros::metered(name = "get_collection_medias")]
     #[tracing::instrument(
         name = "get_collection_medias",
@@ -78,7 +78,7 @@ impl CollectionMediaService {
 
 // 添加
 impl CollectionMediaService {
-    /// 批量将照片加入相册, 并返回实际新增数量.
+    /// 批量将媒体加入相册, 并返回实际新增数量.
     #[common_macros::metered(name = "add_collection_medias")]
     #[tracing::instrument(
         name = "add_collection_medias",
@@ -94,7 +94,7 @@ impl CollectionMediaService {
         // 确认归属
         CollectionRepo::ensure_belong(state, user_id, collection_id).await?;
 
-        // 添加照片
+        // 添加媒体
         let media_count =
             CollectionRepo::add_collection_medias(state, user_id, collection_id, &media_ids)
                 .await?;
@@ -107,7 +107,7 @@ impl CollectionMediaService {
 
 // 删除
 impl CollectionMediaService {
-    /// 移除收藏夹照片.
+    /// 移除收藏夹媒体.
     #[common_macros::metered(name = "remove_collection_medias")]
     #[tracing::instrument(
         name = "remove_collection_medias",
@@ -124,7 +124,7 @@ impl CollectionMediaService {
         let collection =
             CollectionRepo::ensure_belong_with_return(state, user_id, collection_id).await?;
 
-        // 移除照片
+        // 移除媒体
         let remove_count =
             CollectionRepo::remove_collection_medias(state, user_id, collection, &media_ids)
                 .await?;

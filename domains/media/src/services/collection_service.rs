@@ -83,14 +83,14 @@ impl CollectionService {
         user_id: UserId,
         collection_id: CollectionId,
     ) -> Result<()> {
-        // 删除收藏夹 和 收藏夹照片
+        // 删除收藏夹 和 收藏夹媒体
         CollectionRepo::delete_collection(state, user_id, collection_id).await?;
 
         Ok(())
     }
 }
 
-// 当照片删除时
+// 当媒体删除时
 #[step_derive::declare_transaction_step(
     ctx = crate::services::media_service::MediaDeleteContext,
     slice = crate::services::media_service::MEDIA_DELETE_STEPS,
@@ -99,7 +99,7 @@ impl CollectionService {
     method = on_media_delete,
 )]
 impl CollectionService {
-    /// 清理收藏夹照片 和 更新收藏夹计数.
+    /// 清理收藏夹媒体 和 更新收藏夹计数.
     async fn on_media_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,

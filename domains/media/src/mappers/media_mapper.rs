@@ -26,7 +26,7 @@ impl MediaMapper {}
 
 // 修改
 impl MediaMapper {
-    /// 增量更新照片的评论数量.
+    /// 增量更新媒体的评论数量.
     pub async fn update_comment_count_delta(
         db: &impl ConnectionTrait,
         media_id: MediaId,
@@ -44,7 +44,7 @@ impl MediaMapper {
         Ok(())
     }
 
-    /// 增量更新照片的点赞数量.
+    /// 增量更新媒体的点赞数量.
     pub async fn update_like_count_delta(
         db: &impl ConnectionTrait,
         media_id: MediaId,
@@ -62,7 +62,7 @@ impl MediaMapper {
 
 // 查询
 impl MediaMapper {
-    /// 检查照片是否存在.
+    /// 检查媒体是否存在.
     pub async fn exists(db: &impl ConnectionTrait, media_id: MediaId) -> Result<bool> {
         let count = Entity::find()
             .filter(Column::Id.eq(media_id))
@@ -71,13 +71,13 @@ impl MediaMapper {
         Ok(count > 0)
     }
 
-    /// 确保照片存在
+    /// 确保媒体存在
     pub async fn ensure_exist(db: &impl ConnectionTrait, media_id: MediaId) -> Result<()> {
         if !Self::exists(db, media_id).await? {
             return Err(ContextualError::warn_without_source(
                 "media_not_exist",
-                "照片不存在",
-                AppError::not_found("照片不存在"),
+                "媒体不存在",
+                AppError::not_found("媒体不存在"),
             ));
         }
         Ok(())
@@ -106,7 +106,7 @@ impl MediaMapper {
         Ok(!results.is_empty())
     }
 
-    /// 构建照片游标查询, 并统一处理时间与 ID 的排序边界.
+    /// 构建媒体游标查询, 并统一处理时间与 ID 的排序边界.
     fn build_cursor_query(
         cursor: Option<&TimeIdCursor<MediaId>>,
         size: u64,
@@ -143,10 +143,10 @@ impl MediaMapper {
         } else if let Some(anchor) = anchor_time {
             // 无游标但有锚点时间时，用锚点时间作为虚拟游标
             if filter {
-                // Next (倒序): 找 created_at <= anchor 的照片
+                // Next (倒序): 找 created_at <= anchor 的媒体
                 query = query.filter(Column::CreatedAt.lte(anchor));
             } else {
-                // Prev (正序): 找 created_at >= anchor 的照片
+                // Prev (正序): 找 created_at >= anchor 的媒体
                 query = query.filter(Column::CreatedAt.gte(anchor));
             }
         }
@@ -154,7 +154,7 @@ impl MediaMapper {
         query
     }
 
-    /// 游标查询照片id.
+    /// 游标查询媒体id.
     pub async fn query_cursor_page_ids(
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<MediaId>>,
@@ -172,7 +172,7 @@ impl MediaMapper {
         Ok(CursorPage::from_oversize(records, size))
     }
 
-    /// 按照片id查询记录.
+    /// 按媒体id查询记录.
     pub async fn query_by_ids(
         db: &impl ConnectionTrait,
         ids: &[MediaId],
@@ -188,7 +188,7 @@ impl MediaMapper {
     }
 
     #[cfg(feature = "face")]
-    /// 批量查询照片 ID 和 file_id.
+    /// 批量查询媒体 ID 和 file_id.
     pub async fn query_id_and_file_id_by_ids(
         db: &impl ConnectionTrait,
         ids: impl IntoIterator<Item = &MediaId>,
@@ -206,7 +206,7 @@ impl MediaMapper {
             .to_ok()
     }
 
-    /// 根据照片id查询属于用户的照片
+    /// 根据媒体id查询属于用户的媒体
     pub async fn query_by_user_id_and_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -239,7 +239,7 @@ impl MediaMapper {
             .to_ok()
     }
 
-    /// 根据照片 id 查询 file_id.
+    /// 根据媒体 id 查询 file_id.
     pub async fn query_file_id_by_id(db: &impl ConnectionTrait, id: MediaId) -> Result<String> {
         Entity::find()
             .select_only()
@@ -250,7 +250,7 @@ impl MediaMapper {
             .await?
             .ok_or_error(
                 "media_file_id_not_exist",
-                "照片file_id不存在",
+                "媒体file_id不存在",
                 AppError::InternalServerError,
             )
     }
@@ -273,7 +273,7 @@ impl MediaMapper {
 
 // 删除
 impl MediaMapper {
-    /// 删除照片
+    /// 删除媒体
     pub async fn delete_by_ids(db: &impl ConnectionTrait, ids: &[MediaId]) -> Result<()> {
         Entity::delete_many()
             .filter(Column::Id.is_in(ids.iter().copied()))

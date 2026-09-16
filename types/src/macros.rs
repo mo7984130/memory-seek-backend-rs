@@ -168,7 +168,7 @@ macro_rules! id_type {
 /// 用法:
 /// ```ignore
 /// validated_newtype!(MediaIds, Vec<MediaId>, 1024, "media/",
-///     "照片ID列表不能为空", "照片数量不能超过1024");
+///     "媒体ID列表不能为空", "媒体数量不能超过1024");
 /// validated_newtype!(CommentContent, String, 1024, "media/",
 ///     "评论内容不能为空", "评论内容不能超过1024个字符");
 /// ```
@@ -299,7 +299,7 @@ macro_rules! out_dto {
 /// in_dto!(CollectionCreateParam, "media/"; { ... });
 /// in_dto!(MediaCursorParam, "media/", serde_default; { ... });
 /// in_dto!(ChangePasswordParam, "user/", serialize; { ... });
-/// in_dto!(UploadMediaParam, "media/", serialize, docs = "上传照片参数"; { ... });
+/// in_dto!(UploadMediaParam, "media/", serialize, docs = "上传媒体参数"; { ... });
 /// ```
 #[macro_export]
 macro_rules! in_dto {

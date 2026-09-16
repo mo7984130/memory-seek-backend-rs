@@ -1,4 +1,4 @@
-//! 照片上传:`POST /media`。
+//! 媒体上传:`POST /media`。
 
 use common::axum::{ErrR, SucR};
 use memseek_test::{

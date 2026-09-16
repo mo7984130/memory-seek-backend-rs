@@ -1,4 +1,4 @@
-//! 照片相关类型定义
+//! 媒体相关类型定义
 use validator::Validate;
 
 use crate::cursor::TimeIdCursor;
@@ -6,7 +6,7 @@ use crate::media::face::FaceId;
 use crate::media::media::MediaId;
 
 // ============================================================
-// MediaIds — 校验型照片 ID 批量列表
+// MediaIds — 校验型媒体 ID 批量列表
 // ============================================================
 
 crate::validated_newtype!(
@@ -14,8 +14,8 @@ crate::validated_newtype!(
     Vec<MediaId>,
     1024,
     "media/",
-    "照片ID列表不能为空",
-    "照片数量不能超过1024"
+    "媒体ID列表不能为空",
+    "媒体数量不能超过1024"
 );
 
 // ============================================================
@@ -57,7 +57,7 @@ crate::validated_newtype!(
     "人物名称长度不能超过64个字符"
 );
 
-crate::in_dto!(UploadMediaParam, "media/", serialize, docs = "上传照片请求参数（文件的二进制数据由 multipart 单独传递）"; {
+crate::in_dto!(UploadMediaParam, "media/", serialize, docs = "上传媒体请求参数（文件的二进制数据由 multipart 单独传递）"; {
     /// 文件名
     #[validate(length(min = 1, max = 255, message = "文件名长度在 1 到 255 个字符"))]
     pub file_name: String,
@@ -74,12 +74,12 @@ crate::in_dto!(ExistsByMd5BatchParam, "media/", serialize; {
 });
 
 crate::in_dto!(DeleteMediasParam, "media/", serialize; {
-    /// 照片 ID 列表
+    /// 媒体 ID 列表
     #[validate(nested)]
     pub media_ids: MediaIds,
 });
 
-/// 返回点赞照片分页的默认页大小.
+/// 返回点赞媒体分页的默认页大小.
 fn liked_medias_default_size() -> u64 {
     32
 }
@@ -131,7 +131,7 @@ mod tests {
     #[test]
     fn test_media_ids_validate_empty() {
         let ids = MediaIds::new(vec![]).unwrap_err();
-        assert_eq!(ids, "照片ID列表不能为空");
+        assert_eq!(ids, "媒体ID列表不能为空");
         let ids = MediaIds(vec![]);
         assert!(ids.validate().is_err());
     }

@@ -1,4 +1,4 @@
-//! 照片详情:`GET /media/media/{media_id}`。
+//! 媒体详情:`GET /media/media/{media_id}`。
 
 use common::axum::{ErrR, SucR};
 use memseek_test::{
@@ -16,7 +16,7 @@ use crate::context::Context;
 
 use super::{Session, seed_media, session, token_matches};
 
-/// 详情前置:登录 + 定位一张种子照片。
+/// 详情前置:登录 + 定位一张种子媒体。
 /// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
 #[derive(Default)]
 pub struct DetailSetup {
@@ -25,7 +25,7 @@ pub struct DetailSetup {
     pub file_id: String,
 }
 
-/// 获取照片详情: 响应与库中记录一致, token 绑定当前浏览者。
+/// 获取媒体详情: 响应与库中记录一致, token 绑定当前浏览者。
 #[derive(Default)]
 pub struct GetMediaInfoScenario;
 
@@ -96,7 +96,7 @@ impl Scenario for GetMediaInfoScenario {
 
 register_scenario!(GetMediaInfoScenario);
 
-/// 获取不存在的照片: 期望 400(照片不存在)。
+/// 获取不存在的媒体: 期望 400(媒体不存在)。
 #[derive(Default)]
 pub struct GetMediaInfoNotFoundScenario;
 

@@ -18,7 +18,7 @@ mod entity {
     use crate::auth::user::UserId;
     use crate::media::media::MediaId;
 
-    /// 收藏夹里面没有照片时, cover即为空
+    /// 收藏夹里面没有媒体时, cover即为空
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "media_collection")]
     pub struct Model {
@@ -39,13 +39,13 @@ mod entity {
         #[sea_orm(column_type = "String(StringLen::N(255))")]
         pub description: Option<String>,
 
-        /// 收藏的照片总数
+        /// 收藏的媒体总数
         pub media_count: i64,
 
-        /// 封面照片的文件ID
+        /// 封面媒体的文件ID
         pub cover_file_id: Option<String>,
 
-        /// 封面照片的ID
+        /// 封面媒体的ID
         pub cover_media_id: Option<MediaId>,
 
         /// 创建时间

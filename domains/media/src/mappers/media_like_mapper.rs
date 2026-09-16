@@ -17,7 +17,7 @@ pub struct MediaLikeMapper;
 
 // 创建
 impl MediaLikeMapper {
-    /// 插入照片点赞记录; 重复记录由数据库约束处理.
+    /// 插入媒体点赞记录; 重复记录由数据库约束处理.
     pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -46,8 +46,8 @@ impl MediaLikeMapper {
 
 // 查询
 impl MediaLikeMapper {
-    /// 批量查询用户对一组照片的点赞状态
-    /// 查询用户对一批照片的点赞状态.
+    /// 批量查询用户对一组媒体的点赞状态
+    /// 查询用户对一批媒体的点赞状态.
     pub async fn query_is_like_by_media_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -66,10 +66,10 @@ impl MediaLikeMapper {
             .to_ok()
     }
 
-    /// 查询用户点赞的照片ID和点赞时间列表（带游标分页）
+    /// 查询用户点赞的媒体ID和点赞时间列表（带游标分页）
     ///
     /// 返回 `(MediaId, DateTime)` 元组，其中 DateTime 为点赞时间。
-    /// 分页查询用户点赞过的照片 ID, 并返回点赞时间游标.
+    /// 分页查询用户点赞过的媒体 ID, 并返回点赞时间游标.
     pub async fn query_user_liked_media_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -101,7 +101,7 @@ impl MediaLikeMapper {
 
 // 删除
 impl MediaLikeMapper {
-    /// 删除用户对指定照片的点赞记录.
+    /// 删除用户对指定媒体的点赞记录.
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -116,7 +116,7 @@ impl MediaLikeMapper {
         Ok(res.rows_affected > 0)
     }
 
-    /// 删除指定照片的全部点赞记录.
+    /// 删除指定媒体的全部点赞记录.
     pub async fn delete_all_by_media_ids(
         db: &impl ConnectionTrait,
         media_ids: &[MediaId],

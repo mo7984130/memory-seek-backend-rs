@@ -38,7 +38,7 @@ pub struct MediaState {
 }
 
 impl MediaState {
-    /// 组装照片域所需的仓储, 对象存储和备份组件.
+    /// 组装媒体域所需的仓储, 对象存储和备份组件.
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,

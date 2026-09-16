@@ -9,14 +9,14 @@ step_derive::declare_pipeline!(
     MEDIA_DELETE_PIPELINE
 );
 
-/// 照片删除步骤共享上下文，由服务查询并鉴权后在单个事务管道内消费。
+/// 媒体删除步骤共享上下文，由服务查询并鉴权后在单个事务管道内消费。
 pub struct MediaDeleteContext {
     pub user_id: UserId,
     pub medias: Vec<MediaRecord>,
 }
 
 impl MediaDeleteContext {
-    /// 返回当前删除管道中的照片 ID.
+    /// 返回当前删除管道中的媒体 ID.
     pub fn media_ids(&self) -> Vec<MediaId> {
         self.medias.iter().map(|media| media.id).collect()
     }

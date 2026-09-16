@@ -12,7 +12,7 @@ use types::media::{collection::CollectionId, media::MediaId};
 pub(crate) struct CollectionMediaMapper;
 
 impl CollectionMediaMapper {
-    /// 删除指定相册中的指定照片关联, 并返回受影响的照片数量.
+    /// 删除指定相册中的指定媒体关联, 并返回受影响的媒体数量.
     pub async fn delete_by_collection_id_and_media_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -33,9 +33,9 @@ impl CollectionMediaMapper {
         Ok(result.rows_affected as u64)
     }
 
-    /// 根据media_ids 删除收藏夹照片
-    /// 返回HashMap<受影响的收藏夹id, 该收藏夹删除的照片个数(为负)>
-    /// 删除照片对应的全部相册关联, 并返回受影响的相册计数.
+    /// 根据media_ids 删除收藏夹媒体
+    /// 返回HashMap<受影响的收藏夹id, 该收藏夹删除的媒体个数(为负)>
+    /// 删除媒体对应的全部相册关联, 并返回受影响的相册计数.
     pub async fn delete_by_media_ids(
         db: &impl ConnectionTrait,
         media_ids: &[MediaId],
@@ -65,7 +65,7 @@ impl CollectionMediaMapper {
         Ok(affected)
     }
 
-    /// 查询相册中的照片 ID.
+    /// 查询相册中的媒体 ID.
     pub async fn query_media_id_by_collection_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -94,7 +94,7 @@ impl CollectionMediaMapper {
         Ok(CursorPage::from_oversize(records, size))
     }
 
-    /// 删除相册下的全部照片关联.
+    /// 删除相册下的全部媒体关联.
     pub async fn delete_by_collection_id(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -109,8 +109,8 @@ impl CollectionMediaMapper {
             .to_ok()
     }
 
-    /// 查询包含指定照片的所有收藏夹 ID
-    /// 查询照片所属的相册 ID, 并按用户权限过滤.
+    /// 查询包含指定媒体的所有收藏夹 ID
+    /// 查询媒体所属的相册 ID, 并按用户权限过滤.
     pub async fn query_collection_ids_by_media_id(
         db: &impl ConnectionTrait,
         user_id: UserId,

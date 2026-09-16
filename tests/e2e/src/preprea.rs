@@ -1,7 +1,7 @@
 //! 测试前置准备(prepare): 灌入种子数据。
 //!
 //! 原 `tests/load/seed/`(seed.sh + seed.sql)的 Rust 化迁移:
-//! 幂等灌入账号 / 照片 / 人脸 / 人物 / 时间线统计, 与 server 直连同一数据库。
+//! 幂等灌入账号 / 媒体 / 人脸 / 人物 / 时间线统计, 与 server 直连同一数据库。
 //! 策略: 每次执行先清空种子数据(保 admin 等非种子数据), 再整批灌入。
 //!
 //! 前置要求: postgres 服务已启动(`docker compose -f tests/docker-compose.yml up -d --wait`),
@@ -19,7 +19,7 @@ use crate::context::Context;
 const PASS_HASH: &str = "$argon2id$v=19$m=16384,t=2,p=1$T5U+IfQVViaUNr7dhPHmww$CCUS5IsGLNeg0//M+1Iyuwe1izIKPB0oyRud71qofLY";
 
 /// 种子 SQL 语句(占位符 `:NAME` 由 [`SeedConfig`] 替换, 对应原 seed.sh 的 sed 注入)。
-/// 前 6 条清理 e2e 自建的相册/评论/点赞与上传照片(保证可重复运行), 其后为清空+灌入。
+/// 前 6 条清理 e2e 自建的相册/评论/点赞与上传媒体(保证可重复运行), 其后为清空+灌入。
 /// id 规划(避开 admin id=1): auth 用户 id = g+1; media 用户 id = AUTH_USERS+g+1;
 /// user 模块测试池 id = AUTH_USERS + MEDIA_USERS + g(+1)。
 const SEED_STATEMENTS: [&str; 22] = [
@@ -27,18 +27,18 @@ const SEED_STATEMENTS: [&str; 22] = [
     "DELETE FROM media_comment_like",
     // 2. 清理 e2e 自建的评论
     "DELETE FROM media_comment",
-    // 3. 清理 e2e 自建的照片点赞
+    // 3. 清理 e2e 自建的媒体点赞
     "DELETE FROM media_media_like",
-    // 4. 清理 e2e 自建的收藏夹照片
+    // 4. 清理 e2e 自建的收藏夹媒体
     "DELETE FROM media_collection_media",
     // 5. 清理 e2e 自建的收藏夹
     "DELETE FROM media_collection",
-    // 6. 清理 e2e 上传的照片(md5 全局唯一, 不清理会阻塞下次同内容上传;
-    //    种子照片 file_id 以 seed_file_ 开头, 保留)
+    // 6. 清理 e2e 上传的媒体(md5 全局唯一, 不清理会阻塞下次同内容上传;
+    //    种子媒体 file_id 以 seed_file_ 开头, 保留)
     "DELETE FROM media_media WHERE file_id NOT LIKE 'seed_file_%'",
     // 7. 清空人脸/人物表(纯 seed 表, 无外键约束, TRUNCATE 重建保证 id 从头开始)
     "TRUNCATE media_face, media_person RESTART IDENTITY",
-    // 8. 清空种子照片元数据
+    // 8. 清空种子媒体元数据
     "DELETE FROM media_media WHERE file_id LIKE 'seed_file_%'",
     // 9. 清空种子账号(保 admin), e2e 自建/测试池账号一并清理保证可重复运行
     "DELETE FROM auth_user WHERE username LIKE 'loadtest_%' OR username LIKE 'e2e_%' OR username LIKE 'uit_%'",
@@ -68,8 +68,8 @@ const SEED_STATEMENTS: [&str; 22] = [
            now(),
            now()
     FROM generate_series(1, :MEDIA_USERS) AS g",
-    // 13. 照片元数据(每个 media 用户预置若干张; file_id 唯一, 无需真实对象存储)
-    // created_at 随 (u, p) 递增, 避免所有照片同刻导致分页排序退化
+    // 13. 媒体元数据(每个 media 用户预置若干张; file_id 唯一, 无需真实对象存储)
+    // created_at 随 (u, p) 递增, 避免所有媒体同刻导致分页排序退化
     "
     INSERT INTO media_media (user_id, name, size, width, height, mime_type, md5, file_id, created_at, updated_at)
     SELECT (:AUTH_USERS + u + 1),
@@ -88,7 +88,7 @@ const SEED_STATEMENTS: [&str; 22] = [
     "
     INSERT INTO media_timeline_stat (date_str, count, anchor_time, created_at, updated_at)
     VALUES (to_char(now(), 'YYYY-MM'), :MEDIA_COUNT, now(), now(), now())",
-    // 15. 人脸(每张 seed 照片 1 张, 初始未分配; embedding 为随机 512 维)
+    // 15. 人脸(每张 seed 媒体 1 张, 初始未分配; embedding 为随机 512 维)
     "
     INSERT INTO media_face (media_id, person_id, bbox, landmarks, score, embedding, created_at, updated_at)
     SELECT p.id,
@@ -102,7 +102,7 @@ const SEED_STATEMENTS: [&str; 22] = [
            now()
     FROM media_media p
     WHERE p.file_id LIKE 'seed_file_%'",
-    // 16. 人物(每 media 用户 1 个, cover 用其第一张照片; centroid 随机 512 维)
+    // 16. 人物(每 media 用户 1 个, cover 用其第一张媒体; centroid 随机 512 维)
     "
     INSERT INTO media_person (id, name, name_initials, cover_face_id, cover_media_id,
                               cover_file_id, cover_face_score, cover_bbox, centroid, face_count, weight,
@@ -122,8 +122,8 @@ const SEED_STATEMENTS: [&str; 22] = [
            now(),
            now()
     FROM generate_series(1, :MEDIA_USERS) AS u",
-    // 17. 每个用户前 FACES_PER_PERSON 张照片的人脸归属到对应人物
-    //     (person u 的照片 id 范围 [(u-1)*MEDIAS_PER_USER+1, u*MEDIAS_PER_USER])
+    // 17. 每个用户前 FACES_PER_PERSON 张媒体的人脸归属到对应人物
+    //     (person u 的媒体 id 范围 [(u-1)*MEDIAS_PER_USER+1, u*MEDIAS_PER_USER])
     "
     UPDATE media_face f
     SET person_id  = ((f.media_id - 1) / :MEDIAS_PER_USER) + 1,
@@ -194,7 +194,7 @@ pub async fn init(ctx: Context, seed: &SeedConfig) -> Result<Context, Box<dyn st
 
 /// 清理历史 e2e 上传到对象存储的孤儿对象。
 ///
-/// `seed_with` 会删除非种子照片的 DB 记录, 但 S3 对象需另外清理;
+/// `seed_with` 会删除非种子媒体的 DB 记录, 但 S3 对象需另外清理;
 /// 清理失败仅告警, 不阻断测试(孤儿对象不影响断言)。
 async fn clean_uploaded_objects(ctx: &Context) -> Result<(), Box<dyn std::error::Error>> {
     let stmt = Statement::from_string(
