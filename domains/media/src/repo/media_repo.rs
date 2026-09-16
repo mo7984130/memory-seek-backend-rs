@@ -202,7 +202,7 @@ impl MediaRepo {
             .await
     }
 
-    /// 批量查询图片 MD5 是否存在.
+    /// 批量查询媒体 MD5 是否存在.
     pub async fn exists_by_md5_batch(state: &MediaState, md5s: &[String]) -> Result<Vec<bool>> {
         let existing = MediaMapper::exists_by_md5_batch(&state.db, md5s)
             .timed(metrics_name!("db_query"))
@@ -210,7 +210,7 @@ impl MediaRepo {
         Ok(md5s.iter().map(|md5| existing.contains(md5)).collect())
     }
 
-    /// 查询单个图片 MD5 是否存在.
+    /// 查询单个媒体 MD5 是否存在.
     pub async fn exists_by_md5(state: &MediaState, md5: &str) -> Result<bool> {
         MediaMapper::exists_by_md5(&state.db, md5)
             .timed(metrics_name!("db_query"))
@@ -224,7 +224,7 @@ impl MediaRepo {
             .await;
     }
 
-    /// 通过file_id 获取对应的图片尺寸.
+    /// 通过file_id 获取对应的媒体尺寸.
     pub async fn get_media_dimensions(
         state: &MediaState,
         file_id: &str,
@@ -237,7 +237,7 @@ impl MediaRepo {
                     .await?
                     .ok_or_warn(
                         "media_not_found",
-                        "裁剪图片不存在",
+                        "裁剪媒体不存在",
                         AppError::bad_request("媒体不存在"),
                     )
             })

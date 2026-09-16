@@ -42,7 +42,7 @@ pub async fn session(ctx: &Context, index: usize) -> Result<Session, HttpError> 
 
 /// 1x1 PNG fixture(结构合法、可完整解码; 三个 chunk 的 CRC 均正确)。
 ///
-/// 必须是能真正解码的图片: `FileValidator` 只读文件头/尺寸(IHDR)即放行,
+/// 必须是能真正解码的媒体: `FileValidator` 只读文件头/尺寸(IHDR)即放行,
 /// 但 face 管线会用 `image::load_from_memory` 做完整解码。
 static PNG_1X1: &str = "89504E470D0A1A0A0000000D4948445200000001000000010802000000907753DE0000000C4944415478DA63F8CFC0000003010100F70341430000000049454E44AE426082";
 
@@ -85,7 +85,7 @@ pub fn md5_hex(data: &[u8]) -> String {
     format!("{:x}", md5::compute(data))
 }
 
-/// 上传一张图片, 返回媒体视图。
+/// 上传一个媒体, 返回媒体视图。
 pub async fn upload(
     ctx: &Context,
     session: &Session,

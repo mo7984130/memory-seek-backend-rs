@@ -16,7 +16,7 @@ use crate::context::Context;
 
 use super::{Session, session, unique_png, unique_tag};
 
-/// 删除前置:登录 + 上传一张唯一图片(得到可删除的目标)。
+/// 删除前置:登录 + 上传一张唯一媒体(得到可删除的目标)。
 /// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
 #[derive(Default)]
 pub struct DeleteSetup {

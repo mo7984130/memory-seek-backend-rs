@@ -223,7 +223,7 @@ impl MediaMapper {
             .to_ok()
     }
 
-    /// 根据 file_id 查询图片尺寸.
+    /// 根据 file_id 查询媒体尺寸.
     pub async fn query_dimensions_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,

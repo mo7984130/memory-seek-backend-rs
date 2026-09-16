@@ -35,7 +35,7 @@ pub struct Controller;
 impl ControllerRouter for Controller {
     type State = MediaState;
 
-    /// media 模块的公开路由（图片访问等无需认证的接口）
+    /// media 模块的公开路由（媒体访问等无需认证的接口）
     fn public_routes() -> Router<Arc<Self::State>> {
         Router::new().nest("/media", MediaController::public_routes())
     }

@@ -15,7 +15,7 @@ use crate::context::Context;
 
 use super::{Session, file_form, md5_hex, session, token_matches, unique_png, unique_tag};
 
-/// 上传前置:登录 + 本次任务唯一图片字节。
+/// 上传前置:登录 + 本次任务唯一媒体字节。
 #[derive(Default)]
 pub struct UploadSetup {
     pub session: Session,

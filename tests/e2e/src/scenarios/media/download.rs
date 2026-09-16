@@ -1,4 +1,4 @@
-//! 图片下载:`GET /media/{token}`(公开路由)。
+//! 媒体下载:`GET /media/{token}`(公开路由)。
 
 use memseek_test::{
     TaskIndex,
@@ -12,7 +12,7 @@ use crate::context::Context;
 
 use super::{Session, session, unique_png, unique_tag};
 
-/// 下载前置:登录 + 上传唯一图片, 记录原图 token 与字节。
+/// 下载前置:登录 + 上传唯一媒体, 记录原图 token 与字节。
 #[derive(Default)]
 pub struct DownloadSetup {
     pub bytes: Vec<u8>,

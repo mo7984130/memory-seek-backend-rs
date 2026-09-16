@@ -55,7 +55,7 @@ impl ControllerRouter for MediaController {
 }
 
 impl MediaController {
-    /// 接收 multipart 图片, 完成校验, 存储并记录上传行为.
+    /// 接收 multipart 媒体, 完成校验, 存储并记录上传行为.
     async fn upload(
         State(state): State<Arc<MediaState>>,
         Extension(user_id): Extension<UserId>,
@@ -122,7 +122,7 @@ impl MediaController {
             .to_r_ok()
     }
 
-    /// 批量检查图片 MD5 是否已存在.
+    /// 批量检查媒体 MD5 是否已存在.
     async fn md5s_exist(
         State(state): State<Arc<MediaState>>,
         ValidatedJson(req): ValidatedJson<ExistsByMd5BatchParam>,
@@ -132,7 +132,7 @@ impl MediaController {
             .to_r_ok()
     }
 
-    /// 解密图片访问令牌并返回原图或处理后的图片流.
+    /// 解密媒体访问令牌并返回原图或处理后的媒体流.
     async fn get_image(
         State(state): State<Arc<MediaState>>,
         Path(token): Path<String>,
