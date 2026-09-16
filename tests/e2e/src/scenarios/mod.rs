@@ -1,4 +1,4 @@
 pub mod auth;
-pub mod media;
+pub mod visual;
 pub mod system;
 pub mod user;

@@ -11,7 +11,7 @@ use memseek_test::{
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
 use types::auth;
-use types::media::ImageTokenStr;
+use types::visual::ImageTokenStr;
 
 use crate::context::Context;
 

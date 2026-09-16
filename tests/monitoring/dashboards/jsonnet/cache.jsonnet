@@ -90,15 +90,15 @@ local panels = [
 
 // ---- 模板变量:缓存实例 ----
 local cacheVariable = {
-  current: { selected: true, text: 'media_info', value: 'media_info' },
+  current: { selected: true, text: 'visual_info', value: 'visual_info' },
   hide: 0,
   label: '缓存实例',
   name: 'cache',
   options: [
     { selected: false, text: 'user_info', value: 'user_info' },
     { selected: false, text: 'user_info_single', value: 'user_info_single' },
-    { selected: false, text: 'media_info', value: 'media_info' },
-    { selected: false, text: 'media_dimensions', value: 'media_dimensions' },
+    { selected: false, text: 'visual_info', value: 'visual_info' },
+    { selected: false, text: 'visual_dimensions', value: 'visual_dimensions' },
     { selected: false, text: 'timeline_stat', value: 'timeline_stat' },
     { selected: false, text: 'person', value: 'person' },
   ],

@@ -1185,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "constants"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "common",
  "types",
@@ -3096,39 +3096,6 @@ name = "md5"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ebb8d8732c6a6df3d8f032a82911cfc747e00efb95cc46e8d0acd5b5b88570c"
-
-[[package]]
-name = "media"
-version = "0.5.0"
-dependencies = [
- "async-trait",
- "audit",
- "axum",
- "backup",
- "bytes",
- "common",
- "common_macros",
- "constants",
- "file-validator",
- "futures",
- "image",
- "insight-face-rs",
- "linkme",
- "md5",
- "multi-level-cache",
- "ndarray",
- "oss",
- "petal-clustering",
- "pinyin",
- "sea-orm",
- "serde",
- "serde_json",
- "step_derive",
- "tokio",
- "tracing",
- "types",
- "uuid",
-]
 
 [[package]]
 name = "memchr"
@@ -5209,7 +5176,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "audit",
  "auth",
@@ -5223,7 +5190,6 @@ dependencies = [
  "email",
  "insight-face-rs",
  "linkme",
- "media",
  "metrics",
  "metrics-exporter-prometheus",
  "metrics-tracing-context",
@@ -5242,6 +5208,7 @@ dependencies = [
  "types",
  "user",
  "uuid",
+ "visual",
 ]
 
 [[package]]
@@ -6189,7 +6156,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "base64 0.22.1",
  "common",
@@ -6423,6 +6390,39 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "visual"
+version = "0.6.0"
+dependencies = [
+ "async-trait",
+ "audit",
+ "axum",
+ "backup",
+ "bytes",
+ "common",
+ "common_macros",
+ "constants",
+ "file-validator",
+ "futures",
+ "image",
+ "insight-face-rs",
+ "linkme",
+ "md5",
+ "multi-level-cache",
+ "ndarray",
+ "oss",
+ "petal-clustering",
+ "pinyin",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "step_derive",
+ "tokio",
+ "tracing",
+ "types",
+ "uuid",
+]
 
 [[package]]
 name = "walkdir"

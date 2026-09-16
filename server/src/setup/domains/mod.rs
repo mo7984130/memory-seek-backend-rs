@@ -10,8 +10,8 @@ pub mod audit;
 #[cfg(feature = "user")]
 pub mod user;
 
-#[cfg(feature = "media")]
-pub mod media;
+#[cfg(feature = "visual")]
+pub mod visual;
 
 #[linkme::distributed_slice]
 pub static APP_DOMAINS_FIRST: [crate::setup::InitFn];

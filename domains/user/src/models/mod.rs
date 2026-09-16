@@ -2,7 +2,7 @@ use common::Result;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use types::auth::user::UserId;
-use types::media::ImageToken;
+use types::visual::ImageToken;
 use types::user::UserBriefView;
 
 /// 用户信息数据库查询结果（后端内部使用）

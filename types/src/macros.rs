@@ -11,8 +11,8 @@
 //!
 //! 用法:
 //! ```ignore
-//! id_type!(MediaId, "media/");        // i64 主键
-//! id_type!(TimelineStatId, String, "media/"); // String 主键
+//! id_type!(VisualId, "visual/");        // i64 主键
+//! id_type!(TimelineStatId, String, "visual/"); // String 主键
 //! ```
 
 /// i64 主键 ID:序列化为字符串,反序列化接受字符串/数字
@@ -167,9 +167,9 @@ macro_rules! id_type {
 ///
 /// 用法:
 /// ```ignore
-/// validated_newtype!(MediaIds, Vec<MediaId>, 1024, "media/",
-///     "媒体ID列表不能为空", "媒体数量不能超过1024");
-/// validated_newtype!(CommentContent, String, 1024, "media/",
+/// validated_newtype!(VisualIds, Vec<VisualId>, 1024, "visual/",
+///     "影像ID列表不能为空", "影像数量不能超过1024");
+/// validated_newtype!(CommentContent, String, 1024, "visual/",
 ///     "评论内容不能为空", "评论内容不能超过1024个字符");
 /// ```
 #[macro_export]
@@ -245,10 +245,10 @@ macro_rules! validated_newtype {
 ///
 /// 用法：
 /// ```ignore
-/// out_dto!(MediaView, "media/", rename = "Media"; { ... });
-/// out_dto!(CollectionMediaAddBatchResult, "media/", Default; { ... });
+/// out_dto!(VisualView, "visual/", rename = "Visual"; { ... });
+/// out_dto!(CollectionVisualAddBatchResult, "visual/", Default; { ... });
 /// out_dto!(UserInfo, "user/", Debug; { ... });
-/// out_dto!(FaceBBox, "media/", rename = "FaceBBox", docs = "人脸边界框", Copy; { ... });
+/// out_dto!(FaceBBox, "visual/", rename = "FaceBBox", docs = "人脸边界框", Copy; { ... });
 /// ```
 #[macro_export]
 macro_rules! out_dto {
@@ -296,10 +296,10 @@ macro_rules! out_dto {
 ///
 /// 用法：
 /// ```ignore
-/// in_dto!(CollectionCreateParam, "media/"; { ... });
-/// in_dto!(MediaCursorParam, "media/", serde_default; { ... });
+/// in_dto!(CollectionCreateParam, "visual/"; { ... });
+/// in_dto!(VisualCursorParam, "visual/", serde_default; { ... });
 /// in_dto!(ChangePasswordParam, "user/", serialize; { ... });
-/// in_dto!(UploadMediaParam, "media/", serialize, docs = "上传媒体参数"; { ... });
+/// in_dto!(UploadVisualParam, "visual/", serialize, docs = "上传影像参数"; { ... });
 /// ```
 #[macro_export]
 macro_rules! in_dto {

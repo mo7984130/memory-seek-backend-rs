@@ -13,8 +13,8 @@ jobs:
         name: 端到端测试
         runs-on: ubuntu-latest
         env:
-            # server 需要 media 表(依赖 face-engine)与 /metrics
-            FEATURES: metrics,auth,user,media,face-engine
+            # server 需要 visual 表(依赖 face-engine)与 /metrics
+            FEATURES: metrics,auth,user,visual,face-engine
         steps:
             - name: Checkout
               uses: actions/checkout@v7

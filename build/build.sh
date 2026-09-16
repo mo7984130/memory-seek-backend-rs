@@ -3,7 +3,7 @@ set -e
 
 IMAGE_NAME="ubuntu22.04-rust-build-base"
 PROJECT_NAME="memory-seek-server"
-FEATURES="metrics,auth,user,media,face-engine,audit,audit-recording,backup"
+FEATURES="metrics,auth,user,visual,face-engine,audit,audit-recording,backup"
 
 # 构建基础镜像（如果不存在）
 if ! podman image exists $IMAGE_NAME; then

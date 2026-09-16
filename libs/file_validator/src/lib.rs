@@ -123,7 +123,7 @@ impl FileValidator {
     ///
     /// # 错误
     /// 与 [`Self::validate_image`] / [`Self::validate_video`] 一致，由实际识别的类型决定
-    pub fn validate_media(
+    pub fn validate_visual(
         file_data: &[u8],
         file_name: &str,
         content_type: &str,
@@ -505,15 +505,15 @@ mod tests {
     #[test]
     fn image_content_type_uses_the_validation_format_table() {
         assert_eq!(
-            FileValidator::image_content_type("medias/2026/08/17/media.JPEG"),
+            FileValidator::image_content_type("visuals/2026/08/17/visual.JPEG"),
             Some("image/jpeg")
         );
         assert_eq!(
-            FileValidator::image_content_type("medias/2026/08/17/media.png"),
+            FileValidator::image_content_type("visuals/2026/08/17/visual.png"),
             Some("image/png")
         );
-        assert_eq!(FileValidator::image_content_type("media.webp"), None);
-        assert_eq!(FileValidator::image_content_type("media."), None);
+        assert_eq!(FileValidator::image_content_type("visual.webp"), None);
+        assert_eq!(FileValidator::image_content_type("visual."), None);
     }
 
     #[test]
@@ -696,30 +696,30 @@ mod tests {
     #[test]
     fn video_content_type_uses_the_validation_format_table() {
         assert_eq!(
-            FileValidator::video_content_type("medias/2026/09/16/media.mp4"),
+            FileValidator::video_content_type("visuals/2026/09/16/visual.mp4"),
             Some("video/mp4")
         );
         assert_eq!(
-            FileValidator::video_content_type("medias/2026/09/16/media.MOV"),
+            FileValidator::video_content_type("visuals/2026/09/16/visual.MOV"),
             Some("video/quicktime")
         );
         assert_eq!(
-            FileValidator::video_content_type("medias/2026/09/16/media.webm"),
+            FileValidator::video_content_type("visuals/2026/09/16/visual.webm"),
             Some("video/webm")
         );
         assert_eq!(
-            FileValidator::video_content_type("medias/2026/09/16/media.mkv"),
+            FileValidator::video_content_type("visuals/2026/09/16/visual.mkv"),
             Some("video/x-matroska")
         );
-        assert_eq!(FileValidator::video_content_type("media.avi"), None);
-        assert_eq!(FileValidator::video_content_type("media."), None);
+        assert_eq!(FileValidator::video_content_type("visual.avi"), None);
+        assert_eq!(FileValidator::video_content_type("visual."), None);
     }
 
     // ---- 统一入口 ----
 
     #[test]
-    fn validate_media_dispatches_video() {
-        let meta = FileValidator::validate_media(SAMPLE_MP4, "sample.mp4", "video/mp4")
+    fn validate_visual_dispatches_video() {
+        let meta = FileValidator::validate_visual(SAMPLE_MP4, "sample.mp4", "video/mp4")
             .expect("视频应校验通过");
         assert!(meta.is_video());
         assert_eq!(meta.duration_ms, Some(1440));
@@ -728,9 +728,9 @@ mod tests {
     }
 
     #[test]
-    fn validate_media_dispatches_image() {
+    fn validate_visual_dispatches_image() {
         let tiny_png = hex::decode("89504E470D0A1A0A0000000D4948445200000001000000010802000000907753DE0000000C4944415408D763F8FF7F0005FE02FE0DC444830000000049454E44AE426082").unwrap();
-        let meta = FileValidator::validate_media(&tiny_png, "pixel.png", "text/html")
+        let meta = FileValidator::validate_visual(&tiny_png, "pixel.png", "text/html")
             .expect("图片应校验通过");
         assert!(!meta.is_video());
         assert_eq!(meta.duration_ms, None);
@@ -740,9 +740,9 @@ mod tests {
     }
 
     #[test]
-    fn validate_media_unsupported_extension() {
+    fn validate_visual_unsupported_extension() {
         let result =
-            FileValidator::validate_media(SAMPLE_MP4, "test.exe", "application/octet-stream");
+            FileValidator::validate_visual(SAMPLE_MP4, "test.exe", "application/octet-stream");
         assert!(matches!(
             result,
             Err(FileValidationError::UnsupportedFileType)

@@ -17,7 +17,7 @@ use tokio::task::spawn_blocking;
 
 use crate::UserState;
 use types::auth::user::UserId;
-use types::media::{ImageToken, ImageTokenStr};
+use types::visual::{ImageToken, ImageTokenStr};
 use types::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
     UpdateAvatarParam, UserBriefView, UserInfo,

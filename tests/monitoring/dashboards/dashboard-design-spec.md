@@ -2,7 +2,7 @@
 
 ## 概述
 
-本规范定义 Grafana Dashboard 的统一设计标准，确保各 dashboard（auth / user / media /
+本规范定义 Grafana Dashboard 的统一设计标准，确保各 dashboard（auth / user / visual /
 cache / system）风格一致、布局清晰，且面板查询的指标名与代码一致。
 
 ## 生成链路（唯一事实来源）
@@ -20,17 +20,17 @@ Dashboard 由 jsonnet 生成，**禁止手改生成产物**：
 
 ```jsonnet
 {
-  rowTitle: '获取照片列表 (get_collection_medias)', // row 标题
+  rowTitle: '获取照片列表 (get_collection_visuals)', // row 标题
   name: '获取照片列表',                              // 面板标题前缀
-  func: 'get_collection_medias',                     // 指标 {func} 段
+  func: 'get_collection_visuals',                     // 指标 {func} 段
   steps: [
-    { metric: 'query_media_ids', label: '查询照片 ID' },             // 写法一
+    { metric: 'query_visual_ids', label: '查询照片 ID' },             // 写法一
     { metric: 'validate_image:duration_seconds', label: '图片校验' }, // 写法二
   ],
 }
 ```
 
-现状：`auth` / `user` / `media` / `cache` / `system` 五个 dashboard 均已由 jsonnet 生成
+现状：`auth` / `user` / `visual` / `cache` / `system` 五个 dashboard 均已由 jsonnet 生成
 （`generate.sh` 覆盖全部）。
 
 ## 命名规范
@@ -51,7 +51,7 @@ Dashboard 由 jsonnet 生成，**禁止手改生成产物**：
 ```
 用户登录 (login)
 获取用户信息 (get_user_info)
-上传照片 (upload_media)
+上传照片 (upload_visual)
 ```
 
 ### Panel 标题
@@ -90,11 +90,11 @@ Dashboard 由 jsonnet 生成，**禁止手改生成产物**：
 | `HTTP 错误率` | timeseries | `sum(rate(server_http_requests_total{status_class="5xx",module="<模块>"}[5m])) by (route, method) / sum(rate(server_http_requests_total{module="<模块>"}[5m])) by (route, method) * 100` |
 | `HTTP 延迟 (P99)` | timeseries | `histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module="<模块>"}[5m])) by (le, route, method)) * 1000` |
 
-> `<模块>` 为 dashboard 所属模块（auth / user / media），由 metrics 中间件的 `module`
+> `<模块>` 为 dashboard 所属模块（auth / user / visual），由 metrics 中间件的 `module`
 > 标签提供（按路由前缀归类，详见 metrics-naming.md）。**system dashboard 的 HTTP 行
 > 不加 `module` 过滤**，保留全局视角。
 >
-> 三个面板均按 `route` + `method` 分组（图例 `{{method}} {{route}}`，如 `GET /media/:id`），
+> 三个面板均按 `route` + `method` 分组（图例 `{{method}} {{route}}`，如 `GET /visual/:id`），
 > 区分同一路径下的不同请求方式；QPS 面板以 `> 0` 过滤零流量序列，错误率面板只对实际有请求的
 > route+method 组合出图，均不显示无流量的图例项。
 > HTTP 延迟面板仅保留 **P99 汇总**；P50/P95/P99 的详细分位数
@@ -347,7 +347,7 @@ Auth 模块监控
 - 2026-09-10: HTTP 延迟面板收敛为 P99 单查询（详细分位数见各操作的耗时面板）。
 - 2026-09-10: 图例不可见（`showLegend: false` + `displayMode: list`），不再展示系列名与
   `Last *` 统计值；`displayMode: hidden` 在 Grafana 13.2.1 存在 NoData 渲染 bug，禁用。
-- 2026-06-18: 初始版本，统一 auth/user/media 三个模块的 dashboard 设计
+- 2026-06-18: 初始版本，统一 auth/user/visual 三个模块的 dashboard 设计
 - 2026-06-19: 默认时间范围改为 5 分钟，刷新间隔改为 5 秒
 - 2026-06-19: 移除并发度相关设计（底部汇总区、并发度 target/override、单位/阈值定义）
 - 2026-06-19: 明确单行布局（6+6+12 同一 y 值），Panel 标题去掉"与"，成功率阈值移至 override

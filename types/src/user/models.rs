@@ -4,7 +4,7 @@ use common::time::DateTime;
 use validator::Validate;
 
 use super::validators::*;
-use crate::{auth::user::UserId, media::ImageTokenStr};
+use crate::{auth::user::UserId, visual::ImageTokenStr};
 
 // ============================================================
 // UserIds — 校验型用户 ID 批量列表

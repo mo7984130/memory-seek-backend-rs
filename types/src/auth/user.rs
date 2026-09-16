@@ -48,7 +48,7 @@ mod entity {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{media::ImageToken, user::models::UserInfo};
+    use crate::{visual::ImageToken, user::models::UserInfo};
 
     #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
     #[sea_orm(table_name = "auth_user")]

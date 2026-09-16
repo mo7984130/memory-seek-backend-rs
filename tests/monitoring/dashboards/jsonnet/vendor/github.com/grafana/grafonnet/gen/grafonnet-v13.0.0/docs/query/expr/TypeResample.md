@@ -65,7 +65,7 @@ withDownsampler(value)
 PARAMETERS:
 
 * **value** (`string`)
-   - valid values: `"sum"`, `"mean"`, `"min"`, `"max"`, `"count"`, `"last"`, `"median"`
+   - valid values: `"sum"`, `"mean"`, `"min"`, `"max"`, `"count"`, `"last"`, `"visualn"`
 
 The downsample function
 Possible enum values:
@@ -75,7 +75,7 @@ Possible enum values:
  - `"max"` 
  - `"count"` 
  - `"last"` 
- - `"median"` 
+ - `"visualn"` 
 ### fn withExpression
 
 ```jsonnet

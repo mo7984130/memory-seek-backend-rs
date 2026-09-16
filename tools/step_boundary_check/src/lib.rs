@@ -500,7 +500,7 @@ impl Step<Ctx> for MyStep {{
                 Ok(())
             }
         "#;
-        let violations = check_source(source, "/repo/domains/media/src/mappers/demo.rs");
+        let violations = check_source(source, "/repo/domains/visual/src/mappers/demo.rs");
         assert!(violations
             .iter()
             .any(|v| v.message.contains("common::error::contextual::Result")));
@@ -512,7 +512,7 @@ impl Step<Ctx> for MyStep {{
             use common::error::contextual::Result;
             async fn query() -> Result<()> { Ok(()) }
         "#;
-        assert!(check_source(source, "/repo/domains/media/src/mappers/demo.rs").is_empty());
+        assert!(check_source(source, "/repo/domains/visual/src/mappers/demo.rs").is_empty());
     }
 
     #[test]
@@ -521,7 +521,7 @@ impl Step<Ctx> for MyStep {{
             use common::error::Result;
             async fn query() -> Result<()> { Ok(()) }
         "#;
-        let violations = check_source(source, "/repo/domains/media/src/mappers/demo.rs");
+        let violations = check_source(source, "/repo/domains/visual/src/mappers/demo.rs");
         assert!(violations
             .iter()
             .any(|v| v.message.contains("common::error::contextual::Result")));
@@ -556,7 +556,7 @@ impl Step<Ctx> for MyStep {{
         let source = r#"
             fn service() { tracing::error!("failed"); }
         "#;
-        let violations = check_source(source, "/repo/domains/media/src/services/demo.rs");
+        let violations = check_source(source, "/repo/domains/visual/src/services/demo.rs");
         assert!(violations.is_empty());
     }
 
@@ -568,7 +568,7 @@ impl Step<Ctx> for MyStep {{
 
     #[test]
     fn rejects_column_path() {
-        let src = source_with("filter(Column::MediaId.is_in(vec![1]));", r#"&[]"#);
+        let src = source_with("filter(Column::VisualId.is_in(vec![1]));", r#"&[]"#);
         assert_eq!(check_source(&src, "t.rs").len(), 1);
     }
 
@@ -583,7 +583,7 @@ impl Step<Ctx> for MyStep {{
 
     #[test]
     fn ignores_context_method_call() {
-        let src = source_with("let ids = _ctx.media_ids();", r#"&["MediaMapper"]"#);
+        let src = source_with("let ids = _ctx.visual_ids();", r#"&["VisualMapper"]"#);
         assert!(check_source(&src, "t.rs").is_empty());
     }
 
@@ -633,16 +633,16 @@ mod a {
     fn allows_owned_mapper_in_declare_transaction_step() {
         let src = r#"
 #[step_derive::declare_transaction_step(
-    ctx = crate::services::media_service::MediaDeleteContext,
+    ctx = crate::services::visual_service::VisualDeleteContext,
     name = "foo",
-    owns = ["CollectionMediaMapper", "CollectionMapper"],
-method = on_media_delete,
+    owns = ["CollectionVisualMapper", "CollectionMapper"],
+method = on_visual_delete,
 )]
 impl FooService {
-    async fn on_media_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut MediaDeleteContext) -> common::Result<()> {
-        let ids = ctx.media_ids();
-        CollectionMediaMapper::delete_by_media_ids(txn, &ids).await?;
-        CollectionMapper::update_media_count_delta_batch(txn, &HashMap::new()).await?;
+    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
+        let ids = ctx.visual_ids();
+        CollectionVisualMapper::delete_by_visual_ids(txn, &ids).await?;
+        CollectionMapper::update_visual_count_delta_batch(txn, &HashMap::new()).await?;
         Ok(())
     }
 }
@@ -654,13 +654,13 @@ impl FooService {
     fn rejects_unowned_mapper_in_declare_transaction_step() {
         let src = r#"
 #[step_derive::declare_transaction_step(
-    ctx = MediaDeleteContext,
+    ctx = VisualDeleteContext,
     name = "foo",
     owns = ["CollectionMapper"],
-method = on_media_delete,
+method = on_visual_delete,
 )]
 impl FooService {
-    async fn on_media_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut MediaDeleteContext) -> common::Result<()> {
+    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
         CommentMapper::delete_all(txn).await?;
         Ok(())
     }
@@ -677,11 +677,11 @@ impl FooService {
 #[step_derive::declare_transaction_step(
     name = "foo",
     owns = [],
-    ctx = MediaDeleteContext,
-    method = on_media_delete,
+    ctx = VisualDeleteContext,
+    method = on_visual_delete,
 )]
 impl FooService {
-    async fn on_media_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut MediaDeleteContext) -> common::Result<()> {
+    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
         Entity::find().all(txn).await?;
         let _ = ActiveModel { ..Default::default() };
         Ok(())
@@ -697,13 +697,13 @@ impl FooService {
         let src = r#"
 mod a {
     #[step_derive::declare_transaction_step(
-        ctx = MediaDeleteContext,
+        ctx = VisualDeleteContext,
         name = "foo",
         owns = ["A"],
-    method = on_media_delete,
+    method = on_visual_delete,
     )]
     impl FooService {
-        async fn on_media_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut MediaDeleteContext) -> common::Result<()> {
+        async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
             BMapper::x(txn).await?;
             Ok(())
         }

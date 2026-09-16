@@ -1,6 +1,6 @@
 # Metrics 指标规范
 
-适用范围：`domains/*`（auth / user / media / backup / audit）与依赖库（common 多级缓存、
+适用范围：`domains/*`（auth / user / visual / backup / audit）与依赖库（common 多级缓存、
 libs/oss、libs/email）。目标：每个对外操作都具备 `attempts` / `success` /
 `duration_seconds` 三要素，指标名低基数、单位统一、可被 dashboard 直接消费。
 
@@ -27,29 +27,29 @@ libs/oss、libs/email）。目标：每个对外操作都具备 `attempts` / `su
 提供 span（子步骤指标依赖 span 名）。
 
 ```rust
-#[common_macros::metered(name = "get_collection_medias")] // 缺省时用 rust 函数名
+#[common_macros::metered(name = "get_collection_visuals")] // 缺省时用 rust 函数名
 #[tracing::instrument(
-    name = "get_collection_medias",                       // 必须与 metered 的 name 一致
+    name = "get_collection_visuals",                       // 必须与 metered 的 name 一致
     skip_all,
     fields(user_id = %user_id)
 )]
-pub async fn get_medias(
-    state: &MediaState,
+pub async fn get_visuals(
+    state: &VisualState,
     user_id: UserId,
     collection_id: CollectionId,
-    req: CollectionMediaCursorPageParam,
-) -> Result<CollectionMediaView> {
+    req: CollectionVisualCursorPageParam,
+) -> Result<CollectionVisualView> {
     // 子步骤
-    let ids = CollectionRepo::query_collection_media_ids(state, user_id, collection_id, &req)
-        .timed(metrics_name!("query_media_ids"))
+    let ids = CollectionRepo::query_collection_visual_ids(state, user_id, collection_id, &req)
+        .timed(metrics_name!("query_visual_ids"))
         .await?;
 
     // 失败分类
-    let medias = MediaService::load_medias_info(state, user_id, &ids)
-        .timed(metrics_name!("load_medias_info"))
+    let visuals = VisualService::load_visuals_info(state, user_id, &ids)
+        .timed(metrics_name!("load_visuals_info"))
         .await?;
 
-    Ok(medias)
+    Ok(visuals)
 }
 ```
 
@@ -57,10 +57,10 @@ pub async fn get_medias(
 
 | 指标名 | 类型 | 来源 |
 |--------|------|------|
-| `media:get_collection_medias:attempts` | counter | `#[metered]` |
-| `media:get_collection_medias:duration_seconds` | histogram | `#[metered]` |
-| `media:get_collection_medias:success` | counter | `#[metered]`（`Result::is_ok` 时 +1） |
-| `media:get_collection_medias:query_media_ids` | histogram | `.timed(metrics_name!("step"))` |
+| `visual:get_collection_visuals:attempts` | counter | `#[metered]` |
+| `visual:get_collection_visuals:duration_seconds` | histogram | `#[metered]` |
+| `visual:get_collection_visuals:success` | counter | `#[metered]`（`Result::is_ok` 时 +1） |
+| `visual:get_collection_visuals:query_visual_ids` | histogram | `.timed(metrics_name!("step"))` |
 
 约定：
 
@@ -69,7 +69,7 @@ pub async fn get_medias(
    （`.timed(metrics_name!(...))` / `inc_counter!` / `set_gauge!`）取
    **当前 span 名**。两者必须一致，否则 attempts 与子步骤会落到不同 `{func}` 下。
    函数名过泛或语义不清晰时，用 `metered(name = "...")` + `instrument(name = "...")`
-   成对指定（如 `like` → `like_comment`、`get_medias` → `get_collection_medias`）。
+   成对指定（如 `like` → `like_comment`、`get_visuals` → `get_collection_visuals`）。
 3. 子步骤必须处于 `instrument` span 内（通常即 service 入口），否则会取到中间件的
    `request` span，退化为 `{crate}:request:*` 并互相冲突。
 
@@ -89,7 +89,7 @@ pub async fn get_medias(
 ### 2.3 计数与 gauge
 
 ```rust
-inc_counter!("medias_processed", 1);            // counter
+inc_counter!("visuals_processed", 1);            // counter
 set_gauge!("batch", batch_idx as f64);          // gauge（瞬时值）
 set_gauge!("mode", 1.0, "mode" => "full");      // gauge + 标签
 let _guard = GaugeGuard::start(metrics_name!("running")); // 进入 +1，drop 时 -1
@@ -99,7 +99,7 @@ let _guard = GaugeGuard::start(metrics_name!("running")); // 进入 +1，drop �
 
 一次性任务、循环批处理等不适合操作级四要素的场景，可手动组合
 `metrics_group!(name)` / `metrics_success!(name)` 与子步骤宏。示例见
-`media:face_compute`（`domains/media/src/services/face_service.rs`）。
+`visual:face_compute`（`domains/visual/src/services/face_service.rs`）。
 
 ## 3. 命名规范
 
@@ -111,7 +111,7 @@ let _guard = GaugeGuard::start(metrics_name!("running")); // 进入 +1，drop �
 {crate}:{func}:{step}
 ```
 
-- `{crate}` — 模块 crate 名（`auth` / `user` / `media` / `backup`）
+- `{crate}` — 模块 crate 名（`auth` / `user` / `visual` / `backup`）
 - `{func}` — 操作名，取 `#[metered(name = "...")]` 或 rust 函数名（见 2.1）
 - `{step}` — 操作步骤 / 子步骤名，如 `attempts` / `success` / `duration_seconds` /
   `db_query` / `db_transaction` / `cache_get_or_load` / `s3_upload` 等，取自固定词表
@@ -159,7 +159,7 @@ let _guard = GaugeGuard::start(metrics_name!("running")); // 进入 +1，drop �
 method / route（路由 pattern）/ module / status_class / kind / op / mode
 ```
 
-- `route` 取自 `axum::extract::MatchedPath`（如 `/medias/:id`），未匹配回退 `unmatched`。
+- `route` 取自 `axum::extract::MatchedPath`（如 `/visuals/:id`），未匹配回退 `unmatched`。
 - `module` 由路由前缀归类（`classify_module`，固定词表，见第 6 节）。
 - **禁止**将真实 ID、用户输入、文件名等动态值写入标签。
 
@@ -174,7 +174,7 @@ method / route（路由 pattern）/ module / status_class / kind / op / mode
 | `server.http.duration_seconds` | histogram | `method`、`route`、`module` | 请求耗时（秒） |
 | `server.http.in_flight` | gauge | - | 当前在途请求数 |
 
-- `module` 按路由前缀归类：`/auth/*` → `auth`、`/user/*` → `user`、`/media/*` → `media`、
+- `module` 按路由前缀归类：`/auth/*` → `auth`、`/user/*` → `user`、`/visual/*` → `visual`、
   `/admin/backup/*` → `backup`、其余 `/admin/*` → `audit`，其余（`/health`、`/hello`、
   `unmatched` 等）→ `other`。
   模块 dashboard 的 HTTP 行按 `module` 过滤，全局视图（system dashboard）不过滤。
@@ -208,13 +208,13 @@ L1 本地 moka → L2 Redis → L3 数据库（loader）。
 |-----------------|----------|--------|------------|
 | `user_info` | 用户信息批量（`UserInfoRow`） | `get_user_info_batch` | `change_nickname` / `update_avatar` / `logout` |
 | `user_info_single` | 用户信息单查（完整 `UserInfo`） | `get_user_info` | 同上（独立实例，key 与批量一致） |
-| `media_info` | 照片信息（`MediaRecord`，按 media_id 单一 key） | `load_medias_info` | `delete_medias` |
-| `media_like` | 单条点赞状态（`CachedMediaLike`） | `load_medias_info`（批量读） | `like_media` / `unlike_media`（写状态） |
-| `media_cursor_ids` | 用户照片游标页（`CursorPage<MediaId, ()>`） | `query_media_cursor_ids` | `upload_media` / `delete_medias`（`invalidate_media_cursor_ids`） |
-| `media_dimensions` | 照片尺寸 `(w, h)` | 裁剪 token 宽高查询 | `delete_medias` |
-| `timeline_stat` | 月度统计整表（`Vec<MonthStat>`） | `get_monthly_stats` | `upload_media` / `delete_medias` |
+| `visual_info` | 照片信息（`VisualRecord`，按 visual_id 单一 key） | `load_visuals_info` | `delete_visuals` |
+| `visual_like` | 单条点赞状态（`CachedVisualLike`） | `load_visuals_info`（批量读） | `like_visual` / `unlike_visual`（写状态） |
+| `visual_cursor_ids` | 用户照片游标页（`CursorPage<VisualId, ()>`） | `query_visual_cursor_ids` | `upload_visual` / `delete_visuals`（`invalidate_visual_cursor_ids`） |
+| `visual_dimensions` | 照片尺寸 `(w, h)` | 裁剪 token 宽高查询 | `delete_visuals` |
+| `timeline_stat` | 月度统计整表（`Vec<MonthStat>`） | `get_monthly_stats` | `upload_visual` / `delete_visuals` |
 
-> media_info 缓存内容为 `MediaRecord`，不含按浏览者签发的 token（token 在读取时按浏览者
+> visual_info 缓存内容为 `VisualRecord`，不含按浏览者签发的 token（token 在读取时按浏览者
 > 动态生成），因此键只按照片拆分，同一照片所有浏览者共享一份缓存。
 
 ### oss（libs/oss，feature: `metrics`）
@@ -288,47 +288,47 @@ L1 本地 moka → L2 Redis → L3 数据库（loader）。
 | logout | `user:logout:attempts` `user:logout:success` `user:logout:duration_seconds`<br>`user:logout:db_transaction` `user:logout:redis_delete` `user:logout:cache_invalidate` `user:logout:cache_invalidate_single` |
 | get_user_info_batch | `user:get_user_info_batch:attempts` `user:get_user_info_batch:success` `user:get_user_info_batch:duration_seconds`<br>`user:get_user_info_batch:cache_get_or_load_batch` |
 
-### media 模块
+### visual 模块
 
 | 函数 | 指标 |
 |------|------|
-| get_media_cursor_page | `media:get_media_cursor_page:attempts` `media:get_media_cursor_page:success` `media:get_media_cursor_page:duration_seconds`<br>`media:get_media_cursor_page:find_cursor_page_ids` `media:get_media_cursor_page:load_medias_info` |
-| upload_media | `media:upload_media:attempts` `media:upload_media:success` `media:upload_media:duration_seconds`<br>`media:upload_media:validate_media:duration_seconds` `media:upload_media:md5_hash:duration_seconds` `media:upload_media:s3_upload` `media:upload_media:db_insert`<br>`media:upload_media:cache_get_or_load` `media:upload_media:cache_put` `media:upload_media:cache_invalidate` |
-| exists_by_md5_batch | `media:exists_by_md5_batch:attempts` `media:exists_by_md5_batch:success` `media:exists_by_md5_batch:duration_seconds` |
-| delete_medias | `media:delete_medias:attempts` `media:delete_medias:success` `media:delete_medias:duration_seconds`<br>`media:delete_medias:db_transaction` `media:delete_medias:s3_delete_batch` `media:delete_medias:cache_invalidate` `media:delete_medias:cache_invalidate_dimensions` `media:delete_medias:cache_invalidate_timeline` |
-| download_image | `media:download_image:attempts` `media:download_image:success` `media:download_image:duration_seconds`<br>`media:download_image:s3_download_process` `media:download_image:s3_download_stream` |
-| get_collection_list | `media:get_collection_list:attempts` `media:get_collection_list:success` `media:get_collection_list:duration_seconds`<br>`media:get_collection_list:query_by_user_id` |
-| create_collection | `media:create_collection:attempts` `media:create_collection:success` `media:create_collection:duration_seconds`<br>`media:create_collection:db_insert` |
-| update_collection_info | `media:update_collection_info:attempts` `media:update_collection_info:success` `media:update_collection_info:duration_seconds`<br>`media:update_collection_info:db_update` |
-| delete_collection | `media:delete_collection:attempts` `media:delete_collection:success` `media:delete_collection:duration_seconds`<br>`media:delete_collection:db_transaction` |
-| get_collections_by_media | `media:get_collections_by_media:attempts` `media:get_collections_by_media:success` `media:get_collections_by_media:duration_seconds` |
-| get_collection_medias | `media:get_collection_medias:attempts` `media:get_collection_medias:success` `media:get_collection_medias:duration_seconds`<br>`media:get_collection_medias:query_media_ids` `media:get_collection_medias:load_medias_info` |
-| add_collection_medias | `media:add_collection_medias:attempts` `media:add_collection_medias:success` `media:add_collection_medias:duration_seconds`<br>`media:add_collection_medias:auth_check` `media:add_collection_medias:db_transaction` |
-| remove_collection_medias | `media:remove_collection_medias:attempts` `media:remove_collection_medias:success` `media:remove_collection_medias:duration_seconds`<br>`media:remove_collection_medias:db_transaction` |
-| publish_comment | `media:publish_comment:attempts` `media:publish_comment:success` `media:publish_comment:duration_seconds`<br>`media:publish_comment:db_transaction` |
-| get_comment_cursor_page | `media:get_comment_cursor_page:attempts` `media:get_comment_cursor_page:success` `media:get_comment_cursor_page:duration_seconds`<br>`media:get_comment_cursor_page:query_hot_comments` `media:get_comment_cursor_page:query_by_media_id` `media:get_comment_cursor_page:query_is_like` |
-| delete_comment | `media:delete_comment:attempts` `media:delete_comment:success` `media:delete_comment:duration_seconds`<br>`media:delete_comment:db_transaction` |
-| like_comment | `media:like_comment:attempts` `media:like_comment:success` `media:like_comment:duration_seconds`<br>`media:like_comment:db_transaction` |
-| unlike_comment | `media:unlike_comment:attempts` `media:unlike_comment:success` `media:unlike_comment:duration_seconds`<br>`media:unlike_comment:db_transaction` |
-| like_media | `media:like_media:attempts` `media:like_media:success` `media:like_media:duration_seconds`<br>`media:like_media:db_transaction` |
-| unlike_media | `media:unlike_media:attempts` `media:unlike_media:success` `media:unlike_media:duration_seconds`<br>`media:unlike_media:db_transaction` |
-| get_user_liked_medias | `media:get_user_liked_medias:attempts` `media:get_user_liked_medias:success` `media:get_user_liked_medias:duration_seconds`<br>`media:get_user_liked_medias:query_ids` `media:get_user_liked_medias:load_medias_info` |
-| rename_person | `media:rename_person:attempts` `media:rename_person:success` `media:rename_person:duration_seconds`<br>`media:rename_person:db_transaction` |
-| merge_person | `media:merge_person:attempts` `media:merge_person:success` `media:merge_person:duration_seconds`<br>`media:merge_person:db_transaction` `media:merge_person:cache_get_or_load` |
-| get_persons | `media:get_persons:attempts` `media:get_persons:success` `media:get_persons:duration_seconds`<br>`media:get_persons:query_page` |
-| search_persons | `media:search_persons:attempts` `media:search_persons:success` `media:search_persons:duration_seconds`<br>`media:search_persons:query_search` |
-| change_face_belonging | `media:change_face_belonging:attempts` `media:change_face_belonging:success` `media:change_face_belonging:duration_seconds`<br>`media:change_face_belonging:db_transaction` |
-| delete_face | `media:delete_face:attempts` `media:delete_face:success` `media:delete_face:duration_seconds` |
-| delete_faces_batch | `media:delete_faces_batch:attempts` `media:delete_faces_batch:success` `media:delete_faces_batch:duration_seconds` |
-| face_compute（人脸） | counter：`media:face_compute:attempts` `media:face_compute:success` `media:face_compute:medias_processed` `media:face_compute:faces_detected` `media:face_compute:no_face_medias`<br>gauge：`media:face_compute:running` `media:face_compute:mode`（labels `full` / `incremental`）`media:face_compute:batch` `media:face_compute:total_medias` `media:face_compute:total_faces` `media:face_compute:total_no_face`<br>histogram：`media:face_compute:duration_seconds` `media:face_compute:query` `media:face_compute:download_batch` `media:face_compute:media_download` `media:face_compute:media_decode` `media:face_compute:media_detect` `media:face_compute:insert` |
-| get_monthly_stats | `media:get_monthly_stats:attempts` `media:get_monthly_stats:success` `media:get_monthly_stats:duration_seconds`<br>`media:get_monthly_stats:cache_get_or_load` |
-| get_media_info | `media:get_media_info:attempts` `media:get_media_info:success` `media:get_media_info:duration_seconds`<br>`media:get_media_info:load_medias_info` |
-| get_person_medias | `media:get_person_medias:attempts` `media:get_person_medias:success` `media:get_person_medias:duration_seconds`<br>`media:get_person_medias:query_media_ids` `media:get_person_medias:load_medias_info` |
-| get_faces_by_media_id | `media:get_faces_by_media_id:attempts` `media:get_faces_by_media_id:success` `media:get_faces_by_media_id:duration_seconds` |
-| get_unassigned_face_medias | `media:get_unassigned_face_medias:attempts` `media:get_unassigned_face_medias:success` `media:get_unassigned_face_medias:duration_seconds`<br>`media:get_unassigned_face_medias:query_unassigned_face_media_ids` `media:get_unassigned_face_medias:load_medias_info` |
-| delete_person | `media:delete_person:attempts` `media:delete_person:success` `media:delete_person:duration_seconds`<br>`media:delete_person:db_transaction` |
-| person_full_scan | `media:person_full_scan:attempts` `media:person_full_scan:success` `media:person_full_scan:duration_seconds` |
-| person_secondary_cluster | `media:person_secondary_cluster:attempts` `media:person_secondary_cluster:success` `media:person_secondary_cluster:duration_seconds` |
+| get_visual_cursor_page | `visual:get_visual_cursor_page:attempts` `visual:get_visual_cursor_page:success` `visual:get_visual_cursor_page:duration_seconds`<br>`visual:get_visual_cursor_page:find_cursor_page_ids` `visual:get_visual_cursor_page:load_visuals_info` |
+| upload_visual | `visual:upload_visual:attempts` `visual:upload_visual:success` `visual:upload_visual:duration_seconds`<br>`visual:upload_visual:validate_visual:duration_seconds` `visual:upload_visual:md5_hash:duration_seconds` `visual:upload_visual:s3_upload` `visual:upload_visual:db_insert`<br>`visual:upload_visual:cache_get_or_load` `visual:upload_visual:cache_put` `visual:upload_visual:cache_invalidate` |
+| exists_by_md5_batch | `visual:exists_by_md5_batch:attempts` `visual:exists_by_md5_batch:success` `visual:exists_by_md5_batch:duration_seconds` |
+| delete_visuals | `visual:delete_visuals:attempts` `visual:delete_visuals:success` `visual:delete_visuals:duration_seconds`<br>`visual:delete_visuals:db_transaction` `visual:delete_visuals:s3_delete_batch` `visual:delete_visuals:cache_invalidate` `visual:delete_visuals:cache_invalidate_dimensions` `visual:delete_visuals:cache_invalidate_timeline` |
+| download_image | `visual:download_image:attempts` `visual:download_image:success` `visual:download_image:duration_seconds`<br>`visual:download_image:s3_download_process` `visual:download_image:s3_download_stream` |
+| get_collection_list | `visual:get_collection_list:attempts` `visual:get_collection_list:success` `visual:get_collection_list:duration_seconds`<br>`visual:get_collection_list:query_by_user_id` |
+| create_collection | `visual:create_collection:attempts` `visual:create_collection:success` `visual:create_collection:duration_seconds`<br>`visual:create_collection:db_insert` |
+| update_collection_info | `visual:update_collection_info:attempts` `visual:update_collection_info:success` `visual:update_collection_info:duration_seconds`<br>`visual:update_collection_info:db_update` |
+| delete_collection | `visual:delete_collection:attempts` `visual:delete_collection:success` `visual:delete_collection:duration_seconds`<br>`visual:delete_collection:db_transaction` |
+| get_collections_by_visual | `visual:get_collections_by_visual:attempts` `visual:get_collections_by_visual:success` `visual:get_collections_by_visual:duration_seconds` |
+| get_collection_visuals | `visual:get_collection_visuals:attempts` `visual:get_collection_visuals:success` `visual:get_collection_visuals:duration_seconds`<br>`visual:get_collection_visuals:query_visual_ids` `visual:get_collection_visuals:load_visuals_info` |
+| add_collection_visuals | `visual:add_collection_visuals:attempts` `visual:add_collection_visuals:success` `visual:add_collection_visuals:duration_seconds`<br>`visual:add_collection_visuals:auth_check` `visual:add_collection_visuals:db_transaction` |
+| remove_collection_visuals | `visual:remove_collection_visuals:attempts` `visual:remove_collection_visuals:success` `visual:remove_collection_visuals:duration_seconds`<br>`visual:remove_collection_visuals:db_transaction` |
+| publish_comment | `visual:publish_comment:attempts` `visual:publish_comment:success` `visual:publish_comment:duration_seconds`<br>`visual:publish_comment:db_transaction` |
+| get_comment_cursor_page | `visual:get_comment_cursor_page:attempts` `visual:get_comment_cursor_page:success` `visual:get_comment_cursor_page:duration_seconds`<br>`visual:get_comment_cursor_page:query_hot_comments` `visual:get_comment_cursor_page:query_by_visual_id` `visual:get_comment_cursor_page:query_is_like` |
+| delete_comment | `visual:delete_comment:attempts` `visual:delete_comment:success` `visual:delete_comment:duration_seconds`<br>`visual:delete_comment:db_transaction` |
+| like_comment | `visual:like_comment:attempts` `visual:like_comment:success` `visual:like_comment:duration_seconds`<br>`visual:like_comment:db_transaction` |
+| unlike_comment | `visual:unlike_comment:attempts` `visual:unlike_comment:success` `visual:unlike_comment:duration_seconds`<br>`visual:unlike_comment:db_transaction` |
+| like_visual | `visual:like_visual:attempts` `visual:like_visual:success` `visual:like_visual:duration_seconds`<br>`visual:like_visual:db_transaction` |
+| unlike_visual | `visual:unlike_visual:attempts` `visual:unlike_visual:success` `visual:unlike_visual:duration_seconds`<br>`visual:unlike_visual:db_transaction` |
+| get_user_liked_visuals | `visual:get_user_liked_visuals:attempts` `visual:get_user_liked_visuals:success` `visual:get_user_liked_visuals:duration_seconds`<br>`visual:get_user_liked_visuals:query_ids` `visual:get_user_liked_visuals:load_visuals_info` |
+| rename_person | `visual:rename_person:attempts` `visual:rename_person:success` `visual:rename_person:duration_seconds`<br>`visual:rename_person:db_transaction` |
+| merge_person | `visual:merge_person:attempts` `visual:merge_person:success` `visual:merge_person:duration_seconds`<br>`visual:merge_person:db_transaction` `visual:merge_person:cache_get_or_load` |
+| get_persons | `visual:get_persons:attempts` `visual:get_persons:success` `visual:get_persons:duration_seconds`<br>`visual:get_persons:query_page` |
+| search_persons | `visual:search_persons:attempts` `visual:search_persons:success` `visual:search_persons:duration_seconds`<br>`visual:search_persons:query_search` |
+| change_face_belonging | `visual:change_face_belonging:attempts` `visual:change_face_belonging:success` `visual:change_face_belonging:duration_seconds`<br>`visual:change_face_belonging:db_transaction` |
+| delete_face | `visual:delete_face:attempts` `visual:delete_face:success` `visual:delete_face:duration_seconds` |
+| delete_faces_batch | `visual:delete_faces_batch:attempts` `visual:delete_faces_batch:success` `visual:delete_faces_batch:duration_seconds` |
+| face_compute（人脸） | counter：`visual:face_compute:attempts` `visual:face_compute:success` `visual:face_compute:visuals_processed` `visual:face_compute:faces_detected` `visual:face_compute:no_face_visuals`<br>gauge：`visual:face_compute:running` `visual:face_compute:mode`（labels `full` / `incremental`）`visual:face_compute:batch` `visual:face_compute:total_visuals` `visual:face_compute:total_faces` `visual:face_compute:total_no_face`<br>histogram：`visual:face_compute:duration_seconds` `visual:face_compute:query` `visual:face_compute:download_batch` `visual:face_compute:visual_download` `visual:face_compute:visual_decode` `visual:face_compute:visual_detect` `visual:face_compute:insert` |
+| get_monthly_stats | `visual:get_monthly_stats:attempts` `visual:get_monthly_stats:success` `visual:get_monthly_stats:duration_seconds`<br>`visual:get_monthly_stats:cache_get_or_load` |
+| get_visual_info | `visual:get_visual_info:attempts` `visual:get_visual_info:success` `visual:get_visual_info:duration_seconds`<br>`visual:get_visual_info:load_visuals_info` |
+| get_person_visuals | `visual:get_person_visuals:attempts` `visual:get_person_visuals:success` `visual:get_person_visuals:duration_seconds`<br>`visual:get_person_visuals:query_visual_ids` `visual:get_person_visuals:load_visuals_info` |
+| get_faces_by_visual_id | `visual:get_faces_by_visual_id:attempts` `visual:get_faces_by_visual_id:success` `visual:get_faces_by_visual_id:duration_seconds` |
+| get_unassigned_face_visuals | `visual:get_unassigned_face_visuals:attempts` `visual:get_unassigned_face_visuals:success` `visual:get_unassigned_face_visuals:duration_seconds`<br>`visual:get_unassigned_face_visuals:query_unassigned_face_visual_ids` `visual:get_unassigned_face_visuals:load_visuals_info` |
+| delete_person | `visual:delete_person:attempts` `visual:delete_person:success` `visual:delete_person:duration_seconds`<br>`visual:delete_person:db_transaction` |
+| person_full_scan | `visual:person_full_scan:attempts` `visual:person_full_scan:success` `visual:person_full_scan:duration_seconds` |
+| person_secondary_cluster | `visual:person_secondary_cluster:attempts` `visual:person_secondary_cluster:success` `visual:person_secondary_cluster:duration_seconds` |
 
 ### audit 模块
 
@@ -379,12 +379,12 @@ HTTP 视角仍由 `server.http.*{module="audit"}` 覆盖（`/admin/audits`；`/a
 | email | `metrics` | `common/metrics` |
 | auth | `metrics` | `common/metrics`、`email/metrics` |
 | user | `metrics` | `common/metrics`、`multi-level-cache/metrics`、`oss/metrics` |
-| media | `metrics` | `common/metrics`、`multi-level-cache/metrics`、`oss/metrics` |
+| visual | `metrics` | `common/metrics`、`multi-level-cache/metrics`、`oss/metrics` |
 | backup | `metrics` | `common/metrics`、`oss/metrics` |
 | audit | `metrics` | `common/metrics` |
-| server | `metrics` | `common/metrics`、`dep:metrics`、`dep:sysinfo`、`dep:metrics-exporter-prometheus`、`media?/metrics`、`user?/metrics`、`auth?/metrics`、`backup?/metrics`、`audit?/metrics`、`oss?/metrics`、`email?/metrics` |
+| server | `metrics` | `common/metrics`、`dep:metrics`、`dep:sysinfo`、`dep:metrics-exporter-prometheus`、`visual?/metrics`、`user?/metrics`、`auth?/metrics`、`backup?/metrics`、`audit?/metrics`、`oss?/metrics`、`email?/metrics` |
 
-> `oss` / `email` / `audit` 已提供独立 `metrics` feature：`oss` 由 user / media / backup
+> `oss` / `email` / `audit` 已提供独立 `metrics` feature：`oss` 由 user / visual / backup
 > 级联，`email` 由 auth 级联，`audit` 由 server 按可选依赖级联；server 还级联
 > `oss?/metrics` / `email?/metrics` / `audit?/metrics`。新增业务域时，务必同步在 server 的
 > `metrics` feature 中追加 `{domain}?/metrics`。
@@ -409,7 +409,7 @@ HTTP 视角仍由 `server.http.*{module="audit"}` 覆盖（`/admin/audits`；`/a
 
 ## 11. 命名要点
 
-1. 业务指标第一段为模块 crate 名（`auth` / `user` / `media` / `backup`）。
+1. 业务指标第一段为模块 crate 名（`auth` / `user` / `visual` / `backup`）。
 2. 操作名来自 `#[metered(name)]`（缺省为 rust 函数名）；子步骤来自 span 名，二者
    必须一致（见 2.1 约定 2）。
 3. 依赖指标使用逻辑前缀 `cache:` / `oss:` / `email:`。
@@ -426,22 +426,22 @@ HTTP 视角仍由 `server.http.*{module="audit"}` 覆盖（`/admin/audits`；`/a
 ## 更新记录
 
 - 2026-09-12: 补齐剩余缺口。子步骤：auth `login:db_update` / `register:redis_delete` /
-  `send_email_code:acquire_permit`；media `get_media_info:load_medias_info` /
-  `get_user_liked_medias:load_medias_info` / `change_face_belonging:db_transaction`；
+  `send_email_code:acquire_permit`；visual `get_visual_info:load_visuals_info` /
+  `get_user_liked_visuals:load_visuals_info` / `change_face_belonging:db_transaction`；
   user `update_avatar` 补偿删除 `s3_delete`。oss 补 `sign` / `exists` op 指标；
   `/admin/backup/*` 归入 `module="backup"`；audit `append` / `append_many` 消除重复计数；
-  修复 register 的 `email_code_prefix` 按字节切片 panic；media / cache / system dashboard
+  修复 register 的 `email_code_prefix` 按字节切片 panic；visual / cache / system dashboard
   迁移进 jsonnet（cache 耗时单位由 µs 统一为 ms），`generate.sh` 覆盖全部 5 个 dashboard。
 
 - 2026-09-12: 移除错误分类系统（删除 `inc_error!` 宏与全部调用，文档同步移除
-  `errors:{kind}` 相关章节与清单条目）；补齐 media repo 层子步骤埋点；backup 数据层
+  `errors:{kind}` 相关章节与清单条目）；补齐 visual repo 层子步骤埋点；backup 数据层
   （`export` / `restore_local`）埋点；audit 域接入 `metrics`（`audit:query_*` /
-  `audit:append*`，feature 级联 `audit?/metrics`）；按代码实际修正 media 人物相关
+  `audit:append*`，feature 级联 `audit?/metrics`）；按代码实际修正 visual 人物相关
   子步骤并移除未落地的 `record*` / `face_compute` 冗余条目。
 - 2026-09-12: 修复审计发现的 P0 缺口。`oss` / `email` 新增 `metrics` feature 并补齐埋点
   （`oss:{op}:requests/errors/duration_seconds/retries`、`email:send:*`）；feature 级联更新；
   补 `server.build_info`；修正 `redis.connections.active` 语义；事件消费者补命名 span
-  （照片上传/删除/人脸链路子步骤不再落 `media:unknown:*`）；`delete_faces` 统一为
+  （照片上传/删除/人脸链路子步骤不再落 `visual:unknown:*`）；`delete_faces` 统一为
   `delete_faces_batch`；`delete_person` 补 `metered`；person 内部方法补 `instrument`；
   backup `restore` 补四要素；`change_password` 不再重复计入 `user:logout:*`。
 - 2026-09-12: 完善为可落地规范。补充「分层与职责」「埋点契约」（`#[metered]` +
@@ -450,33 +450,33 @@ HTTP 视角仍由 `server.http.*{module="audit"}` 覆盖（`/admin/audits`；`/a
   `cache_get_or_load`、`redis_cache`→`cache_get_or_load_batch`、`redis_delete`→
   `cache_invalidate`、`db_update`→`db_transaction`，补 `cache_invalidate_single`）；
   标注 audit 模块暂无操作级指标。
-- 2026-09-10: HTTP 请求级指标新增 `module` 标签（按路由前缀归类：auth / user / media /
+- 2026-09-10: HTTP 请求级指标新增 `module` 标签（按路由前缀归类：auth / user / visual /
   audit，未知归 other），模块 dashboard 的 HTTP 行按 `module` 过滤。
 - 2026-08-01: 重构命名规范。废弃 summary 式 `duration_quantile`，改用原生 histogram
   （`{name}_bucket/_sum/_count`）；业务指标统一为 `{crate}:{func}:{step}`，操作名来自
-  tracing span；补齐 media 模块 `#[tracing::instrument]`；人脸计算指标迁移为
-  `media:face_compute:*`；对语义模糊或冲突的操作显式命名 span
-  （`publish_comment` / `like_media` / `get_collection_medias` 等）
+  tracing span；补齐 visual 模块 `#[tracing::instrument]`；人脸计算指标迁移为
+  `visual:face_compute:*`；对语义模糊或冲突的操作显式命名 span
+  （`publish_comment` / `like_visual` / `get_collection_visuals` 等）
 - 2026-08-09: 完善监控体系。
   - 新增 HTTP 请求级指标（RED）中间件与 `server.http.*` 指标体系；
   - 新增错误分类规范与 `inc_error!` 宏（`{crate}:{func}:errors:{kind}`）；
-  - 补齐 face_compute 已声明指标（`medias_processed` / `faces_detected` / `no_face_medias`、
+  - 补齐 face_compute 已声明指标（`visuals_processed` / `faces_detected` / `no_face_visuals`、
     `errors:download` 等、`running` / `mode` / `batch` / `total_*` gauge、批次子步骤 histogram）；
   - 新增依赖级指标：oss（`oss:{op}:requests/errors/duration_seconds/retries`）、
     email（`email:send:*`）、backup（`backup:{op}:*`）；
   - 基础设施增强：`system.cpu.cores` / `system.disk.*` / `database.connections.max` /
     `server.build_info`；采集周期 `metrics.interval_seconds` 可配置；histogram 统一分桶。
-  - feature 级联：server `metrics` 现在级联 `media/user/auth/email/oss/backup` 各域 metrics。
+  - feature 级联：server `metrics` 现在级联 `visual/user/auth/email/oss/backup` 各域 metrics。
   - 补齐行为审计、人物管理、人脸归属/删除共 9 个操作埋点；为 auth 登录/注册、
-    media 上传补充 `errors:{kind}` 分类；修复 `metrics_group!` 显式函数名形式
+    visual 上传补充 `errors:{kind}` 分类；修复 `metrics_group!` 显式函数名形式
     产生 `{crate}:{func}::duration_seconds` 双冒号的缺陷。
 - 2026-08-09: 引入统一多级缓存组件 `MultiLevelCache`（L1 moka → L2 Redis → L3 数据库），
   新增依赖级指标 `cache:{name}:{layer}:{op}`（命中率 / 耗时 / L1 容量 / 穿透加载数）；
-  user 与 media 模块的缓存读写迁移至新组件，原 `redis_delete` / `redis_delete_cache` /
+  user 与 visual 模块的缓存读写迁移至新组件，原 `redis_delete` / `redis_delete_cache` /
   `redis_cache` 步骤分别更名为 `cache_invalidate` / `cache_get_or_load_batch`，
-  media 删除补充 `cache_invalidate` 步骤。
-- 2026-08-09: 扩展缓存接入范围。media_info 缓存键改为按照片单一 key（缓存不含浏览者
+  visual 删除补充 `cache_invalidate` 步骤。
+- 2026-08-09: 扩展缓存接入范围。visual_info 缓存键改为按照片单一 key（缓存不含浏览者
   token，token 读取时动态生成），消除同照片多浏览者的缓存冗余；新增 5 个缓存实例：
-  `user_info_single`（用户单查）、`timeline_stat`（月度统计）、`media_dimensions`（尺寸）、
-  `media_md5`（去重）、`person`（人物轻量摘要）；upload/delete/rename/merge/face 变更等
+  `user_info_single`（用户单查）、`timeline_stat`（月度统计）、`visual_dimensions`（尺寸）、
+  `visual_md5`（去重）、`person`（人物轻量摘要）；upload/delete/rename/merge/face 变更等
   写操作补齐缓存失效；dashboard 改用 `$cache` 模板变量按实例切换。

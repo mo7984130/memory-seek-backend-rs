@@ -5,18 +5,18 @@
 //!
 //! ```ignore
 //! #[step_derive::declare_transaction_step(
-//!     ctx = crate::services::media_service::MediaDeleteContext,
-//!     slice = crate::services::media_service::MEDIA_DELETE_STEPS,
+//!     ctx = crate::services::visual_service::VisualDeleteContext,
+//!     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
 //!     name = "foo_cleanup",
 //!     owns = ["FooMapper", "BarMapper"],
 //!     is_final = true,          // 可选:最后执行的步骤(受外键约束时置位)
-//!     method = on_media_delete, // 可选:步骤方法名(缺省为 on_photo_delete)
+//!     method = on_visual_delete, // 可选:步骤方法名(缺省为 on_photo_delete)
 //! )]
 //! impl FooService {
-//!     async fn on_media_delete(
+//!     async fn on_visual_delete(
 //!         &self,
 //!         txn: &sea_orm::DatabaseTransaction,
-//!         ctx: &mut crate::services::media_service::MediaDeleteContext,
+//!         ctx: &mut crate::services::visual_service::VisualDeleteContext,
 //!     ) -> common::Result<()> {
 //!         // 具体清理逻辑
 //!         Ok(())
@@ -97,11 +97,11 @@ pub fn declare_event_consumer(attr: TokenStream, item: TokenStream) -> TokenStre
 /// 注册步骤(定义即注册)与直接执行(`<管道名>.run(...)`)使用:
 ///
 /// ```ignore
-/// step_derive::declare_pipeline!(MediaDeleteContext, MEDIA_DELETE_STEPS, PIPELINE);
+/// step_derive::declare_pipeline!(VisualDeleteContext, MEDIA_DELETE_STEPS, PIPELINE);
 /// // 展开:
 /// #[linkme::distributed_slice]
-/// pub(crate) static MEDIA_DELETE_STEPS: [&'static dyn Step<MediaDeleteContext>] = [..];
-/// static PIPELINE: LazyLock<StepPipeline<MediaDeleteContext>> =
+/// pub(crate) static MEDIA_DELETE_STEPS: [&'static dyn Step<VisualDeleteContext>] = [..];
+/// static PIPELINE: LazyLock<StepPipeline<VisualDeleteContext>> =
 ///     LazyLock::new(|| StepPipeline::from_slice_stable(MEDIA_DELETE_STEPS.to_vec()));
 /// ```
 ///
