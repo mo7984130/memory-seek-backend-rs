@@ -1,4 +1,5 @@
 use const_format::formatcp;
+use nom_exif::{MediaParser, MediaSource, TrackInfo, TrackInfoTag};
 use std::io::Cursor;
 use thiserror::Error;
 
@@ -13,6 +14,66 @@ pub struct ImageMetaData {
     pub mime_type: String,
 }
 
+/// 视频文件解析后的元数据
+#[derive(Debug, Clone)]
+pub struct VideoMetaData {
+    pub format: String,
+    pub width: u32,
+    pub height: u32,
+    pub duration_ms: u64,
+    pub size: u64,
+    pub name: String,
+    pub mime_type: String,
+}
+
+/// 图片与视频统一解析后的元数据
+#[derive(Debug, Clone)]
+pub struct FileMetaData {
+    pub format: String,
+    pub width: u32,
+    pub height: u32,
+    /// 视频时长(毫秒);图片为 `None`
+    pub duration_ms: Option<u64>,
+    pub size: u64,
+    pub name: String,
+    pub mime_type: String,
+}
+
+impl FileMetaData {
+    /// 是否为视频文件
+    pub fn is_video(&self) -> bool {
+        self.duration_ms.is_some()
+    }
+}
+
+impl From<ImageMetaData> for FileMetaData {
+    fn from(meta: ImageMetaData) -> Self {
+        Self {
+            format: meta.format,
+            width: meta.width,
+            height: meta.height,
+            duration_ms: None,
+            size: meta.size,
+            name: meta.name,
+            mime_type: meta.mime_type,
+        }
+    }
+}
+
+impl From<VideoMetaData> for FileMetaData {
+    fn from(meta: VideoMetaData) -> Self {
+        Self {
+            format: meta.format,
+            width: meta.width,
+            height: meta.height,
+            duration_ms: Some(meta.duration_ms),
+            size: meta.size,
+            name: meta.name,
+            mime_type: meta.mime_type,
+        }
+    }
+}
+
 /// 文件校验错误类型
 #[derive(Error, Debug)]
 pub enum FileValidationError {
@@ -22,12 +83,16 @@ pub enum FileValidationError {
     EmptyFileName,
     #[error("{}", FileValidator::SIZE_ERROR_MSG)]
     TooLarge,
+    #[error("{}", FileValidator::VIDEO_SIZE_ERROR_MSG)]
+    VideoTooLarge,
     #[error("不支持的文件类型")]
     UnsupportedFileType,
     #[error("文件头不匹配")]
     InvalidHeader,
     #[error("图片解析失败: {0}")]
     ParseError(String),
+    #[error("视频解析失败: {0}")]
+    VideoParseError(String),
 }
 
 /// 图片文件校验器，提供文件大小、类型、文件头等验证功能
@@ -35,10 +100,48 @@ pub struct FileValidator;
 
 impl FileValidator {
     const ALLOW_IMAGE_MAX_SIZE: u64 = 20 * 1024 * 1024;
+    const ALLOW_VIDEO_MAX_SIZE: u64 = 512 * 1024 * 1024;
     const SIZE_ERROR_MSG: &'static str = formatcp!(
         "上传文件大小不能超过 {}MB",
         FileValidator::ALLOW_IMAGE_MAX_SIZE / 1024 / 1024
     );
+    const VIDEO_SIZE_ERROR_MSG: &'static str = formatcp!(
+        "上传视频文件大小不能超过 {}MB",
+        FileValidator::ALLOW_VIDEO_MAX_SIZE / 1024 / 1024
+    );
+
+    /// 校验媒体文件(图片或视频)的完整性，根据文件扩展名自动识别类型并分发到对应的校验逻辑
+    ///
+    /// # 参数
+    /// - `file_data`: 文件的原始字节数据
+    /// - `file_name`: 文件名，用于提取扩展名
+    /// - `content_type`: 客户端声明的 MIME 类型，仅为保持调用接口兼容而接收；
+    ///   返回的元数据始终由已验证的文件扩展名生成
+    ///
+    /// # 返回
+    /// 校验通过时返回 `FileMetaData`，图片的 `duration_ms` 为 `None`，视频为实际时长(毫秒)
+    ///
+    /// # 错误
+    /// 与 [`Self::validate_image`] / [`Self::validate_video`] 一致，由实际识别的类型决定
+    pub fn validate_media(
+        file_data: &[u8],
+        file_name: &str,
+        content_type: &str,
+    ) -> Result<FileMetaData, FileValidationError> {
+        let file_type = Self::extract_file_extension(file_name);
+        if file_type.is_empty() {
+            return Err(FileValidationError::UnsupportedFileType);
+        }
+
+        if Self::video_format(&file_type).is_some() {
+            return Self::validate_video(file_data, file_name, content_type).map(Into::into);
+        }
+        if Self::image_format(&file_type).is_some() {
+            return Self::validate_image(file_data, file_name, content_type).map(Into::into);
+        }
+
+        Err(FileValidationError::UnsupportedFileType)
+    }
 
     /// 校验图片文件的完整性，包括非空检查、大小限制、扩展名合法性、文件头匹配和图片尺寸解析
     ///
@@ -102,6 +205,85 @@ impl FileValidator {
         Self::image_format(&file_type).map(|format| format.mime_type)
     }
 
+    /// 校验视频文件的完整性，包括非空检查、大小限制、扩展名合法性、文件头匹配和视频轨道元数据解析
+    ///
+    /// # 参数
+    /// - `file_data`: 视频文件的原始字节数据
+    /// - `file_name`: 文件名，用于提取扩展名
+    /// - `content_type`: 客户端声明的 MIME 类型，仅为保持调用接口兼容而接收；
+    ///   返回的元数据始终由已验证的文件扩展名生成
+    ///
+    /// # 返回
+    /// 校验通过时返回 `VideoMetaData`，包含格式、宽高、时长等信息
+    ///
+    /// # 错误
+    /// - `FileValidationError::EmptyFile`: 文件数据为空
+    /// - `FileValidationError::VideoTooLarge`: 文件超过 512MB 限制
+    /// - `FileValidationError::EmptyFileName`: 文件名为空
+    /// - `FileValidationError::UnsupportedFileType`: 扩展名不在支持列表中
+    /// - `FileValidationError::InvalidHeader`: 文件头与预期格式不匹配
+    /// - `FileValidationError::VideoParseError`: 视频轨道解析失败或缺少宽高/时长信息
+    pub fn validate_video(
+        file_data: &[u8],
+        file_name: &str,
+        _content_type: &str,
+    ) -> Result<VideoMetaData, FileValidationError> {
+        if file_data.is_empty() {
+            return Err(FileValidationError::EmptyFile);
+        }
+        if file_data.len() as u64 > Self::ALLOW_VIDEO_MAX_SIZE {
+            return Err(FileValidationError::VideoTooLarge);
+        }
+        if file_name.is_empty() {
+            return Err(FileValidationError::EmptyFileName);
+        }
+
+        let file_type = Self::extract_file_extension(file_name);
+        if file_type.is_empty() {
+            return Err(FileValidationError::UnsupportedFileType);
+        }
+
+        let video_format =
+            Self::video_format(&file_type).ok_or(FileValidationError::UnsupportedFileType)?;
+        Self::validate_video_header(file_data, &file_type)?;
+
+        let track_info = Self::extract_video_metadata(file_data)?;
+
+        let width = track_info
+            .get(TrackInfoTag::Width)
+            .and_then(|value| value.as_u32())
+            .filter(|&width| width > 0)
+            .ok_or_else(|| FileValidationError::VideoParseError("无法解析视频宽度".to_string()))?;
+        let height = track_info
+            .get(TrackInfoTag::Height)
+            .and_then(|value| value.as_u32())
+            .filter(|&height| height > 0)
+            .ok_or_else(|| FileValidationError::VideoParseError("无法解析视频高度".to_string()))?;
+        let duration_ms = track_info
+            .get(TrackInfoTag::DurationMs)
+            .and_then(|value| value.as_u64())
+            .filter(|&duration_ms| duration_ms > 0)
+            .ok_or_else(|| FileValidationError::VideoParseError("无法解析视频时长".to_string()))?;
+
+        Ok(VideoMetaData {
+            format: file_type,
+            width,
+            height,
+            duration_ms,
+            size: file_data.len() as u64,
+            name: file_name.to_string(),
+            mime_type: video_format.mime_type.to_string(),
+        })
+    }
+
+    /// 根据文件名扩展名返回受支持视频的规范 MIME 类型。
+    ///
+    /// 此函数与 [`Self::validate_video`] 使用同一份格式定义，供下载响应复用。
+    pub fn video_content_type(file_name: &str) -> Option<&'static str> {
+        let file_type = Self::extract_file_extension(file_name);
+        Self::video_format(&file_type).map(|format| format.mime_type)
+    }
+
     // 从文件名中提取小写扩展名，忽略 ".gitignore" 等纯点文件
     fn extract_file_extension(file_name: &str) -> String {
         file_name
@@ -120,6 +302,41 @@ impl FileValidator {
             "bmp" => Some(ImageFormat::BMP),
             _ => None,
         }
+    }
+
+    /// 根据扩展名取得受支持视频的格式定义。
+    fn video_format(file_type: &str) -> Option<VideoFormat> {
+        match file_type {
+            "mp4" => Some(VideoFormat::MP4),
+            "mov" => Some(VideoFormat::MOV),
+            "webm" => Some(VideoFormat::WEBM),
+            "mkv" => Some(VideoFormat::MKV),
+            _ => None,
+        }
+    }
+
+    // 校验视频文件头：ISOBMFF (MP4/MOV) 偏移 4 处为 ftyp box 标识，Matroska (WebM/MKV) 以 EBML 魔数开头
+    fn validate_video_header(file_data: &[u8], file_type: &str) -> Result<(), FileValidationError> {
+        match file_type {
+            "mp4" | "mov" => {
+                if file_data.len() < 12 || &file_data[4..8] != b"ftyp" {
+                    return Err(FileValidationError::InvalidHeader);
+                }
+            }
+            "webm" | "mkv" => Self::validate_file_header(file_data, "1A45DFA3")?,
+            _ => return Err(FileValidationError::UnsupportedFileType),
+        }
+        Ok(())
+    }
+
+    // 使用 nom-exif 解析视频轨道元数据，提取宽高、时长等信息
+    fn extract_video_metadata(file_data: &[u8]) -> Result<TrackInfo, FileValidationError> {
+        let mut parser = MediaParser::new();
+        let source = MediaSource::from_memory(file_data.to_vec())
+            .map_err(|e| FileValidationError::VideoParseError(e.to_string()))?;
+        parser
+            .parse_track(source)
+            .map_err(|e| FileValidationError::VideoParseError(e.to_string()))
     }
 
     // 校验文件头部字节是否与预期的十六进制签名匹配
@@ -185,6 +402,27 @@ impl ImageFormat {
     const BMP: Self = Self {
         mime_type: "image/bmp",
         expected_header: "424D",
+    };
+}
+
+/// 受支持视频格式的服务端规范信息。
+#[derive(Clone, Copy)]
+struct VideoFormat {
+    mime_type: &'static str,
+}
+
+impl VideoFormat {
+    const MP4: Self = Self {
+        mime_type: "video/mp4",
+    };
+    const MOV: Self = Self {
+        mime_type: "video/quicktime",
+    };
+    const WEBM: Self = Self {
+        mime_type: "video/webm",
+    };
+    const MKV: Self = Self {
+        mime_type: "video/x-matroska",
     };
 }
 
@@ -358,6 +596,153 @@ mod tests {
     fn test_trailing_dot_no_extension() {
         let data = create_mock_file("FFD8FF", 10);
         let result = FileValidator::validate_image(&data, "test.", "image/jpeg");
+        assert!(matches!(
+            result,
+            Err(FileValidationError::UnsupportedFileType)
+        ));
+    }
+
+    // ---- 视频校验 ----
+
+    // 测试样本取自 nom-exif 仓库 testdata（MIT 许可）：
+    // - sample.mp4: Sony A7 XAVC 元数据样本（ftyp + moov，无媒体数据）
+    // - sample.mov: QuickTime 样本（含 ftyp 品牌）
+    const SAMPLE_MP4: &[u8] = include_bytes!("../tests/fixtures/sample.mp4");
+    const SAMPLE_MOV: &[u8] = include_bytes!("../tests/fixtures/sample.mov");
+
+    #[test]
+    fn test_valid_mp4_parsing() {
+        let result = FileValidator::validate_video(SAMPLE_MP4, "sample.mp4", "video/mp4");
+
+        let meta = result.expect("合法 MP4 应校验通过");
+        assert!(meta.width > 0);
+        assert!(meta.height > 0);
+        assert!(meta.duration_ms > 0);
+        assert_eq!(meta.format, "mp4");
+        assert_eq!(meta.mime_type, "video/mp4");
+        assert_eq!(meta.size, SAMPLE_MP4.len() as u64);
+    }
+
+    #[test]
+    fn test_valid_mov_parsing() {
+        let result = FileValidator::validate_video(SAMPLE_MOV, "sample.mov", "video/quicktime");
+
+        let meta = result.expect("合法 MOV 应校验通过");
+        assert!(meta.width > 0);
+        assert!(meta.height > 0);
+        assert!(meta.duration_ms > 0);
+        assert_eq!(meta.format, "mov");
+        assert_eq!(meta.mime_type, "video/quicktime");
+    }
+
+    #[test]
+    fn test_video_empty_file() {
+        let result = FileValidator::validate_video(&[], "test.mp4", "video/mp4");
+        assert!(matches!(result, Err(FileValidationError::EmptyFile)));
+    }
+
+    #[test]
+    fn test_video_unsupported_extension() {
+        let result = FileValidator::validate_video(SAMPLE_MP4, "test.avi", "video/x-msvideo");
+        assert!(matches!(
+            result,
+            Err(FileValidationError::UnsupportedFileType)
+        ));
+    }
+
+    #[test]
+    fn test_video_empty_file_name() {
+        let result = FileValidator::validate_video(SAMPLE_MP4, "", "video/mp4");
+        assert!(matches!(result, Err(FileValidationError::EmptyFileName)));
+    }
+
+    #[test]
+    fn test_video_invalid_header() {
+        // 篡改 ftyp 标识，文件头应不匹配
+        let mut data = SAMPLE_MP4.to_vec();
+        data[4..8].copy_from_slice(b"XXXX");
+        let result = FileValidator::validate_video(&data, "test.mp4", "video/mp4");
+        assert!(matches!(result, Err(FileValidationError::InvalidHeader)));
+    }
+
+    #[test]
+    fn test_video_header_too_short() {
+        let result = FileValidator::validate_video(&[0xFF; 8], "test.mp4", "video/mp4");
+        assert!(matches!(result, Err(FileValidationError::InvalidHeader)));
+    }
+
+    #[test]
+    fn test_video_parse_failure() {
+        // 文件头合法但缺少 moov 元数据，parse_track 应失败
+        let data = create_mock_file("0000001866747970", 100);
+        let result = FileValidator::validate_video(&data, "test.mp4", "video/mp4");
+        assert!(matches!(
+            result,
+            Err(FileValidationError::VideoParseError(_))
+        ));
+    }
+
+    #[test]
+    fn test_webm_header_then_parse_failure() {
+        // EBML 魔数通过后，因缺少轨道元数据应报解析错误而非文件头错误
+        let data = create_mock_file("1A45DFA3", 100);
+        let result = FileValidator::validate_video(&data, "test.webm", "video/webm");
+        assert!(matches!(
+            result,
+            Err(FileValidationError::VideoParseError(_))
+        ));
+    }
+
+    #[test]
+    fn video_content_type_uses_the_validation_format_table() {
+        assert_eq!(
+            FileValidator::video_content_type("medias/2026/09/16/media.mp4"),
+            Some("video/mp4")
+        );
+        assert_eq!(
+            FileValidator::video_content_type("medias/2026/09/16/media.MOV"),
+            Some("video/quicktime")
+        );
+        assert_eq!(
+            FileValidator::video_content_type("medias/2026/09/16/media.webm"),
+            Some("video/webm")
+        );
+        assert_eq!(
+            FileValidator::video_content_type("medias/2026/09/16/media.mkv"),
+            Some("video/x-matroska")
+        );
+        assert_eq!(FileValidator::video_content_type("media.avi"), None);
+        assert_eq!(FileValidator::video_content_type("media."), None);
+    }
+
+    // ---- 统一入口 ----
+
+    #[test]
+    fn validate_media_dispatches_video() {
+        let meta = FileValidator::validate_media(SAMPLE_MP4, "sample.mp4", "video/mp4")
+            .expect("视频应校验通过");
+        assert!(meta.is_video());
+        assert_eq!(meta.duration_ms, Some(1440));
+        assert_eq!(meta.mime_type, "video/mp4");
+        assert_eq!(meta.format, "mp4");
+    }
+
+    #[test]
+    fn validate_media_dispatches_image() {
+        let tiny_png = hex::decode("89504E470D0A1A0A0000000D4948445200000001000000010802000000907753DE0000000C4944415408D763F8FF7F0005FE02FE0DC444830000000049454E44AE426082").unwrap();
+        let meta = FileValidator::validate_media(&tiny_png, "pixel.png", "text/html")
+            .expect("图片应校验通过");
+        assert!(!meta.is_video());
+        assert_eq!(meta.duration_ms, None);
+        assert_eq!(meta.mime_type, "image/png");
+        assert_eq!(meta.width, 1);
+        assert_eq!(meta.height, 1);
+    }
+
+    #[test]
+    fn validate_media_unsupported_extension() {
+        let result =
+            FileValidator::validate_media(SAMPLE_MP4, "test.exe", "application/octet-stream");
         assert!(matches!(
             result,
             Err(FileValidationError::UnsupportedFileType)

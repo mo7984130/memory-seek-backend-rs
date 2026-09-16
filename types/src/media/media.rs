@@ -21,6 +21,15 @@ mod entity {
     use super::*;
     use crate::auth::user::UserId;
 
+    #[derive(Clone, Debug, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
+    #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(10))")]
+    pub enum MediaKind {
+        #[sea_orm(string_value = "image")]
+        Image,
+        #[sea_orm(string_value = "video")]
+        Video,
+    }
+
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "media_media")]
     pub struct Model {
@@ -43,8 +52,10 @@ mod entity {
         /// 高度(像素)
         pub height: i32,
 
-        /// 文件 MIME 类型
-        pub mime_type: String,
+        pub kind: MediaKind,
+
+        /// 视频的长度 (照片为0)
+        pub duration_ms: i64,
 
         /// 文件MD5哈希值
         #[sea_orm(unique)]
@@ -100,7 +111,8 @@ mod entity {
         pub size: u64,
         pub width: u32,
         pub height: u32,
-        pub mime_type: String,
+        pub kind: MediaKind,
+        pub duration_ms: u64,
         pub md5: String,
         pub file_id: String,
         pub comment_count: u64,
@@ -115,7 +127,8 @@ mod entity {
         pub size: u64,
         pub width: u32,
         pub height: u32,
-        pub mime_type: String,
+        pub kind: MediaKind,
+        pub duration_ms: u64,
         pub md5: String,
         pub file_id: String,
     }
@@ -129,7 +142,8 @@ mod entity {
                 size: model.size as u64,
                 width: model.width as u32,
                 height: model.height as u32,
-                mime_type: model.mime_type,
+                duration_ms: model.duration_ms as u64,
+                kind: model.kind,
                 md5: model.md5,
                 file_id: model.file_id,
                 comment_count: model.comment_count as u64,
@@ -148,7 +162,8 @@ mod entity {
                 size: Set(record.size as i64),
                 width: Set(record.width as i32),
                 height: Set(record.height as i32),
-                mime_type: Set(record.mime_type),
+                duration_ms: Set(record.duration_ms as i64),
+                kind: Set(record.kind),
                 md5: Set(record.md5),
                 file_id: Set(record.file_id),
                 created_at: Set(now()),

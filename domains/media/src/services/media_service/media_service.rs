@@ -14,7 +14,7 @@ use common::{
     types::CursorPage,
     utils::MetricsTimerExt,
 };
-use file_validator::{FileValidator, ImageMetaData};
+use file_validator::{FileMetaData, FileValidator};
 use futures::Stream;
 use oss::OssError;
 use tracing::instrument;
@@ -40,7 +40,7 @@ use types::media::{
 use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
-    media::media::{NewMediaRecord, MediaId, MediaRecord},
+    media::media::{MediaId, MediaKind, MediaRecord, NewMediaRecord},
 };
 
 pub struct MediaService;
@@ -124,7 +124,7 @@ impl MediaService {
 }
 
 impl MediaService {
-    /// 校验图片, 计算 MD5, 上传文件并写入媒体主记录.
+    /// 校验媒体, 计算 MD5, 上传文件并写入媒体主记录.
     #[common_macros::metered]
     #[instrument(
         skip_all,
@@ -139,7 +139,7 @@ impl MediaService {
         // 效验文件
         let metadata = {
             timed!("validate_media", {
-                FileValidator::validate_image(&file_data, &req.file_name, &req.content_type)
+                FileValidator::validate_media(&file_data, &req.file_name, &req.content_type)
                     .map_err(|error| {
                         ContextualError::warn_without_source(
                             "file_validation_error",
@@ -183,31 +183,48 @@ impl MediaService {
             .into_contextual()?;
 
         // 更新数据库
-        let media = MediaRepo::insert_media(
-            state.as_ref(),
+        let media = if metadata.is_video() {
             NewMediaRecord {
                 user_id,
                 name: metadata.name,
                 size: file_data.len() as u64,
                 width: metadata.width,
                 height: metadata.height,
-                mime_type: metadata.mime_type,
+                kind: MediaKind::Video,
+                duration_ms: metadata.duration_ms.ok_or_warn(
+                    "video_has_not_duration",
+                    "未获取到视频的时长",
+                    AppError::bad_request("获取视频时长失败"),
+                )?,
                 md5: md5_hash.clone(),
                 file_id: file_id.clone(),
-            },
-        )
-        .timed(metrics_name!("db_insert"))
-        .await
-        .inspect_err_async(|_| async {
-            state
-                .s3_client
-                .delete(&file_id)
-                .await
-                .into_contextual()
-                .emit_if_err();
-        })
-        .await
-        .into_contextual()?;
+            }
+        } else {
+            NewMediaRecord {
+                user_id,
+                name: metadata.name,
+                size: file_data.len() as u64,
+                width: metadata.width,
+                height: metadata.height,
+                kind: MediaKind::Image,
+                duration_ms: 0,
+                md5: md5_hash.clone(),
+                file_id: file_id.clone(),
+            }
+        };
+        let media = MediaRepo::insert_media(state.as_ref(), media)
+            .timed(metrics_name!("db_insert"))
+            .await
+            .inspect_err_async(|_| async {
+                state
+                    .s3_client
+                    .delete(&file_id)
+                    .await
+                    .into_contextual()
+                    .emit_if_err();
+            })
+            .await
+            .into_contextual()?;
 
         // 发布事件
         let media_record = MediaRecord::from(media);
@@ -461,7 +478,7 @@ impl MediaService {
     }
 
     #[inline]
-    fn get_media_s3_key(metadata: &ImageMetaData) -> String {
+    fn get_media_s3_key(metadata: &FileMetaData) -> String {
         let date_path = common::time::now().format("%Y/%m/%d");
         let uuid = Uuid::new_v4();
         format!("medias/{}/{}.{}", date_path, uuid, metadata.format)

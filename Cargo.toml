@@ -66,6 +66,7 @@ uuid = { version = "1.21.0", features = ["v4"] }
 futures = "0.3.32"
 const_format = "0.2.35"
 image = "0.25.9"
+nom-exif = "3"
 config = { version = "0.15.19", features = ["yaml"] }
 async-trait = "0.1.89"
 
