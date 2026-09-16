@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
 
 [[bin]]
@@ -10,13 +10,13 @@ path = "src/main.rs"
 [features]
 # ============================================================
 # 对外功能开关:部署时通过 --features 按需开启(可多选)
-#   业务域:auth / user / photo / audit / backup
+#   业务域:auth / user / media / audit / backup
 #   能力:   metrics / face-engine / audit-recording
 # ============================================================
 default = []
 auth = ["dep:auth", "_email", "_token_cipher"]
 user = ["dep:user", "_s3", "_token_cipher", "_cache"]
-photo = ["dep:photo", "_s3", "_token_cipher", "_cache"]
+media = ["dep:media", "_s3", "_token_cipher", "_cache"]
 audit = ["dep:audit"]
 backup = ["dep:backup", "_s3"]
 metrics = [
@@ -24,7 +24,7 @@ metrics = [
     "dep:metrics",
     "dep:sysinfo",
     "dep:metrics-exporter-prometheus",
-    "photo?/metrics",
+    "media?/metrics",
     "user?/metrics",
     "auth?/metrics",
     "backup?/metrics",
@@ -32,8 +32,8 @@ metrics = [
     "oss?/metrics",
     "email?/metrics",
 ]
-face-engine = ["dep:insight-face-rs", "photo/face", "backup"]
-audit-recording = ["auth?/audit", "user?/audit", "photo?/audit", "backup?/audit"]
+face-engine = ["dep:insight-face-rs", "media/face", "backup"]
+audit-recording = ["auth?/audit", "user?/audit", "media?/audit", "backup?/audit"]
 
 # ============================================================
 # 内部实现开关:仅由对外开关自动启用,请勿直接开启
@@ -55,7 +55,7 @@ tower-http = { version = "0.6", features = ["cors", "trace"] }
 # 业务模块
 auth = { path = "../domains/auth", features = ["controller"], optional = true }
 user = { path = "../domains/user", features = ["controller"], optional = true }
-photo = { path = "../domains/photo", features = ["controller"], optional = true }
+media = { path = "../domains/media", features = ["controller"], optional = true }
 backup = { path = "../domains/backup", optional = true }
 audit = { path = "../domains/audit", features = ["controller"], optional = true }
 

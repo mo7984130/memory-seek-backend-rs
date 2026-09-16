@@ -1185,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "constants"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "common",
  "types",
@@ -3075,6 +3075,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ebb8d8732c6a6df3d8f032a82911cfc747e00efb95cc46e8d0acd5b5b88570c"
 
 [[package]]
+name = "media"
+version = "0.4.0"
+dependencies = [
+ "async-trait",
+ "audit",
+ "axum",
+ "backup",
+ "bytes",
+ "common",
+ "common_macros",
+ "constants",
+ "file-validator",
+ "futures",
+ "image",
+ "insight-face-rs",
+ "linkme",
+ "md5",
+ "multi-level-cache",
+ "ndarray",
+ "oss",
+ "petal-clustering",
+ "pinyin",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "step_derive",
+ "tokio",
+ "tracing",
+ "types",
+ "uuid",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3831,39 +3864,6 @@ checksum = "3673cba5b9a124916096a423b806a9f29620972c6c97b08db5f2053e9428b481"
 dependencies = [
  "serde",
  "sqlx",
-]
-
-[[package]]
-name = "photo"
-version = "0.3.4"
-dependencies = [
- "async-trait",
- "audit",
- "axum",
- "backup",
- "bytes",
- "common",
- "common_macros",
- "constants",
- "file-validator",
- "futures",
- "image",
- "insight-face-rs",
- "linkme",
- "md5",
- "multi-level-cache",
- "ndarray",
- "oss",
- "petal-clustering",
- "pinyin",
- "sea-orm",
- "serde",
- "serde_json",
- "step_derive",
- "tokio",
- "tracing",
- "types",
- "uuid",
 ]
 
 [[package]]
@@ -5155,7 +5155,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "audit",
  "auth",
@@ -5169,12 +5169,12 @@ dependencies = [
  "email",
  "insight-face-rs",
  "linkme",
+ "media",
  "metrics",
  "metrics-exporter-prometheus",
  "metrics-tracing-context",
  "multi-level-cache",
  "oss",
- "photo",
  "redis",
  "sea-orm",
  "serde",
@@ -6135,7 +6135,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "common",

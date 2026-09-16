@@ -12,7 +12,7 @@ members = [
     "domains/audit",
     "domains/auth",
     "domains/user",
-    "domains/photo",
+    "domains/media",
     "domains/backup",
     "server",
     "tests/e2e",

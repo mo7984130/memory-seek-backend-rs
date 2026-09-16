@@ -267,15 +267,15 @@ mod tests {
     #[test]
     fn image_content_type_uses_the_validation_format_table() {
         assert_eq!(
-            FileValidator::image_content_type("photos/2026/08/17/photo.JPEG"),
+            FileValidator::image_content_type("medias/2026/08/17/media.JPEG"),
             Some("image/jpeg")
         );
         assert_eq!(
-            FileValidator::image_content_type("photos/2026/08/17/photo.png"),
+            FileValidator::image_content_type("medias/2026/08/17/media.png"),
             Some("image/png")
         );
-        assert_eq!(FileValidator::image_content_type("photo.webp"), None);
-        assert_eq!(FileValidator::image_content_type("photo."), None);
+        assert_eq!(FileValidator::image_content_type("media.webp"), None);
+        assert_eq!(FileValidator::image_content_type("media."), None);
     }
 
     #[test]

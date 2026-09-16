@@ -5,17 +5,18 @@
 //!
 //! ```ignore
 //! #[step_derive::declare_transaction_step(
-//!     ctx = crate::services::photo_service::PhotoDeleteContext,
-//!     slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+//!     ctx = crate::services::media_service::MediaDeleteContext,
+//!     slice = crate::services::media_service::MEDIA_DELETE_STEPS,
 //!     name = "foo_cleanup",
 //!     owns = ["FooMapper", "BarMapper"],
 //!     is_final = true,          // 可选:最后执行的步骤(受外键约束时置位)
+//!     method = on_media_delete, // 可选:步骤方法名(缺省为 on_photo_delete)
 //! )]
 //! impl FooService {
-//!     async fn on_photo_delete(
+//!     async fn on_media_delete(
 //!         &self,
 //!         txn: &sea_orm::DatabaseTransaction,
-//!         ctx: &mut crate::services::photo_service::PhotoDeleteContext,
+//!         ctx: &mut crate::services::media_service::MediaDeleteContext,
 //!     ) -> common::Result<()> {
 //!         // 具体清理逻辑
 //!         Ok(())
@@ -24,13 +25,13 @@
 //! ```
 //!
 //! 宏展开为「原 impl 块 + `impl Step<Ctx> for FooService` + 一个 linkme 分布式切片元素」,
-//! 生成的 `execute` 委托调用块内的 `on_photo_delete(txn, ctx)` 方法:
-//! - 步骤方法名统一为 `on_photo_delete`;
+//! 生成的 `execute` 委托调用块内的步骤方法(txn, ctx):
+//! - 步骤方法名由 `method` 参数指定,缺省为 `on_photo_delete`;
 //! - 生成的步骤结构即为 service 本身(unit struct),无需额外定义 Step 结构体;
-//! - 宏不绑定任何业务类型:`ctx` / `slice` / `name` / `owns` / `is_final` 全部参数化。
+//! - 宏不绑定任何业务类型:`ctx` / `slice` / `name` / `owns` / `is_final` / `method` 全部参数化。
 //!
 //! 要求调用 crate 依赖 `common`、`sea-orm` 与 `linkme`(宏生成的路径)。
-//! `on_photo_delete` 的参数名任意(按位置传递),但参数类型必须与生成签名一致。
+//! 步骤方法的参数名任意(按位置传递),但参数类型必须与生成签名一致。
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -96,12 +97,12 @@ pub fn declare_event_consumer(attr: TokenStream, item: TokenStream) -> TokenStre
 /// 注册步骤(定义即注册)与直接执行(`<管道名>.run(...)`)使用:
 ///
 /// ```ignore
-/// step_derive::declare_pipeline!(PhotoDeleteContext, PHOTO_DELETE_STEPS, PIPELINE);
+/// step_derive::declare_pipeline!(MediaDeleteContext, MEDIA_DELETE_STEPS, PIPELINE);
 /// // 展开:
 /// #[linkme::distributed_slice]
-/// pub(crate) static PHOTO_DELETE_STEPS: [&'static dyn Step<PhotoDeleteContext>] = [..];
-/// static PIPELINE: LazyLock<StepPipeline<PhotoDeleteContext>> =
-///     LazyLock::new(|| StepPipeline::from_slice_stable(PHOTO_DELETE_STEPS.to_vec()));
+/// pub(crate) static MEDIA_DELETE_STEPS: [&'static dyn Step<MediaDeleteContext>] = [..];
+/// static PIPELINE: LazyLock<StepPipeline<MediaDeleteContext>> =
+///     LazyLock::new(|| StepPipeline::from_slice_stable(MEDIA_DELETE_STEPS.to_vec()));
 /// ```
 ///
 /// 要求调用 crate 依赖 `common` 与 `linkme`。
@@ -184,6 +185,7 @@ struct Args {
     is_final: Option<bool>,
     ctx: Option<Type>,
     slice: Option<Type>,
+    method: Option<Ident>,
 }
 
 struct EventConsumerArgs {
@@ -242,6 +244,7 @@ impl Parse for Args {
         let mut is_final: Option<bool> = None;
         let mut ctx: Option<Type> = None;
         let mut slice: Option<Type> = None;
+        let mut method: Option<Ident> = None;
 
         while !input.is_empty() {
             if input.peek(Token![,]) {
@@ -276,10 +279,13 @@ impl Parse for Args {
             } else if kw == "slice" {
                 slice = Some(input.parse()?);
                 input.parse::<Token![,]>()?;
+            } else if kw == "method" {
+                method = Some(input.parse()?);
+                input.parse::<Token![,]>()?;
             } else {
                 return Err(syn::Error::new(
                     kw.span(),
-                    format!("期望 `name` / `owns` / `is_final` / `ctx` / `slice`,发现 `{kw}`"),
+                    format!("期望 `name` / `owns` / `is_final` / `ctx` / `slice` / `method`,发现 `{kw}`"),
                 ));
             }
         }
@@ -290,6 +296,7 @@ impl Parse for Args {
             is_final,
             ctx,
             slice,
+            method,
         })
     }
 }
@@ -302,21 +309,23 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
         is_final,
         ctx,
         slice,
+        method,
     } = args;
 
     let ctx = ctx.ok_or_else(|| syn::Error::new(item_impl.span(), "缺少 `ctx = <Type>` 参数"))?;
     let slice =
         slice.ok_or_else(|| syn::Error::new(item_impl.span(), "缺少 `slice = <path>` 参数"))?;
     let self_ty = item_impl.self_ty.clone();
+    let method = method.unwrap_or_else(|| Ident::new("on_photo_delete", item_impl.span()));
 
     if !item_impl
         .items
         .iter()
-        .any(|item| matches!(item, ImplItem::Fn(method) if method.sig.ident == "on_photo_delete"))
+        .any(|item| matches!(item, ImplItem::Fn(m) if m.sig.ident == method))
     {
         return Err(syn::Error::new(
             item_impl.span(),
-            "impl 块内缺少 `async fn on_photo_delete(...)` 方法",
+            format!("impl 块内缺少 `async fn {method}(...)` 方法"),
         ));
     }
 
@@ -363,7 +372,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
                 txn: &::sea_orm::DatabaseTransaction,
                 ctx: &mut #ctx,
             ) -> ::common::error::contextual::Result<()> {
-                self.on_photo_delete(txn, ctx).await
+                self.#method(txn, ctx).await
             }
         }
 

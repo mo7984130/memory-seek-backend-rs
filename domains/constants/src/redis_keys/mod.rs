@@ -4,4 +4,4 @@
 
 pub mod auth;
 
-pub mod photo;
+pub mod media;

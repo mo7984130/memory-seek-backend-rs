@@ -8,7 +8,7 @@ use common::axum::{
 use common::error::{AppError, ContextualError, contextual::ext::OptionExt};
 use std::sync::Arc;
 use types::auth::user::UserId;
-use types::photo::ImageTokenStr;
+use types::media::ImageTokenStr;
 
 use crate::UserState;
 use crate::services as user_service;

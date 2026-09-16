@@ -1,0 +1,48 @@
+[package]
+name = "media"
+version = "0.4.0"
+edition = "2024"
+
+[features]
+default = []
+metrics = ["common/metrics", "multi-level-cache/metrics", "oss/metrics"]
+controller = ["dep:axum", "common/axum"]
+audit = ["audit/recording"]
+face = ["dep:insight-face-rs", "dep:backup", "types/face-engine"]
+ts = ["types/ts", "common/ts"]
+
+[dependencies]
+common = { path = "../../common", features = [
+    "metrics",
+    "tokio",
+    "multi-cache",
+] }
+file-validator.path = "../../libs/file_validator"
+common_macros.path = "../../libs/common_macros"
+audit.path = "../audit"
+step_derive.path = "../../libs/step_derive"
+constants.path = "../constants"
+oss.path = "../../libs/oss"
+types = { workspace = true, features = ["orm"] }
+
+linkme.workspace = true
+async-trait.workspace = true
+
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sea-orm.workspace = true
+tracing.workspace = true
+md5.workspace = true
+uuid.workspace = true
+futures.workspace = true
+multi-level-cache.workspace = true
+bytes.workspace = true
+image.workspace = true
+pinyin.workspace = true
+petal-clustering = "0.13.0"
+ndarray = "0.17.2"
+
+axum = { workspace = true, optional = true }
+insight-face-rs = { workspace = true, optional = true }
+backup = { path = "../backup", optional = true }

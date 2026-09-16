@@ -75,7 +75,7 @@ impl Default for AuditTopQuery {
     fn default() -> Self {
         Self {
             event_type: "view".to_owned(),
-            target_type: "photo".to_owned(),
+            target_type: "media".to_owned(),
             limit: 3,
         }
     }

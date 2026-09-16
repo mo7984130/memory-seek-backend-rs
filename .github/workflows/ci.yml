@@ -64,10 +64,10 @@ jobs:
     #             features:
     #                 - "auth"
     #                 - "auth,user"
-    #                 - "auth,photo"
-    #                 - "auth,photo,face-engine"
-    #                 - "auth,user,photo"
-    #                 - "auth,user,photo,face-engine"
+    #                 - "auth,media"
+    #                 - "auth,media,face-engine"
+    #                 - "auth,user,media"
+    #                 - "auth,user,media,face-engine"
     #     steps:
     #         - uses: actions/checkout@v7
 

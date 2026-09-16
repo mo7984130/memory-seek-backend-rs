@@ -31,8 +31,8 @@ token_cipher:
 # 种子数据量(preprea::init 灌入; 环境变量 E2E__SEED__* 可覆盖)
 seed:
     auth_users: 10000
-    photo_users: 2000
-    photos_per_user: 20
+    media_users: 2000
+    medias_per_user: 20
     faces_per_person: 5
     # user 模块专属测试用户池大小(uit_user_* / uit_pwd_*)
     uit_users: 32
