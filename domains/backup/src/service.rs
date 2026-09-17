@@ -113,25 +113,39 @@ impl BackupService {
         inc_counter!("restore", "rows", restored);
         Ok(restored)
     }
-    /// 执行定时备份，并在完成后清理过期备份。
+    /// 执行定时备份，并在完成后清理过期备份（无论备份成败都会清理）。
     #[common_macros::metered(name = "scheduled")]
     #[tracing::instrument(name = "scheduled", skip_all)]
     pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult> {
         let tables = Self::configured_tables(&state).await?;
-        let mut result = Self::execute(state.clone(), tables, BackupMode::Scheduled).await?;
-
-        match state.storage.cleanup_gfs(&state.config.scheduled).await {
-            Ok(removed) => result.cleaned = removed,
+        // 备份失败不能短路清理：归档可能已部分上传到存储，过期 run 仍需要收敛
+        let mut result = match Self::execute(state.clone(), tables, BackupMode::Scheduled).await {
+            Ok(result) => result,
             Err(error) => {
-                tracing::error!(error = %error, "GFS 清理失败");
+                tracing::error!(error = %error, "定时备份执行失败");
+                Self::run_cleanup(&state).await;
+                return Err(error.into());
             }
-        }
+        };
+
+        result.cleaned = Self::run_cleanup(&state).await;
 
         Self::record_run_audit(&state, "backup.scheduled_completed", None, &result).await?;
         inc_counter!("scheduled", "tables_exported", result.exported as u64);
         inc_counter!("scheduled", "tables_failed", result.failed as u64);
         inc_counter!("scheduled", "cleaned", result.cleaned as u64);
         Ok(result)
+    }
+
+    /// 执行 GFS 分层清理，失败仅记录日志并返回 0，不中断调用方主流程。
+    async fn run_cleanup(state: &BackupState) -> u32 {
+        match state.storage.cleanup_gfs(&state.config.scheduled).await {
+            Ok(removed) => removed,
+            Err(error) => {
+                tracing::error!(error = %error, "GFS 清理失败");
+                0
+            }
+        }
     }
 
     /// 执行管理员触发的全表手动备份。

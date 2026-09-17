@@ -117,7 +117,10 @@ impl BackupStorage {
             .join(Self::relative_file_path(tier, run_id, table))
     }
 
-    /// GFS 分层清理：按保留数清理 daily / weekly / monthly 目录
+    /// GFS 分层清理：本地与 S3 各自按保留数清理 daily / weekly / monthly 目录。
+    ///
+    /// 本地与 S3 独立枚举、独立截断：即使本地目录丢失（迁移/清理）或存在仅
+    /// S3 上可见的历史 run（如多实例部署、备份收尾失败），S3 端也能收敛到保留数内。
     pub async fn cleanup_gfs(&self, config: &BackupScheduleConfig) -> Result<u32, BackupError> {
         let mut removed = 0;
         removed += self
@@ -130,13 +133,23 @@ impl BackupStorage {
             .cleanup_subdir("scheduled/monthly", config.monthly_retention)
             .await?;
         // manual 目录不做清理
+        removed += self
+            .cleanup_s3_subdir("scheduled/daily", config.daily_retention)
+            .await;
+        removed += self
+            .cleanup_s3_subdir("scheduled/weekly", config.weekly_retention)
+            .await;
+        removed += self
+            .cleanup_s3_subdir("scheduled/monthly", config.monthly_retention)
+            .await;
 
         Ok(removed)
     }
 
-    /// 清理指定子目录下超出保留数的历史备份 run
+    /// 清理本地指定子目录下超出保留数的历史备份 run。
     ///
     /// 每个子目录是一个备份运行（按 run_id 命名），删除整个目录 = 删除该次所有表。
+    /// 按 run_id 倒序保留最新，删除失败仅记录日志，不中断其余 run 的清理。
     async fn cleanup_subdir(&self, rel_dir: &str, keep_count: u32) -> Result<u32, BackupError> {
         let dir = self.local_path.join(rel_dir);
         if !dir.exists() {
@@ -155,52 +168,83 @@ impl BackupStorage {
         });
 
         let mut removed = 0;
-
         for entry in run_dirs.iter().skip(keep_count as usize) {
             let run_id = entry.file_name().to_string_lossy().to_string();
             let run_dir = entry.path();
 
-            let s3_keys = self.collect_s3_keys_for_run(&run_dir);
-
-            if !s3_keys.is_empty() {
-                self.s3_client.delete_batch(s3_keys).await?;
+            if let Err(error) = std::fs::remove_dir_all(&run_dir) {
+                tracing::error!(run = %run_id, dir = %rel_dir, error = %error, "本地 GFS 清理失败，跳过该备份 run");
+                continue;
             }
-            std::fs::remove_dir_all(&run_dir)?;
-
             removed += 1;
-            tracing::info!(run = %run_id, dir = %rel_dir, "GFS cleanup removed expired backup run");
+            tracing::info!(run = %run_id, dir = %rel_dir, "GFS cleanup removed expired local backup run");
         }
 
         Ok(removed)
     }
 
-    /// 收集一个 run 目录下所有归档文件对应的 S3 路径
-    fn collect_s3_keys_for_run(&self, run_dir: &std::path::Path) -> Vec<String> {
-        let mut keys = Vec::new();
-        self.collect_archive_keys(run_dir, &mut keys);
-        let manifest = run_dir.join(FILE_NAME);
-        if manifest.exists()
-            && let Ok(relative) = manifest.strip_prefix(&self.local_path)
-        {
-            keys.push(self.object_key(relative));
+    /// 清理 S3 指定前缀下超出保留数的历史备份 run。
+    ///
+    /// 直接从对象存储枚举 run，不依赖本地目录状态，避免本地丢失或多实例部署时
+    /// S3 对象永久堆积。删除失败仅记录日志，不中断其余 run 的清理。
+    async fn cleanup_s3_subdir(&self, rel_dir: &str, keep_count: u32) -> u32 {
+        let prefix = Self::object_prefix(&self.s3_prefix, rel_dir);
+        let keys = match self.s3_client.list(&prefix).await {
+            Ok(keys) => keys,
+            Err(error) => {
+                tracing::error!(dir = %rel_dir, error = %error, "S3 GFS 清理: 枚举对象失败");
+                return 0;
+            }
+        };
+
+        // 按 run_id 分组（对象键形如 {prefix}/{run_id}/{file}）
+        let runs = Self::group_keys_by_run(&prefix, &keys);
+
+        // run_id 为 %Y%m%d_%H%M%S，字典序即时间序；倒序保留最新 keep_count 个
+        let mut removed = 0;
+        for (run_id, keys) in runs.iter().rev().skip(keep_count as usize) {
+            if let Err(error) = self.s3_client.delete_batch(keys.to_vec()).await {
+                tracing::error!(run = %run_id, dir = %rel_dir, error = %error, "S3 GFS 清理: 删除备份 run 失败");
+                continue;
+            }
+            removed += 1;
+            tracing::info!(run = %run_id, dir = %rel_dir, "S3 GFS cleanup removed expired backup run");
         }
-        keys
+
+        removed
     }
 
-    /// 递归收集目录下的归档文件对应的对象存储路径.
-    fn collect_archive_keys(&self, dir: &std::path::Path, keys: &mut Vec<String>) {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    self.collect_archive_keys(&path, keys);
-                } else if path.extension().is_some_and(|e| e == "zst")
-                    && let Ok(relative) = path.strip_prefix(&self.local_path)
-                {
-                    keys.push(self.object_key(relative));
-                }
+    /// 构造 S3 上某相对目录的对象前缀（以 "/" 结尾，可直接用作 list 前缀）。
+    fn object_prefix(s3_prefix: &str, rel_dir: &str) -> String {
+        let suffix = format!("{rel_dir}/");
+        if s3_prefix.is_empty() {
+            suffix
+        } else {
+            format!("{s3_prefix}/{suffix}")
+        }
+    }
+
+    /// 将 S3 对象 key 按 run_id 分组（对象键形如 {prefix}/{run_id}/{file}）。
+    ///
+    /// 无法解析出 run_id 的 key（孤儿对象）将被忽略，避免误删非备份对象。
+    fn group_keys_by_run<'a>(
+        prefix: &str,
+        keys: &'a [String],
+    ) -> std::collections::BTreeMap<String, Vec<&'a str>> {
+        let mut runs: std::collections::BTreeMap<String, Vec<&'a str>> =
+            std::collections::BTreeMap::new();
+        for key in keys {
+            if let Some(run_id) = key
+                .strip_prefix(prefix)
+                .and_then(|rest| rest.split('/').next())
+                .filter(|run_id| !run_id.is_empty())
+            {
+                runs.entry(run_id.to_string())
+                    .or_default()
+                    .push(key.as_str());
             }
         }
+        runs
     }
 
     fn relative_file_path(tier: BackupTier, run_id: &str, table_name: &str) -> PathBuf {
@@ -234,5 +278,44 @@ mod tests {
             BackupStorage::relative_file_path(BackupTier::Daily, "20260828_120000", "face"),
             PathBuf::from("scheduled/daily/20260828_120000/face.copy.zst")
         );
+    }
+
+    #[test]
+    fn object_prefix_appends_trailing_slash() {
+        assert_eq!(
+            BackupStorage::object_prefix("backup", "scheduled/daily"),
+            "backup/scheduled/daily/"
+        );
+        assert_eq!(
+            BackupStorage::object_prefix("", "scheduled/daily"),
+            "scheduled/daily/"
+        );
+    }
+
+    #[test]
+    fn keys_are_grouped_by_run_id_in_time_order() {
+        let keys = vec![
+            "backup/scheduled/daily/20260901_060000/face.copy.zst".to_string(),
+            "backup/scheduled/daily/20260901_060000/manifest.json".to_string(),
+            "backup/scheduled/daily/20260902_060000/face.copy.zst".to_string(),
+            "backup/scheduled/disabled/20260903_060000/face.copy.zst".to_string(),
+        ];
+        let runs = BackupStorage::group_keys_by_run("backup/scheduled/daily/", &keys);
+        let ids: Vec<_> = runs.keys().collect();
+        assert_eq!(ids, vec!["20260901_060000", "20260902_060000"]);
+        assert_eq!(runs["20260901_060000"].len(), 2);
+        assert_eq!(runs["20260902_060000"].len(), 1);
+    }
+
+    #[test]
+    fn keys_outside_prefix_are_ignored() {
+        let keys = vec![
+            "unrelated/key.txt".to_string(),
+            "backup/scheduled/daily/20260901_060000/manifest.json".to_string(),
+        ];
+        let runs = BackupStorage::group_keys_by_run("backup/scheduled/daily/", &keys);
+        assert_eq!(runs.len(), 1);
+        assert!(!runs.contains_key("unrelated"));
+        assert!(runs.contains_key("20260901_060000"));
     }
 }

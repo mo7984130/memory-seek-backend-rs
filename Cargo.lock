@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-compression",
  "audit",
@@ -3698,7 +3698,7 @@ dependencies = [
 
 [[package]]
 name = "oss"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "bytes",
  "common",
