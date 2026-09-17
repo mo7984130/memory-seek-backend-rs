@@ -50,7 +50,7 @@ impl ControllerRouter for VisualController {
     }
 
     fn public_routes() -> Router<Arc<VisualState>> {
-        Router::new().route("/{token}", get(Self::get_image))
+        Router::new().route("/{token}", get(Self::get_visual))
     }
 }
 
@@ -143,9 +143,12 @@ impl VisualController {
         let data = VisualService::download_visual(&state, visual_token).await?;
 
         let resp = match data {
-            ImageDownloadData::Processed(bytes) => Response::builder()
+            ImageDownloadData::Processed {
+                bytes,
+                content_type,
+            } => Response::builder()
                 .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "image/webp")
+                .header(header::CONTENT_TYPE, content_type)
                 .header(header::CACHE_CONTROL, "public, max-age=604800")
                 .body(Body::from(bytes))
                 .unwrap(),

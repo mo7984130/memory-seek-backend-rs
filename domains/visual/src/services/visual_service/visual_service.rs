@@ -379,9 +379,14 @@ impl VisualService {
 
 /// 影像下载结果，Controller 根据此类型构建 HTTP 响应
 pub enum ImageDownloadData {
-    /// 处理后的影像（缩略图/预览/裁剪），始终为 webp 格式
-    Processed(Bytes),
-    /// 原始影像，以流式返回，动态内容类型
+    /// 处理后的影像(缩略图/预览/裁剪/视频截帧),MIME 随处理方式变化
+    Processed {
+        /// 处理后的影像字节
+        bytes: Bytes,
+        /// 处理产物格式:图片处理为 `image/webp`,视频截帧为 `image/jpeg`
+        content_type: &'static str,
+    },
+    /// 原始影像,以流式返回,动态内容类型
     Original {
         /// 影像字节流
         stream: Pin<Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>>,
@@ -461,7 +466,10 @@ impl VisualService {
                     .await
                     .into_contextual()?;
 
-                Ok(ImageDownloadData::Processed(bytes))
+                Ok(ImageDownloadData::Processed {
+                    bytes,
+                    content_type: "image/webp",
+                })
             }
             // 视频:缩略图 / 预览为封面截帧,按时长中点取帧避免片头黑屏
             (VisualKind::Video, VisualTokenType::Thumbnail | VisualTokenType::Preview) => {
@@ -482,7 +490,10 @@ impl VisualService {
                     .await
                     .into_contextual()?;
 
-                Ok(ImageDownloadData::Processed(bytes))
+                Ok(ImageDownloadData::Processed {
+                    bytes,
+                    content_type: "image/jpeg",
+                })
             }
             // 原图 / 原视频:流式下载,MIME 按文件扩展名推断
             (_, VisualTokenType::Original) => {

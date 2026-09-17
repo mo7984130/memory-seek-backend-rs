@@ -267,7 +267,7 @@ impl VisualMapper {
             .into_tuple::<i64>()
             .one(db)
             .await?
-            .map(|d| d.max(0) as u64)
+            .map(|d| Ord::max(d, 0) as u64)
             .to_ok()
     }
 
