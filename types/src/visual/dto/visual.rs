@@ -4,12 +4,10 @@ use serde::Deserialize;
 use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
 #[cfg(feature = "orm")]
-use crate::visual::ImageToken;
-use crate::visual::visual::VisualId;
-#[cfg(feature = "orm")]
-use crate::visual::visual::VisualKind;
+use crate::visual::VisualToken;
 #[cfg(feature = "orm")]
 use crate::visual::visual::VisualRecord;
+use crate::visual::visual::{VisualId, VisualKind};
 
 crate::out_dto!(VisualView, "visual/", rename = "Visual"; {
     pub id: VisualId,
@@ -20,8 +18,9 @@ crate::out_dto!(VisualView, "visual/", rename = "Visual"; {
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size: u64,
     pub created_at: DateTime,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_collected: Option<bool>,
+    pub kind: VisualKind,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_liked: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -31,6 +30,9 @@ crate::out_dto!(VisualView, "visual/", rename = "Visual"; {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_token: Option<String>,
 });
+fn is_zero(num: &u64) -> bool {
+    *num == 0
+}
 
 #[cfg(feature = "orm")]
 impl From<VisualRecord> for VisualView {
@@ -43,7 +45,8 @@ impl From<VisualRecord> for VisualView {
             height: record.height,
             size: record.size,
             created_at: record.created_at,
-            is_collected: None,
+            kind: record.kind,
+            duration_ms: record.duration_ms,
             is_liked: None,
             thumbnail_token: None,
             preview_token: None,
@@ -64,19 +67,34 @@ impl VisualView {
         record: VisualRecord,
         viewer: UserId,
     ) -> common::error::contextual::Result<Self> {
+        let kind = record.kind;
         let file_id = record.file_id.clone();
-        Self::from(record).with_tokens(&file_id, viewer)
+        Self::from(record).with_tokens(kind, &file_id, viewer)
     }
 
     #[cfg(feature = "orm")]
     pub fn with_tokens(
         mut self,
+        kind: VisualKind,
         file_id: &str,
         viewer: UserId,
     ) -> common::error::contextual::Result<Self> {
-        self.original_token = Some(ImageToken::original(viewer, file_id).encrypt()?);
-        self.preview_token = Some(ImageToken::preview(viewer, file_id).encrypt()?);
-        self.thumbnail_token = Some(ImageToken::thumbnail(viewer, file_id).encrypt()?);
+        match kind {
+            VisualKind::Image => {
+                self.original_token =
+                    Some(VisualToken::original(VisualKind::Image, viewer, file_id).encrypt()?);
+                self.preview_token = Some(VisualToken::image_preview(viewer, file_id).encrypt()?);
+                self.thumbnail_token =
+                    Some(VisualToken::image_thumbnail(viewer, file_id).encrypt()?);
+            }
+            VisualKind::Video => {
+                self.original_token =
+                    Some(VisualToken::original(VisualKind::Video, viewer, file_id).encrypt()?);
+                self.preview_token = Some(VisualToken::video_preview(viewer, file_id).encrypt()?);
+                self.thumbnail_token =
+                    Some(VisualToken::video_thumbnail(viewer, file_id).encrypt()?);
+            }
+        }
         Ok(self)
     }
 }
@@ -95,7 +113,7 @@ crate::in_dto!(VisualCursorParam, "visual/", serde_default, docs = "影像游标
 #[cfg(all(test, feature = "orm"))]
 mod orm_tests {
     use super::*;
-    use crate::visual::ImageTokenType;
+    use crate::visual::VisualTokenType;
     use common::utils::{TokenCipher, TokenCipherConfig, init_token_cipher};
 
     fn test_cipher() -> &'static TokenCipher {
@@ -124,12 +142,18 @@ mod orm_tests {
         }
     }
 
-    fn assert_token(token: &str, cipher: &TokenCipher, viewer: UserId, token_type: ImageTokenType) {
-        let token = cipher.decrypt::<ImageToken>(token).unwrap();
+    fn assert_token(
+        token: &str,
+        cipher: &TokenCipher,
+        viewer: UserId,
+        kind: VisualKind,
+        token_type: VisualTokenType,
+    ) {
+        let token = cipher.decrypt::<VisualToken>(token).unwrap();
         assert_eq!(token.file_id, "file-id");
         assert_eq!(token.viewer_id, viewer);
+        assert_eq!(token.kind, kind);
         assert_eq!(token.token_type, token_type);
-        assert!(token.bbox.is_none());
     }
 
     #[test]
@@ -149,19 +173,57 @@ mod orm_tests {
             view.thumbnail_token.as_ref().unwrap(),
             cipher,
             viewer,
-            ImageTokenType::Thumbnail,
+            VisualKind::Image,
+            VisualTokenType::Thumbnail,
         );
         assert_token(
             view.preview_token.as_ref().unwrap(),
             cipher,
             viewer,
-            ImageTokenType::Preview,
+            VisualKind::Image,
+            VisualTokenType::Preview,
         );
         assert_token(
             view.original_token.as_ref().unwrap(),
             cipher,
             viewer,
-            ImageTokenType::Original,
+            VisualKind::Image,
+            VisualTokenType::Original,
+        );
+    }
+
+    #[test]
+    fn from_video_record_generates_video_tokens() {
+        let viewer = UserId(3);
+        let cipher = test_cipher();
+        let record = VisualRecord {
+            kind: VisualKind::Video,
+            duration_ms: 10_000,
+            ..visual_record()
+        };
+
+        let view = VisualView::from_record_with_tokens(record, viewer).unwrap();
+
+        assert_token(
+            view.thumbnail_token.as_ref().unwrap(),
+            cipher,
+            viewer,
+            VisualKind::Video,
+            VisualTokenType::Thumbnail,
+        );
+        assert_token(
+            view.preview_token.as_ref().unwrap(),
+            cipher,
+            viewer,
+            VisualKind::Video,
+            VisualTokenType::Preview,
+        );
+        assert_token(
+            view.original_token.as_ref().unwrap(),
+            cipher,
+            viewer,
+            VisualKind::Video,
+            VisualTokenType::Original,
         );
     }
 }

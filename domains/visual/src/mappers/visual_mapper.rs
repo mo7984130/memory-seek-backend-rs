@@ -255,7 +255,23 @@ impl VisualMapper {
             )
     }
 
-    /// 根据file_id 查询 id.
+    /// 根据 file_id 查询视频时长(ms).
+    pub async fn query_duration_by_file_id(
+        db: &impl ConnectionTrait,
+        file_id: &str,
+    ) -> Result<Option<u64>> {
+        Entity::find()
+            .select_only()
+            .column(Column::DurationMs)
+            .filter(Column::FileId.eq(file_id))
+            .into_tuple::<i64>()
+            .one(db)
+            .await?
+            .map(|d| d.max(0) as u64)
+            .to_ok()
+    }
+
+    /// 根据 file_id 查询 id.
     pub async fn query_visual_id_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,

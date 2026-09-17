@@ -20,7 +20,7 @@ use common::{
     types::CursorPage,
 };
 use types::visual::{
-    ImageToken,
+    VisualToken,
     dto::visual::{VisualCursorParam, VisualView},
     models::{DeleteVisualsParam, ExistsByMd5BatchParam},
     visual::VisualId,
@@ -95,7 +95,8 @@ impl VisualController {
             file_name,
             content_type,
         };
-        let visual = VisualService::upload_visual(Arc::clone(&state), user_id, file_data, req).await?;
+        let visual =
+            VisualService::upload_visual(Arc::clone(&state), user_id, file_data, req).await?;
 
         Ok(visual).to_r_ok()
     }
@@ -132,14 +133,14 @@ impl VisualController {
             .to_r_ok()
     }
 
-    /// 解密影像访问令牌并返回原图或处理后的影像流.
-    async fn get_image(
+    /// 解密视觉访问令牌并返回原图/原视频或处理后的影像流(图片处理/视频截帧).
+    async fn get_visual(
         State(state): State<Arc<VisualState>>,
         Path(token): Path<String>,
     ) -> Result<Response<Body>> {
-        let image_token: ImageToken = ImageToken::decrypt(&token)?;
+        let visual_token: VisualToken = VisualToken::decrypt(&token)?;
 
-        let data = VisualService::download_image(&state, image_token).await?;
+        let data = VisualService::download_visual(&state, visual_token).await?;
 
         let resp = match data {
             ImageDownloadData::Processed(bytes) => Response::builder()

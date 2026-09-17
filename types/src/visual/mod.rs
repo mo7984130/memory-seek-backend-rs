@@ -5,13 +5,13 @@ pub mod comment;
 pub mod comment_like;
 pub mod dto;
 pub mod face;
-pub mod image_token;
-pub mod visual;
-pub mod visual_like;
 pub mod models;
 pub mod person;
 pub mod timeline_stat;
+pub mod visual;
+pub mod visual_like;
+pub mod visual_token;
 
 pub use dto::*;
-pub use image_token::*;
 pub use models::*;
+pub use visual_token::*;

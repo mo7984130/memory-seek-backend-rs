@@ -4,7 +4,7 @@ use common::time::DateTime;
 use validator::Validate;
 
 use super::validators::*;
-use crate::{auth::user::UserId, visual::ImageTokenStr};
+use crate::{auth::user::UserId, visual::VisualTokenStr};
 
 // ============================================================
 // UserIds — 校验型用户 ID 批量列表
@@ -33,7 +33,7 @@ crate::out_dto!(UserInfo, "user/", Debug; {
     pub email: String,
 
     /// 头像令牌（加密字符串）
-    pub avatar_token: Option<ImageTokenStr>,
+    pub avatar_token: Option<VisualTokenStr>,
 
     /// 创建时间
     pub created_at: DateTime,
@@ -83,7 +83,7 @@ crate::in_dto!(UpdateAvatarParam, "user/", serialize, docs = "更新头像请求
 crate::out_dto!(UserBriefView, "user/", rename = "UserBrief"; {
     pub user_id: UserId,
     pub nickname: String,
-    pub avatar_token: Option<ImageTokenStr>,
+    pub avatar_token: Option<VisualTokenStr>,
 });
 
 #[cfg(test)]

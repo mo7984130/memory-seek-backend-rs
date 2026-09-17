@@ -8,7 +8,7 @@ use common::axum::{
 use common::error::{AppError, ContextualError, contextual::ext::OptionExt};
 use std::sync::Arc;
 use types::auth::user::UserId;
-use types::visual::ImageTokenStr;
+use types::visual::VisualTokenStr;
 
 use crate::UserState;
 use crate::services as user_service;
@@ -116,7 +116,7 @@ impl UserController {
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
         mut multipart: Multipart,
-    ) -> Result<R<ImageTokenStr>> {
+    ) -> Result<R<VisualTokenStr>> {
         let field = multipart
             .next_field()
             .await

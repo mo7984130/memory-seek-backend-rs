@@ -4,7 +4,7 @@ use crate::visual::person::PersonId;
 use crate::visual::visual::VisualId;
 use validator::Validate;
 
-/// 人脸边界框（归一化坐标）——统一复用 `crate::visual::image_token::FaceBBox`
+/// 人脸边界框（归一化坐标）——统一复用 `crate::visual::visual_token::FaceBBox`
 use crate::visual::FaceBBox;
 
 crate::out_dto!(FaceView, "visual/", rename = "Face"; {

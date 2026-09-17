@@ -1595,7 +1595,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "e2e"
-version = "0.3.7"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -6156,7 +6156,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "base64 0.22.1",
  "common",
@@ -6283,7 +6283,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "audit",
  "axum",
@@ -6393,7 +6393,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "visual"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "audit",

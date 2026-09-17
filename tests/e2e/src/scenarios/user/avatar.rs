@@ -11,7 +11,7 @@ use memseek_test::{
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
 use types::auth;
-use types::visual::ImageTokenStr;
+use types::visual::VisualTokenStr;
 
 use crate::context::Context;
 
@@ -41,7 +41,7 @@ impl Scenario for UploadAvatarScenario {
 
     type Error = HttpError;
 
-    type Output = SucR<ImageTokenStr>;
+    type Output = SucR<VisualTokenStr>;
 
     type Setup = Session;
 
@@ -111,7 +111,7 @@ impl Scenario for UploadAvatarReplaceScenario {
 
     type Error = HttpError;
 
-    type Output = SucR<ImageTokenStr>;
+    type Output = SucR<VisualTokenStr>;
 
     type Setup = ReplaceSetup;
 
@@ -120,7 +120,7 @@ impl Scenario for UploadAvatarReplaceScenario {
 
         // 第一次上传, 记录旧头像 key
         let form = file_form("old.png", "image/png", PNG_BYTES.clone())?;
-        let resp: SucR<ImageTokenStr> = ctx
+        let resp: SucR<VisualTokenStr> = ctx
             .client
             .request(reqwest::Method::PUT, "/user/avatar")
             .header("Authorization", &session.auth_header())

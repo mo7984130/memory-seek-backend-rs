@@ -81,7 +81,7 @@ mod orm {
 
     use crate::auth::user::UserId;
     use crate::visual::collection::CollectionRecord;
-    use crate::visual::{CollectionBriefView, ImageToken};
+    use crate::visual::{CollectionBriefView, VisualToken};
 
     impl From<CollectionRecord> for CollectionBriefView {
         fn from(record: CollectionRecord) -> Self {
@@ -101,7 +101,7 @@ mod orm {
             self.cover_token = self
                 .cover_token
                 .as_ref()
-                .map(|fid| ImageToken::thumbnail(viewer, fid.to_string()).encrypt())
+                .map(|fid| VisualToken::image_thumbnail(viewer, fid.to_string()).encrypt())
                 .transpose()?;
             Ok(self)
         }

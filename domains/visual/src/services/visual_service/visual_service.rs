@@ -32,7 +32,7 @@ use crate::{
 use audit::{AuditEvent, AuditRecorder};
 use common::Result;
 use types::visual::{
-    ImageToken, ImageTokenType,
+    VisualToken, VisualTokenType,
     dto::visual::{VisualCursorParam, VisualView},
     models::{DeleteVisualsParam, ExistsByMd5BatchParam, UploadVisualParam},
 };
@@ -40,7 +40,7 @@ use types::visual::{
 use types::{
     auth::user::UserId,
     cursor::TimeIdCursor,
-    visual::visual::{VisualId, VisualKind, VisualRecord, NewVisualRecord},
+    visual::visual::{NewVisualRecord, VisualId, VisualKind, VisualRecord},
 };
 
 pub struct VisualService;
@@ -284,7 +284,12 @@ impl VisualService {
             })?;
 
         // 发布删除后事件，缓存失效等后续操作不影响删除结果。
-        publish_after_visual_delete(Arc::clone(&state), AfterVisualDelete { visuals: ctx.visuals });
+        publish_after_visual_delete(
+            Arc::clone(&state),
+            AfterVisualDelete {
+                visuals: ctx.visuals,
+            },
+        );
 
         Ok(())
     }
@@ -387,20 +392,23 @@ pub enum ImageDownloadData {
 
 // 影像下载
 impl VisualService {
-    /// 根据 ImageToken 下载影像，返回处理后的数据或原始流
+    /// 根据 VisualToken 下载影像,返回处理后的数据或原始流
+    ///
+    /// - 图片:缩略图/预览/人脸裁剪走 OSS 图片处理,原图走流式下载
+    /// - 视频:缩略图/预览为按时长中点截取的封面帧(OSS `video/snapshot`),原视频走流式下载
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(viewer_id = %token.viewer_id, file_id = %token.file_id)
     )]
-    pub async fn download_image(
+    pub async fn download_visual(
         state: &VisualState,
-        token: ImageToken,
+        token: VisualToken,
     ) -> Result<ImageDownloadData> {
-        // 浏览埋点：仅预览/原图访问计入，缩略图/裁剪不计入
+        // 浏览埋点:仅预览/原图访问计入,缩略图/裁剪不计入
         if matches!(
             token.token_type,
-            ImageTokenType::Preview | ImageTokenType::Original
+            VisualTokenType::Preview | VisualTokenType::Original
         ) {
             let db = state.db.clone();
             let token = token.clone();
@@ -424,24 +432,24 @@ impl VisualService {
             });
         }
 
-        match token.token_type {
-            ImageTokenType::Thumbnail | ImageTokenType::Preview | ImageTokenType::Crop => {
-                let process_param: String = match token.token_type {
-                    ImageTokenType::Thumbnail => "image/resize,w_300/format,webp".to_string(),
-                    ImageTokenType::Preview => "image/resize,w_1920/format,webp".to_string(),
-                    ImageTokenType::Crop => {
-                        let bbox = token.bbox.ok_or_warn(
-                            "image_token_crop_info_not_found",
-                            "token里面没有包含裁剪信息",
-                            AppError::bad_request("token不包含裁剪信息"),
-                        )?;
+        match (token.kind, &token.token_type) {
+            // 图片:缩略图 / 预览 / 人脸裁剪,统一走 OSS 图片处理
+            (
+                VisualKind::Image,
+                VisualTokenType::Thumbnail
+                | VisualTokenType::Preview
+                | VisualTokenType::Crop { .. },
+            ) => {
+                let process_param: String = match &token.token_type {
+                    VisualTokenType::Thumbnail => "image/resize,w_300/format,webp".to_string(),
+                    VisualTokenType::Preview => "image/resize,w_1920/format,webp".to_string(),
+                    VisualTokenType::Crop {
+                        bbox,
+                        source_dimensions,
+                    } => {
                         let size = 200;
-                        let dimensions = token.source_dimensions.ok_or_warn(
-                            "image_token_dimensions_not_found",
-                            "裁剪 token 中没有包含原图尺寸",
-                            AppError::bad_request("裁剪 token 缺少原图尺寸"),
-                        )?;
-                        let (x, y, w, h) = bbox.to_pixel_rect(dimensions.width, dimensions.height);
+                        let (x, y, w, h) =
+                            bbox.to_pixel_rect(source_dimensions.width, source_dimensions.height);
                         format!("image/crop,x_{x},y_{y},w_{w},h_{h}/resize,w_{size}/format,webp")
                     }
                     _ => unreachable!(),
@@ -455,7 +463,29 @@ impl VisualService {
 
                 Ok(ImageDownloadData::Processed(bytes))
             }
-            ImageTokenType::Original => {
+            // 视频:缩略图 / 预览为封面截帧,按时长中点取帧避免片头黑屏
+            (VisualKind::Video, VisualTokenType::Thumbnail | VisualTokenType::Preview) => {
+                let db = state.db.clone();
+                let duration_ms = VisualMapper::query_duration_by_file_id(&db, &token.file_id)
+                    .await?
+                    .ok_or_warn(
+                        "video_file_id_not_found",
+                        "视频文件不存在",
+                        AppError::not_found("视频文件不存在"),
+                    )?;
+                let t_ms = (duration_ms / 2).max(1);
+                let process_param = format!("video/snapshot,t_{t_ms},f_jpg,w_640,m_fast");
+                let bytes = state
+                    .s3_client
+                    .download_with_process(&token.file_id, &process_param)
+                    .timed(metrics_name!("s3_download_process"))
+                    .await
+                    .into_contextual()?;
+
+                Ok(ImageDownloadData::Processed(bytes))
+            }
+            // 原图 / 原视频:流式下载,MIME 按文件扩展名推断
+            (_, VisualTokenType::Original) => {
                 let stream_resp = state
                     .s3_client
                     .get_download_stream_response(&token.file_id)
@@ -467,12 +497,22 @@ impl VisualService {
                     Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>,
                 > = Box::pin(stream_resp);
 
-                let content_type =
-                    FileValidator::image_content_type(&token.file_id).unwrap_or("image/jpeg");
+                let content_type = match token.kind {
+                    VisualKind::Image => {
+                        FileValidator::image_content_type(&token.file_id).unwrap_or("image/jpeg")
+                    }
+                    VisualKind::Video => {
+                        FileValidator::video_content_type(&token.file_id).unwrap_or("video/mp4")
+                    }
+                };
                 Ok(ImageDownloadData::Original {
                     stream,
                     content_type,
                 })
+            }
+            // 视频不支持人脸裁剪
+            (VisualKind::Video, VisualTokenType::Crop { .. }) => {
+                Err(AppError::bad_request("视频不支持裁剪 token"))
             }
         }
     }
