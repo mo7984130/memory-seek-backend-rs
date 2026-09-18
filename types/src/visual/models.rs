@@ -67,10 +67,10 @@ crate::in_dto!(UploadVisualParam, "visual/", serialize, docs = "上传影像请�
     pub content_type: String,
 });
 
-crate::in_dto!(ExistsByMd5BatchParam, "visual/", serialize; {
-    /// MD5 值列表，数量限制 1~128
-    #[validate(length(min = 1, max = 128, message = "MD5 数量在 1 到 128 之间"))]
-    pub md5s: Vec<String>,
+crate::in_dto!(ExistsByHashBatchParam, "visual/", serialize; {
+    /// 哈希值列表，数量限制 1~128
+    #[validate(length(min = 1, max = 128, message = "哈希值数量在 1 到 128 之间"))]
+    pub hashes: Vec<String>,
 });
 
 crate::in_dto!(DeleteVisualsParam, "visual/", serialize; {
@@ -265,26 +265,26 @@ mod tests {
         assert!(param.validate().is_err());
     }
 
-    // ==================== ExistsByMd5BatchParam validation ====================
+    // ==================== ExistsByHashBatchParam validation ====================
 
     #[test]
-    fn test_exists_by_md5_batch_param_valid() {
-        let param = ExistsByMd5BatchParam {
-            md5s: vec!["abc123".to_string(), "def456".to_string()],
+    fn test_exists_by_hash_batch_param_valid() {
+        let param = ExistsByHashBatchParam {
+            hashes: vec!["abc123".to_string(), "def456".to_string()],
         };
         assert!(param.validate().is_ok());
     }
 
     #[test]
-    fn test_exists_by_md5_batch_param_empty() {
-        let param = ExistsByMd5BatchParam { md5s: vec![] };
+    fn test_exists_by_hash_batch_param_empty() {
+        let param = ExistsByHashBatchParam { hashes: vec![] };
         assert!(param.validate().is_err());
     }
 
     #[test]
-    fn test_exists_by_md5_batch_param_too_many() {
-        let param = ExistsByMd5BatchParam {
-            md5s: (0..129).map(|i| format!("md5_{}", i)).collect(),
+    fn test_exists_by_hash_batch_param_too_many() {
+        let param = ExistsByHashBatchParam {
+            hashes: (0..129).map(|i| format!("hash_{}", i)).collect(),
         };
         assert!(param.validate().is_err());
     }

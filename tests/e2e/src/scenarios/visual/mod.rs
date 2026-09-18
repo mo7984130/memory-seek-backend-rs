@@ -3,7 +3,7 @@
 //! 覆盖影像资源的读写闭环(上传 / 列表 / 详情 / 下载 / 删除)与
 //! 相册、评论、点赞等子资源。共享 helper 集中在本文件:
 //! - 账号:复用 `preprea` 灌入的 `loadtest_visual_*` 种子池(每账号预置 20 张影像);
-//! - 内容唯一:上传内容按任务追加唯一标记,规避 `visual_visual.md5` 全局唯一约束;
+//! - 内容唯一:上传内容按任务追加唯一标记,规避 `visual_visual.hash` 全局唯一约束;
 //! - 数据隔离:场景自建的相册/评论/点赞由 `preprea` 在灌种子前清理。
 
 pub mod collection;
@@ -52,7 +52,7 @@ pub static PNG_BYTES: LazyLock<Vec<u8>> =
 
 /// 生成本次运行唯一的标记:任务编号 + 轮次 + 纳秒时间戳。
 ///
-/// 时间戳保证跨进程重启(每次 e2e 运行)也不重复, 避免 md5 唯一约束导致重复上传失败。
+/// 时间戳保证跨进程重启(每次 e2e 运行)也不重复, 避免 hash 唯一约束导致重复上传失败。
 pub fn unique_tag(task: &TaskIndex) -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -64,7 +64,7 @@ pub fn unique_tag(task: &TaskIndex) -> String {
 /// 构造任务唯一的 PNG:在 IEND 之后追加唯一标记。
 ///
 /// 解码器读取到 IEND 即停止(`image` crate 的完整解码同样如此), 追加的尾部字节
-/// 不影响解码与尺寸校验, 但会改变内容从而改变 MD5。
+/// 不影响解码与尺寸校验, 但会改变内容从而改变哈希。
 pub fn unique_png(tag: &str) -> Vec<u8> {
     let mut data = PNG_BYTES.clone();
     data.extend_from_slice(b"\x00e2e:");
@@ -80,9 +80,9 @@ pub fn file_form(filename: &str, content_type: &str, data: Vec<u8>) -> Result<Fo
     Ok(Form::new().part("file", part))
 }
 
-/// 计算字节内容的 md5 十六进制串(与 server 的 `md5` 计算方式一致)。
-pub fn md5_hex(data: &[u8]) -> String {
-    format!("{:x}", md5::compute(data))
+/// 计算字节内容的 blake3 十六进制串(与 server 的 `blake3` 计算方式一致)。
+pub fn blake3_hex(data: &[u8]) -> String {
+    blake3::hash(data).to_hex().to_string()
 }
 
 /// 上传一个影像, 返回影像视图。

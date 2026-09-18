@@ -22,7 +22,7 @@ use common::{
 use types::visual::{
     VisualToken,
     dto::visual::{VisualCursorParam, VisualView},
-    models::{DeleteVisualsParam, ExistsByMd5BatchParam},
+    models::{DeleteVisualsParam, ExistsByHashBatchParam},
     visual::VisualId,
 };
 use types::{auth::user::UserId, cursor::TimeIdCursor};
@@ -46,7 +46,7 @@ impl ControllerRouter for VisualController {
                     .delete(Self::delete_visuals),
             )
             .route("/visual/{visual_id}", get(Self::get_visual_info))
-            .route("/check-existence", post(Self::md5s_exist))
+            .route("/check-existence", post(Self::hashes_exist))
     }
 
     fn public_routes() -> Router<Arc<VisualState>> {
@@ -123,12 +123,12 @@ impl VisualController {
             .to_r_ok()
     }
 
-    /// 批量检查影像 MD5 是否已存在.
-    async fn md5s_exist(
+    /// 批量检查影像哈希值是否已存在.
+    async fn hashes_exist(
         State(state): State<Arc<VisualState>>,
-        ValidatedJson(req): ValidatedJson<ExistsByMd5BatchParam>,
+        ValidatedJson(req): ValidatedJson<ExistsByHashBatchParam>,
     ) -> Result<R<Vec<bool>>> {
-        VisualService::exists_by_md5_batch(&state, req)
+        VisualService::exists_by_hash_batch(&state, req)
             .await
             .to_r_ok()
     }

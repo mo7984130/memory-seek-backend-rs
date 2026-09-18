@@ -37,8 +37,7 @@ impl VisualRepo {
         user_id: UserId,
         visual_ids: &[VisualId],
     ) -> Result<(Vec<Option<VisualRecord>>, HashSet<VisualId>)> {
-        let (visuals, cached_visual_likes) =
-            tokio::join!(
+        let (visuals, cached_visual_likes) = tokio::join!(
             // 获取影像记录
             state.cache_visual_info.get_or_load_batch(
                 visual_ids,
@@ -93,7 +92,10 @@ impl VisualRepo {
             .cache_visual_like
             .put(
                 &key,
-                CachedVisualLike { visual_id, is_liked },
+                CachedVisualLike {
+                    visual_id,
+                    is_liked,
+                },
                 MEDIA_CACHE_TTL,
             )
             .timed(metrics_name!("cache_put"))
@@ -202,17 +204,17 @@ impl VisualRepo {
             .await
     }
 
-    /// 批量查询影像 MD5 是否存在.
-    pub async fn exists_by_md5_batch(state: &VisualState, md5s: &[String]) -> Result<Vec<bool>> {
-        let existing = VisualMapper::exists_by_md5_batch(&state.db, md5s)
+    /// 批量查询影像哈希值是否存在.
+    pub async fn exists_by_hash_batch(state: &VisualState, hashes: &[String]) -> Result<Vec<bool>> {
+        let existing = VisualMapper::exists_by_hash_batch(&state.db, hashes)
             .timed(metrics_name!("db_query"))
             .await?;
-        Ok(md5s.iter().map(|md5| existing.contains(md5)).collect())
+        Ok(hashes.iter().map(|hash| existing.contains(hash)).collect())
     }
 
-    /// 查询单个影像 MD5 是否存在.
-    pub async fn exists_by_md5(state: &VisualState, md5: &str) -> Result<bool> {
-        VisualMapper::exists_by_md5(&state.db, md5)
+    /// 查询单个影像哈希值是否存在.
+    pub async fn exists_by_hash(state: &VisualState, hash: &str) -> Result<bool> {
+        VisualMapper::exists_by_hash(&state.db, hash)
             .timed(metrics_name!("db_query"))
             .await
     }

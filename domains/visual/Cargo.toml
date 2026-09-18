@@ -1,6 +1,6 @@
 [package]
 name = "visual"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2024"
 
 [features]
@@ -33,7 +33,7 @@ serde.workspace = true
 serde_json.workspace = true
 sea-orm.workspace = true
 tracing.workspace = true
-md5.workspace = true
+blake3.workspace = true
 uuid.workspace = true
 futures.workspace = true
 multi-level-cache.workspace = true

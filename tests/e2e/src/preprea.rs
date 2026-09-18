@@ -33,7 +33,7 @@ const SEED_STATEMENTS: [&str; 22] = [
     "DELETE FROM visual_collection_visual",
     // 5. 清理 e2e 自建的收藏夹
     "DELETE FROM visual_collection",
-    // 6. 清理 e2e 上传的影像(md5 全局唯一, 不清理会阻塞下次同内容上传;
+    // 6. 清理 e2e 上传的影像(hash 全局唯一, 不清理会阻塞下次同内容上传;
     //    种子影像 file_id 以 seed_file_ 开头, 保留)
     "DELETE FROM visual_visual WHERE file_id NOT LIKE 'seed_file_%'",
     // 7. 清空人脸/人物表(纯 seed 表, 无外键约束, TRUNCATE 重建保证 id 从头开始)
@@ -71,14 +71,14 @@ const SEED_STATEMENTS: [&str; 22] = [
     // 13. 影像元数据(每个 visual 用户预置若干张; file_id 唯一, 无需真实对象存储)
     // created_at 随 (u, p) 递增, 避免所有影像同刻导致分页排序退化
     "
-    INSERT INTO visual_visual (user_id, name, size, width, height, mime_type, md5, file_id, created_at, updated_at)
+    INSERT INTO visual_visual (user_id, name, size, width, height, mime_type, hash, file_id, created_at, updated_at)
     SELECT (:AUTH_USERS + u + 1),
            'seed_' || u || '_' || p,
            102400,
            400,
            300,
            'image/jpeg',
-           lpad((u::bigint * 100000 + p)::text, 32, '0'),
+           lpad((u::bigint * 100000 + p)::text, 64, '0'),
            'seed_file_' || u || '_' || p,
            now() - interval '1 minute' * ((:MEDIA_USERS - u) * :MEDIAS_PER_USER + (:MEDIAS_PER_USER - p)),
            now()

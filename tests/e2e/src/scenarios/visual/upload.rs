@@ -13,7 +13,7 @@ use types::visual::{dto::visual::VisualView, visual::VisualKind};
 
 use crate::context::Context;
 
-use super::{Session, file_form, md5_hex, session, token_matches, unique_png, unique_tag};
+use super::{Session, blake3_hex, file_form, session, token_matches, unique_png, unique_tag};
 
 /// 上传前置:登录 + 本次任务唯一影像字节。
 #[derive(Default)]
@@ -76,7 +76,7 @@ impl Scenario for UploadVisualScenario {
         let db_ok = row.user_id == setup.session.user_id
             && row.name == "e2e.png"
             && row.kind == VisualKind::Image
-            && row.md5 == md5_hex(&setup.bytes)
+            && row.hash == blake3_hex(&setup.bytes)
             && row.size as u64 == setup.bytes.len() as u64
             && row.width == 1
             && row.height == 1;
@@ -102,7 +102,7 @@ impl Scenario for UploadVisualScenario {
 
 register_scenario!(UploadVisualScenario);
 
-/// 重复上传同一内容: 期望 400(命中 md5 去重)。
+/// 重复上传同一内容: 期望 400(命中哈希去重)。
 #[derive(Default)]
 pub struct UploadDuplicateVisualScenario;
 
@@ -117,7 +117,7 @@ impl Scenario for UploadDuplicateVisualScenario {
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let setup = prepare(ctx, task).await?;
-        // 先成功上传一次, 为 run 制造 md5 命中
+        // 先成功上传一次, 为 run 制造哈希命中
         super::upload(ctx, &setup.session, "e2e.png", setup.bytes.clone()).await?;
         Ok(setup)
     }

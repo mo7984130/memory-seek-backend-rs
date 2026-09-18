@@ -83,15 +83,15 @@ impl VisualMapper {
         Ok(())
     }
 
-    /// 批量检查md5.
-    pub async fn exists_by_md5_batch(
+    /// 批量检查哈希值是否存在.
+    pub async fn exists_by_hash_batch(
         db: &impl ConnectionTrait,
-        md5s: &[impl AsRef<str>],
+        hashes: &[impl AsRef<str>],
     ) -> Result<HashSet<String>> {
         Entity::find()
-            .filter(Column::Md5.is_in(md5s.iter().map(|s| s.as_ref())))
+            .filter(Column::Hash.is_in(hashes.iter().map(|s| s.as_ref())))
             .select_only()
-            .column(Column::Md5)
+            .column(Column::Hash)
             .into_tuple::<String>()
             .all(db)
             .await?
@@ -100,9 +100,9 @@ impl VisualMapper {
             .to_ok()
     }
 
-    /// 检查md5.
-    pub async fn exists_by_md5(db: &impl ConnectionTrait, md5: impl AsRef<str>) -> Result<bool> {
-        let results = Self::exists_by_md5_batch(db, &[md5.as_ref()]).await?;
+    /// 检查哈希值是否存在.
+    pub async fn exists_by_hash(db: &impl ConnectionTrait, hash: impl AsRef<str>) -> Result<bool> {
+        let results = Self::exists_by_hash_batch(db, &[hash.as_ref()]).await?;
         Ok(!results.is_empty())
     }
 

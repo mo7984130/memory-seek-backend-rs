@@ -65,9 +65,9 @@ mod entity {
         /// 视频的长度 (照片为0)
         pub duration_ms: i64,
 
-        /// 文件MD5哈希值
+        /// 文件BLAKE3哈希值
         #[sea_orm(unique)]
-        pub md5: String,
+        pub hash: String,
 
         /// 存储的文件ID
         #[sea_orm(unique)]
@@ -121,7 +121,7 @@ mod entity {
         pub height: u32,
         pub kind: VisualKind,
         pub duration_ms: u64,
-        pub md5: String,
+        pub hash: String,
         pub file_id: String,
         pub comment_count: u64,
         pub like_count: u64,
@@ -137,7 +137,7 @@ mod entity {
         pub height: u32,
         pub kind: VisualKind,
         pub duration_ms: u64,
-        pub md5: String,
+        pub hash: String,
         pub file_id: String,
     }
 
@@ -152,7 +152,7 @@ mod entity {
                 height: model.height as u32,
                 duration_ms: model.duration_ms as u64,
                 kind: model.kind,
-                md5: model.md5,
+                hash: model.hash,
                 file_id: model.file_id,
                 comment_count: model.comment_count as u64,
                 like_count: model.like_count as u64,
@@ -172,7 +172,7 @@ mod entity {
                 height: Set(record.height as i32),
                 duration_ms: Set(record.duration_ms as i64),
                 kind: Set(record.kind),
-                md5: Set(record.md5),
+                hash: Set(record.hash),
                 file_id: Set(record.file_id),
                 created_at: Set(now()),
                 updated_at: Set(now()),

@@ -133,7 +133,7 @@ mod orm_tests {
             height: 480,
             kind: VisualKind::Image,
             duration_ms: 0,
-            md5: "md5".to_owned(),
+            hash: "hash".to_owned(),
             file_id: "file-id".to_owned(),
             comment_count: 0,
             like_count: 0,

@@ -34,7 +34,7 @@ use common::Result;
 use types::visual::{
     VisualToken, VisualTokenType,
     dto::visual::{VisualCursorParam, VisualView},
-    models::{DeleteVisualsParam, ExistsByMd5BatchParam, UploadVisualParam},
+    models::{DeleteVisualsParam, ExistsByHashBatchParam, UploadVisualParam},
 };
 
 use types::{
@@ -124,7 +124,7 @@ impl VisualService {
 }
 
 impl VisualService {
-    /// 校验影像, 计算 MD5, 上传文件并写入影像主记录.
+    /// 校验影像, 计算 BLAKE3, 上传文件并写入影像主记录.
     #[common_macros::metered]
     #[instrument(
         skip_all,
@@ -150,21 +150,20 @@ impl VisualService {
             })
         };
 
-        // 计算md5
-        let md5_hash = {
+        // 计算 BLAKE3
+        let visual_hash = {
             let file_data_clone = Bytes::clone(&file_data);
             timed!(
-                "md5_hash",
-                tokio::task::spawn_blocking(move || format!(
-                    "{:x}",
-                    md5::compute(&file_data_clone)
-                ))
+                "blake3_hash",
+                tokio::task::spawn_blocking(move || {
+                    blake3::hash(&file_data_clone).to_hex().to_string()
+                })
                 .await
                 .into_contextual()?
             )
         };
-        // MD5 去重校验
-        if VisualRepo::exists_by_md5(&state, &md5_hash).await? {
+        // BLAKE3 去重校验
+        if VisualRepo::exists_by_hash(&state, &visual_hash).await? {
             return Err(ContextualError::warn_without_source(
                 "upload_visual:img_exist",
                 "影像已存在",
@@ -196,7 +195,7 @@ impl VisualService {
                     "未获取到视频的时长",
                     AppError::bad_request("获取视频时长失败"),
                 )?,
-                md5: md5_hash.clone(),
+                hash: visual_hash.clone(),
                 file_id: file_id.clone(),
             }
         } else {
@@ -208,7 +207,7 @@ impl VisualService {
                 height: metadata.height,
                 kind: VisualKind::Image,
                 duration_ms: 0,
-                md5: md5_hash.clone(),
+                hash: visual_hash.clone(),
                 file_id: file_id.clone(),
             }
         };
@@ -240,14 +239,14 @@ impl VisualService {
         Ok(VisualView::from_record_with_tokens(visual_record, user_id)?)
     }
 
-    /// 批量查询影像 MD5 是否已存在.
+    /// 批量查询影像哈希值是否已存在.
     #[common_macros::metered]
-    #[tracing::instrument(skip_all, fields(count = %req.md5s.len()))]
-    pub async fn exists_by_md5_batch(
+    #[tracing::instrument(skip_all, fields(count = %req.hashes.len()))]
+    pub async fn exists_by_hash_batch(
         state: &VisualState,
-        req: ExistsByMd5BatchParam,
+        req: ExistsByHashBatchParam,
     ) -> Result<Vec<bool>> {
-        Ok(VisualRepo::exists_by_md5_batch(state, &req.md5s).await?)
+        Ok(VisualRepo::exists_by_hash_batch(state, &req.hashes).await?)
     }
 
     /// 删除影像.

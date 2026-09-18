@@ -1,4 +1,4 @@
-//! 影像列表 / MD5 查存在 / 时间线统计。
+//! 影像列表 / 哈希查存在 / 时间线统计。
 
 use common::axum::{ErrR, SucR};
 use common::types::CursorPage;
@@ -10,8 +10,8 @@ use memseek_test::{
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use types::cursor::TimeIdCursor;
-use types::visual::dto::visual::VisualView;
 use types::visual::dto::timeline_stat::MonthStat;
+use types::visual::dto::visual::VisualView;
 use types::visual::visual as visual_entity;
 use types::visual::visual::VisualId;
 
@@ -136,35 +136,35 @@ impl Scenario for GetVisualsCursorUnauthorizedScenario {
 
 register_scenario!(GetVisualsCursorUnauthorizedScenario);
 
-/// 不存在的 MD5 占位(种子 md5 为 32 位纯数字, 不会与之相等)。
-const MISSING_MD5: &str = "e2e_missing_md5_000000000000000000";
+/// 不存在的哈希占位(种子 hash 为 64 位纯数字, 不会与之相等)。
+const MISSING_HASH: &str = "e2e_missing_hash_000000000000000000000000000000000000000000000000";
 
-/// MD5 查存在前置:登录 + 取一张种子影像的真实 md5。
+/// 哈希查存在前置:登录 + 取一张种子影像的真实哈希。
 #[derive(Default)]
-pub struct Md5Setup {
+pub struct HashSetup {
     pub session: Session,
-    pub md5: String,
+    pub hash: String,
 }
 
-/// 批量查 MD5: 种子影像命中、随机 MD5 落空。
+/// 批量查哈希: 种子影像命中、随机哈希落空。
 #[derive(Default)]
-pub struct Md5sExistScenario;
+pub struct HashesExistScenario;
 
-impl Scenario for Md5sExistScenario {
+impl Scenario for HashesExistScenario {
     type Ctx = Context;
 
     type Error = HttpError;
 
     type Output = SucR<Vec<bool>>;
 
-    type Setup = Md5Setup;
+    type Setup = HashSetup;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
         let visual = seed_visual(ctx, 1).await.ok_or_else(super::seed_missing)?;
-        Ok(Md5Setup {
+        Ok(HashSetup {
             session,
-            md5: visual.md5,
+            hash: visual.hash,
         })
     }
 
@@ -176,7 +176,7 @@ impl Scenario for Md5sExistScenario {
         ctx.client
             .request(reqwest::Method::POST, "/visual/check-existence")
             .header("Authorization", &setup.session.auth_header())
-            .json_unwrap(&serde_json::json!({ "md5s": [setup.md5, MISSING_MD5] }))
+            .json_unwrap(&serde_json::json!({ "hashes": [setup.hash, MISSING_HASH] }))
             .send_checked()
             .await?
             .json::<Self::Output>()
@@ -194,7 +194,7 @@ impl Scenario for Md5sExistScenario {
     }
 }
 
-register_scenario!(Md5sExistScenario);
+register_scenario!(HashesExistScenario);
 
 /// 时间线统计: 至少包含当前月份且计数为正。
 #[derive(Default)]
