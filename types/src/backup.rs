@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 /// 备份存储层级。
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BackupTier {
     Daily,
