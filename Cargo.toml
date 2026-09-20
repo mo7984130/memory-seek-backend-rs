@@ -89,7 +89,6 @@ linkme = "0.3"
 snowflaked = { version = "1.0.3", features = ["sync"] }
 
 insight-face-rs = { version = "4.0.0" , features = ["sea-orm", "tokio", "load-dynamic"] }
-# insight-face-rs = { path = "../../rust-libs/insight-face-rs" , features = ["sea-orm", "tokio", "load-dynamic"] }
 
 multi-level-cache = { version = "0.1.1", features = ["redis-deadpool"] }
 

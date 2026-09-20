@@ -76,5 +76,7 @@ find thirdparty \( -type f -o -type l \) \
   \( -name "*.so" -o -name "*.so.*" \) \
   -exec cp -a {} $DIST/libs/ \;
 
+cp -r thirdparty/models "$DIST"/
+
 echo "Build completed:"
 tree "$DIST"

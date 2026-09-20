@@ -32,5 +32,5 @@ token_cipher:
   salt: "test"
 
 face_engine:
-  detect_model_path: "./models/det_10g.onnx"
-  recognize_model_path: "./models/w600k_r50.onnx"
+  detect_model_path: "./models/det.onnx"
+  recognize_model_path: "./models/rec.onnx"
