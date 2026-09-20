@@ -74,10 +74,6 @@ crate::in_dto!(UpdateAvatarParam, "user/", serialize, docs = "更新头像请求
     /// 文件名
     #[validate(length(min = 1, max = 255, message = "文件名不能为空"))]
     pub file_name: String,
-
-    /// 文件 MIME 类型
-    #[validate(length(min = 1, max = 100, message = "文件类型不能为空"))]
-    pub content_type: String,
 });
 
 crate::out_dto!(UserBriefView, "user/", rename = "UserBrief"; {

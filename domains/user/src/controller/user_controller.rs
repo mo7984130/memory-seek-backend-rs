@@ -135,8 +135,14 @@ impl UserController {
                 AppError::bad_request("未找到上传文件"),
             )?;
 
-        let file_name = field.file_name().unwrap_or("avatar.jpg").to_string();
-        let content_type = field.content_type().unwrap_or("image/jpg").to_string();
+        let file_name = field
+            .file_name()
+            .ok_or_warn(
+                "avatar_file_name_not_found",
+                "未找到文件名",
+                AppError::bad_request("未找到文件名"),
+            )?
+            .to_string();
         let file_data = field.bytes().await.map_err(|error| {
             ContextualError::warn(
                 "read_file_err",
@@ -147,10 +153,7 @@ impl UserController {
             .emit()
         })?;
 
-        let req = UpdateAvatarParam {
-            file_name,
-            content_type,
-        };
+        let req = UpdateAvatarParam { file_name };
         user_service::update_avatar(&state, user_id, file_data, req)
             .await
             .to_r_ok()

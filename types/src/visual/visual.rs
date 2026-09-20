@@ -139,6 +139,8 @@ mod entity {
         pub duration_ms: u64,
         pub hash: String,
         pub file_id: String,
+        /// 指定创建时间；为 `None` 时使用当前时间
+        pub created_at: Option<DateTime>,
     }
 
     impl From<Model> for VisualRecord {
@@ -174,7 +176,7 @@ mod entity {
                 kind: Set(record.kind),
                 hash: Set(record.hash),
                 file_id: Set(record.file_id),
-                created_at: Set(now()),
+                created_at: Set(record.created_at.unwrap_or_else(now)),
                 updated_at: Set(now()),
                 ..Default::default()
             }

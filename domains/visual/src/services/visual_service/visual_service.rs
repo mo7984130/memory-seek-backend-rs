@@ -38,7 +38,7 @@ use types::visual::{
 };
 
 use types::{
-    auth::user::UserId,
+    auth::user::{AdminId, UserId},
     cursor::TimeIdCursor,
     visual::visual::{NewVisualRecord, VisualId, VisualKind, VisualRecord},
 };
@@ -136,17 +136,21 @@ impl VisualService {
         file_data: Bytes,
         req: UploadVisualParam,
     ) -> Result<VisualView> {
-        // 效验文件
+        // 仅管理员可指定 created_at
+        if req.created_at.is_some() {
+            AdminId::new(user_id)?;
+        }
+
+        // 效验文件（MIME 类型由文件头魔数嗅探确定，不信任客户端声明）
         let metadata = {
             timed!("validate_visual", {
-                FileValidator::validate_visual(&file_data, &req.file_name, &req.content_type)
-                    .map_err(|error| {
-                        ContextualError::warn_without_source(
-                            "file_validation_error",
-                            "文件校验失败",
-                            AppError::bad_request(error.to_string()),
-                        )
-                    })?
+                FileValidator::validate_visual(&file_data, &req.file_name, "").map_err(|error| {
+                    ContextualError::warn_without_source(
+                        "file_validation_error",
+                        "文件校验失败",
+                        AppError::bad_request(error.to_string()),
+                    )
+                })?
             })
         };
 
@@ -197,6 +201,7 @@ impl VisualService {
                 )?,
                 hash: visual_hash.clone(),
                 file_id: file_id.clone(),
+                created_at: req.created_at,
             }
         } else {
             NewVisualRecord {
@@ -209,6 +214,7 @@ impl VisualService {
                 duration_ms: 0,
                 hash: visual_hash.clone(),
                 file_id: file_id.clone(),
+                created_at: req.created_at,
             }
         };
         let visual = VisualRepo::insert_visual(state.as_ref(), visual)

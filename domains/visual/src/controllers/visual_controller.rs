@@ -8,6 +8,7 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
+use bytes::Bytes;
 use common::error::{AppError, ContextualError, contextual::ext::OptionExt};
 use common::{
     Result,
@@ -17,6 +18,7 @@ use common::{
         ext::ToROkExt,
         extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
     },
+    time::DateTime,
     types::CursorPage,
 };
 use types::visual::{
@@ -31,6 +33,12 @@ use crate::{
     services::visual_service::{ImageDownloadData, VisualService},
     state::VisualState,
 };
+
+/// multipart 中提取出的文件字段数据.
+struct UploadedFile {
+    file_name: String,
+    file_data: Bytes,
+}
 
 pub struct VisualController;
 
@@ -61,44 +69,96 @@ impl VisualController {
         Extension(user_id): Extension<UserId>,
         mut multipart: Multipart,
     ) -> Result<R<VisualView>> {
-        let field = multipart
-            .next_field()
-            .await
-            .map_err(|error| {
-                ContextualError::warn(
-                    "invalid_mutipart",
-                    "无效的表单数据",
-                    error,
-                    AppError::bad_request("无效的表单数据"),
-                )
-                .emit()
-            })?
-            .ok_or_warn(
-                "upload_file_not_found",
-                "未找到上传文件",
-                AppError::bad_request("未找到上传文件"),
-            )?;
+        let (uploaded, created_at) = Self::collect_upload_parts(&mut multipart).await?;
 
-        let file_name = field.file_name().unwrap_or("visual.jpg").to_string();
-        let content_type = field.content_type().unwrap_or("image/jpg").to_string();
-        let file_data = field.bytes().await.map_err(|error| {
-            ContextualError::error(
-                "read_file_err",
-                "读取文件失败",
-                error,
-                AppError::InternalServerError,
-            )
-            .emit()
-        })?;
+        let uploaded = uploaded.ok_or_warn(
+            "upload_file_not_found",
+            "未找到上传文件",
+            AppError::bad_request("未找到上传文件"),
+        )?;
 
         let req = types::visual::models::UploadVisualParam {
-            file_name,
-            content_type,
+            file_name: uploaded.file_name,
+            created_at,
         };
         let visual =
-            VisualService::upload_visual(Arc::clone(&state), user_id, file_data, req).await?;
+            VisualService::upload_visual(Arc::clone(&state), user_id, uploaded.file_data, req)
+                .await?;
 
         Ok(visual).to_r_ok()
+    }
+
+    /// 解析 multipart 表单: 提取唯一文件字段与可选的 `created_at` 文本字段.
+    ///
+    /// `Field` 借用 `Multipart`, 故在循环内立即读取并提取数据, 不跨迭代持有字段.
+    async fn collect_upload_parts(
+        multipart: &mut Multipart,
+    ) -> Result<(Option<UploadedFile>, Option<DateTime>)> {
+        let mut uploaded: Option<UploadedFile> = None;
+        let mut created_at: Option<DateTime> = None;
+
+        while let Some(field) = multipart.next_field().await.map_err(|error| {
+            ContextualError::warn(
+                "invalid_mutipart",
+                "无效的表单数据",
+                error,
+                AppError::bad_request("无效的表单数据"),
+            )
+            .emit()
+        })? {
+            if field.file_name().is_some() {
+                if uploaded.is_some() {
+                    return Err(ContextualError::warn_without_source(
+                        "upload_multi_file",
+                        "一次只能上传一个文件",
+                        AppError::bad_request("一次只能上传一个文件"),
+                    )
+                    .emit());
+                }
+                let file_name = field
+                    .file_name()
+                    .ok_or_warn(
+                        "upload_file_name_not_found",
+                        "未找到文件名",
+                        AppError::bad_request("未找到文件名"),
+                    )?
+                    .to_string();
+                let file_data = field.bytes().await.map_err(|error| {
+                    ContextualError::error(
+                        "read_file_err",
+                        "读取文件失败",
+                        error,
+                        AppError::InternalServerError,
+                    )
+                    .emit()
+                })?;
+                uploaded = Some(UploadedFile {
+                    file_name,
+                    file_data,
+                });
+            } else if field.name() == Some("created_at") {
+                let raw = field.text().await.map_err(|error| {
+                    ContextualError::warn(
+                        "read_created_at_err",
+                        "读取 created_at 失败",
+                        error,
+                        AppError::bad_request("created_at 参数无效"),
+                    )
+                    .emit()
+                })?;
+                created_at = Some(raw.parse::<DateTime>().map_err(|error| {
+                    ContextualError::warn(
+                        "invalid_created_at",
+                        "created_at 格式无效，需为 RFC3339 时间",
+                        error,
+                        AppError::bad_request("created_at 格式无效"),
+                    )
+                    .emit()
+                })?);
+            }
+        }
+
+        Ok((uploaded, created_at))
     }
 
     /// 游标获取影像列表.

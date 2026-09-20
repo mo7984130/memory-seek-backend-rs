@@ -1,4 +1,5 @@
 //! 影像相关类型定义
+use common::time::DateTime;
 use validator::Validate;
 
 use crate::cursor::TimeIdCursor;
@@ -62,9 +63,8 @@ crate::in_dto!(UploadVisualParam, "visual/", serialize, docs = "上传影像请�
     #[validate(length(min = 1, max = 255, message = "文件名长度在 1 到 255 个字符"))]
     pub file_name: String,
 
-    /// 文件 MIME 类型
-    #[validate(length(min = 1, max = 100, message = "文件类型不能为空"))]
-    pub content_type: String,
+    /// 指定创建时间（可选，仅管理员可设置，RFC3339 格式）
+    pub created_at: Option<DateTime>,
 });
 
 crate::in_dto!(ExistsByHashBatchParam, "visual/", serialize; {
@@ -242,7 +242,7 @@ mod tests {
     fn test_upload_visual_param_valid() {
         let param = UploadVisualParam {
             file_name: "visual.jpg".to_string(),
-            content_type: "image/jpeg".to_string(),
+            created_at: None,
         };
         assert!(param.validate().is_ok());
     }
@@ -251,16 +251,7 @@ mod tests {
     fn test_upload_visual_param_invalid_empty_file_name() {
         let param = UploadVisualParam {
             file_name: "".to_string(),
-            content_type: "image/jpeg".to_string(),
-        };
-        assert!(param.validate().is_err());
-    }
-
-    #[test]
-    fn test_upload_visual_param_invalid_empty_content_type() {
-        let param = UploadVisualParam {
-            file_name: "visual.jpg".to_string(),
-            content_type: "".to_string(),
+            created_at: None,
         };
         assert!(param.validate().is_err());
     }
