@@ -141,12 +141,15 @@ impl BackupService {
             Ok(result) => result,
             Err(error) => {
                 tracing::error!(error = %error, "定时备份执行失败");
-                Self::run_cleanup(&state).await;
+                if let Err(cleanup_error) = Self::run_cleanup(&state).await {
+                    tracing::error!(error = %cleanup_error, "GFS 清理失败");
+                }
                 return Err(error.into());
             }
         };
 
-        result.cleaned = Self::run_cleanup(&state).await;
+        // 清理是任务的一部分：清理失败视为本次定时任务失败，向上返回错误
+        result.cleaned = Self::run_cleanup(&state).await?;
 
         Self::record_run_audit(&state, "backup.scheduled_completed", None, &result).await?;
         inc_counter!("scheduled", "tables_exported", result.exported as u64);
@@ -155,15 +158,9 @@ impl BackupService {
         Ok(result)
     }
 
-    /// 执行 GFS 分层清理，失败仅记录日志并返回 0，不中断调用方主流程。
-    async fn run_cleanup(state: &BackupState) -> u32 {
-        match state.storage.cleanup_gfs(&state.config.scheduled).await {
-            Ok(removed) => removed,
-            Err(error) => {
-                tracing::error!(error = %error, "GFS 清理失败");
-                0
-            }
-        }
+    /// 执行 GFS 分层清理，错误向上返回，由调用方决定任务成败。
+    async fn run_cleanup(state: &BackupState) -> std::result::Result<u32, BackupError> {
+        state.storage.cleanup_gfs(&state.config.scheduled).await
     }
 
     /// 执行管理员触发的全表手动备份。

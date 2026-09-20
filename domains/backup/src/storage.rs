@@ -135,13 +135,13 @@ impl BackupStorage {
         // manual 目录不做清理
         removed += self
             .cleanup_s3_subdir("scheduled/daily", config.daily_retention)
-            .await;
+            .await?;
         removed += self
             .cleanup_s3_subdir("scheduled/weekly", config.weekly_retention)
-            .await;
+            .await?;
         removed += self
             .cleanup_s3_subdir("scheduled/monthly", config.monthly_retention)
-            .await;
+            .await?;
 
         Ok(removed)
     }
@@ -186,16 +186,10 @@ impl BackupStorage {
     /// 清理 S3 指定前缀下超出保留数的历史备份 run。
     ///
     /// 直接从对象存储枚举 run，不依赖本地目录状态，避免本地丢失或多实例部署时
-    /// S3 对象永久堆积。删除失败仅记录日志，不中断其余 run 的清理。
-    async fn cleanup_s3_subdir(&self, rel_dir: &str, keep_count: u32) -> u32 {
+    /// S3 对象永久堆积。错误向上返回：清理是定时任务的一部分，失败即任务失败。
+    async fn cleanup_s3_subdir(&self, rel_dir: &str, keep_count: u32) -> Result<u32, BackupError> {
         let prefix = Self::object_prefix(&self.s3_prefix, rel_dir);
-        let keys = match self.s3_client.list(&prefix).await {
-            Ok(keys) => keys,
-            Err(error) => {
-                tracing::error!(dir = %rel_dir, error = %error, "S3 GFS 清理: 枚举对象失败");
-                return 0;
-            }
-        };
+        let keys = self.s3_client.list(&prefix).await?;
 
         // 按 run_id 分组（对象键形如 {prefix}/{run_id}/{file}）
         let runs = Self::group_keys_by_run(&prefix, &keys);
@@ -203,15 +197,12 @@ impl BackupStorage {
         // run_id 为 %Y%m%d_%H%M%S，字典序即时间序；倒序保留最新 keep_count 个
         let mut removed = 0;
         for (run_id, keys) in runs.iter().rev().skip(keep_count as usize) {
-            if let Err(error) = self.s3_client.delete_batch(keys.to_vec()).await {
-                tracing::error!(run = %run_id, dir = %rel_dir, error = %error, "S3 GFS 清理: 删除备份 run 失败");
-                continue;
-            }
+            self.s3_client.delete_batch(keys.to_vec()).await?;
             removed += 1;
             tracing::info!(run = %run_id, dir = %rel_dir, "S3 GFS cleanup removed expired backup run");
         }
 
-        removed
+        Ok(removed)
     }
 
     /// 构造 S3 上某相对目录的对象前缀（以 "/" 结尾，可直接用作 list 前缀）。
