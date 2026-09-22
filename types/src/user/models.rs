@@ -45,7 +45,7 @@ crate::in_dto!(ChangePasswordParam, "user/", serialize; {
 
     #[validate(
         custom(function = "validate_password"),
-        must_match(other = "confirm_password")
+        must_match(other = "confirm_password", message = "两次输入的密码不一致")
     )]
     pub new_password: String,
 
