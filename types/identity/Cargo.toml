@@ -12,7 +12,6 @@ ts = ["dep:ts-rs", "types-core/ts", "types-token/ts"]
 [dependencies]
 types-core.workspace = true
 types-token.workspace = true
-common_macros.path = "../../libs/common_macros"
 common-core.path = "../../common/core"
 
 serde = { workspace = true, features = ["derive"] }

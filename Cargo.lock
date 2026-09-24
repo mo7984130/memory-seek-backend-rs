@@ -6246,7 +6246,6 @@ name = "types-audit"
 version = "0.1.0"
 dependencies = [
  "common-core",
- "common_macros",
  "linkme",
  "sea-orm",
  "serde",
@@ -6293,7 +6292,6 @@ name = "types-identity"
 version = "0.1.0"
 dependencies = [
  "common-core",
- "common_macros",
  "derive_more 1.0.0",
  "linkme",
  "regex",
