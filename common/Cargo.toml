@@ -2,41 +2,26 @@
 name = "common"
 version = "0.9.0"
 edition = "2024"
+description = "基础设施门面: 重导出各能力 crate(对外路径保持不变)"
 
 [features]
 default = []
-metrics = ["dep:metrics"]
-tokio = ["common-core/tokio", "dep:tokio", "dep:dashmap", "dep:tokio-util"]
-ts = ["common-core/ts", "dep:ts-rs"]
-axum = ["common-core/axum", "dep:axum", "dep:validator"]
-multi-cache = ["common-core/multi-cache", "dep:multi-level-cache"]
+metrics = ["dep:common-metrics"]
+tokio = ["common-core/tokio", "dep:common-runtime"]
+ts = ["common-core/ts"]
+axum = ["dep:common-web"]
+multi-cache = ["common-core/multi-cache"]
 snowflake = []
 
 [dependencies]
 common-core.path = "core"
 common-crypto.path = "crypto"
+common-db.path = "db"
+common-cache.path = "cache"
+
+common-metrics = { path = "metrics", optional = true }
+common-web = { path = "web", optional = true }
+common-runtime = { path = "runtime", optional = true }
+
 common_macros.path = "../libs/common_macros"
-serde.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
-sea-orm.workspace = true
-rand.workspace = true
-deadpool-redis.workspace = true
-redis.workspace = true
 tracing.workspace = true
-base64.workspace = true
-chrono.workspace = true
-async-trait.workspace = true
-http-body-util.workspace = true
-
-# tokio feature 依赖
-tokio = { workspace = true, optional = true }
-dashmap = { workspace = true, optional = true }
-tokio-util = { workspace = true, optional = true }
-
-ts-rs = { workspace = true, optional = true }
-snowflaked = { workspace = true, optional = true }
-multi-level-cache = { workspace = true, optional = true }
-axum = { workspace = true, optional = true }
-validator = { workspace = true, optional = true }
-metrics = { workspace = true, optional = true }

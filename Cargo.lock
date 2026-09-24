@@ -1081,30 +1081,24 @@ dependencies = [
 name = "common"
 version = "0.9.0"
 dependencies = [
- "async-trait",
- "axum",
- "base64 0.22.1",
- "chrono",
+ "common-cache",
  "common-core",
  "common-crypto",
+ "common-db",
+ "common-metrics",
+ "common-runtime",
+ "common-web",
  "common_macros",
- "dashmap",
- "deadpool-redis",
- "http-body-util",
- "metrics",
- "multi-level-cache",
- "rand 0.10.2",
- "redis",
- "sea-orm",
- "serde",
- "serde_json",
- "snowflaked",
- "thiserror",
- "tokio",
- "tokio-util",
  "tracing",
- "ts-rs",
- "validator",
+]
+
+[[package]]
+name = "common-cache"
+version = "0.1.0"
+dependencies = [
+ "deadpool-redis",
+ "redis",
+ "tracing",
 ]
 
 [[package]]
@@ -1142,6 +1136,51 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "snowflaked",
+]
+
+[[package]]
+name = "common-db"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-core",
+ "sea-orm",
+ "serde",
+ "tracing",
+]
+
+[[package]]
+name = "common-metrics"
+version = "0.1.0"
+dependencies = [
+ "metrics",
+ "tracing",
+]
+
+[[package]]
+name = "common-runtime"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "common-core",
+ "dashmap",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "common-web"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "common-core",
+ "http-body-util",
+ "serde",
+ "serde_json",
+ "tracing",
+ "validator",
 ]
 
 [[package]]

@@ -1,4 +1,3 @@
-pub mod event;
-pub mod task_manager;
+//! 运行时门面:实现已下沉 `common-runtime`。
 
-pub use task_manager::{TaskManager, TaskSchedule};
+pub use common_runtime::*;

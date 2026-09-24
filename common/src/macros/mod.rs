@@ -1,7 +1,6 @@
-//! 通用宏
-//!
-//! 提供事务样板封装，以及通过 `metrics` feature 按需启用的性能监控宏。
+//! 通用宏门面:`db_transaction!` 在 `common-db`,性能监控宏在 `common-metrics`。
 
-mod current_span_name;
-mod db_transaction;
-mod metrics;
+pub use common_db::db_transaction;
+
+#[cfg(feature = "metrics")]
+pub use common_metrics::*;
