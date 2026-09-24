@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::{repo::TimelineStatRepo, services::visual_service::AfterVisualUpload, state::VisualState};
+use crate::{
+    repo::TimelineStatRepo, services::visual_service::AfterVisualUpload, state::VisualState,
+};
 use common::{Result, ext::ToOk};
 use types::visual::dto::timeline_stat::MonthStat;
 
@@ -30,7 +32,11 @@ impl TimelineStatService {
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::visual_service::VisualDeleteContext,
     ) -> common::error::contextual::Result<()> {
-        let created_ats = ctx.visuals.iter().map(|p| &p.created_at).collect::<Vec<_>>();
+        let created_ats = ctx
+            .visuals
+            .iter()
+            .map(|p| &p.created_at)
+            .collect::<Vec<_>>();
         crate::repo::TimelineStatRepo::decrement_by_created_ats(txn, &created_ats).await?;
         Ok(())
     }

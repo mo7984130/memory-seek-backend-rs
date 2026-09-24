@@ -33,7 +33,10 @@ async fn publish_comment(
 ) -> Result<i64, HttpError> {
     let view: CommentView = ctx
         .client
-        .request(reqwest::Method::POST, &format!("/visual/comment/{visual_id}"))
+        .request(
+            reqwest::Method::POST,
+            &format!("/visual/comment/{visual_id}"),
+        )
         .header("Authorization", &session.auth_header())
         .json_unwrap(&json!({ "content": "e2e like comment" }))
         .send_checked()
@@ -259,7 +262,11 @@ impl Scenario for GetLikedVisualsScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.data.records.iter().any(|p| p.id.0 == setup.visual_id))
+        Ok(output
+            .data
+            .records
+            .iter()
+            .any(|p| p.id.0 == setup.visual_id))
     }
 }
 

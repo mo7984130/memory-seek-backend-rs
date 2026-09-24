@@ -27,8 +27,8 @@ use types::{
     auth::user::{AdminId, UserId},
     cursor::{CountIdCursor, TimeIdCursor},
     visual::{
-        MergePersonParam, PersonCursorParam, PersonVisualCursorParam, PersonSearchParam, PersonView,
-        VisualView, RenamePersonParam, SecondaryClusterParam,
+        MergePersonParam, PersonCursorParam, PersonSearchParam, PersonView,
+        PersonVisualCursorParam, RenamePersonParam, SecondaryClusterParam, VisualView,
         face::FaceRecord,
         person::{NewPerson, PersonCover, PersonId},
         visual::VisualId,

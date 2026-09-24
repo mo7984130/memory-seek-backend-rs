@@ -12,9 +12,9 @@ pub mod comment_like_controller;
 pub mod face_controller;
 #[cfg(feature = "face")]
 pub mod person_controller;
+pub mod timeline_stat_controller;
 pub mod visual_controller;
 pub mod visual_like_controller;
-pub mod timeline_stat_controller;
 
 use collection_controller::CollectionController;
 use collection_visual_controller::CollectionVisualController;
@@ -24,9 +24,9 @@ use comment_like_controller::CommentLikeController;
 pub use face_controller::FaceController;
 #[cfg(feature = "face")]
 pub use person_controller::PersonController;
+use timeline_stat_controller::TimelineStatController;
 use visual_controller::VisualController;
 use visual_like_controller::VisualLikeController;
-use timeline_stat_controller::TimelineStatController;
 
 use common::axum::controller_router::ControllerRouter;
 
@@ -45,7 +45,8 @@ impl ControllerRouter for Controller {
         let router = Router::new()
             .nest(
                 "/visual",
-                VisualController::protected_routes().merge(VisualLikeController::protected_routes()),
+                VisualController::protected_routes()
+                    .merge(VisualLikeController::protected_routes()),
             )
             .nest(
                 "/visual/collections",

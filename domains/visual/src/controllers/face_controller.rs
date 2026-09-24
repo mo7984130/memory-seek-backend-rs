@@ -23,8 +23,8 @@ use types::{
         dto::face::{FaceDeleteBatchParam, FaceDeleteBatchResult, UnassignedFaceVisualCursorParam},
         dto::visual::VisualView,
         face::FaceId,
-        visual::VisualId,
         person::PersonId,
+        visual::VisualId,
     },
 };
 
@@ -40,7 +40,10 @@ impl ControllerRouter for FaceController {
             .route("/admin/full", get(Self::full_compute))
             .route("/admin/incremental", get(Self::incremental_compute))
             .route("/visual/{visual_id}", get(Self::get_faces_by_visual_id))
-            .route("/unassigned-visuals", get(Self::get_unassigned_face_visuals))
+            .route(
+                "/unassigned-visuals",
+                get(Self::get_unassigned_face_visuals),
+            )
             .route(
                 "/feature/{feature_id}/belonging/{person_id}",
                 post(Self::change_belonging),

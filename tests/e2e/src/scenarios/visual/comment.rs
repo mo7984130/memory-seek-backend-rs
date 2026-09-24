@@ -29,7 +29,10 @@ async fn publish(
     content: &str,
 ) -> Result<SucR<CommentView>, HttpError> {
     ctx.client
-        .request(reqwest::Method::POST, &format!("/visual/comment/{visual_id}"))
+        .request(
+            reqwest::Method::POST,
+            &format!("/visual/comment/{visual_id}"),
+        )
         .header("Authorization", &session.auth_header())
         .json_unwrap(&json!({ "content": content }))
         .send_checked()
@@ -78,7 +81,13 @@ impl Scenario for PublishCommentScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        publish(ctx, &setup.session, VisualId(setup.visual_id), "e2e comment").await
+        publish(
+            ctx,
+            &setup.session,
+            VisualId(setup.visual_id),
+            "e2e comment",
+        )
+        .await
     }
 
     async fn validate(

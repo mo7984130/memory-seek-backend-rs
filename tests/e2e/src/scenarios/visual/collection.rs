@@ -12,7 +12,7 @@ use serde_json::json;
 use types::visual::collection as collection_entity;
 use types::visual::collection::CollectionId;
 use types::visual::collection_visual as collection_visual_entity;
-use types::visual::dto::collection::{CollectionVisualAddBatchResult, CollectionView};
+use types::visual::dto::collection::{CollectionView, CollectionVisualAddBatchResult};
 use types::visual::visual::VisualId;
 
 use crate::context::Context;
@@ -355,7 +355,8 @@ impl Scenario for AddVisualsToCollectionScenario {
     ) -> Result<bool, Self::Error> {
         let linked = collection_visual_entity::Entity::find()
             .filter(
-                collection_visual_entity::Column::CollectionId.eq(CollectionId(setup.collection_id)),
+                collection_visual_entity::Column::CollectionId
+                    .eq(CollectionId(setup.collection_id)),
             )
             .filter(collection_visual_entity::Column::VisualId.eq(VisualId(setup.visual_id)))
             .one(&ctx.db)

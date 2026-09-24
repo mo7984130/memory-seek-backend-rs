@@ -11,7 +11,7 @@ use common::{
 use types::visual::{
     collection::CollectionRecord,
     dto::collection::{
-        CollectionCreateParam, CollectionVisualCursorPageParam, CollectionUpdateParam,
+        CollectionCreateParam, CollectionUpdateParam, CollectionVisualCursorPageParam,
     },
 };
 use types::{

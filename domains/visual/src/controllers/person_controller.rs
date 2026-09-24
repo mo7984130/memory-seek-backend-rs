@@ -20,13 +20,13 @@ use types::{
     cursor::{CountIdCursor, TimeIdCursor},
     visual::{
         PersonView,
-        dto::visual::VisualView,
         dto::person::{
-            MergePersonParam, PersonCursorParam, PersonVisualCursorParam, PersonSearchParam,
+            MergePersonParam, PersonCursorParam, PersonSearchParam, PersonVisualCursorParam,
             RenamePersonParam, SecondaryClusterParam,
         },
-        visual::VisualId,
+        dto::visual::VisualView,
         person::PersonId,
+        visual::VisualId,
     },
 };
 

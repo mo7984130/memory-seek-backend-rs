@@ -161,7 +161,10 @@ impl CollectionMapper {
         delta: i64,
     ) -> Result<()> {
         Entity::update_many()
-            .col_expr(Column::VisualCount, Expr::col(Column::VisualCount).add(delta))
+            .col_expr(
+                Column::VisualCount,
+                Expr::col(Column::VisualCount).add(delta),
+            )
             .filter(Column::Id.eq(collection_id))
             .exec(db)
             .await?;

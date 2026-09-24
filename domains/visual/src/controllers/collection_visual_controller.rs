@@ -27,8 +27,8 @@ use types::{
             CollectionVisualRemoveBatchResult,
         },
         dto::visual::VisualView,
-        visual::VisualId,
         models::VisualIds,
+        visual::VisualId,
     },
 };
 
@@ -39,7 +39,10 @@ impl ControllerRouter for CollectionVisualController {
 
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
-            .route("/by-visual/{visual_id}", get(Self::get_collections_by_visual))
+            .route(
+                "/by-visual/{visual_id}",
+                get(Self::get_collections_by_visual),
+            )
             .route(
                 "/{collection_id}/visuals",
                 get(Self::get_cursor_page)

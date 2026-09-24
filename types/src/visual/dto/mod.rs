@@ -8,16 +8,16 @@ pub mod collection;
 pub mod comment;
 #[cfg(feature = "face-engine")]
 pub mod face;
-pub mod visual;
 #[cfg(feature = "face-engine")]
 pub mod person;
 pub mod timeline_stat;
+pub mod visual;
 
 pub use collection::*;
 pub use comment::*;
 #[cfg(feature = "face-engine")]
 pub use face::*;
-pub use visual::*;
 #[cfg(feature = "face-engine")]
 pub use person::*;
 pub use timeline_stat::*;
+pub use visual::*;

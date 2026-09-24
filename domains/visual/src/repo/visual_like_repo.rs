@@ -23,7 +23,11 @@ pub(crate) struct VisualLikeRepo;
 
 impl VisualLikeRepo {
     /// 点赞影像.
-    pub(crate) async fn like(state: &VisualState, user_id: UserId, visual_id: VisualId) -> Result<()> {
+    pub(crate) async fn like(
+        state: &VisualState,
+        user_id: UserId,
+        visual_id: VisualId,
+    ) -> Result<()> {
         db_transaction!(scoped & state.db, |txn| {
             // 确认存在
             VisualMapper::ensure_exist(txn, visual_id).await?;

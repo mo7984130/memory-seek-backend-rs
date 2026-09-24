@@ -7,7 +7,9 @@ use common::Result;
 use common::ext::ToOk;
 use types::auth::user::UserId;
 use types::visual::collection::CollectionId;
-use types::visual::dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView};
+use types::visual::dto::collection::{
+    CollectionCreateParam, CollectionUpdateParam, CollectionView,
+};
 
 pub(crate) struct CollectionService;
 

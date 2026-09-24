@@ -197,7 +197,10 @@ impl FaceMapper {
                         types::visual::face::Entity,
                         types::visual::face::Column::VisualId,
                     ))
-                    .equals((types::visual::visual::Entity, types::visual::visual::Column::Id)),
+                    .equals((
+                        types::visual::visual::Entity,
+                        types::visual::visual::Column::Id,
+                    )),
                 )
                 .to_owned();
             Condition::all()
@@ -252,10 +255,10 @@ impl FaceMapper {
         let subquery = Query::select()
             .expr(Expr::val(1))
             .from(Entity)
-            .and_where(
-                Expr::col((Entity, Column::VisualId))
-                    .equals((types::visual::visual::Entity, types::visual::visual::Column::Id)),
-            )
+            .and_where(Expr::col((Entity, Column::VisualId)).equals((
+                types::visual::visual::Entity,
+                types::visual::visual::Column::Id,
+            )))
             .and_where(Column::PersonId.is_null())
             .to_owned();
 
@@ -292,10 +295,10 @@ impl FaceMapper {
         let subquery = Query::select()
             .expr(Expr::val(1))
             .from(Entity)
-            .and_where(
-                Expr::col((Entity, Column::VisualId))
-                    .equals((types::visual::visual::Entity, types::visual::visual::Column::Id)),
-            )
+            .and_where(Expr::col((Entity, Column::VisualId)).equals((
+                types::visual::visual::Entity,
+                types::visual::visual::Column::Id,
+            )))
             .and_where(Column::PersonId.eq(person_id))
             .to_owned();
 

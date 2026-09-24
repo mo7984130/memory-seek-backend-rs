@@ -4,9 +4,9 @@ pub mod backup;
 pub mod cursor;
 pub mod error;
 pub mod macros;
-pub mod visual;
 pub mod user;
 pub mod validators;
+pub mod visual;
 
 #[cfg(feature = "orm")]
 pub mod db_init;
