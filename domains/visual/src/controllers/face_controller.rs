@@ -10,17 +10,12 @@ use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
     extractors::ValidatedPath, extractors::ValidatedQuery,
 };
-use types::{
-    auth::user::{AdminId, UserId},
-    cursor::TimeIdCursor,
-    visual::{
-        FaceView,
-        dto::face::{FaceDeleteBatchParam, FaceDeleteBatchResult, UnassignedFaceVisualCursorParam},
-        dto::visual::VisualView,
-        face::FaceId,
-        person::PersonId,
-        visual::VisualId,
-    },
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::{AdminId, UserId};
+use types_visual::{
+    FaceView, dto::face::FaceDeleteBatchParam, dto::face::FaceDeleteBatchResult,
+    dto::face::UnassignedFaceVisualCursorParam, dto::visual::VisualView, face::FaceId,
+    person::PersonId, visual::VisualId,
 };
 
 use crate::{VisualState, services::face_service::FaceService};

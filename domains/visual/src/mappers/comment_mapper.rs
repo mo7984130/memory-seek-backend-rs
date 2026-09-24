@@ -8,11 +8,9 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
     QueryOrder, QuerySelect, sea_query::Expr,
 };
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::{comment::*, visual::VisualId},
-};
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{comment::*, visual::VisualId};
 
 pub struct CommentMapper;
 

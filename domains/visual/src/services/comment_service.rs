@@ -5,14 +5,11 @@ use crate::{
     state::VisualState,
 };
 use common_core::{Result, ext::ToOk, types::CursorPage};
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::{
-        comment::CommentId,
-        dto::comment::{CommentCursorPageParam, CommentPublishParam, CommentView},
-        visual::VisualId,
-    },
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{
+    comment::CommentId, dto::comment::CommentCursorPageParam, dto::comment::CommentPublishParam,
+    dto::comment::CommentView, visual::VisualId,
 };
 
 pub(crate) struct CommentService;

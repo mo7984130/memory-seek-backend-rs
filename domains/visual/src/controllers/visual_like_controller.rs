@@ -10,11 +10,9 @@ use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedPath,
     extractors::ValidatedQuery,
 };
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::{dto::visual::VisualView, models::LikedVisualsQuery, visual::VisualId},
-};
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{dto::visual::VisualView, models::LikedVisualsQuery, visual::VisualId};
 
 use crate::{services::visual_like_service::VisualLikeService, state::VisualState};
 

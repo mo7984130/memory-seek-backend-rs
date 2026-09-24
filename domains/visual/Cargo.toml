@@ -28,6 +28,7 @@ step_derive.path = "../../libs/step_derive"
 constants.path = "../constants"
 oss.path = "../../libs/oss"
 types-core = { workspace = true, features = ["orm"] }
+types-identity = { workspace = true }
 types-visual = { workspace = true, features = ["orm"] }
 
 linkme.workspace = true

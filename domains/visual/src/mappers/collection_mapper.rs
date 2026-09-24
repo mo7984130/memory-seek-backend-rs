@@ -13,7 +13,8 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DbBackend, EntityName, EntityTrait, ExprTrait, Iden, IdenStatic,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
-use types::{auth::user::UserId, visual::collection::*};
+use types_identity::auth::user::UserId;
+use types_visual::collection::*;
 use types_visual::collection::{self, CollectionId};
 use types_visual::collection_visual;
 use types_visual::visual::VisualId;

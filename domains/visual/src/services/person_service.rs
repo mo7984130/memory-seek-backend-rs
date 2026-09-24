@@ -23,16 +23,12 @@ use ndarray::Array2;
 use petal_clustering::{Fit, HDbscan};
 use tokio::{spawn, task::spawn_blocking};
 use tracing::{info, instrument};
-use types::{
-    auth::user::{AdminId, UserId},
-    cursor::{CountIdCursor, TimeIdCursor},
-    visual::{
-        MergePersonParam, PersonCursorParam, PersonSearchParam, PersonView,
-        PersonVisualCursorParam, RenamePersonParam, SecondaryClusterParam, VisualView,
-        face::FaceRecord,
-        person::{NewPerson, PersonCover, PersonId},
-        visual::VisualId,
-    },
+use types_core::cursor::{CountIdCursor, TimeIdCursor};
+use types_identity::auth::user::{AdminId, UserId};
+use types_visual::{
+    MergePersonParam, PersonCursorParam, PersonSearchParam, PersonView, PersonVisualCursorParam,
+    RenamePersonParam, SecondaryClusterParam, VisualView, face::FaceRecord, person::NewPerson,
+    person::PersonCover, person::PersonId, visual::VisualId,
 };
 
 pub struct PersonService;

@@ -1,7 +1,5 @@
-use types::{
-    auth::user::UserId,
-    visual::visual::{VisualId, VisualRecord},
-};
+use types_identity::auth::user::UserId;
+use types_visual::{visual::VisualId, visual::VisualRecord};
 
 step_derive::declare_pipeline!(
     VisualDeleteContext,

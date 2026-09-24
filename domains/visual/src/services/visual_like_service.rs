@@ -1,6 +1,8 @@
 use common_core::{Result, ext::ToOk, types::CursorPage};
 use common_metrics::{MetricsTimerExt, metrics_name};
-use types::{auth::user::UserId, cursor::TimeIdCursor, visual::visual::VisualId};
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::visual::VisualId;
 
 use crate::{
     mappers::visual_like_mapper::VisualLikeMapper, repo::VisualLikeRepo,

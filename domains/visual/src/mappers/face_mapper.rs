@@ -9,10 +9,8 @@ use sea_orm::{
     ColumnTrait, Condition, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Expr, Query},
 };
-use types::{
-    cursor::TimeIdCursor,
-    visual::{face::*, person::PersonId, visual::VisualId},
-};
+use types_core::cursor::TimeIdCursor;
+use types_visual::{face::*, person::PersonId, visual::VisualId};
 
 pub struct FaceMapper;
 

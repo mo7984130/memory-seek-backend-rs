@@ -3,7 +3,8 @@ use std::collections::HashSet;
 use common_core::{DbConn as ConnectionTrait, error::contextual::Result, ext::ToOk, time::now};
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
-use types::{auth::user::UserId, visual::comment::CommentId};
+use types_identity::auth::user::UserId;
+use types_visual::comment::CommentId;
 use types_visual::comment_like::*;
 
 pub struct CommentLikeMapper;

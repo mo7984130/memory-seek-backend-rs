@@ -8,14 +8,11 @@ use common_core::{
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
-use types::{
-    auth::user::UserId,
-    visual::{
-        CommentCursorPageParam,
-        comment::{CommentId, CommentRecord},
-        dto::comment::{CommentPublishParam, HOT_COMMENT_MAX_COUNT, HOT_COMMENT_MIN_LIKES},
-        visual::VisualId,
-    },
+use types_identity::auth::user::UserId;
+use types_visual::{
+    CommentCursorPageParam, comment::CommentId, comment::CommentRecord,
+    dto::comment::CommentPublishParam, dto::comment::HOT_COMMENT_MAX_COUNT,
+    dto::comment::HOT_COMMENT_MIN_LIKES, visual::VisualId,
 };
 
 use crate::mappers::{

@@ -12,12 +12,10 @@ use common_metrics::{MetricsTimerExt, metrics_name, timed};
 use file_validator::{FileValidator, MediaKind};
 use futures::StreamExt;
 use tracing::{info, instrument};
-use types::{
-    auth::user::{AdminId, UserId},
-    visual::{
-        UploadVisualParam, VisualView,
-        visual::{NewVisualRecord, VisualKind, VisualRecord},
-    },
+use types_identity::auth::user::{AdminId, UserId};
+use types_visual::{
+    UploadVisualParam, VisualView, visual::NewVisualRecord, visual::VisualKind,
+    visual::VisualRecord,
 };
 use uuid::Uuid;
 

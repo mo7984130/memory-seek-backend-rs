@@ -17,20 +17,12 @@ use image::{ImageBuffer, Rgb};
 use insight_face_rs::Face;
 use tokio::{spawn, sync::mpsc, task::spawn_blocking};
 use tracing::{debug, info, warn};
-use types::{
-    auth::user::{AdminId, UserId},
-    cursor::TimeIdCursor,
-    visual::{
-        FaceView,
-        dto::{
-            face::{FaceDeleteBatchResult, UnassignedFaceVisualCursorParam},
-            visual::VisualView,
-        },
-        face::{self, FaceId, FaceRecord},
-        models::FaceIds,
-        person::PersonId,
-        visual::{VisualId, VisualKind},
-    },
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::{AdminId, UserId};
+use types_visual::{
+    FaceView, dto::face::FaceDeleteBatchResult, dto::face::UnassignedFaceVisualCursorParam,
+    dto::visual::VisualView, face, face::FaceId, face::FaceRecord, models::FaceIds,
+    person::PersonId, visual::VisualId, visual::VisualKind,
 };
 
 use crate::{

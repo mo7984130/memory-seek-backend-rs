@@ -6,11 +6,9 @@ use common_core::{
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::{models::LikedVisualsQuery, visual::VisualId},
-};
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{models::LikedVisualsQuery, visual::VisualId};
 
 use crate::state::VisualState;
 use crate::{

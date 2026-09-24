@@ -7,10 +7,8 @@ use common_core::{
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
-use types::{
-    auth::user::UserId, visual::collection::CollectionId, visual::models::VisualIds,
-    visual::visual::VisualId,
-};
+use types_identity::auth::user::UserId;
+use types_visual::{collection::CollectionId, models::VisualIds, visual::VisualId};
 use types_visual::{
     collection::CollectionRecord,
     dto::collection::{

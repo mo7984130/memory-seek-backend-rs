@@ -8,14 +8,10 @@ use common_core::{
 use common_db::{db_transaction, utils::DbUtils};
 use common_metrics::{MetricsTimerExt, metrics_name};
 use sea_orm::{DbBackend, EntityName, Statement};
-use types::{
-    auth::user::UserId,
-    visual::{
-        PersonVisualCursorParam, UnassignedFaceVisualCursorParam,
-        face::{self, FaceId, FaceRecord, NewFaceRecord},
-        person::{self, PersonId},
-        visual::VisualId,
-    },
+use types_identity::auth::user::UserId;
+use types_visual::{
+    PersonVisualCursorParam, UnassignedFaceVisualCursorParam, face, face::FaceId, face::FaceRecord,
+    face::NewFaceRecord, person, person::PersonId, visual::VisualId,
 };
 
 use crate::{

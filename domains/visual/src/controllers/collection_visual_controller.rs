@@ -11,20 +11,16 @@ use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
     extractors::ValidatedPath, extractors::ValidatedQuery,
 };
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::{
-        collection::CollectionId,
-        dto::collection::{
-            CollectionBriefView, CollectionVisualAddBatchParam, CollectionVisualAddBatchResult,
-            CollectionVisualCursorPageParam, CollectionVisualRemoveBatchParam,
-            CollectionVisualRemoveBatchResult,
-        },
-        dto::visual::VisualView,
-        models::VisualIds,
-        visual::VisualId,
-    },
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{
+    collection::CollectionId, dto::collection::CollectionBriefView,
+    dto::collection::CollectionVisualAddBatchParam,
+    dto::collection::CollectionVisualAddBatchResult,
+    dto::collection::CollectionVisualCursorPageParam,
+    dto::collection::CollectionVisualRemoveBatchParam,
+    dto::collection::CollectionVisualRemoveBatchResult, dto::visual::VisualView, models::VisualIds,
+    visual::VisualId,
 };
 
 pub struct CollectionVisualController;

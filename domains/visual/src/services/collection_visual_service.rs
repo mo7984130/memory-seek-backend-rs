@@ -2,19 +2,14 @@ use crate::repo::CollectionRepo;
 use crate::{services::visual_service::VisualService, state::VisualState};
 use common_core::{Result, ext::ToOk, types::CursorPage};
 use common_metrics::{MetricsTimerExt, metrics_name};
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::{
-        collection::CollectionId,
-        dto::collection::{
-            CollectionBriefView, CollectionVisualAddBatchResult, CollectionVisualCursorPageParam,
-            CollectionVisualRemoveBatchResult,
-        },
-        dto::visual::VisualView,
-        models::VisualIds,
-        visual::VisualId,
-    },
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{
+    collection::CollectionId, dto::collection::CollectionBriefView,
+    dto::collection::CollectionVisualAddBatchResult,
+    dto::collection::CollectionVisualCursorPageParam,
+    dto::collection::CollectionVisualRemoveBatchResult, dto::visual::VisualView, models::VisualIds,
+    visual::VisualId,
 };
 
 pub(crate) struct CollectionVisualService;

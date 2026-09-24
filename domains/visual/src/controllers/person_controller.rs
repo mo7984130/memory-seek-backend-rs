@@ -10,19 +10,13 @@ use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
     extractors::ValidatedPath, extractors::ValidatedQuery,
 };
-use types::{
-    auth::user::{AdminId, UserId},
-    cursor::{CountIdCursor, TimeIdCursor},
-    visual::{
-        PersonView,
-        dto::person::{
-            MergePersonParam, PersonCursorParam, PersonSearchParam, PersonVisualCursorParam,
-            RenamePersonParam, SecondaryClusterParam,
-        },
-        dto::visual::VisualView,
-        person::PersonId,
-        visual::VisualId,
-    },
+use types_core::cursor::{CountIdCursor, TimeIdCursor};
+use types_identity::auth::user::{AdminId, UserId};
+use types_visual::{
+    PersonView, dto::person::MergePersonParam, dto::person::PersonCursorParam,
+    dto::person::PersonSearchParam, dto::person::PersonVisualCursorParam,
+    dto::person::RenamePersonParam, dto::person::SecondaryClusterParam, dto::visual::VisualView,
+    person::PersonId, visual::VisualId,
 };
 
 use crate::{VisualState, services::person_service::PersonService};

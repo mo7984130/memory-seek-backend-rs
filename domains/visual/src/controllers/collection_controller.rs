@@ -10,12 +10,10 @@ use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
     extractors::ValidatedPath,
 };
-use types::{
-    auth::user::UserId,
-    visual::{
-        collection::CollectionId,
-        dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView},
-    },
+use types_identity::auth::user::UserId;
+use types_visual::{
+    collection::CollectionId, dto::collection::CollectionCreateParam,
+    dto::collection::CollectionUpdateParam, dto::collection::CollectionView,
 };
 
 use crate::{services::collection_service::CollectionService, state::VisualState};

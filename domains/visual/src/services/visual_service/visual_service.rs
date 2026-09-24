@@ -35,11 +35,9 @@ use types_visual::{
     models::{DeleteVisualsParam, ExistsByHashBatchParam},
 };
 
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::visual::{VisualId, VisualKind},
-};
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{visual::VisualId, visual::VisualKind};
 
 pub struct VisualService;
 
