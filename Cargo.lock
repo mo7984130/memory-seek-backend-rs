@@ -1722,7 +1722,8 @@ dependencies = [
 name = "email"
 version = "0.3.0"
 dependencies = [
- "common",
+ "common-core",
+ "common-metrics",
  "lettre",
 ]
 
@@ -3777,7 +3778,8 @@ name = "oss"
 version = "0.6.0"
 dependencies = [
  "bytes",
- "common",
+ "common-core",
+ "common-metrics",
  "futures",
  "reqwest 0.12.28",
  "rust-s3",

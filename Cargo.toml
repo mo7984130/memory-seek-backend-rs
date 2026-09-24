@@ -47,6 +47,13 @@ codegen-units = 1
 rpath = false
 
 [workspace.dependencies]
+common-core = { path = "common/core" }
+common-crypto = { path = "common/crypto" }
+common-db = { path = "common/db" }
+common-cache = { path = "common/cache" }
+common-metrics = { path = "common/metrics" }
+common-web = { path = "common/web" }
+common-runtime = { path = "common/runtime" }
 types = { path = "types" }
 types-core = { path = "types/core" }
 types-token = { path = "types/token" }
