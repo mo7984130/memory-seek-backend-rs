@@ -521,8 +521,12 @@ version = "0.3.1"
 dependencies = [
  "audit",
  "axum",
- "common",
+ "common-cache",
+ "common-core",
+ "common-crypto",
+ "common-db",
  "common-metrics",
+ "common-web",
  "common_macros",
  "constants",
  "email",

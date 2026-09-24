@@ -5,7 +5,7 @@ pub use auth_controller::AuthController;
 use std::sync::Arc;
 
 use axum::Router;
-use common::axum::controller_router::ControllerRouter;
+use common_web::controller_router::ControllerRouter;
 
 use crate::AuthState;
 

@@ -3,13 +3,17 @@ use crate::config::{ACCESS_TOKEN_EXPIRE, EMAIL_CODE_EXPIRE, REFRESH_TOKEN_EXPIRE
 use crate::error_ext::AuthOptionExt;
 use crate::mapper::{AuthInsertParam, AuthMapper};
 use audit::{AuditEvent, AuditRecorder};
-use common::Result;
-use common::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt, OptionExt};
-use common::error::{AppError, ContextualError};
-use common::ext::{RedisExt, ResultInspectErrAsync, ToOk};
-use common::metrics_name;
-use common::time::{after, now};
-use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
+use common_cache::RedisExt;
+use common_core::Result;
+use common_core::error::contextual::ext::{
+    BoolExt, ContextualResultExt, IntoContextualExt, OptionExt,
+};
+use common_core::error::{AppError, ContextualError};
+use common_core::time::{after, now};
+use common_core::{ext::ResultInspectErrAsync, ext::ToOk};
+use common_crypto::{HashAlgorithm, rand_utils};
+use common_metrics::MetricsTimerExt;
+use common_metrics::metrics_name;
 use constants::RedisKeys;
 use constants::redis_keys;
 use std::sync::LazyLock;
@@ -222,7 +226,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     };
 
     // 写入用户
-    let user_model = common::db_transaction!(scoped & state.db, |txn| {
+    let user_model = common_db::db_transaction!(scoped & state.db, |txn| {
         let user_model = AuthMapper::insert(txn, insert_param)
             .timed(metrics_name!("db_insert"))
             .await?;
