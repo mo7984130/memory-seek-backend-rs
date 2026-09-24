@@ -1,4 +1,5 @@
 pub mod app_error;
+pub mod body_util;
 pub mod controller_router;
 pub mod ext;
 pub mod extractors;

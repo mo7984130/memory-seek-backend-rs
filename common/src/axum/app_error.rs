@@ -13,6 +13,7 @@ impl AppError {
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Ignore => StatusCode::OK,
             Self::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+            Self::ServiceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 }

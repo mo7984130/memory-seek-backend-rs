@@ -10,7 +10,7 @@ use tracing::{debug, info};
 
 pub use backup::BackupConfig as Config;
 
-/// 备份运行时资源，供其它域（如 photo/face-engine）按需获取。
+/// 备份运行时资源，供其它域（如 visual/face-engine）按需获取。
 pub struct BackupRuntime {
     #[allow(unused)]
     pub state: Arc<backup::BackupState>,

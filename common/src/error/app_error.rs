@@ -30,6 +30,9 @@ pub enum AppError {
 
     #[error("请求体过大")]
     PayloadTooLarge,
+
+    #[error("服务繁忙, 请稍后重试")]
+    ServiceUnavailable,
 }
 
 impl AppError {

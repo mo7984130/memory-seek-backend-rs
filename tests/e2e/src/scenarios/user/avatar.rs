@@ -1,7 +1,6 @@
 use std::sync::LazyLock;
 
 use common::axum::{ErrR, SucR};
-use memseek_test::ctxlibs::http_client::multipart::{Form, Part};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -11,7 +10,7 @@ use memseek_test::{
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
 use types::auth;
-use types::photo::ImageTokenStr;
+use types::visual::VisualTokenStr;
 
 use crate::context::Context;
 
@@ -24,12 +23,21 @@ static PNG_1X1: &str = "89504E470D0A1A0A0000000D49484452000000010000000108020000
 static PNG_BYTES: LazyLock<Vec<u8>> =
     LazyLock::new(|| hex::decode(PNG_1X1).expect("内置 PNG fixture 非法"));
 
-/// 构造单文件 multipart 表单(用库重新导出的 `reqwest::multipart` 类型).
-fn file_form(filename: &str, content_type: &str, data: Vec<u8>) -> Result<Form, HttpError> {
-    let part = Part::bytes(data)
-        .file_name(filename.to_string())
-        .mime_str(content_type)?;
-    Ok(Form::new().part("file", part))
+/// 上传头像字节(request body 即文件)。
+async fn upload_avatar_body(
+    client: &reqwest::Client,
+    auth_header: &str,
+    content_type: &str,
+    data: Vec<u8>,
+) -> Result<reqwest::Response, HttpError> {
+    client
+        .request(reqwest::Method::PUT, "/user/avatar")
+        .header("Authorization", auth_header)
+        .header("content-type", content_type)
+        .body(data)
+        .send()
+        .await
+        .map_err(HttpError::from)
 }
 
 /// 上传头像: 落库 key 与响应 token 一致, 且 S3 对象存在、内容与上传一致.
@@ -41,7 +49,7 @@ impl Scenario for UploadAvatarScenario {
 
     type Error = HttpError;
 
-    type Output = SucR<ImageTokenStr>;
+    type Output = SucR<VisualTokenStr>;
 
     type Setup = Session;
 
@@ -54,16 +62,14 @@ impl Scenario for UploadAvatarScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let form = file_form("avatar.png", "image/png", PNG_BYTES.clone())?;
-        ctx.client
-            .request(reqwest::Method::PUT, "/user/avatar")
-            .header("Authorization", &setup.auth_header())
-            .multipart(form)
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let resp = upload_avatar_body(
+            &ctx.client,
+            &setup.auth_header(),
+            "image/png",
+            PNG_BYTES.clone(),
+        )
+        .await?;
+        resp.json::<Self::Output>().await.map_err(HttpError::from)
     }
 
     async fn validate(
@@ -111,7 +117,7 @@ impl Scenario for UploadAvatarReplaceScenario {
 
     type Error = HttpError;
 
-    type Output = SucR<ImageTokenStr>;
+    type Output = SucR<VisualTokenStr>;
 
     type Setup = ReplaceSetup;
 
@@ -119,16 +125,16 @@ impl Scenario for UploadAvatarReplaceScenario {
         let session = login(ctx, &user_account(task.index)).await?;
 
         // 第一次上传, 记录旧头像 key
-        let form = file_form("old.png", "image/png", PNG_BYTES.clone())?;
-        let resp: SucR<ImageTokenStr> = ctx
-            .client
-            .request(reqwest::Method::PUT, "/user/avatar")
-            .header("Authorization", &session.auth_header())
-            .multipart(form)
-            .send()
-            .await?
-            .json()
+        let resp: SucR<VisualTokenStr> = {
+            let resp = upload_avatar_body(
+                &ctx.client,
+                &session.auth_header(),
+                "image/png",
+                PNG_BYTES.clone(),
+            )
             .await?;
+            resp.json().await?
+        };
 
         Ok(ReplaceSetup {
             session,
@@ -141,16 +147,14 @@ impl Scenario for UploadAvatarReplaceScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let form = file_form("new.png", "image/png", PNG_BYTES.clone())?;
-        ctx.client
-            .request(reqwest::Method::PUT, "/user/avatar")
-            .header("Authorization", &setup.session.auth_header())
-            .multipart(form)
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let resp = upload_avatar_body(
+            &ctx.client,
+            &setup.session.auth_header(),
+            "image/png",
+            PNG_BYTES.clone(),
+        )
+        .await?;
+        resp.json::<Self::Output>().await.map_err(HttpError::from)
     }
 
     async fn validate(
@@ -202,16 +206,14 @@ impl Scenario for UploadAvatarInvalidFileScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let form = file_form("evil.txt", "text/plain", b"not an image".to_vec())?;
-        ctx.client
-            .request(reqwest::Method::PUT, "/user/avatar")
-            .header("Authorization", &setup.auth_header())
-            .multipart(form)
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let resp = upload_avatar_body(
+            &ctx.client,
+            &setup.auth_header(),
+            "text/plain",
+            b"not an image".to_vec(),
+        )
+        .await?;
+        resp.json::<Self::Output>().await.map_err(HttpError::from)
     }
 
     async fn validate(

@@ -2,8 +2,8 @@ use common::Result;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use types::auth::user::UserId;
-use types::photo::ImageToken;
 use types::user::UserBriefView;
+use types::visual::VisualToken;
 
 /// 用户信息数据库查询结果（后端内部使用）
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
@@ -19,7 +19,7 @@ impl UserBriefRow {
     pub fn into_brief_view(self, viewer: UserId) -> Result<UserBriefView> {
         let avatar_token = self
             .avatar_file_id
-            .map(|file_id| ImageToken::thumbnail(viewer, file_id).into());
+            .map(|file_id| VisualToken::image_thumbnail(viewer, file_id).into());
 
         Ok(UserBriefView {
             user_id: self.user_id,

@@ -5,6 +5,7 @@ use crate::manifest::BackupManifest;
 use crate::state::BackupState;
 use crate::storage::{BackupSource, BackupTier};
 use audit::{AuditEvent, AuditRecorder};
+use chrono::{Datelike, Local, Weekday};
 use common::ext::ToOk;
 use common::time::{Duration, now};
 use common::utils::table_metadata::TableMetadata;
@@ -30,11 +31,28 @@ impl BackupMode {
         }
     }
 
-    fn tiers(self) -> &'static [BackupTier] {
+    /// 本次备份应写入的 tier 列表。
+    ///
+    /// - `Scheduled`: 每天写入 Daily;每周第一天(周一)追加 Weekly;每月 1 号追加 Monthly。
+    ///   保证 weekly / monthly 目录里保留的是对应周期的 run,而非最近若干天。
+    /// - `Manual`: 仅写入 Manual。
+    fn tiers(self, now: &chrono::DateTime<Local>) -> Vec<BackupTier> {
         match self {
-            Self::Scheduled => &[BackupTier::Daily, BackupTier::Weekly, BackupTier::Monthly],
-            Self::Manual => &[BackupTier::Manual],
+            Self::Manual => vec![BackupTier::Manual],
+            Self::Scheduled => Self::scheduled_tiers(now.weekday(), now.day()),
         }
+    }
+
+    /// GFS 分层选择:周一 = Weekly,每月 1 号 = Monthly(周一且恰逢 1 号时两者都写)。
+    fn scheduled_tiers(weekday: Weekday, day_of_month: u32) -> Vec<BackupTier> {
+        let mut tiers = vec![BackupTier::Daily];
+        if weekday == Weekday::Mon {
+            tiers.push(BackupTier::Weekly);
+        }
+        if day_of_month == 1 {
+            tiers.push(BackupTier::Monthly);
+        }
+        tiers
     }
 }
 
@@ -113,25 +131,36 @@ impl BackupService {
         inc_counter!("restore", "rows", restored);
         Ok(restored)
     }
-    /// 执行定时备份，并在完成后清理过期备份。
+    /// 执行定时备份，并在完成后清理过期备份（无论备份成败都会清理）。
     #[common_macros::metered(name = "scheduled")]
     #[tracing::instrument(name = "scheduled", skip_all)]
     pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult> {
         let tables = Self::configured_tables(&state).await?;
-        let mut result = Self::execute(state.clone(), tables, BackupMode::Scheduled).await?;
-
-        match state.storage.cleanup_gfs(&state.config.scheduled).await {
-            Ok(removed) => result.cleaned = removed,
+        // 备份失败不能短路清理：归档可能已部分上传到存储，过期 run 仍需要收敛
+        let mut result = match Self::execute(state.clone(), tables, BackupMode::Scheduled).await {
+            Ok(result) => result,
             Err(error) => {
-                tracing::error!(error = %error, "GFS 清理失败");
+                tracing::error!(error = %error, "定时备份执行失败");
+                if let Err(cleanup_error) = Self::run_cleanup(&state).await {
+                    tracing::error!(error = %cleanup_error, "GFS 清理失败");
+                }
+                return Err(error.into());
             }
-        }
+        };
+
+        // 清理是任务的一部分：清理失败视为本次定时任务失败，向上返回错误
+        result.cleaned = Self::run_cleanup(&state).await?;
 
         Self::record_run_audit(&state, "backup.scheduled_completed", None, &result).await?;
         inc_counter!("scheduled", "tables_exported", result.exported as u64);
         inc_counter!("scheduled", "tables_failed", result.failed as u64);
         inc_counter!("scheduled", "cleaned", result.cleaned as u64);
         Ok(result)
+    }
+
+    /// 执行 GFS 分层清理，错误向上返回，由调用方决定任务成败。
+    async fn run_cleanup(state: &BackupState) -> std::result::Result<u32, BackupError> {
+        state.storage.cleanup_gfs(&state.config.scheduled).await
     }
 
     /// 执行管理员触发的全表手动备份。
@@ -185,6 +214,8 @@ impl BackupService {
         let manifest_tables = tables.clone();
         let start = std::time::Instant::now();
         let run_id = now().format("%Y%m%d_%H%M%S").to_string();
+        // tier 选择基于本地日期(周一/每月 1 号),与调度时刻的时区一致
+        let backup_time = Local::now();
         let work_dir = state.temp_dir.join(&run_id);
         state.ensure_dirs()?;
 
@@ -195,10 +226,10 @@ impl BackupService {
             match BinaryCopyExporter::export_to_dir(&state.db, &table_name, &work_dir).await {
                 Ok(archive_path) => {
                     let save_result = async {
-                        for tier in mode.tiers() {
+                        for tier in mode.tiers(&backup_time) {
                             state
                                 .storage
-                                .save(&table_name, &archive_path, *tier, &run_id)
+                                .save(&table_name, &archive_path, tier, &run_id)
                                 .await?;
                         }
                         Ok::<(), BackupError>(())
@@ -225,10 +256,10 @@ impl BackupService {
             let postgres_major = TableMetadata::postgres_major_version(&state.db).await?;
             let manifest =
                 BackupManifest::new(result.run_id.clone(), manifest_tables, postgres_major);
-            for tier in mode.tiers() {
+            for tier in mode.tiers(&backup_time) {
                 state
                     .storage
-                    .save_manifest(*tier, &result.run_id, &manifest)
+                    .save_manifest(tier, &result.run_id, &manifest)
                     .await?;
             }
         }
@@ -283,6 +314,45 @@ impl BackupService {
             && value
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BackupMode;
+    use chrono::Weekday;
+    use types::backup::BackupTier;
+
+    #[test]
+    fn scheduled_backup_stays_daily_on_regular_days() {
+        assert_eq!(
+            BackupMode::scheduled_tiers(Weekday::Tue, 15),
+            vec![BackupTier::Daily]
+        );
+    }
+
+    #[test]
+    fn weekly_tier_on_first_day_of_week() {
+        assert_eq!(
+            BackupMode::scheduled_tiers(Weekday::Mon, 15),
+            vec![BackupTier::Daily, BackupTier::Weekly]
+        );
+    }
+
+    #[test]
+    fn monthly_tier_on_first_day_of_month() {
+        assert_eq!(
+            BackupMode::scheduled_tiers(Weekday::Tue, 1),
+            vec![BackupTier::Daily, BackupTier::Monthly]
+        );
+    }
+
+    #[test]
+    fn month_starting_on_monday_gets_all_scheduled_tiers() {
+        assert_eq!(
+            BackupMode::scheduled_tiers(Weekday::Mon, 1),
+            vec![BackupTier::Daily, BackupTier::Weekly, BackupTier::Monthly]
+        );
     }
 }
 

@@ -46,6 +46,12 @@ pub struct ServerConfig {
     pub host: String,
     #[serde(default = "default_port")]
     pub port: u16,
+    /// 上传请求体上限(字节), 须大于业务校验上限(图片 20MB / 视频 512MB)
+    #[serde(default = "default_max_upload_bytes")]
+    pub max_upload_bytes: u64,
+    /// 统一临时文件目录(上传落盘等), 服务启动时创建, 优雅关闭时删除
+    #[serde(default = "default_tmp_path")]
+    pub tmp_path: PathBuf,
 }
 
 impl Default for ServerConfig {
@@ -53,6 +59,8 @@ impl Default for ServerConfig {
         Self {
             host: default_host(),
             port: default_port(),
+            max_upload_bytes: default_max_upload_bytes(),
+            tmp_path: default_tmp_path(),
         }
     }
 }
@@ -62,6 +70,14 @@ fn default_host() -> String {
 }
 const fn default_port() -> u16 {
     7984
+}
+/// 默认上传上限: 512MB(与业务视频上限一致).
+const fn default_max_upload_bytes() -> u64 {
+    512 * 1024 * 1024
+}
+/// 默认统一临时文件目录.
+fn default_tmp_path() -> PathBuf {
+    PathBuf::from("./tmp")
 }
 
 impl AppConfig {
@@ -90,7 +106,13 @@ impl AppConfig {
 
         let cfg = Config::builder()
             .add_source(File::from(config_path))
-            .add_source(Environment::with_prefix("MEMORY_SEEK").separator("__"))
+            .add_source(
+                // prefix_separator 需显式指定为 "_", 否则默认跟随 separator("__"),
+                // 导致 MEMORY_SEEK_<SECTION>__<KEY> 形式的变量被静默跳过
+                Environment::with_prefix("MEMORY_SEEK")
+                    .prefix_separator("_")
+                    .separator("__"),
+            )
             .build()
             .expect("构建配置失败");
 

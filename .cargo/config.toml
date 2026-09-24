@@ -5,10 +5,22 @@
 # 无需手动维护导出清单（旧方案 tools/export-ts bin 已移除）。
 #
 # relative = true 表示相对本配置文件所在目录（仓库根），
-# 因此 types / common / photo 三个 crate 都会输出到仓库根 bindings/ 下，
-# 目录归属由各类型上的 export_to 属性决定（auth / photo / user）。
+# 因此 types / common / visual 三个 crate 都会输出到仓库根 bindings/ 下，
+# 目录归属由各类型上的 export_to 属性决定（auth / visual / user）。
 [env]
 TS_RS_EXPORT_DIR = { value = "target/bindings", relative = true }
 
-[build]
-rustflags = ["-C", "target-cpu=x86-64-v3"]
+# 构建参数。注意 `target.<triple>.rustflags` 会覆盖 `[build].rustflags`,
+# 因此所有 rustflags 集中写在这一张表里,不要再往 [build] 里放。
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+    # 基线 CPU 特性(勿随意改动: 改动会触发一次性全量重编译)
+    "-C", "target-cpu=x86-64-v3",
+    # rustc 1.98 在 x86_64-unknown-linux-gnu 上默认使用自带的 rust-lld
+    # (下发 `-fuse-ld=lld` + `-B <sysroot>/.../gcc-ld`)。这里显式关掉自包含
+    # 链接器,改为系统驱动 `cc` + mold。
+    "-C", "link-self-contained=no",
+    # 名字形式而非绝对路径:mold 需在 PATH 中(本机 ~/.local/bin/mold)。
+    # 若环境里没有 mold,gcc 会直接报 "cannot find mold" 而不是静默退回 LLD。
+    "-C", "link-arg=-fuse-ld=mold",
+]

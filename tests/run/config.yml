@@ -31,6 +31,9 @@ token_cipher:
   key: "test"
   salt: "test"
 
+metrics:
+  interval_seconds: 1
+
 face_engine:
-  detect_model_path: "./models/det_10g.onnx"
-  recognize_model_path: "./models/w600k_r50.onnx"
+  detect_model_path: "./target/dist/models/det.onnx"
+  recognize_model_path: "./target/dist/models/rec.onnx"

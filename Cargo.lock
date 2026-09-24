@@ -562,7 +562,7 @@ dependencies = [
  "anyhow",
  "arrayvec",
  "log",
- "nom",
+ "nom 8.0.0",
  "num-rational",
  "v_frame",
 ]
@@ -645,7 +645,6 @@ dependencies = [
  "matchit",
  "memchr",
  "mime",
- "multer",
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
@@ -692,12 +691,13 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.4.0"
+version = "0.4.3"
 dependencies = [
  "async-compression",
  "audit",
  "axum",
  "bytes",
+ "chrono",
  "common",
  "common_macros",
  "futures-util",
@@ -800,6 +800,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
 dependencies = [
  "digest 0.10.7",
+]
+
+[[package]]
+name = "blake3"
+version = "1.8.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d9e454fc11f76977dc803893aff6304ed33d6a26efae8696573bea74baa27ae"
+dependencies = [
+ "arrayvec",
+ "cc",
+ "cfg-if",
+ "constant_time_eq",
+ "cpufeatures 0.3.1",
 ]
 
 [[package]]
@@ -1064,7 +1077,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1078,6 +1091,7 @@ dependencies = [
  "deadpool-redis",
  "hex",
  "hkdf 0.12.4",
+ "http-body-util",
  "metrics",
  "multi-level-cache",
  "password-hash",
@@ -1184,8 +1198,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "constant_time_eq"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
+
+[[package]]
 name = "constants"
-version = "0.1.1"
+version = "0.3.0"
 dependencies = [
  "common",
  "types",
@@ -1595,16 +1615,16 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "e2e"
-version = "0.3.7"
+version = "0.6.0"
 dependencies = [
  "base64 0.22.1",
+ "blake3",
  "clap",
  "common",
  "config",
  "constants",
  "deadpool-redis",
  "hex",
- "md5",
  "memseek-test",
  "oss",
  "sea-orm",
@@ -1792,11 +1812,12 @@ dependencies = [
 
 [[package]]
 name = "file-validator"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "const_format",
  "hex",
  "image",
+ "nom-exif",
  "thiserror",
 ]
 
@@ -1999,6 +2020,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "geo-types"
+version = "0.7.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "777d18aa0f12f8b285331cd867133ee14422b3f023f6d388034c47d43e28786a"
+dependencies = [
+ "approx",
+ "num-traits",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2169,7 +2202,7 @@ dependencies = [
  "byteorder",
  "crossbeam-channel",
  "flate2",
- "nom",
+ "nom 8.0.0",
  "num-traits",
 ]
 
@@ -2594,9 +2627,9 @@ dependencies = [
 
 [[package]]
 name = "insight-face-rs"
-version = "4.0.0"
+version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d28e4a8c4bfd8db1e3cb924c8446c55d7253fdf8dbdc72e371f750175036b165"
+checksum = "170407334f12b9ee84d7696a13a9fc28a6e36d90a4b8eb843d3bdec3b71cfa4d"
 dependencies = [
  "image",
  "imageproc",
@@ -2645,6 +2678,16 @@ name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
+
+[[package]]
+name = "iso6709parse"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5090db9c6a716d1f4eeb729957e889e9c28156061c825cbccd44950cf0f3c66"
+dependencies = [
+ "geo-types",
+ "nom 7.1.3",
+]
 
 [[package]]
 name = "itertools"
@@ -2797,7 +2840,7 @@ dependencies = [
  "httpdate",
  "idna",
  "mime",
- "nom",
+ "nom 8.0.0",
  "percent-encoding",
  "quoted_printable",
  "rustls",
@@ -3197,6 +3240,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "minimal-lexical"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3255,23 +3304,6 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
-]
-
-[[package]]
-name = "multer"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83e87776546dc87511aa5ee218730c92b666d7264ab6ed41f9d215af9cd5224b"
-dependencies = [
- "bytes",
- "encoding_rs",
- "futures-util",
- "http",
- "httparse",
- "memchr",
- "mime",
- "spin",
- "version_check",
 ]
 
 [[package]]
@@ -3377,11 +3409,36 @@ dependencies = [
 
 [[package]]
 name = "nom"
+version = "7.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
+dependencies = [
+ "memchr",
+ "minimal-lexical",
+]
+
+[[package]]
+name = "nom"
 version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "nom-exif"
+version = "3.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3217a90c724aa7c99f53b2fc7eec37b63e3e9aa1801ebe031dee75234d9c8339"
+dependencies = [
+ "bytes",
+ "chrono",
+ "iso6709parse",
+ "nom 8.0.0",
+ "regex",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -3644,7 +3701,7 @@ dependencies = [
 
 [[package]]
 name = "oss"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "bytes",
  "common",
@@ -3831,39 +3888,6 @@ checksum = "3673cba5b9a124916096a423b806a9f29620972c6c97b08db5f2053e9428b481"
 dependencies = [
  "serde",
  "sqlx",
-]
-
-[[package]]
-name = "photo"
-version = "0.3.4"
-dependencies = [
- "async-trait",
- "audit",
- "axum",
- "backup",
- "bytes",
- "common",
- "common_macros",
- "constants",
- "file-validator",
- "futures",
- "image",
- "insight-face-rs",
- "linkme",
- "md5",
- "multi-level-cache",
- "ndarray",
- "oss",
- "petal-clustering",
- "pinyin",
- "sea-orm",
- "serde",
- "serde_json",
- "step_derive",
- "tokio",
- "tracing",
- "types",
- "uuid",
 ]
 
 [[package]]
@@ -4893,9 +4917,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a334e83ced3ae3ee44db0f84d1fcf8d2087a1ad9bb9036f00f9f6067156ea197"
+checksum = "e01d46a6e22b8ce84aba64fe97011669859bc7f7120a47f5b58839dcaaa4545c"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -4942,9 +4966,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm-macros"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4039a86f9acc4d3b52747508b347dddc6fd725bbc429902ebeb6d26225fc2528"
+checksum = "e24c82fc1e76c014dffe5ecdac8f654da73161d703a16ea13414581e07459c83"
 dependencies = [
  "heck 0.5.0",
  "itertools",
@@ -5155,7 +5179,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.4.1"
+version = "0.7.0"
 dependencies = [
  "audit",
  "auth",
@@ -5174,7 +5198,6 @@ dependencies = [
  "metrics-tracing-context",
  "multi-level-cache",
  "oss",
- "photo",
  "redis",
  "sea-orm",
  "serde",
@@ -5188,6 +5211,7 @@ dependencies = [
  "types",
  "user",
  "uuid",
+ "visual",
 ]
 
 [[package]]
@@ -6135,7 +6159,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types"
-version = "0.3.2"
+version = "0.11.0"
 dependencies = [
  "base64 0.22.1",
  "common",
@@ -6262,7 +6286,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.2.0"
+version = "0.5.0"
 dependencies = [
  "audit",
  "axum",
@@ -6369,6 +6393,39 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "visual"
+version = "0.10.0"
+dependencies = [
+ "async-trait",
+ "audit",
+ "axum",
+ "backup",
+ "blake3",
+ "bytes",
+ "common",
+ "common_macros",
+ "constants",
+ "file-validator",
+ "futures",
+ "image",
+ "insight-face-rs",
+ "linkme",
+ "multi-level-cache",
+ "ndarray",
+ "oss",
+ "petal-clustering",
+ "pinyin",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "step_derive",
+ "tokio",
+ "tracing",
+ "types",
+ "uuid",
+]
 
 [[package]]
 name = "walkdir"

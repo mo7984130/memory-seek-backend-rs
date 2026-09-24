@@ -47,7 +47,7 @@ fn classify_module(route: &str) -> &'static str {
     match segments.next() {
         Some("auth") => "auth",
         Some("user") => "user",
-        Some("photo") => "photo",
+        Some("visual") => "visual",
         // /admin/backup/* → backup；其余 /admin/*（如 /admin/audits）→ audit
         Some("admin") => match segments.next() {
             Some("backup") => "backup",
@@ -86,8 +86,8 @@ mod tests {
         assert_eq!(classify_module("/auth/login"), "auth");
         assert_eq!(classify_module("/auth/token"), "auth");
         assert_eq!(classify_module("/user/me"), "user");
-        assert_eq!(classify_module("/photo/:id"), "photo");
-        assert_eq!(classify_module("/photo/face/:id"), "photo");
+        assert_eq!(classify_module("/visual/:id"), "visual");
+        assert_eq!(classify_module("/visual/face/:id"), "visual");
         assert_eq!(classify_module("/admin/audits"), "audit");
         assert_eq!(classify_module("/admin/backup/trigger"), "backup");
         assert_eq!(classify_module("/admin/backup/restore"), "backup");

@@ -17,6 +17,14 @@ EnvironmentFile=/etc/memory-seek/memory-seek-server.env
 
 ExecStart=/usr/local/bin/memory-seek-server -c /etc/memory-seek/config.yaml
 
+# ── CPU 限制：最多用 90%，留 10% 给系统和 SSH ──
+CPUQuota=90%
+
+# 软限制：达到后节流，不杀进程
+MemoryHigh=80%
+# 硬限制：绝对上限，超出则 OOM Killer 终止进程
+MemoryMax=90%
+
 # 崩溃自动重启
 Restart=on-failure
 RestartSec=5

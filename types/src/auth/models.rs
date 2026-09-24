@@ -38,7 +38,7 @@ crate::in_dto!(RegisterRequest, "auth/", serialize; {
     /// 密码
     #[validate(
         custom(function = "validate_password"),
-        must_match(other = "confirm_password")
+        must_match(other = "confirm_password", message = "两次输入的密码不一致")
     )]
     pub password: String,
 

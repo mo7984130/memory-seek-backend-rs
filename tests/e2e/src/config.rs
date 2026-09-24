@@ -87,16 +87,16 @@ pub struct TokenCipherConfig {
 #[derive(Debug, Deserialize)]
 pub struct SeedConfig {
     pub auth_users: u64,
-    pub photo_users: u64,
-    pub photos_per_user: u64,
+    pub visual_users: u64,
+    pub visuals_per_user: u64,
     pub faces_per_person: u64,
     /// user 模块专属测试用户池大小(uit_user_* / uit_pwd_*), 需 >= Manager 并发度
     pub uit_users: u64,
 }
 
 impl SeedConfig {
-    pub fn photo_count(&self) -> u64 {
-        self.photo_users * self.photos_per_user
+    pub fn visual_count(&self) -> u64 {
+        self.visual_users * self.visuals_per_user
     }
 }
 

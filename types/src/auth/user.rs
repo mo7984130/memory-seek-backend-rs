@@ -48,7 +48,7 @@ mod entity {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{photo::ImageToken, user::models::UserInfo};
+    use crate::{user::models::UserInfo, visual::VisualToken};
 
     #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
     #[sea_orm(table_name = "auth_user")]
@@ -149,7 +149,7 @@ mod entity {
     impl UserInfo {
         /// 为头像文件 ID 生成加密访问令牌.
         pub fn with_avatar_token(&mut self, file_id: String) {
-            self.avatar_token = Some(ImageToken::thumbnail(self.id, file_id).into());
+            self.avatar_token = Some(VisualToken::image_thumbnail(self.id, file_id).into());
         }
 
         /// 将用户记录转换为包含头像访问令牌的用户信息.

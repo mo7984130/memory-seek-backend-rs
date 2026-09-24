@@ -1,7 +1,7 @@
 //! `step_boundary_check` — 静态检查 `common::pipeline::Step` 的表归属白名单约束
 //!
 //! 规则(作用于所有 `impl ... Step for Xxx` 以及 `#[step_derive::declare_transaction_step(...)]`
-//! 标记的 impl 块的 `on_photo_delete` 方法体):
+//! 标记的 impl 块的步骤方法体):
 //!
 //! 1. 调用路径倒数第二个 segment 以 `Mapper` 结尾时,类型名必须在 `owns()` 白名单内;
 //! 2. 禁止直接使用 SeaORM 实体(`Entity::` / `Column::` / `ActiveModel` / `Model`),
@@ -251,7 +251,7 @@ fn collect_step_impls<'a>(items: &'a [Item], f: &mut impl FnMut(&'a ItemImpl)) {
     }
 }
 
-/// 递归收集所有带 `#[declare_transaction_step(...)]` 属性的 impl 块,检查其 `on_photo_delete` 方法体
+/// 递归收集所有带 `#[declare_transaction_step(...)]` 属性的 impl 块,检查其步骤方法体
 fn collect_declare_transaction_step_impls(
     items: &[Item],
     file: &str,
@@ -260,11 +260,11 @@ fn collect_declare_transaction_step_impls(
     for item in items {
         match item {
             Item::Impl(item_impl) => {
-                if let Some(owns) = parse_declare_transaction_step_attr(&item_impl.attrs) {
+                if let Some(attr) = parse_declare_transaction_step_attr(&item_impl.attrs) {
                     for impl_item in &item_impl.items {
                         if let ImplItem::Fn(method) = impl_item {
-                            if method.sig.ident == "on_photo_delete" {
-                                check_body(&owns, &method.block, file, violations);
+                            if method.sig.ident.to_string() == attr.method {
+                                check_body(&attr.owns, &method.block, file, violations);
                             }
                         }
                     }
@@ -280,8 +280,10 @@ fn collect_declare_transaction_step_impls(
     }
 }
 
-/// 从 impl 块的属性中提取 `#[declare_transaction_step(...)]` 的 `owns` 白名单数组
-fn parse_declare_transaction_step_attr(attrs: &[syn::Attribute]) -> Option<Vec<String>> {
+/// 从 impl 块的属性中提取 `#[declare_transaction_step(...)]` 的 `owns` 白名单与 `method` 方法名
+fn parse_declare_transaction_step_attr(attrs: &[syn::Attribute]) -> Option<StepAttr> {
+    let mut owns = None;
+    let mut method = None;
     for attr in attrs {
         let is_declare_transaction_step = attr
             .path()
@@ -300,15 +302,29 @@ fn parse_declare_transaction_step_attr(attrs: &[syn::Attribute]) -> Option<Vec<S
                         iter.next(); // `=`
                         if let Some(TokenTree::Group(group)) = iter.next() {
                             if group.delimiter() == Delimiter::Bracket {
-                                return Some(extract_strings(group.stream()));
+                                owns = Some(extract_strings(group.stream()));
                             }
+                        }
+                    } else if ident == "method" {
+                        iter.next(); // `=`
+                        if let Some(TokenTree::Ident(name)) = iter.next() {
+                            method = Some(name.to_string());
                         }
                     }
                 }
             }
         }
     }
-    None
+    owns.map(|owns| StepAttr {
+        owns,
+        method: method.unwrap_or_else(|| "on_photo_delete".to_owned()),
+    })
+}
+
+/// `#[declare_transaction_step(...)]` 属性解析结果
+struct StepAttr {
+    owns: Vec<String>,
+    method: String,
 }
 
 /// 从 token 流中收集所有字符串字面量
@@ -484,12 +500,10 @@ impl Step<Ctx> for MyStep {{
                 Ok(())
             }
         "#;
-        let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
-        assert!(
-            violations
-                .iter()
-                .any(|v| v.message.contains("common::error::contextual::Result"))
-        );
+        let violations = check_source(source, "/repo/domains/visual/src/mappers/demo.rs");
+        assert!(violations
+            .iter()
+            .any(|v| v.message.contains("common::error::contextual::Result")));
     }
 
     #[test]
@@ -498,7 +512,7 @@ impl Step<Ctx> for MyStep {{
             use common::error::contextual::Result;
             async fn query() -> Result<()> { Ok(()) }
         "#;
-        assert!(check_source(source, "/repo/domains/photo/src/mappers/demo.rs").is_empty());
+        assert!(check_source(source, "/repo/domains/visual/src/mappers/demo.rs").is_empty());
     }
 
     #[test]
@@ -507,12 +521,10 @@ impl Step<Ctx> for MyStep {{
             use common::error::Result;
             async fn query() -> Result<()> { Ok(()) }
         "#;
-        let violations = check_source(source, "/repo/domains/photo/src/mappers/demo.rs");
-        assert!(
-            violations
-                .iter()
-                .any(|v| v.message.contains("common::error::contextual::Result"))
-        );
+        let violations = check_source(source, "/repo/domains/visual/src/mappers/demo.rs");
+        assert!(violations
+            .iter()
+            .any(|v| v.message.contains("common::error::contextual::Result")));
     }
 
     #[test]
@@ -544,7 +556,7 @@ impl Step<Ctx> for MyStep {{
         let source = r#"
             fn service() { tracing::error!("failed"); }
         "#;
-        let violations = check_source(source, "/repo/domains/photo/src/services/demo.rs");
+        let violations = check_source(source, "/repo/domains/visual/src/services/demo.rs");
         assert!(violations.is_empty());
     }
 
@@ -556,7 +568,7 @@ impl Step<Ctx> for MyStep {{
 
     #[test]
     fn rejects_column_path() {
-        let src = source_with("filter(Column::PhotoId.is_in(vec![1]));", r#"&[]"#);
+        let src = source_with("filter(Column::VisualId.is_in(vec![1]));", r#"&[]"#);
         assert_eq!(check_source(&src, "t.rs").len(), 1);
     }
 
@@ -571,7 +583,7 @@ impl Step<Ctx> for MyStep {{
 
     #[test]
     fn ignores_context_method_call() {
-        let src = source_with("let ids = _ctx.photo_ids();", r#"&["PhotoMapper"]"#);
+        let src = source_with("let ids = _ctx.visual_ids();", r#"&["VisualMapper"]"#);
         assert!(check_source(&src, "t.rs").is_empty());
     }
 
@@ -621,15 +633,16 @@ mod a {
     fn allows_owned_mapper_in_declare_transaction_step() {
         let src = r#"
 #[step_derive::declare_transaction_step(
-    ctx = crate::services::photo_service::PhotoDeleteContext,
+    ctx = crate::services::visual_service::VisualDeleteContext,
     name = "foo",
-    owns = ["CollectionPhotoMapper", "CollectionMapper"],
+    owns = ["CollectionVisualMapper", "CollectionMapper"],
+method = on_visual_delete,
 )]
 impl FooService {
-    async fn on_photo_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut PhotoDeleteContext) -> common::Result<()> {
-        let ids = ctx.photo_ids();
-        CollectionPhotoMapper::delete_by_photo_ids(txn, &ids).await?;
-        CollectionMapper::update_photo_count_delta_batch(txn, &HashMap::new()).await?;
+    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
+        let ids = ctx.visual_ids();
+        CollectionVisualMapper::delete_by_visual_ids(txn, &ids).await?;
+        CollectionMapper::update_visual_count_delta_batch(txn, &HashMap::new()).await?;
         Ok(())
     }
 }
@@ -641,12 +654,13 @@ impl FooService {
     fn rejects_unowned_mapper_in_declare_transaction_step() {
         let src = r#"
 #[step_derive::declare_transaction_step(
-    ctx = PhotoDeleteContext,
+    ctx = VisualDeleteContext,
     name = "foo",
     owns = ["CollectionMapper"],
+method = on_visual_delete,
 )]
 impl FooService {
-    async fn on_photo_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut PhotoDeleteContext) -> common::Result<()> {
+    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
         CommentMapper::delete_all(txn).await?;
         Ok(())
     }
@@ -663,10 +677,11 @@ impl FooService {
 #[step_derive::declare_transaction_step(
     name = "foo",
     owns = [],
-    ctx = PhotoDeleteContext,
+    ctx = VisualDeleteContext,
+    method = on_visual_delete,
 )]
 impl FooService {
-    async fn on_photo_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut PhotoDeleteContext) -> common::Result<()> {
+    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
         Entity::find().all(txn).await?;
         let _ = ActiveModel { ..Default::default() };
         Ok(())
@@ -682,12 +697,13 @@ impl FooService {
         let src = r#"
 mod a {
     #[step_derive::declare_transaction_step(
-        ctx = PhotoDeleteContext,
+        ctx = VisualDeleteContext,
         name = "foo",
         owns = ["A"],
+    method = on_visual_delete,
     )]
     impl FooService {
-        async fn on_photo_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut PhotoDeleteContext) -> common::Result<()> {
+        async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
             BMapper::x(txn).await?;
             Ok(())
         }

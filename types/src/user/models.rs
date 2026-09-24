@@ -4,7 +4,7 @@ use common::time::DateTime;
 use validator::Validate;
 
 use super::validators::*;
-use crate::{auth::user::UserId, photo::ImageTokenStr};
+use crate::{auth::user::UserId, visual::VisualTokenStr};
 
 // ============================================================
 // UserIds — 校验型用户 ID 批量列表
@@ -33,7 +33,7 @@ crate::out_dto!(UserInfo, "user/", Debug; {
     pub email: String,
 
     /// 头像令牌（加密字符串）
-    pub avatar_token: Option<ImageTokenStr>,
+    pub avatar_token: Option<VisualTokenStr>,
 
     /// 创建时间
     pub created_at: DateTime,
@@ -45,7 +45,7 @@ crate::in_dto!(ChangePasswordParam, "user/", serialize; {
 
     #[validate(
         custom(function = "validate_password"),
-        must_match(other = "confirm_password")
+        must_match(other = "confirm_password", message = "两次输入的密码不一致")
     )]
     pub new_password: String,
 
@@ -70,20 +70,10 @@ crate::out_dto!(InviterCodeView, "user/", rename = "InviterCode"; {
     pub expire_at: DateTime,
 });
 
-crate::in_dto!(UpdateAvatarParam, "user/", serialize, docs = "更新头像请求参数（文件二进制数据由 multipart 单独传递）"; {
-    /// 文件名
-    #[validate(length(min = 1, max = 255, message = "文件名不能为空"))]
-    pub file_name: String,
-
-    /// 文件 MIME 类型
-    #[validate(length(min = 1, max = 100, message = "文件类型不能为空"))]
-    pub content_type: String,
-});
-
 crate::out_dto!(UserBriefView, "user/", rename = "UserBrief"; {
     pub user_id: UserId,
     pub nickname: String,
-    pub avatar_token: Option<ImageTokenStr>,
+    pub avatar_token: Option<VisualTokenStr>,
 });
 
 #[cfg(test)]

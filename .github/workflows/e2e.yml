@@ -13,8 +13,8 @@ jobs:
         name: 端到端测试
         runs-on: ubuntu-latest
         env:
-            # server 需要 photo 表(依赖 face-engine)与 /metrics
-            FEATURES: metrics,auth,user,photo,face-engine
+            # server 需要 visual 表(依赖 face-engine)与 /metrics
+            FEATURES: metrics,auth,user,visual,face-engine
         steps:
             - name: Checkout
               uses: actions/checkout@v7
@@ -24,6 +24,10 @@ jobs:
 
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
+
+            - name: Install mold
+              # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
+              run: sudo apt-get update && sudo apt-get install -y mold
 
             - uses: Swatinem/rust-cache@v2
               with:

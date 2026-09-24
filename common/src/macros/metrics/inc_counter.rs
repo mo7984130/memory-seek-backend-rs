@@ -8,7 +8,7 @@
 /// // 自动使用当前 span 名
 /// inc_counter!("processed", 1);
 /// // 显式指定函数名
-/// inc_counter!("face:compute", "photos_processed", count as u64);
+/// inc_counter!("face:compute", "visuals_processed", count as u64);
 /// ```
 #[macro_export]
 macro_rules! inc_counter {

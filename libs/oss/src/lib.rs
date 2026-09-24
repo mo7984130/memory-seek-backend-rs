@@ -343,6 +343,34 @@ impl S3Client {
             .any(|object| object.key.as_str() == key))
     }
 
+    /// 列出指定前缀下的全部对象 key（底层自动处理分页）。
+    ///
+    /// # 参数
+    /// - `prefix`: 对象键前缀，如 `backup/scheduled/daily/`
+    ///
+    /// # 返回
+    /// 匹配前缀的全部对象 key 列表
+    ///
+    /// # 错误
+    /// - `OssError`: OSS 列举操作失败
+    pub async fn list(&self, prefix: &str) -> Result<Vec<String>, OssError> {
+        retry_429("list", prefix, || async {
+            self.inner
+                .bucket
+                .list(prefix.to_string(), None)
+                .await
+                .map_err(OssError::from)
+        })
+        .await
+        .map(|results| {
+            results
+                .into_iter()
+                .flat_map(|result| result.contents.into_iter())
+                .map(|object| object.key)
+                .collect()
+        })
+    }
+
     /// 获取对象存储的流式下载响应.
     pub async fn get_download_stream_response(
         &self,
