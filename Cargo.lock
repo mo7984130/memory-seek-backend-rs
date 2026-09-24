@@ -1706,8 +1706,8 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "types-core",
+ "types-db-init",
  "types-identity",
- "types-schema",
  "types-visual",
 ]
 
@@ -5292,7 +5292,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "types-core",
- "types-schema",
+ "types-db-init",
  "user",
  "uuid",
  "visual",
@@ -6252,7 +6252,7 @@ dependencies = [
  "serde_json",
  "ts-rs",
  "types-core",
- "types-db-api",
+ "types-db-registry",
  "validator",
 ]
 
@@ -6279,7 +6279,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "types-db-api"
+name = "types-db-init"
+version = "0.1.0"
+dependencies = [
+ "common-core",
+ "sea-orm",
+ "tracing",
+ "types-audit",
+ "types-db-registry",
+ "types-identity",
+ "types-visual",
+]
+
+[[package]]
+name = "types-db-registry"
 version = "0.1.0"
 dependencies = [
  "common-core",
@@ -6300,22 +6313,9 @@ dependencies = [
  "serde_json",
  "ts-rs",
  "types-core",
- "types-db-api",
+ "types-db-registry",
  "types-token",
  "validator",
-]
-
-[[package]]
-name = "types-schema"
-version = "0.1.0"
-dependencies = [
- "common-core",
- "sea-orm",
- "tracing",
- "types-audit",
- "types-db-api",
- "types-identity",
- "types-visual",
 ]
 
 [[package]]
@@ -6346,7 +6346,7 @@ dependencies = [
  "serde_json",
  "ts-rs",
  "types-core",
- "types-db-api",
+ "types-db-registry",
  "types-token",
  "validator",
 ]

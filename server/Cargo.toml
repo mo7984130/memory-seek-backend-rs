@@ -32,7 +32,7 @@ metrics = [
     "oss?/metrics",
     "email?/metrics",
 ]
-face-engine = ["dep:insight-face-rs", "visual/face", "backup", "types-schema/face-engine"]
+face-engine = ["dep:insight-face-rs", "visual/face", "backup", "types-db-init/face-engine"]
 audit-recording = ["auth?/audit", "user?/audit", "visual?/audit", "backup?/audit"]
 
 # ============================================================
@@ -69,7 +69,7 @@ common-web = { workspace = true }
 common_macros.path = "../libs/common_macros"
 constants = { path = "../domains/constants" }
 types-core = { workspace = true, features = ["orm"] }
-types-schema.path = "../types/schema"
+types-db-init.path = "../types/db-init"
 email = { path = "../libs/email", optional = true }
 config = { workspace = true }
 clap = { workspace = true }

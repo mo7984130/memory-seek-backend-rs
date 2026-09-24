@@ -16,5 +16,6 @@ pub use types_core::{in_dto, out_dto, validated_newtype};
 
 /// schema 前缀自我登记: `auth_user` 表由 `init_db` 同步。
 #[cfg(feature = "orm")]
-#[linkme::distributed_slice(types_db_api::SCHEMA_PREFIXES)]
-static SCHEMA_PREFIX: types_db_api::SchemaPrefix = types_db_api::SchemaPrefix("types_identity");
+#[linkme::distributed_slice(types_db_registry::SCHEMA_PREFIXES)]
+static SCHEMA_PREFIX: types_db_registry::SchemaPrefix =
+    types_db_registry::SchemaPrefix("types_identity");

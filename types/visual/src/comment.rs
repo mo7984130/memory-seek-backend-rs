@@ -54,8 +54,8 @@ mod entity {
     /// VisualId 和 LikeCount 复合索引, 用于 查询影像的热门评论
     #[common_macros::register_async(
         send,
-        slice = types_db_api::INIT_INDEXES,
-        ty = types_db_api::InitIndexFn
+        slice = types_db_registry::INIT_INDEXES,
+        ty = types_db_registry::InitIndexFn
     )]
     async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
         let stmt = Index::create()

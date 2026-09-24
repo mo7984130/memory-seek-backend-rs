@@ -25,4 +25,4 @@ common-web = { workspace = true }
 types-core = { workspace = true, features = ["orm"] }
 types-identity = { workspace = true, features = ["orm"] }
 types-visual = { workspace = true, features = ["orm"] }
-types-schema = { workspace = true }
+types-db-init = { workspace = true }

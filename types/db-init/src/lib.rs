@@ -1,16 +1,16 @@
-//! 数据库 schema 编排:表结构同步与幂等索引初始化。
+//! 数据库初始化编排:按注册表同步表结构, 并执行幂等索引回调。
 //!
-//! 位于全部实体 crate **之上**(与 [`types_db_api`] 的依赖方向相反):
+//! 位于全部实体 crate **之上**([`types_db_registry`] 只定义登记点、在它们之下):
 //! 表结构同步由各实体 crate 自我登记的前缀驱动 —— sea-orm 的实体注册表按
 //! `module_path!()` 字符串前缀匹配,且 `sync` 只增不删,因此按前缀逐个同步是安全的。
 //!
 //! 依赖 `types-audit` / `types-identity` / `types-visual` 是为了把它们的实体
-//! 纳入依赖图(实体通过 `inventory` 自我注册,需要被链接)。
+//! 纳入依赖图(实体通过 `linkme` 分布式切片自我注册,未被链接就不会出现在注册表里)。
 
 use common_core::{ContextualError, ContextualResult};
 use sea_orm::DatabaseConnection;
 
-pub use types_db_api::{INIT_INDEXES, InitIndexFn, InitIndexFuture, SCHEMA_PREFIXES};
+pub use types_db_registry::{INIT_INDEXES, InitIndexFn, InitIndexFuture, SCHEMA_PREFIXES};
 
 /// 初始化数据库:同步表结构 + 执行幂等索引初始化回调。
 ///
@@ -49,7 +49,7 @@ pub async fn init_db(db: &DatabaseConnection) -> ContextualResult<()> {
 ///
 /// 背景: 手写 INSERT / ActiveModel 漏填这些列时会触发 not-null 约束
 /// (见 `visual_collection_visual.created_at` 与 `visual_comment.like_count` 的修复)。
-/// schema sync 只增不改, 已存在的表需手工 `ALTER` 对齐(见 `docs/service-conventions.md` 的 schema 小节)。
+/// schema sync 只增不改, 已存在的表需手工 `ALTER` 对齐。
 #[cfg(test)]
 mod column_default_tests {
     use sea_orm::ColumnTrait;

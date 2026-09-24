@@ -73,8 +73,8 @@ mod entity {
 
     #[common_macros::register_async(
         send,
-        slice = types_db_api::INIT_INDEXES,
-        ty = types_db_api::InitIndexFn
+        slice = types_db_registry::INIT_INDEXES,
+        ty = types_db_registry::InitIndexFn
     )]
     async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
         let stmt = Index::create()

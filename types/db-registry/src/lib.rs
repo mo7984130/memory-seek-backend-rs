@@ -1,7 +1,7 @@
-//! 实体注册契约。
+//! 实体注册表契约:`types-db-init` 建表与建索引的输入来源。
 //!
 //! 各实体 crate(定义 SeaORM 实体的域契约 crate)通过本 crate 的分布式切片
-//! **自我登记**, 避免 schema 编排出中心化的字符串清单:
+//! **自我登记**, 避免初始化编排出中心化的字符串清单:
 //!
 //! - [`SCHEMA_PREFIXES`]：本 crate 的实体模块路径前缀(如 `"types_visual"`)。
 //!   `init_db` 会按前缀逐个调用 `get_schema_registry(prefix).sync(db)` ——

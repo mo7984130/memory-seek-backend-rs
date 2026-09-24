@@ -51,8 +51,8 @@ mod entity {
     /// CollectionId 和 CreatedAt 复合索引, 用于 按照收藏时间获取收藏夹里面影像时
     #[common_macros::register_async(
         send,
-        slice = types_db_api::INIT_INDEXES,
-        ty = types_db_api::InitIndexFn
+        slice = types_db_registry::INIT_INDEXES,
+        ty = types_db_registry::InitIndexFn
     )]
     async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
         let stmt = Index::create()

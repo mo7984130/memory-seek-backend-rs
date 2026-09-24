@@ -15,8 +15,9 @@ pub use types_core::{in_dto, out_dto};
 
 /// schema 前缀自我登记: `init_db` 按前缀逐个同步表结构。
 #[cfg(feature = "orm")]
-#[linkme::distributed_slice(types_db_api::SCHEMA_PREFIXES)]
-static SCHEMA_PREFIX: types_db_api::SchemaPrefix = types_db_api::SchemaPrefix("types_audit");
+#[linkme::distributed_slice(types_db_registry::SCHEMA_PREFIXES)]
+static SCHEMA_PREFIX: types_db_registry::SchemaPrefix =
+    types_db_registry::SchemaPrefix("types_audit");
 
 /// 一个必须和业务状态一起提交的审计事实。
 #[derive(Clone, Debug, PartialEq)]

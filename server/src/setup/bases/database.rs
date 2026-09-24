@@ -35,7 +35,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
         )
     })?;
 
-    types_schema::init_db(&db).await?;
+    types_db_init::init_db(&db).await?;
 
     setup.registry.insert(db);
 

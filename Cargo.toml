@@ -10,12 +10,12 @@ members = [
     "common/runtime",
     "types/core",
     "types/token",
-    "types/db-api",
+    "types/db-registry",
     "types/backup",
     "types/audit",
     "types/identity",
     "types/visual",
-    "types/schema",
+    "types/db-init",
     "libs/common_macros",
     "libs/file_validator",
     "libs/email",
@@ -54,12 +54,12 @@ common-web = { path = "common/web" }
 common-runtime = { path = "common/runtime" }
 types-core = { path = "types/core" }
 types-token = { path = "types/token" }
-types-db-api = { path = "types/db-api" }
+types-db-registry = { path = "types/db-registry" }
 types-backup = { path = "types/backup" }
 types-audit = { path = "types/audit" }
 types-identity = { path = "types/identity" }
 types-visual = { path = "types/visual" }
-types-schema = { path = "types/schema" }
+types-db-init = { path = "types/db-init" }
 axum = { version = "0.8.8", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
 tokio-util = { version = "0.7" }
