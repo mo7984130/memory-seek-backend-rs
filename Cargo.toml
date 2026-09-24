@@ -5,7 +5,7 @@ members = [
     "common/crypto",
     "common/web",
     "common/db",
-    "common/cache",
+    "common/redis",
     "common/metrics",
     "common/runtime",
     "types/core",
@@ -48,7 +48,7 @@ rpath = false
 common-core = { path = "common/core" }
 common-crypto = { path = "common/crypto" }
 common-db = { path = "common/db" }
-common-cache = { path = "common/cache" }
+common-redis = { path = "common/redis" }
 common-metrics = { path = "common/metrics" }
 common-web = { path = "common/web" }
 common-runtime = { path = "common/runtime" }

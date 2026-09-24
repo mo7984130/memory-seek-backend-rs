@@ -14,7 +14,7 @@ common-core = { workspace = true, features = [
     "multi-cache",
     "tokio"
 ] }
-common-cache = { workspace = true }
+common-redis = { workspace = true }
 common-crypto = { workspace = true }
 common-db = { workspace = true }
 common-metrics = { workspace = true }

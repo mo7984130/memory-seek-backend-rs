@@ -13,7 +13,7 @@ audit = ["audit/recording"]
 audit = { path = "../audit" }
 types-identity = { workspace = true, features = ["orm"] }
 common-core = { workspace = true, features = ["tokio"] }
-common-cache = { workspace = true }
+common-redis = { workspace = true }
 common-crypto = { workspace = true }
 common-db = { workspace = true }
 common-metrics = { workspace = true }

@@ -25,7 +25,7 @@ pub async fn init(_config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .miss_dep("auth", "DatabaseConnection")?
             .clone(),
         register
-            .get::<common_cache::Pool>()
+            .get::<common_redis::Pool>()
             .miss_dep("auth", "RedisPool")?
             .clone(),
         register

@@ -1,5 +1,4 @@
 use bytes::Bytes;
-use common_cache::RedisExt;
 use common_core::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt};
 use common_core::{
     Result,
@@ -9,6 +8,7 @@ use common_core::{ext::ResultInspectErrAsync, ext::ToOk, time::after};
 use common_crypto::rand_utils;
 use common_metrics::MetricsTimerExt;
 use common_metrics::{metrics_name, timed};
+use common_redis::RedisExt;
 use constants::{PasswordHasher, RedisKeys};
 use file_validator::FileValidator;
 use sea_orm::sqlx::types::uuid;

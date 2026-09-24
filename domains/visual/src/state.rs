@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use common_cache::Pool;
 use common_core::types::CursorPage;
+use common_redis::Pool;
 use common_runtime::TaskManager;
 use multi_level_cache::CacheConfig;
 use multi_level_cache::MultiLevelCache;

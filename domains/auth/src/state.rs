@@ -1,4 +1,4 @@
-use common_cache::Pool;
+use common_redis::Pool;
 use email::EmailClient;
 use sea_orm::DatabaseConnection;
 

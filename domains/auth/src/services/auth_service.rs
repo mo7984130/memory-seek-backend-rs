@@ -3,7 +3,6 @@ use crate::config::{ACCESS_TOKEN_EXPIRE, EMAIL_CODE_EXPIRE, REFRESH_TOKEN_EXPIRE
 use crate::error_ext::AuthOptionExt;
 use crate::mapper::{AuthInsertParam, AuthMapper};
 use audit::{AuditEvent, AuditRecorder};
-use common_cache::RedisExt;
 use common_core::Result;
 use common_core::error::contextual::ext::{
     BoolExt, ContextualResultExt, IntoContextualExt, OptionExt,
@@ -14,6 +13,7 @@ use common_core::{ext::ResultInspectErrAsync, ext::ToOk};
 use common_crypto::{HashAlgorithm, rand_utils};
 use common_metrics::MetricsTimerExt;
 use common_metrics::metrics_name;
+use common_redis::RedisExt;
 use constants::RedisKeys;
 use constants::redis_keys;
 use std::sync::LazyLock;

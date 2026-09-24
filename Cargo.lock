@@ -521,11 +521,11 @@ version = "0.3.1"
 dependencies = [
  "audit",
  "axum",
- "common-cache",
  "common-core",
  "common-crypto",
  "common-db",
  "common-metrics",
+ "common-redis",
  "common-web",
  "common_macros",
  "constants",
@@ -1090,15 +1090,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-cache"
-version = "0.1.0"
-dependencies = [
- "deadpool-redis",
- "redis",
- "tracing",
-]
-
-[[package]]
 name = "common-core"
 version = "0.1.0"
 dependencies = [
@@ -1152,6 +1143,14 @@ version = "0.1.0"
 dependencies = [
  "metrics",
  "tracing",
+]
+
+[[package]]
+name = "common-redis"
+version = "0.1.0"
+dependencies = [
+ "deadpool-redis",
+ "redis",
 ]
 
 [[package]]
@@ -5263,10 +5262,10 @@ dependencies = [
  "axum",
  "backup",
  "clap",
- "common-cache",
  "common-core",
  "common-crypto",
  "common-metrics",
+ "common-redis",
  "common-runtime",
  "common-web",
  "common_macros",
@@ -6466,11 +6465,11 @@ dependencies = [
  "audit",
  "axum",
  "bytes",
- "common-cache",
  "common-core",
  "common-crypto",
  "common-db",
  "common-metrics",
+ "common-redis",
  "common-web",
  "common_macros",
  "constants",
@@ -6585,10 +6584,10 @@ dependencies = [
  "backup",
  "blake3",
  "bytes",
- "common-cache",
  "common-core",
  "common-db",
  "common-metrics",
+ "common-redis",
  "common-runtime",
  "common-web",
  "common_macros",

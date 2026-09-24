@@ -1,10 +1,9 @@
 [package]
-name = "common-cache"
+name = "common-redis"
 version = "0.1.0"
 edition = "2024"
-description = "缓存能力: Redis 连接池与扩展 trait"
+description = "Redis 访问层: 连接池与常用命令扩展"
 
 [dependencies]
 redis.workspace = true
 deadpool-redis.workspace = true
-tracing.workspace = true

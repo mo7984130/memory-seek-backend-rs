@@ -1,9 +1,9 @@
 use audit::{AuditEvent, AuditRecorder};
-use common_cache::{Pool, RedisExt};
 use common_core::error::{ContextualError, contextual::Result};
 use common_core::ext::ToOk;
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
+use common_redis::{Pool, RedisExt};
 use constants::RedisKeys;
 use multi_level_cache::{CacheConfig, MultiLevelCache};
 use sea_orm::DatabaseConnection;

@@ -1,4 +1,4 @@
-use common_cache::Pool;
+use common_redis::Pool;
 use multi_level_cache::CacheConfig;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;

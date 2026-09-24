@@ -1,6 +1,5 @@
 use crate::state::AppState;
 use axum::{extract::Request, middleware::Next, response::Response};
-use common_cache::RedisExt;
 use common_core::{
     Result,
     error::{
@@ -8,6 +7,7 @@ use common_core::{
         contextual::ext::{IntoContextualExt, OptionExt},
     },
 };
+use common_redis::RedisExt;
 use std::{str::FromStr, sync::Arc};
 use types_core::UserId;
 

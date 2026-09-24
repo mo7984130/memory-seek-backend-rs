@@ -6,9 +6,9 @@ use std::mem::take;
 use std::sync::Arc;
 
 use axum::{Router, middleware::from_fn, routing::get};
-use common_cache::Pool;
 use common_core::{Result, time::Duration};
 use common_macros::register_async;
+use common_redis::Pool;
 use common_runtime::TaskManager;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use sea_orm::DatabaseConnection;

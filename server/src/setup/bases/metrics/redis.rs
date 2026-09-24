@@ -1,4 +1,4 @@
-use common_cache::Pool;
+use common_redis::Pool;
 use metrics::gauge;
 
 /// 采集 Redis 连接池指标
