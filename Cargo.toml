@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 members = [
-    "common",
     "common/core",
     "common/crypto",
     "common/web",
@@ -9,7 +8,6 @@ members = [
     "common/cache",
     "common/metrics",
     "common/runtime",
-    "types",
     "types/core",
     "types/token",
     "types/db-api",
@@ -54,7 +52,6 @@ common-cache = { path = "common/cache" }
 common-metrics = { path = "common/metrics" }
 common-web = { path = "common/web" }
 common-runtime = { path = "common/runtime" }
-types = { path = "types" }
 types-core = { path = "types/core" }
 types-token = { path = "types/token" }
 types-db-api = { path = "types/db-api" }

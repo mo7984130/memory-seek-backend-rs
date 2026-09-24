@@ -11,8 +11,9 @@
 #   types-audit  审计查询 DTO
 #   types-identity 认证与用户资料 DTO
 #   types-visual 视觉实体与 DTO
-#   types        DTO / 视图 / 共享枚举
-#   common       分页与响应包装(CursorPage / R)
+#
+# 这些 crate 合起来覆盖全部 `#[ts(export)]` 类型(ID / 响应包装 / 令牌 /
+# 审计 / 身份 / 视觉 DTO)。
 #
 # 输出目录由 .cargo/config.toml 的 TS_RS_EXPORT_DIR 指定(= target/bindings),
 # 具体子目录由各类型的 export_to 属性决定(auth / user / visual / audit / common)。
@@ -30,8 +31,6 @@ cargo test \
   -p types-audit \
   -p types-identity \
   -p types-visual \
-  -p types \
-  -p common \
   --features ts,orm,axum
 
 echo

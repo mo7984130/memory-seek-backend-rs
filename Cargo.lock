@@ -1090,21 +1090,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common"
-version = "0.9.0"
-dependencies = [
- "common-cache",
- "common-core",
- "common-crypto",
- "common-db",
- "common-metrics",
- "common-runtime",
- "common-web",
- "common_macros",
- "tracing",
-]
-
-[[package]]
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
@@ -1705,7 +1690,9 @@ dependencies = [
  "base64 0.22.1",
  "blake3",
  "clap",
- "common",
+ "common-core",
+ "common-crypto",
+ "common-web",
  "config",
  "constants",
  "deadpool-redis",
@@ -1718,7 +1705,10 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "types",
+ "types-core",
+ "types-identity",
+ "types-schema",
+ "types-visual",
 ]
 
 [[package]]
@@ -6250,18 +6240,6 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
-
-[[package]]
-name = "types"
-version = "0.11.0"
-dependencies = [
- "types-audit",
- "types-backup",
- "types-core",
- "types-identity",
- "types-token",
- "types-visual",
-]
 
 [[package]]
 name = "types-audit"

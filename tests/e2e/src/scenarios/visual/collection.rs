@@ -1,6 +1,6 @@
 //! 相册:`/visual/collections`。
 
-use common::axum::{ErrR, SucR};
+use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -9,11 +9,13 @@ use memseek_test::{
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
-use types::visual::collection as collection_entity;
-use types::visual::collection::CollectionId;
-use types::visual::collection_visual as collection_visual_entity;
-use types::visual::dto::collection::{CollectionView, CollectionVisualAddBatchResult};
-use types::visual::visual::VisualId;
+use types_visual::collection as collection_entity;
+use types_visual::collection::CollectionId;
+use types_visual::collection_visual as collection_visual_entity;
+use types_visual::visual::VisualId;
+use types_visual::{
+    dto::collection::CollectionView, dto::collection::CollectionVisualAddBatchResult,
+};
 
 use crate::context::Context;
 

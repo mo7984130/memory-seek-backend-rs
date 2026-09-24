@@ -3,8 +3,8 @@
 //! 各场景使用不同的种子影像(file_id 里的 user ordinal 前缀不同), 避免同一
 //! (user, visual) 在不同场景重复点赞触发 400。
 
-use common::axum::SucR;
-use common::types::CursorPage;
+use common_core::types::CursorPage;
+use common_web::SucR;
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -13,13 +13,13 @@ use memseek_test::{
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
-use types::cursor::TimeIdCursor;
-use types::visual::comment::CommentId;
-use types::visual::comment_like as comment_like_entity;
-use types::visual::dto::comment::CommentView;
-use types::visual::dto::visual::VisualView;
-use types::visual::visual::VisualId;
-use types::visual::visual_like as visual_like_entity;
+use types_core::cursor::TimeIdCursor;
+use types_visual::comment::CommentId;
+use types_visual::comment_like as comment_like_entity;
+use types_visual::dto::comment::CommentView;
+use types_visual::dto::visual::VisualView;
+use types_visual::visual::VisualId;
+use types_visual::visual_like as visual_like_entity;
 
 use crate::context::Context;
 

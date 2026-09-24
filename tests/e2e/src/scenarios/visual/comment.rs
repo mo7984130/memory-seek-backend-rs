@@ -1,7 +1,7 @@
 //! 评论:`/visual/comment`。
 
-use common::axum::{ErrR, SucR};
-use common::types::CursorPage;
+use common_core::types::CursorPage;
+use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -10,12 +10,12 @@ use memseek_test::{
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
-use types::cursor::TimeIdCursor;
-use types::visual::comment as comment_entity;
-use types::visual::comment::CommentId;
-use types::visual::dto::comment::CommentView;
-use types::visual::visual as visual_entity;
-use types::visual::visual::VisualId;
+use types_core::cursor::TimeIdCursor;
+use types_visual::comment as comment_entity;
+use types_visual::comment::CommentId;
+use types_visual::dto::comment::CommentView;
+use types_visual::visual as visual_entity;
+use types_visual::visual::VisualId;
 
 use crate::context::Context;
 

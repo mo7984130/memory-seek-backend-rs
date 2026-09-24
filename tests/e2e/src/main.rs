@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 初始化全局 token 加密器: 必须与 server 的 token_cipher 一致,
     // 否则响应中的 avatar_token(VisualTokenStr)无法解密, 反序列化会失败
-    common::utils::init_token_cipher(&common::utils::TokenCipherConfig {
+    common_crypto::init_token_cipher(&common_crypto::TokenCipherConfig {
         key: cfg.token_cipher.key.clone(),
         salt: cfg.token_cipher.salt.clone(),
     });

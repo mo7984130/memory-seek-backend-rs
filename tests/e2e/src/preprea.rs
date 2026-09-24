@@ -15,7 +15,7 @@ use tracing::info;
 use crate::config::SeedConfig;
 use crate::context::Context;
 
-/// Test123456 的 argon2id 哈希(由 common::utils::HashAlgorithm 生成, 参数 m=16384,t=2,p=1)
+/// Test123456 的 argon2id 哈希(由 common_crypto::HashAlgorithm 生成, 参数 m=16384,t=2,p=1)
 const PASS_HASH: &str = "$argon2id$v=19$m=16384,t=2,p=1$T5U+IfQVViaUNr7dhPHmww$CCUS5IsGLNeg0//M+1Iyuwe1izIKPB0oyRud71qofLY";
 
 /// 种子 SQL 语句(占位符 `:NAME` 由 [`SeedConfig`] 替换, 对应原 seed.sh 的 sed 注入)。

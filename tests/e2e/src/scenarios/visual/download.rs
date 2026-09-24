@@ -6,7 +6,7 @@ use memseek_test::{
     register_scenario,
     scenario::Scenario,
 };
-use types::visual::dto::visual::VisualView;
+use types_visual::dto::visual::VisualView;
 
 use crate::context::Context;
 

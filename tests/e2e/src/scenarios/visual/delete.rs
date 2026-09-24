@@ -1,6 +1,6 @@
 //! 影像删除:`DELETE /visual`。
 
-use common::axum::{ErrR, SucR};
+use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -9,8 +9,8 @@ use memseek_test::{
 };
 use sea_orm::EntityTrait;
 use serde_json::json;
-use types::visual::visual as visual_entity;
-use types::visual::visual::VisualId;
+use types_visual::visual as visual_entity;
+use types_visual::visual::VisualId;
 
 use crate::context::Context;
 

@@ -1,6 +1,6 @@
 //! 影像上传:`POST /visual`。
 
-use common::axum::{ErrR, SucR};
+use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -8,8 +8,8 @@ use memseek_test::{
     scenario::{Scenario, SetupMode},
 };
 use sea_orm::EntityTrait;
-use types::visual::visual as visual_entity;
-use types::visual::{dto::visual::VisualView, visual::VisualKind};
+use types_visual::visual as visual_entity;
+use types_visual::{dto::visual::VisualView, visual::VisualKind};
 
 use crate::context::Context;
 
