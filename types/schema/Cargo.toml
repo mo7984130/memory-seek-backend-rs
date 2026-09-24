@@ -1,0 +1,19 @@
+[package]
+name = "types-schema"
+version = "0.1.0"
+edition = "2024"
+description = "数据库 schema 编排: 表结构同步与幂等索引初始化"
+
+[features]
+default = []
+face-engine = ["types-visual/face-engine"]
+
+[dependencies]
+types-db-api.workspace = true
+types-audit = { workspace = true, features = ["orm"] }
+types-identity = { workspace = true, features = ["orm"] }
+types-visual = { workspace = true, features = ["orm"] }
+
+common.path = "../../common"
+sea-orm = { workspace = true, features = ["sqlx-postgres", "macros", "schema-sync", "entity-registry"] }
+tracing.workspace = true

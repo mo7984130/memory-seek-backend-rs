@@ -5,7 +5,7 @@
 //! 策略: 每次执行先清空种子数据(保 admin 等非种子数据), 再整批灌入。
 //!
 //! 前置要求: postgres 服务已启动(`docker compose -f tests/docker-compose.yml up -d --wait`),
-//! 且表结构已就绪(server 启动时 `types::db_init::init_db` 自动同步),
+//! 且表结构已就绪(server 启动时 `types_schema::init_db` 自动同步),
 //! vector 扩展由 compose 的 postgres-init 服务创建。
 //! 数据量等参数见 `e2e.config.yml`(seed 段)。
 

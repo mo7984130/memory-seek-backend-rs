@@ -32,7 +32,7 @@ metrics = [
     "oss?/metrics",
     "email?/metrics",
 ]
-face-engine = ["dep:insight-face-rs", "visual/face", "backup"]
+face-engine = ["dep:insight-face-rs", "visual/face", "backup", "types-schema/face-engine"]
 audit-recording = ["auth?/audit", "user?/audit", "visual?/audit", "backup?/audit"]
 
 # ============================================================
@@ -63,6 +63,7 @@ audit = { path = "../domains/audit", features = ["controller"], optional = true 
 common = { path = "../common", features = ["axum", "tokio"] }
 constants = { path = "../domains/constants" }
 types = { path = "../types", features = ["orm"] }
+types-schema.path = "../types/schema"
 email = { path = "../libs/email", optional = true }
 config = { workspace = true }
 clap = { workspace = true }

@@ -5209,6 +5209,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "types",
+ "types-schema",
  "user",
  "uuid",
  "visual",
@@ -6161,14 +6162,9 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 name = "types"
 version = "0.11.0"
 dependencies = [
- "common",
- "linkme",
- "sea-orm",
- "tracing",
  "types-audit",
  "types-backup",
  "types-core",
- "types-db-api",
  "types-identity",
  "types-token",
  "types-visual",
@@ -6236,6 +6232,19 @@ dependencies = [
  "types-db-api",
  "types-token",
  "validator",
+]
+
+[[package]]
+name = "types-schema"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "sea-orm",
+ "tracing",
+ "types-audit",
+ "types-db-api",
+ "types-identity",
+ "types-visual",
 ]
 
 [[package]]

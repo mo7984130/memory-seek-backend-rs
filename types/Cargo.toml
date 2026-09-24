@@ -16,9 +16,6 @@ ts = [
     "types-visual/ts",
 ]
 orm = [
-    "dep:sea-orm",
-    "dep:linkme",
-    "dep:types-db-api",
     "types-core/orm",
     "types-audit/orm",
     "types-identity/orm",
@@ -27,16 +24,9 @@ orm = [
 face-engine = ["orm", "types-token/face-engine", "types-visual/face-engine"]
 
 [dependencies]
-common.path = "../common"
 types-core.workspace = true
 types-token.workspace = true
 types-backup.workspace = true
 types-audit.workspace = true
 types-identity.workspace = true
 types-visual.workspace = true
-
-types-db-api = { workspace = true, optional = true }
-
-sea-orm = { workspace = true, features = ["sqlx-postgres", "macros", "schema-sync", "entity-registry"], optional = true }
-linkme = { workspace = true, optional = true }
-tracing.workspace = true
