@@ -25,7 +25,7 @@ audit.path = "../audit"
 constants.path = "../constants"
 oss.path = "../../libs/oss"
 types-identity = { workspace = true, features = ["orm"] }
-types-token.workspace = true
+types-visual-token.workspace = true
 
 multi-level-cache.workspace = true
 serde.workspace = true

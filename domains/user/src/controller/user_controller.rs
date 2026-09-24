@@ -9,7 +9,7 @@ use common_web::{
 };
 use std::sync::Arc;
 use types_identity::auth::user::UserId;
-use types_token::VisualTokenStr;
+use types_visual_token::VisualTokenStr;
 
 use crate::UserState;
 use crate::services as user_service;

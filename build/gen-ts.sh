@@ -7,7 +7,7 @@
 #
 #   types-core   强类型 ID(id_type! 生成)
 #   common-core  统一响应格式 R(与 AppError 响应实现同 crate)
-#   types-token  视觉令牌契约(VisualToken / FaceBBox / ImageDimensions)
+#   types-visual-token  视觉令牌契约(VisualToken / FaceBBox / ImageDimensions)
 #   types-audit  审计查询 DTO
 #   types-identity 认证与用户资料 DTO
 #   types-visual 视觉实体与 DTO
@@ -27,7 +27,7 @@ echo '=== 生成 TS 类型契约 ==='
 cargo test \
   -p types-core \
   -p common-core \
-  -p types-token \
+  -p types-visual-token \
   -p types-audit \
   -p types-identity \
   -p types-visual \

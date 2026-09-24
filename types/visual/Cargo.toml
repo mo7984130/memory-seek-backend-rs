@@ -6,13 +6,13 @@ description = "视觉上下文契约: 实体、视图与请求 DTO"
 
 [features]
 default = []
-ts = ["dep:ts-rs", "types-core/ts", "types-token/ts"]
+ts = ["dep:ts-rs", "types-core/ts", "types-visual-token/ts"]
 orm = ["dep:sea-orm", "dep:linkme", "dep:types-db-registry", "types-core/orm"]
-face-engine = ["orm", "dep:insight-face-rs", "types-token/face-engine"]
+face-engine = ["orm", "dep:insight-face-rs", "types-visual-token/face-engine"]
 
 [dependencies]
 types-core.workspace = true
-types-token.workspace = true
+types-visual-token.workspace = true
 common_macros.path = "../../libs/common_macros"
 common-core.path = "../../common/core"
 common-crypto.path = "../../common/crypto"

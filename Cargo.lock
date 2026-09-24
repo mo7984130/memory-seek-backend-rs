@@ -6314,21 +6314,8 @@ dependencies = [
  "ts-rs",
  "types-core",
  "types-db-registry",
- "types-token",
+ "types-visual-token",
  "validator",
-]
-
-[[package]]
-name = "types-token"
-version = "0.1.0"
-dependencies = [
- "common-core",
- "common-crypto",
- "insight-face-rs",
- "serde",
- "serde_json",
- "ts-rs",
- "types-core",
 ]
 
 [[package]]
@@ -6347,8 +6334,21 @@ dependencies = [
  "ts-rs",
  "types-core",
  "types-db-registry",
- "types-token",
+ "types-visual-token",
  "validator",
+]
+
+[[package]]
+name = "types-visual-token"
+version = "0.1.0"
+dependencies = [
+ "common-core",
+ "common-crypto",
+ "insight-face-rs",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "types-core",
 ]
 
 [[package]]
@@ -6483,7 +6483,7 @@ dependencies = [
  "tokio",
  "tracing",
  "types-identity",
- "types-token",
+ "types-visual-token",
  "uuid",
 ]
 

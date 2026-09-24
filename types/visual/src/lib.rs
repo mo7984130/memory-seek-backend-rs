@@ -1,6 +1,6 @@
 //! 视觉上下文契约:9 个 SeaORM 实体、视图 / 查询类型与请求 DTO。
 //!
-//! 依赖方向:`types-core`(强类型 ID、游标、`VisualKind`)+ `types-token`
+//! 依赖方向:`types-core`(强类型 ID、游标、`VisualKind`)+ `types-visual-token`
 //! (视觉访问令牌)+ `types-db-registry`(实体注册契约),**不依赖其它上下文契约 crate**。
 
 #![allow(clippy::module_inception)]

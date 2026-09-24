@@ -1,5 +1,5 @@
 [package]
-name = "types-token"
+name = "types-visual-token"
 version = "0.1.0"
 edition = "2024"
 description = "视觉访问令牌契约(跨上下文协议)"

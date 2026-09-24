@@ -3,7 +3,7 @@ use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use types_identity::auth::user::UserId;
 use types_identity::user::UserBriefView;
-use types_token::VisualToken;
+use types_visual_token::VisualToken;
 
 /// 用户信息数据库查询结果（后端内部使用）
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]

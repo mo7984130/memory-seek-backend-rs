@@ -22,7 +22,7 @@ use types_identity::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
     UserBriefView, UserInfo,
 };
-use types_token::{VisualToken, VisualTokenStr};
+use types_visual_token::{VisualToken, VisualTokenStr};
 
 use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL};
 

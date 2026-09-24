@@ -9,7 +9,7 @@ members = [
     "common/metrics",
     "common/runtime",
     "types/core",
-    "types/token",
+    "types/visual-token",
     "types/db-registry",
     "types/backup",
     "types/audit",
@@ -53,7 +53,7 @@ common-metrics = { path = "common/metrics" }
 common-web = { path = "common/web" }
 common-runtime = { path = "common/runtime" }
 types-core = { path = "types/core" }
-types-token = { path = "types/token" }
+types-visual-token = { path = "types/visual-token" }
 types-db-registry = { path = "types/db-registry" }
 types-backup = { path = "types/backup" }
 types-audit = { path = "types/audit" }
