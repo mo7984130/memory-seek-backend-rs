@@ -1,4 +1,4 @@
-use common::Result;
+use common_core::Result;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use types_identity::auth::user::UserId;
@@ -32,7 +32,7 @@ impl UserBriefRow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::utils::{TokenCipherConfig, init_token_cipher};
+    use common_crypto::{TokenCipherConfig, init_token_cipher};
 
     fn init_test_cipher() {
         init_token_cipher(&TokenCipherConfig {

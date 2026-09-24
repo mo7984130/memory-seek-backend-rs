@@ -1,4 +1,4 @@
-use common::time::Duration;
+use common_core::time::Duration;
 
 pub const GENERATE_INVITER_CODE_MAX_RETRY: u8 = 3;
 pub const INVITER_CODE_LEN: usize = 6;
