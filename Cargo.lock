@@ -6174,6 +6174,7 @@ dependencies = [
  "tracing",
  "ts-rs",
  "types-core",
+ "types-token",
  "validator",
 ]
 
@@ -6190,6 +6191,18 @@ dependencies = [
  "thiserror",
  "ts-rs",
  "validator",
+]
+
+[[package]]
+name = "types-token"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "insight-face-rs",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "types-core",
 ]
 
 [[package]]

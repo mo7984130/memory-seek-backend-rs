@@ -4,6 +4,7 @@ members = [
     "common",
     "types",
     "types/core",
+    "types/token",
     "libs/common_macros",
     "libs/file_validator",
     "libs/email",
@@ -35,6 +36,7 @@ rpath = false
 [workspace.dependencies]
 types = { path = "types" }
 types-core = { path = "types/core" }
+types-token = { path = "types/token" }
 axum = { version = "0.8.8", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
 tokio-util = { version = "0.7" }

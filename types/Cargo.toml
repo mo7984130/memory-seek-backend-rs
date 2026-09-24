@@ -8,13 +8,14 @@ description = "Shared types for memory-seek: ID types, DTOs, SeaORM entities"
 default = ["lightweight"]
 
 lightweight = []
-ts = ["dep:ts-rs", "types-core/ts"]
+ts = ["dep:ts-rs", "types-core/ts", "types-token/ts"]
 orm = ["dep:sea-orm", "dep:linkme", "types-core/orm"]
-face-engine = ["orm", "dep:insight-face-rs"]
+face-engine = ["orm", "dep:insight-face-rs", "types-token/face-engine"]
 
 [dependencies]
 common.path = "../common"
 types-core.workspace = true
+types-token.workspace = true
 
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
