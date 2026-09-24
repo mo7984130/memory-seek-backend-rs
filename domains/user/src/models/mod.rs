@@ -1,9 +1,9 @@
 use common::Result;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
-use types::auth::user::UserId;
-use types::user::UserBriefView;
-use types::visual::VisualToken;
+use types_identity::auth::user::UserId;
+use types_identity::user::UserBriefView;
+use types_token::VisualToken;
 
 /// 用户信息数据库查询结果（后端内部使用）
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]

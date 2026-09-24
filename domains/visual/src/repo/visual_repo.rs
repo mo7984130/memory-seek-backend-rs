@@ -12,10 +12,10 @@ use common::types::CursorPage;
 use common::utils::MetricsTimerExt;
 use constants::RedisKeys;
 use sea_orm::ActiveModelTrait;
-use types::auth::user::UserId;
-use types::visual::ImageDimensions;
-use types::visual::dto::visual::{PageDirection, VisualCursorParam};
-use types::visual::visual::{ActiveModel, Model, NewVisualRecord, VisualId, VisualRecord};
+use types_core::UserId;
+use types_visual::ImageDimensions;
+use types_visual::dto::visual::{PageDirection, VisualCursorParam};
+use types_visual::visual::{ActiveModel, Model, NewVisualRecord, VisualId, VisualRecord};
 
 use crate::{
     mappers::{visual_like_mapper::VisualLikeMapper, visual_mapper::VisualMapper},

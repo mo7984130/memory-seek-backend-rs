@@ -15,9 +15,9 @@ use sea_orm::{
     ColumnTrait, EntityTrait, ExprTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
-use types::auth::user::UserId;
-use types::cursor::TimeIdCursor;
-use types::visual::{dto::visual::PageDirection, visual::*};
+use types_core::UserId;
+use types_core::cursor::TimeIdCursor;
+use types_visual::{dto::visual::PageDirection, visual::*};
 
 pub(crate) struct VisualMapper;
 

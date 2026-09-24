@@ -8,7 +8,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, DbErr, EntityTrait,
     FromQueryResult, QueryFilter, QuerySelect, RuntimeErr, sea_query::Expr,
 };
-use types::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
+use types_identity::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
 pub struct AuthMapper;
 

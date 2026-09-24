@@ -11,11 +11,11 @@ use common::axum::{
 use common::error::contextual::ext::OptionExt;
 use common::error::{AppError, ContextualError};
 use std::sync::Arc;
-use types::auth::user::UserId;
-use types::auth::{
+use types_identity::auth::user::UserId;
+use types_identity::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
 };
-use types::user::UserInfo;
+use types_identity::user::UserInfo;
 
 pub struct AuthController;
 

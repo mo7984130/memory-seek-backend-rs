@@ -30,7 +30,7 @@ use crate::{
 };
 use audit::{AuditEvent, AuditRecorder};
 use common::Result;
-use types::visual::{
+use types_visual::{
     VisualToken, VisualTokenType,
     dto::visual::{VisualCursorParam, VisualView},
     models::{DeleteVisualsParam, ExistsByHashBatchParam},

@@ -1,4 +1,4 @@
-use types::visual::comment::CommentId;
+use types_core::CommentId;
 
 /// 构造评论点赞数量缓存键.
 pub fn likes_count(comment_id: CommentId) -> String {

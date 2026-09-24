@@ -15,10 +15,10 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DbBackend, EntityName, EntityTrait, ExprTrait, Iden, IdenStatic,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
-use types::visual::collection::{self, CollectionId};
-use types::visual::collection_visual;
-use types::visual::visual::VisualId;
 use types::{auth::user::UserId, visual::collection::*};
+use types_visual::collection::{self, CollectionId};
+use types_visual::collection_visual;
+use types_visual::visual::VisualId;
 
 // 创建
 impl CollectionMapper {

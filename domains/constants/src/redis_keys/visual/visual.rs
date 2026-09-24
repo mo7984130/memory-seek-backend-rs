@@ -1,7 +1,4 @@
-use types::{
-    auth::user::UserId,
-    visual::{dto::visual::PageDirection, visual::VisualId},
-};
+use types_core::{PageDirection, UserId, VisualId};
 
 /// 生成影像信息的 Redis 缓存键
 ///

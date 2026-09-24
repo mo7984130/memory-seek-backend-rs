@@ -4,38 +4,9 @@
 
 pub use types_core::UserId;
 
-/// 已通过管理员校验的用户身份
-///
-/// 由 [`AdminId::new`] 构造，只有管理员才能取得。
-/// 作为 service 层参数，内部通过 [`AdminId::into_inner`] 展开为 [`UserId`] 使用。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, derive_more::Display)]
-#[display("{}", _0)]
-pub struct AdminId(UserId);
-
-impl AdminId {
-    pub const ADMIN_ID: AdminId = AdminId(UserId(1));
-
-    /// 判断该身份是否为系统管理员.
-    pub fn is_admin(&self) -> bool {
-        *self == Self::ADMIN_ID
-    }
-
-    /// 展开为内部 [`UserId`]
-    pub fn into_inner(self) -> UserId {
-        self.0
-    }
-
-    /// 校验管理员权限，非管理员返回 403
-    #[cfg(feature = "orm")]
-    pub fn new(user_id: UserId) -> common::Result<Self> {
-        let this = Self(user_id);
-        if this.is_admin() {
-            Ok(this)
-        } else {
-            Err(common::error::AppError::forbidden("仅管理员可访问"))
-        }
-    }
-}
+/// 管理员身份标识定义在共享内核 `types-core`(身份、审计、备份、视觉上下文共用),
+/// 此处重导出以保持 `types_identity::auth::user::AdminId` 路径不变。
+pub use types_core::AdminId;
 
 // ============================================================
 // SeaORM 实体（仅 orm feature）

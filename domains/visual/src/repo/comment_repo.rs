@@ -91,7 +91,7 @@ impl CommentRepo {
         user_id: UserId,
         visual_id: VisualId,
         req: CommentPublishParam,
-    ) -> Result<types::visual::comment::CommentRecord> {
+    ) -> Result<types_visual::comment::CommentRecord> {
         let comment = db_transaction!(scoped & state.db, |txn| {
             let comment =
                 CommentMapper::insert(txn, visual_id, user_id, req.content.into_inner()).await?;

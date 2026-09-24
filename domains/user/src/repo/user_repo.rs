@@ -6,8 +6,8 @@ use common::{Pool, db_transaction, metrics_name};
 use constants::RedisKeys;
 use multi_level_cache::{CacheConfig, MultiLevelCache};
 use sea_orm::DatabaseConnection;
-use types::auth::user::UserId;
-use types::user::UserInfo;
+use types_identity::auth::user::UserId;
+use types_identity::user::UserInfo;
 
 use crate::config::USER_INFO_CACHE_TTL;
 use crate::error_ext::ContextualErrorExt;

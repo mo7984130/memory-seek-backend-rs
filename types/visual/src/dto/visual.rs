@@ -1,5 +1,4 @@
 use common::time::DateTime;
-use serde::Deserialize;
 
 #[cfg(feature = "orm")]
 use crate::VisualToken;
@@ -239,11 +238,6 @@ impl Default for VisualCursorParam {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Deserialize)]
-#[serde(rename_all = "lowercase")]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export, export_to = "visual/"))]
-pub enum PageDirection {
-    Next,
-    Prev,
-}
+/// 分页方向定义在共享内核 `types-core`(跨上下文通用词汇),此处重导出以保持
+/// `types_visual::PageDirection` 路径不变。
+pub use types_core::PageDirection;

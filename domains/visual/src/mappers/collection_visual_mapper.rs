@@ -4,10 +4,10 @@ use common::ext::ToOk;
 use common::types::CursorPage;
 use common::{DbConn as ConnectionTrait, error::contextual::Result};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
-use types::auth::user::UserId;
-use types::cursor::TimeIdCursor;
-use types::visual::collection_visual::*;
-use types::visual::{collection::CollectionId, visual::VisualId};
+use types_core::UserId;
+use types_core::cursor::TimeIdCursor;
+use types_visual::collection_visual::*;
+use types_visual::{collection::CollectionId, visual::VisualId};
 
 pub(crate) struct CollectionVisualMapper;
 

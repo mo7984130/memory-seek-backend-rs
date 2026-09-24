@@ -9,9 +9,9 @@ use common::{
 };
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
-use types::cursor::TimeIdCursor;
-use types::visual::visual_like::*;
 use types::{auth::user::UserId, visual::visual::VisualId};
+use types_core::cursor::TimeIdCursor;
+use types_visual::visual_like::*;
 
 pub struct VisualLikeMapper;
 

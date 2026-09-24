@@ -12,7 +12,7 @@ use common::utils::table_metadata::TableMetadata;
 use common::{Result, inc_counter};
 use serde_json::json;
 use std::sync::Arc;
-use types::auth::user::AdminId;
+use types_core::AdminId;
 
 /// 备份领域用例服务。
 pub struct BackupService;
@@ -280,7 +280,7 @@ impl BackupService {
     async fn record_run_audit(
         state: &BackupState,
         event_type: &str,
-        actor_id: Option<types::auth::user::UserId>,
+        actor_id: Option<types_core::UserId>,
         result: &BackupResult,
     ) -> Result<()> {
         let event = AuditEvent::new(event_type).with_detail(json!({
@@ -321,7 +321,7 @@ impl BackupService {
 mod tests {
     use super::BackupMode;
     use chrono::Weekday;
-    use types::backup::BackupTier;
+    use types_backup::BackupTier;
 
     #[test]
     fn scheduled_backup_stays_daily_on_regular_days() {

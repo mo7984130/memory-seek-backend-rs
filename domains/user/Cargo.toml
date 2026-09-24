@@ -20,7 +20,8 @@ common_macros.path = "../../libs/common_macros"
 audit.path = "../audit"
 constants.path = "../constants"
 oss.path = "../../libs/oss"
-types = { workspace = true, features = ["orm"] }
+types-identity = { workspace = true, features = ["orm"] }
+types-token.workspace = true
 
 multi-level-cache.workspace = true
 serde.workspace = true

@@ -5,11 +5,9 @@ use crate::repo::CollectionRepo;
 use crate::state::VisualState;
 use common::Result;
 use common::ext::ToOk;
-use types::auth::user::UserId;
-use types::visual::collection::CollectionId;
-use types::visual::dto::collection::{
-    CollectionCreateParam, CollectionUpdateParam, CollectionView,
-};
+use types_core::UserId;
+use types_visual::collection::CollectionId;
+use types_visual::dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView};
 
 pub(crate) struct CollectionService;
 

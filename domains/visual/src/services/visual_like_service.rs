@@ -6,8 +6,8 @@ use crate::{
     mappers::visual_like_mapper::VisualLikeMapper, repo::VisualLikeRepo,
     services::visual_service::VisualService, state::VisualState,
 };
-use types::visual::dto::visual::VisualView;
-use types::visual::models::LikedVisualsQuery;
+use types_visual::dto::visual::VisualView;
+use types_visual::models::LikedVisualsQuery;
 
 pub(crate) struct VisualLikeService;
 

@@ -10,12 +10,12 @@ use common::types::HasChanged::Changed;
 use common::utils::DbUtils;
 use common::utils::MetricsTimerExt;
 use serde_json::json;
-use types::auth::user::{AdminId, UserId};
-use types::cursor::CountIdCursor;
-use types::visual::MergePersonParam;
-use types::visual::face::FaceRecord;
-use types::visual::person::{PersonId, PersonRecord, UpdatePersonRecord};
-use types::visual::visual::VisualId;
+use types_core::cursor::CountIdCursor;
+use types_core::{AdminId, UserId};
+use types_visual::MergePersonParam;
+use types_visual::face::FaceRecord;
+use types_visual::person::{PersonId, PersonRecord, UpdatePersonRecord};
+use types_visual::visual::VisualId;
 
 use crate::VisualState;
 use crate::mappers::face_mapper::FaceMapper;
@@ -148,7 +148,7 @@ impl PersonRepo {
         keyword: &str,
         cursor: Option<PersonId>,
         size: u64,
-    ) -> Result<CursorPage<types::visual::person::PersonRecord, ()>> {
+    ) -> Result<CursorPage<types_visual::person::PersonRecord, ()>> {
         PersonMapper::query_search(&state.db, keyword, cursor, size)
             .timed(metrics_name!("query_search"))
             .await

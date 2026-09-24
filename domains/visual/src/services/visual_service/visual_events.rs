@@ -1,6 +1,6 @@
 #[cfg(feature = "face")]
 use common::utils::TempFile;
-use types::visual::visual::VisualRecord;
+use types_visual::visual::VisualRecord;
 
 /// 影像主记录落库后发布的事件，供时间线、人脸等后续服务消费。
 pub struct AfterVisualUpload {

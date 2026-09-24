@@ -8,15 +8,15 @@ use common::{
     types::CursorPage,
     utils::MetricsTimerExt,
 };
-use types::visual::{
+use types::{
+    auth::user::UserId, visual::collection::CollectionId, visual::models::VisualIds,
+    visual::visual::VisualId,
+};
+use types_visual::{
     collection::CollectionRecord,
     dto::collection::{
         CollectionCreateParam, CollectionUpdateParam, CollectionVisualCursorPageParam,
     },
-};
-use types::{
-    auth::user::UserId, visual::collection::CollectionId, visual::models::VisualIds,
-    visual::visual::VisualId,
 };
 
 use crate::mappers::{

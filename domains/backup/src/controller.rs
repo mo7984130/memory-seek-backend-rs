@@ -6,10 +6,8 @@ use common::{
     axum::{R, controller_router::ControllerRouter},
 };
 use std::sync::Arc;
-use types::{
-    auth::user::{AdminId, UserId},
-    backup::RestoreRequest,
-};
+use types_backup::RestoreRequest;
+use types_core::{AdminId, UserId};
 
 pub struct BackupController;
 

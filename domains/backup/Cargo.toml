@@ -10,7 +10,8 @@ audit = ["audit/recording"]
 
 [dependencies]
 audit.path = "../audit"
-types = { path = "../../types", features = ["orm"] }
+types-core = { workspace = true, features = ["orm"] }
+types-backup.workspace = true
 common = { path = "../../common", features = ["axum", "tokio"] }
 common_macros.path = "../../libs/common_macros"
 oss.path = "../../libs/oss"

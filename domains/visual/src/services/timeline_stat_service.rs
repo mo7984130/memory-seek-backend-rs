@@ -4,7 +4,7 @@ use crate::{
     repo::TimelineStatRepo, services::visual_service::AfterVisualUpload, state::VisualState,
 };
 use common::{Result, ext::ToOk};
-use types::visual::dto::timeline_stat::MonthStat;
+use types_visual::dto::timeline_stat::MonthStat;
 
 pub(crate) struct TimelineStatService;
 

@@ -16,12 +16,12 @@ use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
 use crate::UserState;
-use types::auth::user::UserId;
-use types::user::{
+use types_identity::auth::user::UserId;
+use types_identity::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
     UserBriefView, UserInfo,
 };
-use types::visual::{VisualToken, VisualTokenStr};
+use types_token::{VisualToken, VisualTokenStr};
 
 use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL};
 

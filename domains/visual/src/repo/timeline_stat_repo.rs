@@ -5,7 +5,7 @@ use common::error::contextual::ext::{ContextualResultExt, IntoContextualExt};
 use common::{error::contextual::Result, metrics_name, time::DateTime, utils::MetricsTimerExt};
 use constants::RedisKeys;
 use sea_orm::DatabaseTransaction;
-use types::visual::dto::timeline_stat::MonthStat;
+use types_visual::dto::timeline_stat::MonthStat;
 
 use crate::mappers::timeline_stat_mapper::TimelineStatMapper;
 use crate::services::visual_service::AfterVisualDelete;

@@ -13,8 +13,8 @@ use std::path::PathBuf;
 use backup::BackupState;
 
 use common::error::ContextualError;
-use types::visual::dto::timeline_stat::MonthStat;
-use types::visual::visual::{VisualId, VisualRecord};
+use types_visual::dto::timeline_stat::MonthStat;
+use types_visual::visual::{VisualId, VisualRecord};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct CachedVisualLike {

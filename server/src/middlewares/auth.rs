@@ -9,7 +9,7 @@ use common::{
     ext::RedisExt,
 };
 use std::{str::FromStr, sync::Arc};
-use types::auth::user::UserId;
+use types_core::UserId;
 
 /// 认证中间件
 ///

@@ -11,7 +11,8 @@ controller = ["dep:axum", "common/axum"]
 
 [dependencies]
 common = { path = "../../common", features = ["snowflake", "metrics"] }
-types = { path = "../../types", features = ["orm"] }
+types-core = { workspace = true, features = ["orm"] }
+types-audit = { workspace = true, features = ["orm"] }
 common_macros.path = "../../libs/common_macros"
 
 # controller 需要

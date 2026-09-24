@@ -7,11 +7,11 @@ use common::{
     axum::{R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedQuery},
     types::CursorPage,
 };
-use types::audit::{
+use types_audit::{
     AuditId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem, AuditTopQuery,
 };
-use types::auth::user::{AdminId, UserId};
-use types::cursor::TimeIdCursor;
+use types_core::cursor::TimeIdCursor;
+use types_core::{AdminId, UserId};
 
 pub struct AuditController;
 

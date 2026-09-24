@@ -18,13 +18,13 @@ use common::{
     },
     types::CursorPage,
 };
-use types::visual::{
+use types::{auth::user::UserId, cursor::TimeIdCursor};
+use types_visual::{
     VisualToken,
     dto::visual::{VisualCursorParam, VisualView},
     models::{DeleteVisualsParam, ExistsByHashBatchParam, UploadVisualParam},
     visual::VisualId,
 };
-use types::{auth::user::UserId, cursor::TimeIdCursor};
 
 use crate::{
     services::visual_service::{ImageDownloadData, VisualService},

@@ -12,8 +12,8 @@ use sea_orm::{
     ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, CaseStatement, Expr, Func, SimpleExpr},
 };
-use types::visual::timeline_stat::TimelineStatId;
-use types::visual::{dto::timeline_stat::MonthStat, timeline_stat::*};
+use types_visual::timeline_stat::TimelineStatId;
+use types_visual::{dto::timeline_stat::MonthStat, timeline_stat::*};
 
 pub(crate) struct TimelineStatMapper;
 

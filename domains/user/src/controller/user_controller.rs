@@ -8,12 +8,12 @@ use common::axum::{
 };
 use common::error::{AppError, ContextualError};
 use std::sync::Arc;
-use types::auth::user::UserId;
-use types::visual::VisualTokenStr;
+use types_identity::auth::user::UserId;
+use types_token::VisualTokenStr;
 
 use crate::UserState;
 use crate::services as user_service;
-use types::user::{
+use types_identity::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
     UserBriefView, UserInfo,
 };

@@ -15,11 +15,11 @@ use constants::redis_keys;
 use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task::{self, spawn_blocking};
-use types::auth::user::UserId;
-use types::auth::{
+use types_identity::auth::user::UserId;
+use types_identity::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
 };
-use types::user::UserInfo;
+use types_identity::user::UserInfo;
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
 static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
