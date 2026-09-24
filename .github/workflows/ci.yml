@@ -32,6 +32,10 @@ jobs:
               with:
                   components: clippy
 
+            - name: Install mold
+              # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
+              run: sudo apt-get update && sudo apt-get install -y mold
+
             - uses: Swatinem/rust-cache@v2
 
             - name: Run clippy
@@ -50,6 +54,10 @@ jobs:
 
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
+
+            - name: Install mold
+              # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
+              run: sudo apt-get update && sudo apt-get install -y mold
 
             - uses: Swatinem/rust-cache@v2
 

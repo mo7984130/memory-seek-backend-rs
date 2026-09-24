@@ -93,6 +93,10 @@ jobs:
             - name: Install Rust
               uses: dtolnay/rust-toolchain@stable
 
+            - name: Install mold
+              # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
+              run: sudo apt-get update && sudo apt-get install -y mold
+
             # 依赖/target 缓存(key 基于 Cargo.lock + 平台, 不随 commit 变;
             # 默认不缓存最终可执行文件, 业务 crate 每次增量编译)
             - uses: Swatinem/rust-cache@v2
