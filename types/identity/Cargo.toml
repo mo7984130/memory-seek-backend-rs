@@ -6,8 +6,8 @@ description = "用户身份上下文契约: 认证 DTO、用户资料 DTO 与 au
 
 [features]
 default = []
+orm = ["dep:sea-orm", "dep:linkme", "dep:types-db-api", "types-core/orm"]
 ts = ["dep:ts-rs", "types-core/ts", "types-token/ts"]
-orm = ["dep:sea-orm", "dep:types-db-api", "types-core/orm"]
 
 [dependencies]
 types-core.workspace = true
@@ -19,8 +19,9 @@ serde_json.workspace = true
 validator.workspace = true
 regex.workspace = true
 derive_more.workspace = true
-linkme.workspace = true
+
+linkme = { workspace = true, optional = true }
 
 types-db-api = { workspace = true, optional = true }
-sea-orm = { workspace = true, features = ["sqlx-postgres", "macros"], optional = true }
+sea-orm = { workspace = true, features = ["sqlx-postgres", "macros", "entity-registry"], optional = true }
 ts-rs = { workspace = true, optional = true }

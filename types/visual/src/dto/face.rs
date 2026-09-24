@@ -1,11 +1,11 @@
-use crate::visual::face::{FaceId, FaceRecord};
-use crate::visual::models::FaceIds;
-use crate::visual::person::PersonId;
-use crate::visual::visual::VisualId;
+use crate::face::{FaceId, FaceRecord};
+use crate::models::FaceIds;
+use crate::person::PersonId;
+use crate::visual::VisualId;
 use validator::Validate;
 
-/// 人脸边界框（归一化坐标）——统一复用 `crate::visual::visual_token::FaceBBox`
-use crate::visual::FaceBBox;
+/// 人脸边界框（归一化坐标）——统一复用 `crate::visual_token::FaceBBox`
+use crate::FaceBBox;
 
 crate::out_dto!(FaceView, "visual/", rename = "Face"; {
     pub id: FaceId,
@@ -34,7 +34,7 @@ fn unassigned_face_visual_cursor_page_default_size() -> u64 {
 
 crate::in_dto!(UnassignedFaceVisualCursorParam, "visual/", docs = "未分配人脸照片游标参数(cursor 为 TimeIdCursor<VisualId> 的 Base64 编码)"; {
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
-    pub cursor: Option<crate::cursor::TimeIdCursor<VisualId>>,
+    pub cursor: Option<types_core::cursor::TimeIdCursor<VisualId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "unassigned_face_visual_cursor_page_default_size")]
     #[cfg_attr(feature = "ts", ts(type = "number"))]

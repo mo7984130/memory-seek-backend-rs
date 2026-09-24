@@ -1,11 +1,11 @@
-use crate::cursor::TimeIdCursor;
 use common::time::DateTime;
+use types_core::cursor::TimeIdCursor;
 use validator::Validate;
 
-use crate::visual::collection::CollectionId;
+use crate::collection::CollectionId;
 
-use crate::visual::models::VisualIds;
-use crate::visual::visual::VisualId;
+use crate::models::VisualIds;
+use crate::visual::VisualId;
 
 crate::out_dto!(CollectionView, "visual/", rename = "Collection"; {
     pub id: CollectionId,
@@ -79,8 +79,8 @@ crate::out_dto!(CollectionVisualRemoveBatchResult, "visual/", Default; {
 mod orm {
     use super::*;
 
-    use crate::visual::collection::CollectionRecord;
-    use crate::visual::{CollectionBriefView, VisualToken};
+    use crate::collection::CollectionRecord;
+    use crate::{CollectionBriefView, VisualToken};
     use types_core::UserId;
 
     impl From<CollectionRecord> for CollectionBriefView {

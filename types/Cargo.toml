@@ -2,18 +2,18 @@
 name = "types"
 version = "0.11.0"
 edition = "2024"
-description = "Shared types for memory-seek: ID types, DTOs, SeaORM entities"
+description = "领域契约门面: 重导出各上下文契约 crate(对外路径保持不变)"
 
 [features]
 default = ["lightweight"]
 
 lightweight = []
 ts = [
-    "dep:ts-rs",
     "types-core/ts",
     "types-token/ts",
     "types-audit/ts",
     "types-identity/ts",
+    "types-visual/ts",
 ]
 orm = [
     "dep:sea-orm",
@@ -22,8 +22,9 @@ orm = [
     "types-core/orm",
     "types-audit/orm",
     "types-identity/orm",
+    "types-visual/orm",
 ]
-face-engine = ["orm", "dep:insight-face-rs", "types-token/face-engine"]
+face-engine = ["orm", "types-token/face-engine", "types-visual/face-engine"]
 
 [dependencies]
 common.path = "../common"
@@ -32,20 +33,10 @@ types-token.workspace = true
 types-backup.workspace = true
 types-audit.workspace = true
 types-identity.workspace = true
+types-visual.workspace = true
 
 types-db-api = { workspace = true, optional = true }
 
-serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
-validator.workspace = true
-thiserror.workspace = true
-derive_more.workspace = true
-base64.workspace = true
-regex.workspace = true
-
-
 sea-orm = { workspace = true, features = ["sqlx-postgres", "macros", "schema-sync", "entity-registry"], optional = true }
-insight-face-rs = { workspace = true, features = ["pgvector"], optional = true }
-ts-rs = { workspace = true, optional = true }
 linkme = { workspace = true, optional = true }
 tracing.workspace = true

@@ -73,8 +73,8 @@ mod entity {
 
     #[common::register_async(
         send,
-        slice = crate::db_init::INIT_INDEXES,
-        ty = crate::db_init::InitIndexFn
+        slice = types_db_api::INIT_INDEXES,
+        ty = types_db_api::InitIndexFn
     )]
     async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
         let stmt = Index::create()

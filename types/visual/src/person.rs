@@ -18,7 +18,7 @@ mod entity {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::visual::{
+    use crate::{
         FaceBBox,
         face::{FaceId, FaceRecord},
         visual::VisualId,

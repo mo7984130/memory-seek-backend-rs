@@ -6161,25 +6161,17 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 name = "types"
 version = "0.11.0"
 dependencies = [
- "base64 0.22.1",
  "common",
- "derive_more 1.0.0",
- "insight-face-rs",
  "linkme",
- "regex",
  "sea-orm",
- "serde",
- "serde_json",
- "thiserror",
  "tracing",
- "ts-rs",
  "types-audit",
  "types-backup",
  "types-core",
  "types-db-api",
  "types-identity",
  "types-token",
- "validator",
+ "types-visual",
 ]
 
 [[package]]
@@ -6256,6 +6248,24 @@ dependencies = [
  "serde_json",
  "ts-rs",
  "types-core",
+]
+
+[[package]]
+name = "types-visual"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "derive_more 1.0.0",
+ "insight-face-rs",
+ "linkme",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "types-core",
+ "types-db-api",
+ "types-token",
+ "validator",
 ]
 
 [[package]]

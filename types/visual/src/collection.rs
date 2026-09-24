@@ -15,7 +15,7 @@ mod entity {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::visual::visual::VisualId;
+    use crate::visual::VisualId;
     use types_core::UserId;
 
     /// 收藏夹里面没有影像时, cover即为空

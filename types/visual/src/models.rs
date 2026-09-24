@@ -2,9 +2,9 @@
 use common::time::DateTime;
 use validator::Validate;
 
-use crate::cursor::TimeIdCursor;
-use crate::visual::face::FaceId;
-use crate::visual::visual::VisualId;
+use crate::face::FaceId;
+use crate::visual::VisualId;
+use types_core::cursor::TimeIdCursor;
 
 // ============================================================
 // VisualIds — 校验型影像 ID 批量列表
@@ -285,8 +285,7 @@ mod tests {
     fn test_person_name_deserialize_then_validate() {
         // 超长名称应能反序列化, 校验错误走 validator 通道, 不含位置信息
         let json = format!(r#"{{"newName": "{}"}}"#, "a".repeat(65));
-        let param: crate::visual::dto::person::RenamePersonParam =
-            serde_json::from_str(&json).unwrap();
+        let param: crate::dto::person::RenamePersonParam = serde_json::from_str(&json).unwrap();
         let err = param.validate().unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("人物名称长度不能超过64个字符"), "msg: {msg}");

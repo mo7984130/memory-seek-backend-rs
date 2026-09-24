@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::visual::timeline_stat::TimelineStatId;
+use crate::timeline_stat::TimelineStatId;
 
 /// 每月影像统计数据
 #[derive(Serialize, Deserialize, Clone)]

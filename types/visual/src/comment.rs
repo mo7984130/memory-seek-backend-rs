@@ -17,7 +17,7 @@ mod entity {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::visual::visual::VisualId;
+    use crate::visual::VisualId;
     use types_core::UserId;
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
@@ -54,8 +54,8 @@ mod entity {
     /// VisualId 和 LikeCount 复合索引, 用于 查询影像的热门评论
     #[common::register_async(
         send,
-        slice = crate::db_init::INIT_INDEXES,
-        ty = crate::db_init::InitIndexFn
+        slice = types_db_api::INIT_INDEXES,
+        ty = types_db_api::InitIndexFn
     )]
     async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
         let stmt = Index::create()

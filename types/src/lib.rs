@@ -1,4 +1,5 @@
-pub mod visual;
+/// 视觉上下文契约(`types::visual::*` 路径不变)。
+pub use types_visual as visual;
 
 /// 用户身份上下文契约(`types::auth::*` / `types::user::*` / `types::validators::*`
 /// 路径不变)。
@@ -14,7 +15,7 @@ pub use types_audit as audit;
 /// 备份上下文契约(`types::backup::*` 路径不变)。
 pub use types_backup as backup;
 
-/// 本 crate 的实体模块路径前缀(`types::auth::user` / `types::visual::*`),
+/// 本 crate 的实体模块路径前缀(当前仅 `types::db_init` 的 schema 编排测试),
 /// 供 `init_db` 同步表结构。
 #[cfg(feature = "orm")]
 #[linkme::distributed_slice(types_db_api::SCHEMA_PREFIXES)]

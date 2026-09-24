@@ -1,13 +1,13 @@
 use common::time::DateTime;
 use serde::Deserialize;
 
-use crate::cursor::TimeIdCursor;
 #[cfg(feature = "orm")]
-use crate::visual::VisualToken;
+use crate::VisualToken;
 #[cfg(feature = "orm")]
-use crate::visual::visual::VisualRecord;
-use crate::visual::visual::{VisualId, VisualKind};
+use crate::visual::VisualRecord;
+use crate::visual::{VisualId, VisualKind};
 use types_core::UserId;
+use types_core::cursor::TimeIdCursor;
 
 crate::out_dto!(VisualView, "visual/", rename = "Visual"; {
     pub id: VisualId,
@@ -113,7 +113,7 @@ crate::in_dto!(VisualCursorParam, "visual/", serde_default, docs = "影像游标
 #[cfg(all(test, feature = "orm"))]
 mod orm_tests {
     use super::*;
-    use crate::visual::VisualTokenType;
+    use crate::VisualTokenType;
     use common::utils::{TokenCipher, TokenCipherConfig, init_token_cipher};
 
     fn test_cipher() -> &'static TokenCipher {
