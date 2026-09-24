@@ -5,15 +5,10 @@ use axum::{
     extract::State,
     routing::{get, post},
 };
-use common::{
-    Result,
-    axum::{
-        R,
-        controller_router::ControllerRouter,
-        ext::ToROkExt,
-        extractors::{ValidatedPath, ValidatedQuery},
-    },
-    types::CursorPage,
+use common_core::{Result, types::CursorPage};
+use common_web::{
+    R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedPath,
+    extractors::ValidatedQuery,
 };
 use types::{
     auth::user::UserId,

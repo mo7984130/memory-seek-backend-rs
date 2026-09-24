@@ -25,6 +25,6 @@ impl VisualDeleteContext {
 pub async fn run_visual_delete_pipeline(
     db: &sea_orm::DatabaseConnection,
     ctx: &mut VisualDeleteContext,
-) -> common::Result<()> {
+) -> common_core::Result<()> {
     MEDIA_DELETE_PIPELINE.run(db, ctx).await
 }

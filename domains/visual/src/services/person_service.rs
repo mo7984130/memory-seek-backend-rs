@@ -7,17 +7,17 @@ use crate::{
     services::visual_service::VisualService,
 };
 use audit::{AuditEvent, AuditRecorder};
-use common::{
-    Result, db_transaction,
+use common_core::{
+    Result,
     error::{
         AppError,
         contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt},
     },
     ext::ToOk,
-    metrics_name,
     types::CursorPage,
-    utils::MetricsTimerExt,
 };
+use common_db::db_transaction;
+use common_metrics::{MetricsTimerExt, metrics_name};
 use insight_face_rs::{FaceEmbedding, types::DIMS};
 use ndarray::Array2;
 use petal_clustering::{Fit, HDbscan};

@@ -1,12 +1,12 @@
 use audit::{AuditEvent, AuditRecorder};
-use common::{
-    DbConn as ConnectionTrait, db_transaction,
+use common_core::{
+    DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
     ext::ToOk,
-    metrics_name,
     types::CursorPage,
-    utils::{DbUtils, MetricsTimerExt},
 };
+use common_db::{db_transaction, utils::DbUtils};
+use common_metrics::{MetricsTimerExt, metrics_name};
 use sea_orm::{DbBackend, EntityName, Statement};
 use types::{
     auth::user::UserId,
@@ -224,7 +224,7 @@ impl FaceRepo {
     pub async fn backup_and_truncate(state: &VisualState) -> Result<()> {
         Self::backup_face_tables(state).await?;
 
-        common::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(scoped & state.db, |txn| {
             txn.execute_raw(Statement::from_string(
                 DbBackend::Postgres,
                 format!(

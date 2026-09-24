@@ -6,15 +6,10 @@ use axum::{
     extract::State,
     routing::{delete, get},
 };
-use common::{
-    Result,
-    axum::{
-        R,
-        controller_router::ControllerRouter,
-        ext::ToROkExt,
-        extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
-    },
-    types::CursorPage,
+use common_core::{Result, types::CursorPage};
+use common_web::{
+    R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
+    extractors::ValidatedPath, extractors::ValidatedQuery,
 };
 use types::{
     auth::user::UserId,

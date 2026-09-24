@@ -5,22 +5,22 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "multi-level-cache/metrics", "oss/metrics"]
-controller = ["dep:axum", "common/axum"]
+metrics = ["multi-level-cache/metrics", "oss/metrics"]
+controller = ["dep:axum", "dep:common-web"]
 audit = ["audit/recording"]
 face = ["dep:insight-face-rs", "dep:backup", "types-visual/face-engine"]
-ts = ["types-visual/ts", "common/ts"]
+ts = ["types-visual/ts", "common-core/ts"]
 
 [dependencies]
-common = { path = "../../common", features = [
-    "metrics",
-    "tokio",
+common-core = { workspace = true, features = [
     "multi-cache",
+    "tokio"
 ] }
-common-core = { workspace = true }
+common-cache = { workspace = true }
 common-db = { workspace = true }
 common-metrics = { workspace = true }
 common-runtime = { workspace = true }
+common-web = { workspace = true, optional = true }
 file-validator.path = "../../libs/file_validator"
 common_macros.path = "../../libs/common_macros"
 audit.path = "../audit"

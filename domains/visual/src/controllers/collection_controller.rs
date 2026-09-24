@@ -5,14 +5,10 @@ use axum::{
     extract::State,
     routing::{get, patch},
 };
-use common::{
-    Result,
-    axum::{
-        R,
-        controller_router::ControllerRouter,
-        ext::ToROkExt,
-        extractors::{ValidatedJson, ValidatedPath},
-    },
+use common_core::Result;
+use common_web::{
+    R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
+    extractors::ValidatedPath,
 };
 use types::{
     auth::user::UserId,

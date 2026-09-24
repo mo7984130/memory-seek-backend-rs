@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use common::{
+use common_core::{
     DbConn as ConnectionTrait,
     error::contextual::Result,
     error::contextual::ext::IntoContextualExt,

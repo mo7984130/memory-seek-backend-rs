@@ -1,9 +1,8 @@
-use common::ext::ToOk;
-use common::types::CursorPage;
-use common::{
+use common_core::{
     DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
 };
+use common_core::{ext::ToOk, types::CursorPage};
 use sea_orm::ExprTrait;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,

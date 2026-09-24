@@ -1,5 +1,5 @@
 #[cfg(feature = "face")]
-use common::utils::TempFile;
+use common_core::TempFile;
 use types_visual::visual::VisualRecord;
 
 /// 影像主记录落库后发布的事件，供时间线、人脸等后续服务消费。

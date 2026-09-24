@@ -3,13 +3,12 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use blake3::Hasher;
-use common::{
-    AppError, ContextualError, Result,
+use common_core::{
+    AppError, ContextualError, Result, TempFile,
     error::contextual::ext::{ContextualResultExt, IntoContextualExt, OptionExt},
     ext::ResultInspectErrAsync,
-    metrics_name, timed,
-    utils::{MetricsTimerExt, TempFile},
 };
+use common_metrics::{MetricsTimerExt, metrics_name, timed};
 use file_validator::{FileValidator, MediaKind};
 use futures::StreamExt;
 use tracing::{info, instrument};
@@ -77,7 +76,7 @@ impl VisualService {
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(|error| {
                 // 请求体超限(DefaultBodyLimit 流式限制): 返回 413 而非 500
-                if common::axum::body_util::is_body_limit_error(&error) {
+                if common_web::body_util::is_body_limit_error(&error) {
                     return ContextualError::warn_without_source(
                         "upload_file_too_large",
                         "上传文件大小超过服务器限制",

@@ -1,4 +1,4 @@
-use common::{
+use common_core::{
     DbConn as ConnectionTrait,
     error::contextual::ext::{OptionExt, UintExt},
     error::{AppError, contextual::Result},
