@@ -6,10 +6,11 @@ use crate::state::BackupState;
 use crate::storage::{BackupSource, BackupTier};
 use audit::{AuditEvent, AuditRecorder};
 use chrono::{Datelike, Local, Weekday};
-use common::ext::ToOk;
-use common::time::{Duration, now};
-use common::utils::table_metadata::TableMetadata;
-use common::{Result, inc_counter};
+use common_core::Result;
+use common_core::ext::ToOk;
+use common_core::time::{Duration, now};
+use common_db::utils::table_metadata::TableMetadata;
+use common_metrics::inc_counter;
 use serde_json::json;
 use std::sync::Arc;
 use types_core::AdminId;
@@ -292,7 +293,7 @@ impl BackupService {
         }));
         let event = actor_id.map_or(event.clone(), |actor_id| event.with_actor(actor_id.0));
 
-        common::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(scoped & state.db, |txn| {
             AuditRecorder::append(txn, event).await?;
             Ok(())
         })
@@ -301,7 +302,7 @@ impl BackupService {
     }
 
     async fn record_restore_audit(state: &BackupState, event: AuditEvent) -> Result<()> {
-        common::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(scoped & state.db, |txn| {
             AuditRecorder::append(txn, event).await?;
             Ok(())
         })

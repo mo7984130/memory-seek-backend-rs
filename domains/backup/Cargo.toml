@@ -5,15 +5,18 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "oss/metrics"]
+metrics = ["oss/metrics"]
 audit = ["audit/recording"]
 
 [dependencies]
 audit.path = "../audit"
 types-core = { workspace = true, features = ["orm"] }
 types-backup.workspace = true
-common = { path = "../../common", features = ["axum", "tokio"] }
+common-core = { workspace = true }
+common-db = { workspace = true }
 common-metrics = { workspace = true }
+common-runtime = { workspace = true }
+common-web = { workspace = true }
 common_macros.path = "../../libs/common_macros"
 oss.path = "../../libs/oss"
 
