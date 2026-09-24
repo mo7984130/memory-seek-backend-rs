@@ -15,8 +15,8 @@ mod entity {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::auth::user::UserId;
     use crate::visual::visual::VisualId;
+    use types_core::UserId;
 
     /// 收藏夹里面没有影像时, cover即为空
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]

@@ -6,8 +6,12 @@
 //! - [`in_dto!`]：输入 DTO(参数 / 请求)
 //!
 //! ⚠️ 这些宏体内的 `#[cfg_attr(feature = "orm" / "ts", ...)]` 按**展开处所在
-//! crate** 的 feature 解析,展开处还需能解析 `serde` / `validator` / `ts_rs` 路径。
+//! crate** 的 feature 解析,展开处还需能解析宏内引用的路径:
+//! - `serde` / `validator` / `ts-rs`(DTO 宏)
+//! - `derive_more`(`validated_newtype!`)
+//!
 //! 因此:
+//!
 //! - `id_type!` 只在**本 crate** 内使用,ID 定义集中在 [`crate::ids`]
 //!   (避免实体侧与 DTO 侧派生不一致);
 //! - DTO 宏由各域契约 crate 展开,那些 crate 需自行声明 `ts` feature

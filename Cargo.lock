@@ -6177,6 +6177,7 @@ dependencies = [
  "types-backup",
  "types-core",
  "types-db-api",
+ "types-identity",
  "types-token",
  "validator",
 ]
@@ -6225,6 +6226,24 @@ dependencies = [
  "common",
  "linkme",
  "sea-orm",
+]
+
+[[package]]
+name = "types-identity"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "derive_more 1.0.0",
+ "linkme",
+ "regex",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "types-core",
+ "types-db-api",
+ "types-token",
+ "validator",
 ]
 
 [[package]]

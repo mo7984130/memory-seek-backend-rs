@@ -1,11 +1,11 @@
 use validator::Validate;
 
-use crate::auth::user::UserId;
 use crate::cursor::{CountIdCursor, TimeIdCursor};
 use crate::visual::models::PersonName;
 use crate::visual::person::{PersonId, PersonRecord};
 use crate::visual::visual::VisualId;
 use crate::visual::{ImageDimensions, VisualToken, VisualTokenStr};
+use types_core::UserId;
 
 crate::in_dto!(PersonCursorParam, "visual/", serde_default, docs = "人物列表参数(cursor 为 FaceCountIdCursor<PersonId> 的 Base64 编码, 按 face_count 倒序分页)"; {
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]

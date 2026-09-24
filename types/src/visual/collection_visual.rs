@@ -17,9 +17,9 @@ mod entity {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::auth::user::UserId;
     use crate::visual::collection::CollectionId;
     use crate::visual::visual::VisualId;
+    use types_core::UserId;
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
     #[sea_orm(table_name = "visual_collection_visual")]

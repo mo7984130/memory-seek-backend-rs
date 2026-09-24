@@ -8,6 +8,7 @@
 #   types-core   强类型 ID(id_type! 生成)
 #   types-token  视觉令牌契约(VisualToken / FaceBBox / ImageDimensions)
 #   types-audit  审计查询 DTO
+#   types-identity 认证与用户资料 DTO
 #   types        DTO / 视图 / 共享枚举
 #   common       分页与响应包装(CursorPage / R)
 #
@@ -24,6 +25,7 @@ cargo test \
   -p types-core \
   -p types-token \
   -p types-audit \
+  -p types-identity \
   -p types \
   -p common \
   --features ts,orm,axum

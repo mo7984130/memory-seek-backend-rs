@@ -1,12 +1,12 @@
 use common::time::DateTime;
 use validator::Validate;
 
-use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
 use crate::visual::comment::CommentId;
 #[cfg(feature = "orm")]
 use crate::visual::comment::CommentRecord;
 use crate::visual::models::CommentContent;
+use types_core::UserId;
 
 pub const COMMENT_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 #[allow(dead_code)]

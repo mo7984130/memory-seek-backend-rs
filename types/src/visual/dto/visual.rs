@@ -1,13 +1,13 @@
 use common::time::DateTime;
 use serde::Deserialize;
 
-use crate::auth::user::UserId;
 use crate::cursor::TimeIdCursor;
 #[cfg(feature = "orm")]
 use crate::visual::VisualToken;
 #[cfg(feature = "orm")]
 use crate::visual::visual::VisualRecord;
 use crate::visual::visual::{VisualId, VisualKind};
+use types_core::UserId;
 
 crate::out_dto!(VisualView, "visual/", rename = "Visual"; {
     pub id: VisualId,

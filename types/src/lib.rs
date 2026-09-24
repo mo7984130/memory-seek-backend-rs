@@ -1,7 +1,8 @@
-pub mod auth;
-pub mod user;
-pub mod validators;
 pub mod visual;
+
+/// 用户身份上下文契约(`types::auth::*` / `types::user::*` / `types::validators::*`
+/// 路径不变)。
+pub use types_identity::{auth, user, validators};
 
 /// 声明宏(定义在共享内核 `types-core`,此处重导出以保持 `types::in_dto!` /
 /// `crate::in_dto!` 等既有路径不变)。

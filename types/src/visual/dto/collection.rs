@@ -79,9 +79,9 @@ crate::out_dto!(CollectionVisualRemoveBatchResult, "visual/", Default; {
 mod orm {
     use super::*;
 
-    use crate::auth::user::UserId;
     use crate::visual::collection::CollectionRecord;
     use crate::visual::{CollectionBriefView, VisualToken};
+    use types_core::UserId;
 
     impl From<CollectionRecord> for CollectionBriefView {
         fn from(record: CollectionRecord) -> Self {
