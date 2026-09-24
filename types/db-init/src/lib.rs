@@ -10,7 +10,7 @@
 use common_core::{ContextualError, ContextualResult};
 use sea_orm::DatabaseConnection;
 
-pub use types_db_registry::{INIT_INDEXES, InitIndexFn, InitIndexFuture, SCHEMA_PREFIXES};
+use types_db_registry::{INIT_INDEXES, SCHEMA_PREFIXES};
 
 /// 初始化数据库:同步表结构 + 执行幂等索引初始化回调。
 ///
