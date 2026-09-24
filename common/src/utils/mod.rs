@@ -1,11 +1,8 @@
 //! 工具门面:密码学能力在 `common-crypto`,持久化工具在 `common-db`,
-//! 可观测性工具在 `common-metrics`,此处重导出以保持既有路径不变。
+//! 可观测性工具在 `common-metrics`,通用文件/类型工具在 `common-core`,
+//! 此处重导出以保持既有路径不变。
 
-mod temp_file;
-mod type_map;
-
-pub use temp_file::{TempFile, remove_dir_all};
-pub use type_map::TypeMap;
+pub use common_core::{TempFile, TypeMap, remove_dir_all};
 
 pub use common_crypto::{Argon2idConfig, BcryptConfig, HashAlgorithm};
 pub use common_crypto::{TokenCipher, TokenCipherConfig, init_token_cipher};

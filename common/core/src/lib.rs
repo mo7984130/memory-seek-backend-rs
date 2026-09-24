@@ -21,3 +21,9 @@ pub use error::{AppError, ContextualError, ContextualResult, Result};
 
 /// sea-orm 连接抽象的重导出(实体与仓储代码常用别名)。
 pub use sea_orm::ConnectionTrait as DbConn;
+
+mod temp_file;
+mod type_map;
+
+pub use temp_file::{TempFile, remove_dir_all};
+pub use type_map::TypeMap;
