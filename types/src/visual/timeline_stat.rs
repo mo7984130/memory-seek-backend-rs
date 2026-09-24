@@ -1,7 +1,7 @@
 // ============================================================
 // TimelineStatId
 // ============================================================
-crate::id_type!(TimelineStatId, String, "visual/");
+pub use types_core::TimelineStatId;
 pub fn to_date_str(date: &common::time::DateTime) -> String {
     date.format("%Y-%m").to_string()
 }

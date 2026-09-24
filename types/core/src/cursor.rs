@@ -1,3 +1,8 @@
+//! 共享内核 `types-core` 的游标编解码:key 集分页的游标契约。
+//!
+//! 被 audit / visual 等上下文的 DTO 与查询层共同引用,因此位于各域契约 crate 之下。
+//! `orm` feature 下提供 `keyset_condition` / `before` / `after` 等键集查询辅助。
+
 use std::fmt::Debug;
 
 use base64::Engine;

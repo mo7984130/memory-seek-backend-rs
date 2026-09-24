@@ -2,7 +2,7 @@
 // PersonId
 // ============================================================
 
-crate::id_type!(PersonId, "visual/");
+pub use types_core::PersonId;
 
 // ============================================================
 // SeaORM 实体（仅 face-engine feature）

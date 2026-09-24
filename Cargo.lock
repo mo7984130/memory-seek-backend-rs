@@ -6173,6 +6173,22 @@ dependencies = [
  "thiserror",
  "tracing",
  "ts-rs",
+ "types-core",
+ "validator",
+]
+
+[[package]]
+name = "types-core"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "common",
+ "derive_more 1.0.0",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "ts-rs",
  "validator",
 ]
 

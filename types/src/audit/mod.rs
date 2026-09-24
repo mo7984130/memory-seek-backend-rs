@@ -8,7 +8,7 @@ use crate::cursor::TimeIdCursor;
 mod model;
 pub use model::*;
 
-crate::id_type!(AuditId, "audit/");
+pub use types_core::AuditId;
 
 /// 一个必须和业务状态一起提交的审计事实。
 #[derive(Clone, Debug, PartialEq)]

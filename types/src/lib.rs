@@ -1,12 +1,18 @@
 pub mod audit;
 pub mod auth;
 pub mod backup;
-pub mod cursor;
-pub mod error;
 pub mod macros;
 pub mod user;
 pub mod validators;
 pub mod visual;
+
+/// 键集分页游标(定义在共享内核 `types-core`,此处重导出以保持
+/// `types::cursor::*` 路径不变)。
+pub use types_core::cursor;
+
+/// ID / 枚举 / 游标的解析错误(定义在共享内核 `types-core`,此处重导出以保持
+/// `types::error::*` 路径不变)。
+pub use types_core::error;
 
 #[cfg(feature = "orm")]
 pub mod db_init;

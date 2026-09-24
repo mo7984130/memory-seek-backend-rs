@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "common",
     "types",
+    "types/core",
     "libs/common_macros",
     "libs/file_validator",
     "libs/email",
@@ -33,6 +34,7 @@ rpath = false
 
 [workspace.dependencies]
 types = { path = "types" }
+types-core = { path = "types/core" }
 axum = { version = "0.8.8", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
 tokio-util = { version = "0.7" }

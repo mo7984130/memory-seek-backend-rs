@@ -1,0 +1,22 @@
+[package]
+name = "types-core"
+version = "0.1.0"
+edition = "2024"
+description = "跨上下文共享的领域通用语言: 强类型 ID 与解析错误"
+
+[features]
+default = []
+ts = ["dep:ts-rs"]
+orm = ["dep:sea-orm"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+derive_more.workspace = true
+base64.workspace = true
+validator.workspace = true
+
+common.path = "../../common"
+sea-orm = { workspace = true, features = ["macros"], optional = true }
+ts-rs = { workspace = true, optional = true }

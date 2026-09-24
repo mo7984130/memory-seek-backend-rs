@@ -2,7 +2,7 @@
 // CollectionVisualId
 // ============================================================
 
-crate::id_type!(CollectionVisualId, "visual/");
+pub use types_core::CollectionVisualId;
 
 // ============================================================
 // SeaORM 实体（仅 orm feature）

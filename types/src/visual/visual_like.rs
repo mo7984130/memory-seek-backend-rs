@@ -2,7 +2,7 @@
 // VisualLikeId
 // ============================================================
 
-crate::id_type!(VisualLikeId, "visual/");
+pub use types_core::VisualLikeId;
 
 // ============================================================
 // SeaORM 实体（仅 orm feature）

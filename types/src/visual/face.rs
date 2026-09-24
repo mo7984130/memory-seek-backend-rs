@@ -2,7 +2,7 @@
 // FaceId
 // ============================================================
 
-crate::id_type!(FaceId, "visual/");
+pub use types_core::FaceId;
 
 // ============================================================
 // SeaORM 实体（仅 face-engine feature）

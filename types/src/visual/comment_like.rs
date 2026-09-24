@@ -2,7 +2,7 @@
 // CommentLikeId
 // ============================================================
 
-crate::id_type!(CommentLikeId, "visual/");
+pub use types_core::CommentLikeId;
 
 // ============================================================
 // SeaORM 实体（仅 orm feature）
