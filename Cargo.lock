@@ -1081,28 +1081,23 @@ dependencies = [
 name = "common"
 version = "0.9.0"
 dependencies = [
- "aes-gcm",
- "argon2",
  "async-trait",
  "axum",
  "base64 0.22.1",
- "bcrypt",
  "chrono",
+ "common-core",
+ "common-crypto",
  "common_macros",
  "dashmap",
  "deadpool-redis",
- "hex",
- "hkdf 0.12.4",
  "http-body-util",
  "metrics",
  "multi-level-cache",
- "password-hash",
  "rand 0.10.2",
  "redis",
  "sea-orm",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "snowflaked",
  "thiserror",
  "tokio",
@@ -1110,6 +1105,43 @@ dependencies = [
  "tracing",
  "ts-rs",
  "validator",
+]
+
+[[package]]
+name = "common-core"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "deadpool-redis",
+ "multi-level-cache",
+ "redis",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "ts-rs",
+]
+
+[[package]]
+name = "common-crypto"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "argon2",
+ "base64 0.22.1",
+ "bcrypt",
+ "common-core",
+ "hex",
+ "hkdf 0.12.4",
+ "password-hash",
+ "rand 0.10.2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "snowflaked",
 ]
 
 [[package]]

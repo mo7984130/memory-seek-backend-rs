@@ -1,0 +1,22 @@
+[package]
+name = "common-crypto"
+version = "0.1.0"
+edition = "2024"
+description = "密码与令牌能力: argon2/bcrypt 口令哈希、AEAD 令牌加解密、随机串与雪花 ID"
+
+[dependencies]
+common-core.path = "../core"
+
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+rand.workspace = true
+hex.workspace = true
+
+bcrypt.workspace = true
+argon2.workspace = true
+password-hash.workspace = true
+aes-gcm.workspace = true
+hkdf.workspace = true
+sha2.workspace = true
+snowflaked.workspace = true

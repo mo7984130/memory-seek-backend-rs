@@ -9,7 +9,7 @@ use hkdf::Hkdf;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 
-use crate::error::{AppError, ContextualError, contextual::Result};
+use common_core::error::{AppError, ContextualError, contextual::Result};
 
 const NONCE_LEN: usize = 12;
 const HKDF_KEY_INFO: &[u8] = b"image-file-id-token-v1";

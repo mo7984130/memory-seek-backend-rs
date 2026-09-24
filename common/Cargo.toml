@@ -5,15 +5,16 @@ edition = "2024"
 
 [features]
 default = []
-
 metrics = ["dep:metrics"]
-tokio = ["dep:tokio", "dep:dashmap", "dep:tokio-util"]
-ts = ["dep:ts-rs"]
-axum = ["dep:axum", "dep:validator"]
-multi-cache = ["dep:multi-level-cache"]
-snowflake = ["dep:snowflaked"]
+tokio = ["common-core/tokio", "dep:tokio", "dep:dashmap", "dep:tokio-util"]
+ts = ["common-core/ts", "dep:ts-rs"]
+axum = ["common-core/axum", "dep:axum", "dep:validator"]
+multi-cache = ["common-core/multi-cache", "dep:multi-level-cache"]
+snowflake = []
 
 [dependencies]
+common-core.path = "core"
+common-crypto.path = "crypto"
 common_macros.path = "../libs/common_macros"
 serde.workspace = true
 serde_json.workspace = true
@@ -23,13 +24,6 @@ rand.workspace = true
 deadpool-redis.workspace = true
 redis.workspace = true
 tracing.workspace = true
-hex.workspace = true
-bcrypt.workspace = true
-argon2.workspace = true
-password-hash.workspace = true
-aes-gcm.workspace = true
-hkdf.workspace = true
-sha2.workspace = true
 base64.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
