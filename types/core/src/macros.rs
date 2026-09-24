@@ -97,12 +97,12 @@ macro_rules! id_type {
         }
 
         impl std::str::FromStr for $name {
-            type Err = $crate::error::ParseIdError;
+            type Err = $crate::ids::ParseIdError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 s.parse::<i64>()
                     .map($name)
-                    .map_err(|_| $crate::error::ParseIdError(concat!("无效 ", stringify!($name))))
+                    .map_err(|_| $crate::ids::ParseIdError(concat!("无效 ", stringify!($name))))
             }
         }
     };
@@ -158,7 +158,7 @@ macro_rules! id_type {
         }
 
         impl std::str::FromStr for $name {
-            type Err = $crate::error::ParseIdError;
+            type Err = $crate::ids::ParseIdError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 Ok($name(s.to_string()))

@@ -14,6 +14,11 @@
 //!
 //! 子模块保持私有并在此重导出,避免与 [`crate::kinds`] 下的同名模块在 crate 根撞名。
 
+use thiserror::Error;
+
+#[cfg(feature = "orm")]
+use common_core::error::AppError;
+
 mod audit;
 mod identity;
 mod visual;
@@ -21,3 +26,19 @@ mod visual;
 pub use audit::*;
 pub use identity::*;
 pub use visual::*;
+
+/// ID 解析错误（轻量，不依赖 AppError）
+///
+/// 由 [`id_type!`](crate::id_type) 生成的 `FromStr::Err`。
+/// 调用方可按其边界策略转换为 `AppError`。
+/// 后端 orm 模式下直接实现 `From<ParseIdError> for AppError` 以便 `?` 直接使用。
+#[derive(Error, Debug)]
+#[error("{0}")]
+pub struct ParseIdError(pub &'static str);
+
+#[cfg(feature = "orm")]
+impl From<ParseIdError> for AppError {
+    fn from(e: ParseIdError) -> Self {
+        AppError::bad_request(e.0)
+    }
+}
