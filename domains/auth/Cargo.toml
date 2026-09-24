@@ -16,6 +16,7 @@ common = { path = "../../common", features = [
     "metrics",
     "tokio"
 ] }
+common-metrics = { workspace = true }
 constants.path = "../constants"
 email.path = "../../libs/email"
 common_macros.path = "../../libs/common_macros"

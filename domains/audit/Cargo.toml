@@ -5,12 +5,15 @@ edition = "2024"
 
 [features]
 default = []
-recording = ["common/snowflake"]
-metrics = ["common/metrics"]
-controller = ["dep:axum", "common/axum"]
+recording = ["dep:common-crypto"]
+metrics = []
+controller = ["dep:axum", "dep:common-web"]
 
 [dependencies]
-common = { path = "../../common", features = ["snowflake", "metrics"] }
+common-core = { workspace = true }
+common-metrics = { workspace = true }
+common-crypto = { workspace = true, optional = true }
+common-web = { workspace = true, optional = true }
 types-core = { workspace = true, features = ["orm"] }
 types-audit = { workspace = true, features = ["orm"] }
 common_macros.path = "../../libs/common_macros"

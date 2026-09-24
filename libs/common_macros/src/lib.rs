@@ -54,7 +54,7 @@ pub fn async_boxed(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// 调用此宏的 crate 必须直接依赖 `linkme`。
 ///
 /// ```ignore
-/// #[common::register_async(
+/// #[common_macros::register_async(
 ///     slice = crate::db_init::AFTER_SCHEMA_TASKS,
 ///     ty = crate::db_init::DbInitFn,
 /// )]
@@ -199,14 +199,14 @@ fn expand_metered(
     if function.sig.asyncness.is_none() {
         return Err(syn::Error::new(
             function.sig.fn_token.span(),
-            "`#[common::metered]` 仅支持异步函数",
+            "`#[common_macros::metered]` 仅支持异步函数",
         ));
     }
 
     if !returns_result(&function.sig.output) {
         return Err(syn::Error::new(
             function.sig.output.span(),
-            "`#[common::metered]` 要求函数返回 `Result`",
+            "`#[common_macros::metered]` 要求函数返回 `Result`",
         ));
     }
 
@@ -216,11 +216,11 @@ fn expand_metered(
     let original_block = function.block;
 
     function.block = Box::new(syn::parse_quote!({
-        ::common::metrics_group!(#metric_name);
+        ::common_metrics::metrics_group!(#metric_name);
 
         let __metered_result = (async #original_block).await;
         if __metered_result.is_ok() {
-            ::common::metrics_success!(#metric_name);
+            ::common_metrics::metrics_success!(#metric_name);
         }
 
         __metered_result

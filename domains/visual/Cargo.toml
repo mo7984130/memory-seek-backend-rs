@@ -17,6 +17,10 @@ common = { path = "../../common", features = [
     "tokio",
     "multi-cache",
 ] }
+common-core = { workspace = true }
+common-db = { workspace = true }
+common-metrics = { workspace = true }
+common-runtime = { workspace = true }
 file-validator.path = "../../libs/file_validator"
 common_macros.path = "../../libs/common_macros"
 audit.path = "../audit"

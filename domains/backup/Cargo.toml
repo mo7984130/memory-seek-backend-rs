@@ -13,6 +13,7 @@ audit.path = "../audit"
 types-core = { workspace = true, features = ["orm"] }
 types-backup.workspace = true
 common = { path = "../../common", features = ["axum", "tokio"] }
+common-metrics = { workspace = true }
 common_macros.path = "../../libs/common_macros"
 oss.path = "../../libs/oss"
 
