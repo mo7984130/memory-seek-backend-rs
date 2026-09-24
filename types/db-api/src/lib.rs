@@ -7,14 +7,14 @@
 //!   `init_db` 会按前缀逐个调用 `get_schema_registry(prefix).sync(db)` ——
 //!   sea-orm 的注册表按 `module_path!()` 字符串前缀匹配, 且 `sync` 只增不删,
 //!   因此多次调用安全。
-//! - [`INIT_INDEXES`]：幂等索引初始化回调, 由 `common::register_async` 宏登记。
+//! - [`INIT_INDEXES`]：幂等索引初始化回调, 由 `common_macros::register_async` 宏登记。
 //!
 //! ⚠️ 依赖方向:本 crate 必须位于所有实体 crate **之下**(实体要引用切片),
 //! 因此这里不能依赖任何 `types-*` 域契约 crate。
 
 use std::pin::Pin;
 
-use common::ContextualResult;
+use common_core::ContextualResult;
 use sea_orm::DatabaseConnection;
 
 /// 索引初始化回调的返回类型(装箱的 future)。
@@ -23,7 +23,7 @@ pub type InitIndexFuture<'a> = Pin<Box<dyn Future<Output = ContextualResult<()>>
 /// 索引初始化回调签名。
 pub type InitIndexFn = for<'a> fn(&'a DatabaseConnection) -> InitIndexFuture<'a>;
 
-/// 幂等索引初始化回调集合(元素由 `common::register_async` 宏登记)。
+/// 幂等索引初始化回调集合(元素由 `common_macros::register_async` 宏登记)。
 #[linkme::distributed_slice]
 pub static INIT_INDEXES: [InitIndexFn] = [..];
 

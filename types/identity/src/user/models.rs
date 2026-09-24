@@ -1,6 +1,6 @@
 //! 用户相关类型定义
 
-use common::time::DateTime;
+use common_core::time::DateTime;
 use validator::Validate;
 
 use super::validators::*;

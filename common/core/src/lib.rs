@@ -18,3 +18,6 @@ pub mod types;
 pub mod r;
 
 pub use error::{AppError, ContextualError, ContextualResult, Result};
+
+/// sea-orm 连接抽象的重导出(实体与仓储代码常用别名)。
+pub use sea_orm::ConnectionTrait as DbConn;

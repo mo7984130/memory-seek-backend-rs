@@ -1,4 +1,4 @@
-use common::time::DateTime;
+use common_core::time::DateTime;
 
 #[cfg(feature = "orm")]
 use crate::VisualToken;
@@ -65,7 +65,7 @@ impl VisualView {
     pub fn from_record_with_tokens(
         record: VisualRecord,
         viewer: UserId,
-    ) -> common::error::contextual::Result<Self> {
+    ) -> common_core::error::contextual::Result<Self> {
         let kind = record.kind;
         let file_id = record.file_id.clone();
         Self::from(record).with_tokens(kind, &file_id, viewer)
@@ -77,7 +77,7 @@ impl VisualView {
         kind: VisualKind,
         file_id: &str,
         viewer: UserId,
-    ) -> common::error::contextual::Result<Self> {
+    ) -> common_core::error::contextual::Result<Self> {
         match kind {
             VisualKind::Image => {
                 self.original_token =
@@ -113,7 +113,7 @@ crate::in_dto!(VisualCursorParam, "visual/", serde_default, docs = "影像游标
 mod orm_tests {
     use super::*;
     use crate::VisualTokenType;
-    use common::utils::{TokenCipher, TokenCipherConfig, init_token_cipher};
+    use common_crypto::{TokenCipher, TokenCipherConfig, init_token_cipher};
 
     fn test_cipher() -> &'static TokenCipher {
         init_token_cipher(&TokenCipherConfig {

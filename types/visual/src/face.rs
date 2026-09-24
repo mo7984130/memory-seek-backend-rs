@@ -10,7 +10,7 @@ pub use types_core::FaceId;
 
 #[cfg(feature = "face-engine")]
 mod entity {
-    use common::time::{DateTime, now};
+    use common_core::time::{DateTime, now};
     use insight_face_rs::types::{BoundingBox, Face, FaceEmbedding, FaceLandmarks};
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};

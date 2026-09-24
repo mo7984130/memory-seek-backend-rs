@@ -6,7 +6,7 @@
 use std::fmt::Debug;
 
 use base64::Engine;
-use common::time::DateTime;
+use common_core::time::DateTime;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -325,7 +325,7 @@ mod tests {
     #[cfg(feature = "orm")]
     mod keyset_tests {
         use super::*;
-        use common::time::DateTime as CommonDateTime;
+        use common_core::time::DateTime as CommonDateTime;
         use sea_orm::{DbBackend, QueryFilter, QueryTrait, entity::prelude::*};
 
         #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]

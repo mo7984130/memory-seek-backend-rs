@@ -12,7 +12,7 @@ pub use types_core::CommentLikeId;
 mod entity {
     use super::*;
     use crate::comment::CommentId;
-    use common::time::DateTime;
+    use common_core::time::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
     use types_core::UserId;

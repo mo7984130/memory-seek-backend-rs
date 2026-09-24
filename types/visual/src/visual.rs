@@ -9,7 +9,7 @@ use sea_orm::entity::prelude::*;
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::{
+    use common_core::{
         ContextualResult, DbConn,
         time::{DateTime, now},
     };
@@ -71,7 +71,7 @@ mod entity {
         pub created_at: DateTime,
     }
 
-    #[common::register_async(
+    #[common_macros::register_async(
         send,
         slice = types_db_api::INIT_INDEXES,
         ty = types_db_api::InitIndexFn

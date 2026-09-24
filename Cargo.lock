@@ -6208,7 +6208,8 @@ dependencies = [
 name = "types-audit"
 version = "0.1.0"
 dependencies = [
- "common",
+ "common-core",
+ "common_macros",
  "linkme",
  "sea-orm",
  "serde",
@@ -6231,7 +6232,7 @@ name = "types-core"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
- "common",
+ "common-core",
  "derive_more 1.0.0",
  "sea-orm",
  "serde",
@@ -6245,7 +6246,7 @@ dependencies = [
 name = "types-db-api"
 version = "0.1.0"
 dependencies = [
- "common",
+ "common-core",
  "linkme",
  "sea-orm",
 ]
@@ -6254,7 +6255,8 @@ dependencies = [
 name = "types-identity"
 version = "0.1.0"
 dependencies = [
- "common",
+ "common-core",
+ "common_macros",
  "derive_more 1.0.0",
  "linkme",
  "regex",
@@ -6272,7 +6274,7 @@ dependencies = [
 name = "types-schema"
 version = "0.1.0"
 dependencies = [
- "common",
+ "common-core",
  "sea-orm",
  "tracing",
  "types-audit",
@@ -6285,7 +6287,8 @@ dependencies = [
 name = "types-token"
 version = "0.1.0"
 dependencies = [
- "common",
+ "common-core",
+ "common-crypto",
  "insight-face-rs",
  "serde",
  "serde_json",
@@ -6297,7 +6300,9 @@ dependencies = [
 name = "types-visual"
 version = "0.1.0"
 dependencies = [
- "common",
+ "common-core",
+ "common-crypto",
+ "common_macros",
  "derive_more 1.0.0",
  "insight-face-rs",
  "linkme",

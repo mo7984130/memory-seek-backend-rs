@@ -1,6 +1,6 @@
 //! 审计查询接口的请求与响应 DTO。
 
-use common::time::DateTime;
+use common_core::time::DateTime;
 use serde::Deserialize;
 use types_core::UserId;
 use types_core::cursor::TimeIdCursor;

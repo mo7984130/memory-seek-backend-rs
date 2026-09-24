@@ -13,7 +13,9 @@ face-engine = ["orm", "dep:insight-face-rs", "types-token/face-engine"]
 [dependencies]
 types-core.workspace = true
 types-token.workspace = true
-common.path = "../../common"
+common_macros.path = "../../libs/common_macros"
+common-core.path = "../../common/core"
+common-crypto.path = "../../common/crypto"
 
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

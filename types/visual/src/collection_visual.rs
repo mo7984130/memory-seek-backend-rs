@@ -10,8 +10,8 @@ pub use types_core::CollectionVisualId;
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::ContextualResult;
-    use common::time::DateTime;
+    use common_core::ContextualResult;
+    use common_core::time::DateTime;
     use sea_orm::entity::prelude::*;
     use sea_orm::sea_query::Index;
     use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ mod entity {
 
     /// 创建索引
     /// CollectionId 和 CreatedAt 复合索引, 用于 按照收藏时间获取收藏夹里面影像时
-    #[common::register_async(
+    #[common_macros::register_async(
         send,
         slice = types_db_api::INIT_INDEXES,
         ty = types_db_api::InitIndexFn

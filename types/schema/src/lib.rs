@@ -7,7 +7,7 @@
 //! 依赖 `types-audit` / `types-identity` / `types-visual` 是为了把它们的实体
 //! 纳入依赖图(实体通过 `inventory` 自我注册,需要被链接)。
 
-use common::{ContextualError, ContextualResult};
+use common_core::{ContextualError, ContextualResult};
 use sea_orm::DatabaseConnection;
 
 pub use types_db_api::{INIT_INDEXES, InitIndexFn, InitIndexFuture, SCHEMA_PREFIXES};
@@ -28,7 +28,7 @@ pub async fn init_db(db: &DatabaseConnection) -> ContextualResult<()> {
                     "db_sync_err",
                     "数据库同步失败",
                     source,
-                    common::error::AppError::InternalServerError,
+                    common_core::error::AppError::InternalServerError,
                 )
             })?;
     }

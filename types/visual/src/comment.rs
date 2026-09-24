@@ -10,8 +10,8 @@ pub use types_core::CommentId;
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::ContextualResult;
-    use common::time::DateTime;
+    use common_core::ContextualResult;
+    use common_core::time::DateTime;
     use sea_orm::entity::prelude::*;
     use sea_orm::sea_query::Index;
     use serde::{Deserialize, Serialize};
@@ -52,7 +52,7 @@ mod entity {
     /// 创建索引
     /// VisualId 和 CreatedAt 复合索引, 用于 查询影像的评论
     /// VisualId 和 LikeCount 复合索引, 用于 查询影像的热门评论
-    #[common::register_async(
+    #[common_macros::register_async(
         send,
         slice = types_db_api::INIT_INDEXES,
         ty = types_db_api::InitIndexFn

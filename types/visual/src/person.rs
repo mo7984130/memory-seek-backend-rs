@@ -11,8 +11,8 @@ pub use types_core::PersonId;
 #[cfg(feature = "face-engine")]
 mod entity {
 
-    use common::time::DateTime;
-    use common::types::HasChanged;
+    use common_core::time::DateTime;
+    use common_core::types::HasChanged;
     use insight_face_rs::{BoundingBox, types::FaceEmbedding};
     use sea_orm::{ActiveValue::Set, entity::prelude::*};
     use serde::{Deserialize, Serialize};

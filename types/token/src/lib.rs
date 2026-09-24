@@ -16,8 +16,8 @@
 //! ```
 //! 明文形态并非对外契约(对外为加密字符串),由服务端自产自销。
 
-use common::ContextualResult;
-use common::utils::token_cipher;
+use common_core::ContextualResult;
+use common_crypto::token_cipher;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use types_core::{UserId, VisualKind};
@@ -296,7 +296,7 @@ impl From<VisualTokenStr> for VisualToken {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::utils::{TokenCipherConfig, init_token_cipher};
+    use common_crypto::{TokenCipherConfig, init_token_cipher};
 
     fn init_test_cipher() {
         init_token_cipher(&TokenCipherConfig {
@@ -538,9 +538,9 @@ mod tests {
 #[cfg(test)]
 mod cipher_roundtrip_tests {
     use super::*;
-    use common::utils::{TokenCipherConfig, init_token_cipher};
+    use common_crypto::{TokenCipherConfig, init_token_cipher};
 
-    fn test_cipher() -> &'static common::utils::TokenCipher {
+    fn test_cipher() -> &'static common_crypto::TokenCipher {
         init_token_cipher(&TokenCipherConfig {
             key: "test-key-for-unit-tests".to_owned(),
             salt: "test-salt".to_owned(),

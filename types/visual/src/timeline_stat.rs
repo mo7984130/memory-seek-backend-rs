@@ -2,7 +2,7 @@
 // TimelineStatId
 // ============================================================
 pub use types_core::TimelineStatId;
-pub fn to_date_str(date: &common::time::DateTime) -> String {
+pub fn to_date_str(date: &common_core::time::DateTime) -> String {
     date.format("%Y-%m").to_string()
 }
 
@@ -12,7 +12,7 @@ pub fn to_date_str(date: &common::time::DateTime) -> String {
 
 #[cfg(feature = "orm")]
 mod orm {
-    use common::time::DateTime;
+    use common_core::time::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 

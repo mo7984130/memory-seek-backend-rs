@@ -2,7 +2,7 @@ use base64::DecodeError;
 use thiserror::Error;
 
 #[cfg(feature = "orm")]
-use common::error::{AppError, ContextualError};
+use common_core::error::{AppError, ContextualError};
 
 /// 枚举值解析错误（轻量，不依赖 AppError）
 #[derive(Error, Debug)]

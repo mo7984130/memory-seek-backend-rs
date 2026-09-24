@@ -17,6 +17,6 @@ derive_more.workspace = true
 base64.workspace = true
 validator.workspace = true
 
-common.path = "../../common"
+common-core.path = "../../common/core"
 sea-orm = { workspace = true, features = ["macros"], optional = true }
 ts-rs = { workspace = true, optional = true }

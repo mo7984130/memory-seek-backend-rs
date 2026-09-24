@@ -5,7 +5,7 @@ edition = "2024"
 description = "实体注册契约: schema 前缀与初始化回调"
 
 [dependencies]
-common.path = "../../common"
+common-core.path = "../../common/core"
 
 linkme.workspace = true
 sea-orm = { workspace = true, features = ["sqlx-postgres", "macros"] }

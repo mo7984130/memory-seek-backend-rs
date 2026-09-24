@@ -10,7 +10,7 @@ pub use types_core::CollectionId;
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common::time::DateTime;
+    use common_core::time::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 

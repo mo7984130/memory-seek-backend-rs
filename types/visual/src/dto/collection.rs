@@ -1,4 +1,4 @@
-use common::time::DateTime;
+use common_core::time::DateTime;
 use types_core::cursor::TimeIdCursor;
 use validator::Validate;
 
@@ -97,7 +97,7 @@ mod orm {
         pub fn with_generate_cover_token(
             mut self,
             viewer: UserId,
-        ) -> common::error::contextual::Result<Self> {
+        ) -> common_core::error::contextual::Result<Self> {
             self.cover_token = self
                 .cover_token
                 .as_ref()

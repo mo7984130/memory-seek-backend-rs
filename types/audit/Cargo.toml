@@ -11,7 +11,8 @@ orm = ["dep:sea-orm", "dep:linkme", "dep:types-db-api", "types-core/orm"]
 
 [dependencies]
 types-core.workspace = true
-common.path = "../../common"
+common_macros.path = "../../libs/common_macros"
+common-core.path = "../../common/core"
 
 types-db-api = { workspace = true, optional = true }
 

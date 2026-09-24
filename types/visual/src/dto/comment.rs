@@ -1,4 +1,4 @@
-use common::time::DateTime;
+use common_core::time::DateTime;
 use validator::Validate;
 
 use crate::comment::CommentId;

@@ -45,12 +45,12 @@ impl AdminId {
 
     /// 校验管理员权限，非管理员返回 403
     #[cfg(feature = "orm")]
-    pub fn new(user_id: UserId) -> common::Result<Self> {
+    pub fn new(user_id: UserId) -> common_core::Result<Self> {
         let this = Self(user_id);
         if this.is_admin() {
             Ok(this)
         } else {
-            Err(common::error::AppError::forbidden("仅管理员可访问"))
+            Err(common_core::error::AppError::forbidden("仅管理员可访问"))
         }
     }
 }

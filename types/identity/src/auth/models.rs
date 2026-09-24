@@ -1,7 +1,7 @@
 //! 认证相关类型定义
 
 use super::validators::*;
-use common::time::DateTime;
+use common_core::time::DateTime;
 
 crate::in_dto!(LoginRequest, "auth/", serialize; {
     #[validate(custom(function = "validate_account"))]

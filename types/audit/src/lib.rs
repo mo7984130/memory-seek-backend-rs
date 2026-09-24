@@ -1,6 +1,6 @@
 //! 审计事件类型、查询 DTO 与 `audit_event` SeaORM 实体。
 
-use common::time::{DateTime, now};
+use common_core::time::{DateTime, now};
 use serde_json::Value;
 
 use types_core::cursor::TimeIdCursor;
@@ -85,7 +85,7 @@ impl AuditRecord {
 mod entity {
     use super::*;
 
-    use common::time::DateTime;
+    use common_core::time::DateTime;
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
 
