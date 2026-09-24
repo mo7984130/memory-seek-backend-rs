@@ -1,12 +1,11 @@
 //! 审计查询接口的请求与响应 DTO。
 
 use common::time::DateTime;
-
-use crate::audit::AuditId;
-use crate::audit::AuditRecord;
-use crate::auth::user::UserId;
-use crate::cursor::TimeIdCursor;
 use serde::Deserialize;
+use types_core::UserId;
+use types_core::cursor::TimeIdCursor;
+
+use crate::{AuditId, AuditRecord};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]

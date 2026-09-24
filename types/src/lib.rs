@@ -1,10 +1,23 @@
-pub mod audit;
 pub mod auth;
-pub mod backup;
-pub mod macros;
 pub mod user;
 pub mod validators;
 pub mod visual;
+
+/// 声明宏(定义在共享内核 `types-core`,此处重导出以保持 `types::in_dto!` /
+/// `crate::in_dto!` 等既有路径不变)。
+pub use types_core::{in_dto, out_dto, validated_newtype};
+
+/// 审计上下文契约(`types::audit::*` 路径不变)。
+pub use types_audit as audit;
+
+/// 备份上下文契约(`types::backup::*` 路径不变)。
+pub use types_backup as backup;
+
+/// 本 crate 的实体模块路径前缀(`types::auth::user` / `types::visual::*`),
+/// 供 `init_db` 同步表结构。
+#[cfg(feature = "orm")]
+#[linkme::distributed_slice(types_db_api::SCHEMA_PREFIXES)]
+static SCHEMA_PREFIX: types_db_api::SchemaPrefix = types_db_api::SchemaPrefix("types");
 
 /// 键集分页游标(定义在共享内核 `types-core`,此处重导出以保持
 /// `types::cursor::*` 路径不变)。

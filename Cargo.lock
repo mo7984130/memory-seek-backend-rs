@@ -6173,9 +6173,34 @@ dependencies = [
  "thiserror",
  "tracing",
  "ts-rs",
+ "types-audit",
+ "types-backup",
  "types-core",
+ "types-db-api",
  "types-token",
  "validator",
+]
+
+[[package]]
+name = "types-audit"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "linkme",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "types-core",
+ "types-db-api",
+ "validator",
+]
+
+[[package]]
+name = "types-backup"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -6191,6 +6216,15 @@ dependencies = [
  "thiserror",
  "ts-rs",
  "validator",
+]
+
+[[package]]
+name = "types-db-api"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "linkme",
+ "sea-orm",
 ]
 
 [[package]]

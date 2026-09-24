@@ -5,10 +5,11 @@
 # `export_bindings_<type>` 测试,运行测试时才写文件。因此必须运行
 # "定义了这些类型"的 crate 的测试:
 #
-#   types-core  强类型 ID(id_type! 生成)
-#   types-token 视觉令牌契约(VisualToken / FaceBBox / ImageDimensions)
-#   types       DTO / 视图 / 共享枚举
-#   common      分页与响应包装(CursorPage / R)
+#   types-core   强类型 ID(id_type! 生成)
+#   types-token  视觉令牌契约(VisualToken / FaceBBox / ImageDimensions)
+#   types-audit  审计查询 DTO
+#   types        DTO / 视图 / 共享枚举
+#   common       分页与响应包装(CursorPage / R)
 #
 # 输出目录由 .cargo/config.toml 的 TS_RS_EXPORT_DIR 指定(= target/bindings),
 # 具体子目录由各类型的 export_to 属性决定(auth / user / visual / audit / common)。
@@ -22,6 +23,7 @@ echo '=== 生成 TS 类型契约 ==='
 cargo test \
   -p types-core \
   -p types-token \
+  -p types-audit \
   -p types \
   -p common \
   --features ts,orm,axum

@@ -3,12 +3,20 @@
 use common::time::{DateTime, now};
 use serde_json::Value;
 
-use crate::cursor::TimeIdCursor;
+use types_core::cursor::TimeIdCursor;
 
 mod model;
 pub use model::*;
 
 pub use types_core::AuditId;
+/// DTO 声明宏(定义在共享内核 `types-core`,此处重导出以便本 crate 的 DTO 使用
+/// `crate::in_dto!` / `crate::out_dto!` 路径)。
+pub use types_core::{in_dto, out_dto};
+
+/// schema 前缀自我登记: `init_db` 按前缀逐个同步表结构。
+#[cfg(feature = "orm")]
+#[linkme::distributed_slice(types_db_api::SCHEMA_PREFIXES)]
+static SCHEMA_PREFIX: types_db_api::SchemaPrefix = types_db_api::SchemaPrefix("types_audit");
 
 /// 一个必须和业务状态一起提交的审计事实。
 #[derive(Clone, Debug, PartialEq)]
