@@ -1,8 +1,4 @@
-//! 跨上下文共享的枚举词汇。
-//!
-//! 放在共享内核的判据:`VisualKind` 被视觉访问令牌契约(`types-token`)与视觉
-//! 实体 / DTO 同时引用,若留在任一域契约 crate 都会形成相互依赖,因此必须
-//! 位于两者之下。
+//! 视觉上下文的共享枚举。
 
 use serde::{Deserialize, Serialize};
 
@@ -25,17 +21,4 @@ pub enum VisualKind {
     Image,
     #[cfg_attr(feature = "orm", sea_orm(string_value = "video"))]
     Video,
-}
-
-/// 键集分页方向。
-///
-/// 属跨上下文通用词汇(视觉 DTO 与 Redis key 构造共同引用),因此下沉到共享内核。
-/// TS 导出目录沿用 `visual/`,以保持前端契约不变。
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Deserialize)]
-#[serde(rename_all = "lowercase")]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export, export_to = "visual/"))]
-pub enum PageDirection {
-    Next,
-    Prev,
 }
