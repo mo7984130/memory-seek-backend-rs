@@ -1,8 +1,9 @@
 #[cfg(feature = "face-engine")]
 use crate::setup::domains::backup::BackupRuntime;
 use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
-use common::tokio::TaskManager;
-use common::{Result, axum::controller_router::ControllerRouter};
+use common_core::Result;
+use common_runtime::TaskManager;
+use common_web::controller_router::ControllerRouter;
 use sea_orm::DatabaseConnection;
 #[cfg(feature = "face-engine")]
 use std::sync::Arc;
@@ -10,7 +11,7 @@ use tracing::{debug, info};
 use visual::VisualState;
 
 /// 注册 Visual 模块路由
-#[common::register_async(
+#[common_macros::register_async(
     slice = crate::setup::domains::APP_DOMAINS,
     ty = crate::setup::InitFn,
 )]
@@ -26,7 +27,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .miss_dep("Visual", "DatabaseConnection")?
             .clone(),
         register
-            .get::<common::Pool>()
+            .get::<common_cache::Pool>()
             .miss_dep("Visual", "RedisPool")?
             .clone(),
         config.cache.to(),

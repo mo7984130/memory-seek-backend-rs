@@ -1,12 +1,13 @@
 use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
-use common::{Result, axum::controller_router::ControllerRouter};
+use common_core::Result;
+use common_web::controller_router::ControllerRouter;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{debug, info};
 use user::UserState;
 
 /// 注册 User 模块路由
-#[common::register_async(
+#[common_macros::register_async(
     slice = crate::setup::domains::APP_DOMAINS,
     ty = crate::setup::InitFn,
 )]
@@ -23,7 +24,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .miss_dep("User", "DatabaseConnection")?
             .clone(),
         register
-            .get::<common::Pool>()
+            .get::<common_cache::Pool>()
             .miss_dep("User", "RedisPool")?
             .clone(),
         config.cache.to(),

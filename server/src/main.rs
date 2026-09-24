@@ -3,12 +3,12 @@ use axum::extract::DefaultBodyLimit;
 use axum::middleware::{from_fn, from_fn_with_state};
 
 use clap::Parser;
-use common::Result;
-use common::error::{
+use common_core::Result;
+use common_core::error::{
     AppError,
     contextual::ext::{IntoContextualExt, ResultContextualExt},
 };
-use common::time::Duration;
+use common_core::time::Duration;
 use tracing::{error, info};
 
 use std::net::SocketAddr;
@@ -159,7 +159,7 @@ async fn shutdown_signal(state: Arc<crate::state::AppState>) {
     state.task_manager.shutdown(Duration::from_secs(0)).await;
 
     // 删除统一临时文件目录(优雅关闭时)
-    common::utils::remove_dir_all(&state.tmp_path);
+    common_core::remove_dir_all(&state.tmp_path);
     info!(path = %state.tmp_path.display(), "临时文件目录已删除");
 
     if let Err(e) = state.db.clone().close().await {

@@ -1,4 +1,4 @@
-use common::{Result, error::ContextualError};
+use common_core::{Result, error::ContextualError};
 use serde::Deserialize;
 
 use crate::{config::AppConfig, setup::AppSetup};
@@ -16,7 +16,7 @@ const fn default_max_connections() -> u32 {
 }
 
 /// 根据配置建立数据库连接并执行基础初始化.
-#[common::register_async(
+#[common_macros::register_async(
     slice = crate::setup::bases::APP_BASES,
     ty = crate::setup::InitFn,
 )]
@@ -31,7 +31,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             "db_connect_err",
             "数据库连接失败",
             source,
-            common::error::AppError::InternalServerError,
+            common_core::error::AppError::InternalServerError,
         )
     })?;
 
