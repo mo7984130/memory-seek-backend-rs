@@ -1,9 +1,11 @@
 mod db_utils;
 mod password_hash;
 pub mod rand_utils;
+mod temp_file;
 mod token_cipher;
 
 pub use db_utils::DbUtils;
+pub use temp_file::{TempFile, remove_dir_all};
 
 pub mod table_metadata;
 

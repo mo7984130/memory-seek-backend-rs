@@ -1,9 +1,13 @@
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::middleware::{from_fn, from_fn_with_state};
 
 use clap::Parser;
 use common::Result;
-use common::error::contextual::ext::IntoContextualExt;
+use common::error::{
+    AppError,
+    contextual::ext::{IntoContextualExt, ResultContextualExt},
+};
 use common::time::Duration;
 use tracing::{error, info};
 
@@ -44,10 +48,24 @@ async fn main() -> Result<()> {
     // 加载配置
     let cfg = AppConfig::load(cli.config);
 
+    // 创建统一临时文件目录(上传落盘等)
+    std::fs::create_dir_all(&cfg.server.tmp_path)
+        .into_contextual()
+        .context_err(
+            "create_tmp_dir_failed",
+            "创建临时目录失败",
+            AppError::InternalServerError,
+        )?;
+    info!(path = %cfg.server.tmp_path.display(), "临时文件目录已就绪");
+
     // 初始化应用
     let mut app_setup = AppSetup::init(&cfg).await?;
 
-    let state = AppState::from_setup(&app_setup)?;
+    let state = AppState::from_setup(
+        &app_setup,
+        cfg.server.max_upload_bytes,
+        cfg.server.tmp_path.clone(),
+    )?;
     let state = Arc::new(state);
 
     // 合并路由并添加中间件
@@ -67,6 +85,15 @@ async fn main() -> Result<()> {
         router
             .merge(public)
             .merge(protected)
+            // 上传请求体上限: 由配置 server.max_upload_bytes 控制(默认 600MB),
+            // 须大于业务校验上限(图片 20MB / 视频 512MB); axum 默认 2MB,
+            // 超过会在请求体流式读取时报 failed to read stream
+            .layer(DefaultBodyLimit::max(cfg.server.max_upload_bytes as usize))
+            // 已知长度请求预检: 超限直接 413, 避免大文件传完才被拒
+            .layer(from_fn_with_state(
+                Arc::clone(&state),
+                middlewares::upload_size_limit::upload_size_limit,
+            ))
             .layer(from_fn(middlewares::tracing_span::tracing_span))
             .layer(from_fn(middlewares::trace_id::trace_id_middleware))
             .layer(from_fn(middlewares::client_ip::client_ip_middleware))
@@ -130,6 +157,10 @@ async fn shutdown_signal(state: Arc<crate::state::AppState>) {
 
     // 关闭后台任务
     state.task_manager.shutdown(Duration::from_secs(0)).await;
+
+    // 删除统一临时文件目录(优雅关闭时)
+    common::utils::remove_dir_all(&state.tmp_path);
+    info!(path = %state.tmp_path.display(), "临时文件目录已删除");
 
     if let Err(e) = state.db.clone().close().await {
         error!(error = %e, "关闭数据库连接池失败");

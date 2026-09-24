@@ -1,12 +1,13 @@
-#[cfg(feature = "face")]
 use std::sync::Arc;
 
+use common::tokio::TaskManager;
 use common::{Pool, types::CursorPage};
 use multi_level_cache::CacheConfig;
 use multi_level_cache::MultiLevelCache;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[cfg(feature = "face")]
 use backup::BackupState;
@@ -31,6 +32,12 @@ pub struct VisualState {
     pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     pub redis: Pool,
     pub s3_client: S3Client,
+    /// 后台任务托管(人脸检测常驻 worker 等)
+    pub(crate) task_manager: TaskManager,
+    /// 上传接口并发信号量(按 CPU 核数), 控制同时落盘/校验的上传请求数
+    pub(crate) upload_semaphore: Arc<tokio::sync::Semaphore>,
+    /// 上传落盘临时目录
+    pub(crate) tmp_dir: PathBuf,
     #[cfg(feature = "face")]
     pub face_engine: Arc<insight_face_rs::FaceEngine>,
     #[cfg(feature = "face")]
@@ -44,10 +51,12 @@ impl VisualState {
         redis: Pool,
         cache_config: CacheConfig,
         s3_client: S3Client,
+        tmp_dir: PathBuf,
         #[cfg(feature = "face")] face_engine: Arc<insight_face_rs::FaceEngine>,
         #[cfg(feature = "face")] backup_state: Arc<BackupState>,
-    ) -> Self {
-        Self {
+        task_manager: TaskManager,
+    ) -> Arc<Self> {
+        let state = Arc::new(Self {
             db,
             cache_visual_info: MultiLevelCache::new_with_name(
                 "visual_info",
@@ -76,10 +85,23 @@ impl VisualState {
             ),
             redis,
             s3_client,
+            task_manager,
+            // 与密码校验的信号量策略一致: 按 CPU 核数默认
+            upload_semaphore: Arc::new(tokio::sync::Semaphore::new(
+                std::thread::available_parallelism()
+                    .expect("获取可用并行数错误")
+                    .into(),
+            )),
+            tmp_dir,
             #[cfg(feature = "face")]
             face_engine,
             #[cfg(feature = "face")]
             backup_state,
-        }
+        });
+
+        #[cfg(all(feature = "face", feature = "controller"))]
+        crate::services::face_service::FaceService::start_face_consumer(Arc::clone(&state));
+
+        state
     }
 }

@@ -1,11 +1,13 @@
 #[cfg(feature = "face-engine")]
 use crate::setup::domains::backup::BackupRuntime;
 use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
+use common::tokio::TaskManager;
 use common::{Result, axum::controller_router::ControllerRouter};
-use visual::VisualState;
 use sea_orm::DatabaseConnection;
+#[cfg(feature = "face-engine")]
 use std::sync::Arc;
 use tracing::{debug, info};
+use visual::VisualState;
 
 /// 注册 Visual 模块路由
 #[common::register_async(
@@ -18,7 +20,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     let register = &mut setup.registry;
     let router = &mut setup.router;
 
-    let visual_state = Arc::new(VisualState::new(
+    let visual_state = VisualState::new(
         register
             .get::<DatabaseConnection>()
             .miss_dep("Visual", "DatabaseConnection")?
@@ -32,6 +34,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .get::<oss::S3Client>()
             .miss_dep("Visual", "S3Client")?
             .clone(),
+        config.server.tmp_path.clone(),
         #[cfg(feature = "face-engine")]
         register
             .get::<Arc<insight_face_rs::FaceEngine>>()
@@ -43,7 +46,11 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .miss_dep("Visual", "BackupRuntime")?
             .state
             .clone(),
-    ));
+        register
+            .get::<TaskManager>()
+            .miss_dep("Visual", "TaskManager")?
+            .clone(),
+    );
 
     // 获取路由
     let public_router = visual::Controller::public_routes().with_state(visual_state.clone());

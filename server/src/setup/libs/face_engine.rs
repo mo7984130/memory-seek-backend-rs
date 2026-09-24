@@ -28,7 +28,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> common::Result<()
     engine.unload().expect("unload engine fail");
 
     let engine = Arc::new(engine);
-    FaceEngine::start_reaper_thread(&engine);
+    FaceEngine::start_reaper(&engine);
 
     setup.registry.insert(engine);
 

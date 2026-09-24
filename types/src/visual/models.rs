@@ -59,10 +59,6 @@ crate::validated_newtype!(
 );
 
 crate::in_dto!(UploadVisualParam, "visual/", serialize, docs = "上传影像请求参数（文件的二进制数据由 multipart 单独传递）"; {
-    /// 文件名
-    #[validate(length(min = 1, max = 255, message = "文件名长度在 1 到 255 个字符"))]
-    pub file_name: String,
-
     /// 指定创建时间（可选，仅管理员可设置，RFC3339 格式）
     pub created_at: Option<DateTime>,
 });
@@ -234,26 +230,6 @@ mod tests {
     fn test_person_name_validate_too_long() {
         let n = PersonName("a".repeat(65));
         assert!(n.validate().is_err());
-    }
-
-    // ==================== UploadVisualParam validation ====================
-
-    #[test]
-    fn test_upload_visual_param_valid() {
-        let param = UploadVisualParam {
-            file_name: "visual.jpg".to_string(),
-            created_at: None,
-        };
-        assert!(param.validate().is_ok());
-    }
-
-    #[test]
-    fn test_upload_visual_param_invalid_empty_file_name() {
-        let param = UploadVisualParam {
-            file_name: "".to_string(),
-            created_at: None,
-        };
-        assert!(param.validate().is_err());
     }
 
     // ==================== ExistsByHashBatchParam validation ====================

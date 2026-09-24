@@ -13,7 +13,7 @@ use types::visual::{dto::visual::VisualView, visual::VisualKind};
 
 use crate::context::Context;
 
-use super::{Session, blake3_hex, file_form, session, token_matches, unique_png, unique_tag};
+use super::{Session, blake3_hex, session, token_matches, unique_png, unique_tag};
 
 /// 上传前置:登录 + 本次任务唯一影像字节。
 #[derive(Default)]
@@ -54,7 +54,7 @@ impl Scenario for UploadVisualScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        super::upload(ctx, &setup.session, "e2e.png", setup.bytes.clone()).await
+        super::upload(ctx, &setup.session, setup.bytes.clone()).await
     }
 
     async fn validate(
@@ -118,7 +118,7 @@ impl Scenario for UploadDuplicateVisualScenario {
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let setup = prepare(ctx, task).await?;
         // 先成功上传一次, 为 run 制造哈希命中
-        super::upload(ctx, &setup.session, "e2e.png", setup.bytes.clone()).await?;
+        super::upload(ctx, &setup.session, setup.bytes.clone()).await?;
         Ok(setup)
     }
 
@@ -127,11 +127,11 @@ impl Scenario for UploadDuplicateVisualScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let form = file_form("e2e.png", "image/png", setup.bytes.clone())?;
         ctx.client
             .request(reqwest::Method::POST, "/visual")
             .header("Authorization", &setup.session.auth_header())
-            .multipart(form)
+            .header("content-type", "image/png")
+            .body(setup.bytes.clone())
             .send()
             .await?
             .json::<Self::Output>()
@@ -173,11 +173,11 @@ impl Scenario for UploadInvalidFileScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let form = file_form("evil.txt", "text/plain", b"not an image".to_vec())?;
         ctx.client
             .request(reqwest::Method::POST, "/visual")
             .header("Authorization", &setup.auth_header())
-            .multipart(form)
+            .header("content-type", "text/plain")
+            .body(b"not an image".to_vec())
             .send()
             .await?
             .json::<Self::Output>()
@@ -215,10 +215,10 @@ impl Scenario for UploadUnauthorizedScenario {
         task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let form = file_form("e2e.png", "image/png", unique_png(&unique_tag(task)))?;
         ctx.client
             .request(reqwest::Method::POST, "/visual")
-            .multipart(form)
+            .header("content-type", "image/png")
+            .body(unique_png(&unique_tag(task)))
             .send()
             .await?
             .json::<Self::Output>()

@@ -19,7 +19,7 @@ use crate::UserState;
 use types::auth::user::UserId;
 use types::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
-    UpdateAvatarParam, UserBriefView, UserInfo,
+    UserBriefView, UserInfo,
 };
 use types::visual::{VisualToken, VisualTokenStr};
 
@@ -144,11 +144,10 @@ pub async fn update_avatar(
     state: &UserState,
     user_id: UserId,
     file_data: Bytes,
-    req: UpdateAvatarParam,
 ) -> Result<VisualTokenStr> {
     // 校验图片（MIME 类型由文件头魔数嗅探确定，不信任客户端声明）
     let img_metadata = timed!("validate_image", {
-        FileValidator::validate_image(&file_data, &req.file_name, "").map_err(|error| {
+        FileValidator::validate_image_mem(&file_data).map_err(|error| {
             ContextualError::warn_without_source(
                 "file_validation_error",
                 "文件校验失败",

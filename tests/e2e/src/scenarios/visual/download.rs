@@ -35,9 +35,7 @@ impl Scenario for DownloadOriginalScenario {
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session: Session = session(ctx, task.index).await?;
         let bytes = unique_png(&unique_tag(task));
-        let view: VisualView = super::upload(ctx, &session, "e2e.png", bytes.clone())
-            .await?
-            .data;
+        let view: VisualView = super::upload(ctx, &session, bytes.clone()).await?.data;
         Ok(DownloadSetup {
             bytes,
             original_token: view.original_token.unwrap_or_default(),

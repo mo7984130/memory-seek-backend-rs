@@ -19,7 +19,6 @@ use std::sync::LazyLock;
 
 use common::axum::SucR;
 use memseek_test::TaskIndex;
-use memseek_test::ctxlibs::http_client::multipart::{Form, Part};
 use memseek_test::ctxlibs::http_client::{HttpError, reqwest};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use types::auth::user::UserId;
@@ -72,36 +71,27 @@ pub fn unique_png(tag: &str) -> Vec<u8> {
     data
 }
 
-/// 构造单文件 multipart 表单。
-pub fn file_form(filename: &str, content_type: &str, data: Vec<u8>) -> Result<Form, HttpError> {
-    let part = Part::bytes(data)
-        .file_name(filename.to_string())
-        .mime_str(content_type)?;
-    Ok(Form::new().part("file", part))
-}
-
-/// 计算字节内容的 blake3 十六进制串(与 server 的 `blake3` 计算方式一致)。
-pub fn blake3_hex(data: &[u8]) -> String {
-    blake3::hash(data).to_hex().to_string()
-}
-
-/// 上传一个影像, 返回影像视图。
+/// 上传一个影像(request body 即文件字节), 返回影像视图。
 pub async fn upload(
     ctx: &Context,
     session: &Session,
-    filename: &str,
     data: Vec<u8>,
 ) -> Result<SucR<VisualView>, HttpError> {
-    let form = file_form(filename, "image/png", data)?;
     ctx.client
         .request(reqwest::Method::POST, "/visual")
         .header("Authorization", &session.auth_header())
-        .multipart(form)
+        .header("content-type", "image/png")
+        .body(data)
         .send_checked()
         .await?
         .json::<SucR<VisualView>>()
         .await
         .map_err(HttpError::from)
+}
+
+/// 计算字节内容的 blake3 十六进制串(与 server 的 `blake3` 计算方式一致)。
+pub fn blake3_hex(data: &[u8]) -> String {
+    blake3::hash(data).to_hex().to_string()
 }
 
 /// 按 `seed_file_{user_ordinal}_1` 精确取一张种子影像。

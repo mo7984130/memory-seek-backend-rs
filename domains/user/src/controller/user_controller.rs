@@ -1,11 +1,12 @@
-use axum::extract::{Multipart, State};
+use axum::body::Body;
+use axum::extract::State;
 use axum::routing::{get, patch, post, put};
 use axum::{Extension, Router};
 use common::Result;
 use common::axum::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
 };
-use common::error::{AppError, ContextualError, contextual::ext::OptionExt};
+use common::error::{AppError, ContextualError};
 use std::sync::Arc;
 use types::auth::user::UserId;
 use types::visual::VisualTokenStr;
@@ -14,7 +15,7 @@ use crate::UserState;
 use crate::services as user_service;
 use types::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
-    UpdateAvatarParam, UserBriefView, UserInfo,
+    UserBriefView, UserInfo,
 };
 
 /// 用户模块 HTTP 控制器，处理用户相关的 API 请求
@@ -105,7 +106,7 @@ impl UserController {
     /// # 参数
     /// - `state`: 用户模块共享状态
     /// - `user_id`: 当前登录用户的 ID（从认证中间件提取）
-    /// - `multipart`: 包含头像文件的 multipart 表单数据
+    /// - `body`: 头像图片的原始字节(request body 即文件)
     ///
     /// # 返回
     /// 返回封装后的头像访问 token
@@ -115,46 +116,39 @@ impl UserController {
     async fn upload_avatar(
         State(state): State<Arc<UserState>>,
         Extension(user_id): Extension<UserId>,
-        mut multipart: Multipart,
+        body: Body,
     ) -> Result<R<VisualTokenStr>> {
-        let field = multipart
-            .next_field()
+        // 头像为小文件, 限制 20MB 内整体读入(与图片校验上限一致)
+        const AVATAR_MAX_BYTES: usize = 20 * 1024 * 1024;
+        let file_data = axum::body::to_bytes(body, AVATAR_MAX_BYTES)
             .await
             .map_err(|error| {
+                if common::axum::body_util::is_body_limit_error(&error) {
+                    return ContextualError::warn_without_source(
+                        "avatar_too_large",
+                        "头像文件大小超过服务器限制",
+                        AppError::PayloadTooLarge,
+                    )
+                    .emit();
+                }
                 ContextualError::warn(
-                    "invaild_multipart",
-                    "无效的表单数据",
+                    "read_avatar_err",
+                    "读取头像文件失败",
                     error,
-                    AppError::bad_request("无效的表单数据"),
+                    AppError::bad_request("读取头像文件失败"),
                 )
                 .emit()
-            })?
-            .ok_or_warn(
-                "mutipart_not_found",
+            })?;
+        if file_data.is_empty() {
+            return Err(ContextualError::warn_without_source(
+                "avatar_not_found",
                 "未找到上传文件",
                 AppError::bad_request("未找到上传文件"),
-            )?;
-
-        let file_name = field
-            .file_name()
-            .ok_or_warn(
-                "avatar_file_name_not_found",
-                "未找到文件名",
-                AppError::bad_request("未找到文件名"),
-            )?
-            .to_string();
-        let file_data = field.bytes().await.map_err(|error| {
-            ContextualError::warn(
-                "read_file_err",
-                "读取文件失败",
-                error,
-                AppError::bad_request("读取文件失败"),
             )
-            .emit()
-        })?;
+            .emit());
+        }
 
-        let req = UpdateAvatarParam { file_name };
-        user_service::update_avatar(&state, user_id, file_data, req)
+        user_service::update_avatar(&state, user_id, file_data)
             .await
             .to_r_ok()
     }

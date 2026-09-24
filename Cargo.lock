@@ -645,7 +645,6 @@ dependencies = [
  "matchit",
  "memchr",
  "mime",
- "multer",
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
@@ -1078,7 +1077,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1092,6 +1091,7 @@ dependencies = [
  "deadpool-redis",
  "hex",
  "hkdf 0.12.4",
+ "http-body-util",
  "metrics",
  "multi-level-cache",
  "password-hash",
@@ -1615,7 +1615,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "e2e"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -1812,7 +1812,7 @@ dependencies = [
 
 [[package]]
 name = "file-validator"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "const_format",
  "hex",
@@ -2627,9 +2627,9 @@ dependencies = [
 
 [[package]]
 name = "insight-face-rs"
-version = "4.0.0"
+version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d28e4a8c4bfd8db1e3cb924c8446c55d7253fdf8dbdc72e371f750175036b165"
+checksum = "170407334f12b9ee84d7696a13a9fc28a6e36d90a4b8eb843d3bdec3b71cfa4d"
 dependencies = [
  "image",
  "imageproc",
@@ -3304,23 +3304,6 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
-]
-
-[[package]]
-name = "multer"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83e87776546dc87511aa5ee218730c92b666d7264ab6ed41f9d215af9cd5224b"
-dependencies = [
- "bytes",
- "encoding_rs",
- "futures-util",
- "http",
- "httparse",
- "memchr",
- "mime",
- "spin",
- "version_check",
 ]
 
 [[package]]
@@ -4934,9 +4917,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a334e83ced3ae3ee44db0f84d1fcf8d2087a1ad9bb9036f00f9f6067156ea197"
+checksum = "e01d46a6e22b8ce84aba64fe97011669859bc7f7120a47f5b58839dcaaa4545c"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -4983,9 +4966,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm-macros"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4039a86f9acc4d3b52747508b347dddc6fd725bbc429902ebeb6d26225fc2528"
+checksum = "e24c82fc1e76c014dffe5ecdac8f654da73161d703a16ea13414581e07459c83"
 dependencies = [
  "heck 0.5.0",
  "itertools",
@@ -5196,7 +5179,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "audit",
  "auth",
@@ -6176,7 +6159,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "base64 0.22.1",
  "common",
@@ -6303,7 +6286,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "audit",
  "axum",
@@ -6413,7 +6396,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "visual"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "audit",

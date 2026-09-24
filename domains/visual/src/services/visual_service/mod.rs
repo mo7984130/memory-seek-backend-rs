@@ -1,4 +1,5 @@
 mod on_visual_delete;
+mod upload;
 mod visual_events;
 #[allow(clippy::module_inception)]
 mod visual_service;

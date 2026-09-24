@@ -9,6 +9,13 @@
 server:
   host: "0.0.0.0"
   port: 3000
+  # 上传请求体上限(字节), 默认 536870912(512MB), 与业务视频上限一致
+  # 超限请求将返回 413(可环境变量覆盖: MEMORY_SEEK_SERVER__MAX_UPLOAD_BYTES)
+  # max_upload_bytes: 536870912
+
+  # 统一临时文件目录(上传流式落盘等), 默认 ./tmp
+  # 服务启动时创建, 优雅关闭时删除(可环境变量覆盖: MEMORY_SEEK_SERVER__TMP_PATH)
+  # tmp_path: /var/lib/memory-seek/tmp
 
 metrics:
   # 基础设施指标采集周期（秒），默认 5

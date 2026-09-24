@@ -6,11 +6,11 @@ use common::{
         AppError, ContextualError,
         contextual::{
             self,
-            ext::{ContextualResultExt, IntoContextualExt, OptionExt},
+            ext::{IntoContextualExt, OptionExt},
         },
     },
-    ext::{ResultInspectErrAsync, ToOk},
-    metrics_name, timed,
+    ext::ToOk,
+    metrics_name,
     types::CursorPage,
     utils::MetricsTimerExt,
 };
@@ -18,14 +18,13 @@ use file_validator::{FileMetaData, FileValidator};
 use futures::Stream;
 use oss::OssError;
 use tracing::instrument;
-use uuid::Uuid;
 
 use crate::{
     mappers::visual_mapper::VisualMapper,
     repo::VisualRepo,
     services::visual_service::{
         AfterVisualDelete, AfterVisualUpload, VisualDeleteContext, publish_after_visual_delete,
-        publish_after_visual_upload, run_visual_delete_pipeline,
+        run_visual_delete_pipeline,
     },
     state::VisualState,
 };
@@ -34,13 +33,13 @@ use common::Result;
 use types::visual::{
     VisualToken, VisualTokenType,
     dto::visual::{VisualCursorParam, VisualView},
-    models::{DeleteVisualsParam, ExistsByHashBatchParam, UploadVisualParam},
+    models::{DeleteVisualsParam, ExistsByHashBatchParam},
 };
 
 use types::{
-    auth::user::{AdminId, UserId},
+    auth::user::UserId,
     cursor::TimeIdCursor,
-    visual::visual::{NewVisualRecord, VisualId, VisualKind, VisualRecord},
+    visual::visual::{VisualId, VisualKind},
 };
 
 pub struct VisualService;
@@ -124,127 +123,6 @@ impl VisualService {
 }
 
 impl VisualService {
-    /// 校验影像, 计算 BLAKE3, 上传文件并写入影像主记录.
-    #[common_macros::metered]
-    #[instrument(
-        skip_all,
-        fields(user_id = %user_id, file_name = %req.file_name)
-    )]
-    pub async fn upload_visual(
-        state: Arc<VisualState>,
-        user_id: UserId,
-        file_data: Bytes,
-        req: UploadVisualParam,
-    ) -> Result<VisualView> {
-        // 仅管理员可指定 created_at
-        if req.created_at.is_some() {
-            AdminId::new(user_id)?;
-        }
-
-        // 效验文件（MIME 类型由文件头魔数嗅探确定，不信任客户端声明）
-        let metadata = {
-            timed!("validate_visual", {
-                FileValidator::validate_visual(&file_data, &req.file_name, "").map_err(|error| {
-                    ContextualError::warn_without_source(
-                        "file_validation_error",
-                        "文件校验失败",
-                        AppError::bad_request(error.to_string()),
-                    )
-                })?
-            })
-        };
-
-        // 计算 BLAKE3
-        let visual_hash = {
-            let file_data_clone = Bytes::clone(&file_data);
-            timed!(
-                "blake3_hash",
-                tokio::task::spawn_blocking(move || {
-                    blake3::hash(&file_data_clone).to_hex().to_string()
-                })
-                .await
-                .into_contextual()?
-            )
-        };
-        // BLAKE3 去重校验
-        if VisualRepo::exists_by_hash(&state, &visual_hash).await? {
-            return Err(ContextualError::warn_without_source(
-                "upload_visual:img_exist",
-                "影像已存在",
-                AppError::bad_request("影像已存在"),
-            )
-            .emit());
-        }
-
-        // 上传文件
-        let file_id = Self::get_visual_s3_key(&metadata);
-        state
-            .s3_client
-            .upload(&file_id, &file_data, &metadata.mime_type)
-            .timed(metrics_name!("s3_upload"))
-            .await
-            .into_contextual()?;
-
-        // 更新数据库
-        let visual = if metadata.is_video() {
-            NewVisualRecord {
-                user_id,
-                name: metadata.name,
-                size: file_data.len() as u64,
-                width: metadata.width,
-                height: metadata.height,
-                kind: VisualKind::Video,
-                duration_ms: metadata.duration_ms.ok_or_warn(
-                    "video_has_not_duration",
-                    "未获取到视频的时长",
-                    AppError::bad_request("获取视频时长失败"),
-                )?,
-                hash: visual_hash.clone(),
-                file_id: file_id.clone(),
-                created_at: req.created_at,
-            }
-        } else {
-            NewVisualRecord {
-                user_id,
-                name: metadata.name,
-                size: file_data.len() as u64,
-                width: metadata.width,
-                height: metadata.height,
-                kind: VisualKind::Image,
-                duration_ms: 0,
-                hash: visual_hash.clone(),
-                file_id: file_id.clone(),
-                created_at: req.created_at,
-            }
-        };
-        let visual = VisualRepo::insert_visual(state.as_ref(), visual)
-            .timed(metrics_name!("db_insert"))
-            .await
-            .inspect_err_async(|_| async {
-                state
-                    .s3_client
-                    .delete(&file_id)
-                    .await
-                    .into_contextual()
-                    .emit_if_err();
-            })
-            .await
-            .into_contextual()?;
-
-        // 发布事件
-        let visual_record = VisualRecord::from(visual);
-        publish_after_visual_upload(
-            Arc::clone(&state),
-            AfterVisualUpload {
-                visual: visual_record.clone(),
-                #[cfg(feature = "face")]
-                file_data,
-            },
-        );
-
-        Ok(VisualView::from_record_with_tokens(visual_record, user_id)?)
-    }
-
     /// 批量查询影像哈希值是否已存在.
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(count = %req.hashes.len()))]
@@ -534,9 +412,8 @@ impl VisualService {
     }
 
     #[inline]
-    fn get_visual_s3_key(metadata: &FileMetaData) -> String {
+    pub fn get_visual_s3_key(uuid: &str, metadata: &FileMetaData) -> String {
         let date_path = common::time::now().format("%Y/%m/%d");
-        let uuid = Uuid::new_v4();
         format!("visuals/{}/{}.{}", date_path, uuid, metadata.format)
     }
 }

@@ -1,11 +1,12 @@
 use audit::{AuditEvent, AuditRecorder};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::path::Path;
+use std::sync::{Arc, OnceLock};
 
 use common::{
     Result,
     error::contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt},
-    error::{AppError, contextual},
+    error::{AppError, ContextualError, contextual},
     ext::ToOk,
     inc_counter, metrics_name, set_gauge,
     types::CursorPage,
@@ -13,8 +14,8 @@ use common::{
 };
 use image::{ImageBuffer, Rgb};
 use insight_face_rs::Face;
-use tokio::{spawn, task::spawn_blocking};
-use tracing::{debug, info};
+use tokio::{spawn, sync::mpsc, task::spawn_blocking};
+use tracing::{debug, info, warn};
 use types::{
     auth::user::{AdminId, UserId},
     cursor::TimeIdCursor,
@@ -25,9 +26,9 @@ use types::{
             visual::VisualView,
         },
         face::{self, FaceId, FaceRecord},
-        visual::{VisualId, VisualKind},
         models::FaceIds,
         person::PersonId,
+        visual::{VisualId, VisualKind},
     },
 };
 
@@ -41,6 +42,7 @@ use crate::{
 pub(crate) struct FaceService;
 
 type Img = ImageBuffer<Rgb<u8>, Vec<u8>>;
+
 // 创建
 impl FaceService {
     /// 人脸计算.
@@ -94,9 +96,10 @@ impl FaceService {
             batch_idx += 1;
             set_gauge!("batch", batch_idx as f64);
 
-            let visuals = FaceRepo::query_face_compute_visuals(&state, full, batch_size, previous_id)
-                .timed(metrics_name!("query"))
-                .await?;
+            let visuals =
+                FaceRepo::query_face_compute_visuals(&state, full, batch_size, previous_id)
+                    .timed(metrics_name!("query"))
+                    .await?;
             if visuals.is_empty() {
                 info!("第{}批DB查询结果为空, 计算结束", batch_idx);
                 break;
@@ -191,6 +194,39 @@ impl FaceService {
         .await
         .into_contextual()?;
         Ok(decode_result?)
+    }
+
+    /// 在阻塞线程中直接对落盘图片文件执行人脸检测, 避免占用异步执行器.
+    ///
+    /// 引擎内部(`run_from_file`)负责解码, 调用方无需持有解码缓冲。
+    async fn detect_visual_from_file(state: &VisualState, path: &Path) -> Result<Vec<Face>> {
+        let face_engine_clone = Arc::clone(&state.face_engine);
+        let path = path.to_owned();
+        let detect_result = spawn_blocking(move || -> contextual::Result<Vec<Face>> {
+            let result = face_engine_clone.run_from_file(&path);
+            if let Err(ref error) = result {
+                // 诊断: 打印文件状态(大小/头部字节), 便于定位 image::open 失败原因
+                let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                let head = std::fs::read(&path)
+                    .map(|b| b[..b.len().min(16)].to_vec())
+                    .unwrap_or_default();
+                warn!(
+                    path = %path.display(),
+                    size,
+                    head = ?head,
+                    error = %error,
+                    "run_from_file 解码失败诊断"
+                );
+            }
+            result.context_err(
+                "face-engine_run_error",
+                "人脸检测模型运行失败",
+                AppError::InternalServerError,
+            )
+        })
+        .await
+        .into_contextual()?;
+        Ok(detect_result?)
     }
 
     /// 在阻塞线程中执行人脸检测并返回检测结果.
@@ -338,26 +374,85 @@ impl FaceService {
     name = "face_recognition",
 )]
 impl FaceService {
-    #[tracing::instrument(name = "face_compute", skip_all)]
+    /// 消费者仅将事件投入队列, 由单 worker 串行处理;
+    /// 检测延迟从上传响应转移到队列积压。
+    #[tracing::instrument(name = "face_enqueue", skip_all)]
     async fn on_after_visual_upload(
         &self,
-        state: Arc<VisualState>,
+        _state: Arc<VisualState>,
         event: Arc<AfterVisualUpload>,
     ) -> common::Result<()> {
         if event.visual.kind != VisualKind::Image {
             return Ok(());
         }
-        let image = Self::decode_visual(event.file_data.clone()).await?;
-        let faces = Self::detect_visual(&state, image)
+        FACE_QUEUE
+            .get()
+            .ok_or_error(
+                "face_queue_not_ready",
+                "人脸检测队列未初始化",
+                AppError::InternalServerError,
+            )?
+            .send(event)
+            .context_err(
+                "face_queue_closed",
+                "人脸检测队列已关闭",
+                AppError::InternalServerError,
+            )?;
+        Ok(())
+    }
+}
+
+/// 上传后待做人脸检测的事件队列: 消费者仅入队, 由常驻单 worker 串行消费,
+/// 避免大量上传时无限 spawn 任务造成内存压力。
+static FACE_QUEUE: OnceLock<mpsc::UnboundedSender<Arc<AfterVisualUpload>>> = OnceLock::new();
+
+// 常驻 worker: 消费上传事件队列, 串行执行人脸检测
+impl FaceService {
+    /// 启动单线程人脸检测 worker, 由 [`crate::VisualState::new`] 调用;
+    /// 重复调用直接 panic。
+    pub(crate) fn start_face_consumer(state: Arc<VisualState>) {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        FACE_QUEUE
+            .set(tx)
+            .unwrap_or_else(|_| panic!("FACE_QUEUE 重复初始化"));
+        let task_manager = state.task_manager.clone();
+        task_manager.spawn("face_consumer_worker", async move {
+            while let Some(event) = rx.recv().await {
+                if let Err(error) = Self::process_face_event(&state, event).await {
+                    ContextualError::warn(
+                        "face_consume_failed",
+                        "人脸检测消费上传事件失败",
+                        error,
+                        AppError::InternalServerError,
+                    )
+                    .emit();
+                }
+            }
+        });
+    }
+
+    /// 单张照片的人脸检测与入库, 由 worker 串行调用。
+    /// 直接对落盘临时文件执行人脸检测(引擎内部解码), 不再持有解码缓冲;
+    /// 守卫在消费结束后删除文件。
+    #[tracing::instrument(name = "face_compute", skip_all)]
+    async fn process_face_event(
+        state: &Arc<VisualState>,
+        event: Arc<AfterVisualUpload>,
+    ) -> common::Result<()> {
+        if event.visual.kind != VisualKind::Image {
+            return Ok(());
+        }
+        let faces = Self::detect_visual_from_file(state, event.temp_file.path())
             .timed(metrics_name!("visual_detect"))
             .await?;
         let faces = faces
             .into_iter()
             .map(|face| face::NewFaceRecord::from_detected(event.visual.id, face))
             .collect();
-        Self::insert_faces(&state, faces)
+        Self::insert_faces(state, faces)
             .timed(metrics_name!("insert"))
             .await?;
+        info!("照片 id: {} 人脸检测完成", event.visual.id);
         Ok(())
     }
 }

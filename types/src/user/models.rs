@@ -70,12 +70,6 @@ crate::out_dto!(InviterCodeView, "user/", rename = "InviterCode"; {
     pub expire_at: DateTime,
 });
 
-crate::in_dto!(UpdateAvatarParam, "user/", serialize, docs = "更新头像请求参数（文件二进制数据由 multipart 单独传递）"; {
-    /// 文件名
-    #[validate(length(min = 1, max = 255, message = "文件名不能为空"))]
-    pub file_name: String,
-});
-
 crate::out_dto!(UserBriefView, "user/", rename = "UserBrief"; {
     pub user_id: UserId,
     pub nickname: String,

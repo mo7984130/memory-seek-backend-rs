@@ -42,7 +42,7 @@ impl Scenario for DeleteVisualScenario {
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
-        let view = super::upload(ctx, &session, "e2e.png", unique_png(&unique_tag(task)))
+        let view = super::upload(ctx, &session, unique_png(&unique_tag(task)))
             .await?
             .data;
         let row = visual_entity::Entity::find_by_id(view.id)
