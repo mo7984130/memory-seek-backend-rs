@@ -72,9 +72,15 @@ impl Scenario for UploadVisualScenario {
             return Ok(false);
         };
 
-        // 落库字段与请求内容一致
+        // 落库字段与请求内容一致。
+        // 上传接口只收原始字节、无客户端文件名, 服务端以生成的 uuid 作为 name,
+        // 并写入 file_id = `visuals/YYYY/MM/DD/<uuid>.png`。
+        let name_ok = row.name.len() == 36
+            && row.name.matches('-').count() == 4
+            && row.file_id.starts_with("visuals/")
+            && row.file_id.ends_with(&format!("{}.png", row.name));
         let db_ok = row.user_id == setup.session.user_id
-            && row.name == "e2e.png"
+            && name_ok
             && row.kind == VisualKind::Image
             && row.hash == blake3_hex(&setup.bytes)
             && row.size as u64 == setup.bytes.len() as u64

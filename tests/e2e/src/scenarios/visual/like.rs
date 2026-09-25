@@ -1,4 +1,4 @@
-//! 点赞:`/visual/visuals/{visual_id}/like` 与 `/visual/comment/{comment_id}/like`。
+//! 点赞:`/visual/visual/{visual_id}/like` 与 `/visual/comment/{comment_id}/like`。
 //!
 //! 各场景使用不同的种子影像(file_id 里的 user ordinal 前缀不同), 避免同一
 //! (user, visual) 在不同场景重复点赞触发 400。
@@ -78,7 +78,7 @@ impl Scenario for LikeVisualScenario {
             .client
             .request(
                 reqwest::Method::DELETE,
-                &format!("/visual/visuals/{}/like", visual.id),
+                &format!("/visual/visual/{}/like", visual.id),
             )
             .header("Authorization", &session.auth_header())
             .send_checked()
@@ -97,7 +97,7 @@ impl Scenario for LikeVisualScenario {
         ctx.client
             .request(
                 reqwest::Method::POST,
-                &format!("/visual/visuals/{}/like", setup.visual_id),
+                &format!("/visual/visual/{}/like", setup.visual_id),
             )
             .header("Authorization", &setup.session.auth_header())
             .send_checked()
@@ -155,7 +155,7 @@ impl Scenario for UnlikeVisualScenario {
         ctx.client
             .request(
                 reqwest::Method::POST,
-                &format!("/visual/visuals/{}/like", visual.id),
+                &format!("/visual/visual/{}/like", visual.id),
             )
             .header("Authorization", &session.auth_header())
             .send_checked()
@@ -174,7 +174,7 @@ impl Scenario for UnlikeVisualScenario {
         ctx.client
             .request(
                 reqwest::Method::DELETE,
-                &format!("/visual/visuals/{}/like", setup.visual_id),
+                &format!("/visual/visual/{}/like", setup.visual_id),
             )
             .header("Authorization", &setup.session.auth_header())
             .send_checked()
@@ -229,7 +229,7 @@ impl Scenario for GetLikedVisualsScenario {
         ctx.client
             .request(
                 reqwest::Method::POST,
-                &format!("/visual/visuals/{}/like", visual.id),
+                &format!("/visual/visual/{}/like", visual.id),
             )
             .header("Authorization", &session.auth_header())
             .send_checked()
@@ -246,7 +246,7 @@ impl Scenario for GetLikedVisualsScenario {
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         ctx.client
-            .request(reqwest::Method::GET, "/visual/visuals/liked")
+            .request(reqwest::Method::GET, "/visual/visual/liked")
             .header("Authorization", &setup.session.auth_header())
             .query("size", "10")
             .send_checked()
