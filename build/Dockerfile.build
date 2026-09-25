@@ -12,6 +12,9 @@ RUN apt-get update && \
     build-essential \
     pkg-config \
     cmake \
+    # 链接器: .cargo/config.toml 指定 `-fuse-ld=mold`,
+    # 缺失时 gcc 会报误导性的 "cannot find 'ld'" (它只认最后一个 -fuse-ld)
+    mold \
     # Rust编译依赖
     curl \
     ca-certificates \

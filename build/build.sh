@@ -1,6 +1,16 @@
 #!/bin/bash
 set -e
 
+# 从仓库根目录执行(与在哪里调用脚本无关)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$REPO_ROOT"
+
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[0;33m'
+NC=$'\033[0m'
+
 IMAGE_NAME="ubuntu22.04-rust-build-base"
 PROJECT_NAME="memory-seek-server"
 FEATURES="metrics,auth,user,visual,face-engine,audit,audit-recording,backup"
@@ -16,18 +26,28 @@ if ! podman image exists $IMAGE_NAME; then
         podman pull ubuntu:22.04
     }
 
-    podman build -t $IMAGE_NAME -f Dockerfile.build .
+    podman build -t $IMAGE_NAME -f "$SCRIPT_DIR/Dockerfile.build" "$SCRIPT_DIR"
     echo -e "${GREEN}基础镜像构建完成${NC}"
 else
     echo -e "${GREEN}基础镜像已存在: $IMAGE_NAME${NC}"
 fi
 
 # 运行构建容器
+# 预检: .cargo/config.toml 用 `-fuse-ld=mold`, 镜像缺 mold 时 gcc 只会报
+# 误导性的 "cannot find 'ld'", 所以先给出明确提示
+if ! podman run --rm $IMAGE_NAME sh -c 'command -v mold >/dev/null'; then
+    echo -e "${RED}错误: 基础镜像 $IMAGE_NAME 缺少 mold(或无法启动)${NC}"
+    echo -e "${YELLOW}删除旧镜像后重跑本脚本, 会自动重建:${NC}"
+    echo "  podman rmi $IMAGE_NAME"
+    echo "  $0"
+    exit 1
+fi
+
 echo -e "${GREEN}开始构建项目...${NC}"
 podman run -it --rm \
   --http-proxy=false \
   --name rust-build-$(date +%s) \
-  -v "$(pwd):/app:Z" \
+  -v "$REPO_ROOT:/app:Z" \
   -v "$HOME/.rustup:/root/.rustup:Z" \
   -v "$HOME/.cargo:/root/.cargo:Z" \
   -v "$HOME/.cargo/registry:/root/.cargo/registry:Z" \
@@ -40,6 +60,7 @@ podman run -it --rm \
     echo '=== 环境信息 ==='
     rustc --version
     cargo --version
+    mold --version
     echo '=== 开始构建 ==='
 
     # 构建项目
