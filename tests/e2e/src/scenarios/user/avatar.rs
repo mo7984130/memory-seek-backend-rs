@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
+    ctxlibs::http_client::{Client, HttpError, reqwest},
     register_scenario,
     scenario::Scenario,
 };
@@ -24,8 +24,12 @@ static PNG_BYTES: LazyLock<Vec<u8>> =
     LazyLock::new(|| hex::decode(PNG_1X1).expect("内置 PNG fixture 非法"));
 
 /// 上传头像字节(request body 即文件)。
+///
+/// 参数必须是 harness 的 [`Client`] 而不是裸 `reqwest::Client`: 相对路径
+/// `/user/avatar` 只有经它才能拼上配置里的 base_url(否则 reqwest 直接报
+/// `RelativeUrlWithoutBase`, 请求根本发不出去)。
 async fn upload_avatar_body(
-    client: &reqwest::Client,
+    client: &Client,
     auth_header: &str,
     content_type: &str,
     data: Vec<u8>,
@@ -37,7 +41,6 @@ async fn upload_avatar_body(
         .body(data)
         .send()
         .await
-        .map_err(HttpError::from)
 }
 
 /// 上传头像: 落库 key 与响应 token 一致, 且 S3 对象存在、内容与上传一致.
