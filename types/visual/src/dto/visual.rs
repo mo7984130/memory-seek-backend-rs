@@ -18,7 +18,11 @@ crate::out_dto!(VisualView, "visual/", rename = "Visual"; {
     pub size: u64,
     pub created_at: DateTime,
     pub kind: VisualKind,
-    #[serde(skip_serializing_if = "is_zero")]
+    /// 视频长度(毫秒, 图片为 0, 此时序列化时省略)。
+    ///
+    /// 序列化会省略 0 值, 因此反序列化必须允许字段缺失(`default`),
+    /// 否则同一类型的输出无法被自己解析。
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_liked: Option<bool>,
