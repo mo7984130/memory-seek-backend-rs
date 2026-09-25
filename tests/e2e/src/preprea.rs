@@ -70,14 +70,17 @@ const SEED_STATEMENTS: [&str; 22] = [
     FROM generate_series(1, :MEDIA_USERS) AS g",
     // 13. 影像元数据(每个 visual 用户预置若干张; file_id 唯一, 无需真实对象存储)
     // created_at 随 (u, p) 递增, 避免所有影像同刻导致分页排序退化
+    // 均为图片: kind='image' 且 duration_ms=0(实体里这两列为 NOT NULL 且无默认值,
+    // 因此 INSERT 必须显式提供; 列名与 `types_visual::visual` 实体保持一致)
     "
-    INSERT INTO visual_visual (user_id, name, size, width, height, mime_type, hash, file_id, created_at, updated_at)
+    INSERT INTO visual_visual (user_id, name, size, width, height, kind, duration_ms, hash, file_id, created_at, updated_at)
     SELECT (:AUTH_USERS + u + 1),
            'seed_' || u || '_' || p,
            102400,
            400,
            300,
-           'image/jpeg',
+           'image',
+           0,
            lpad((u::bigint * 100000 + p)::text, 64, '0'),
            'seed_file_' || u || '_' || p,
            now() - interval '1 minute' * ((:MEDIA_USERS - u) * :MEDIAS_PER_USER + (:MEDIAS_PER_USER - p)),
