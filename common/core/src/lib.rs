@@ -7,11 +7,18 @@
 //! - [`time`]：`DateTime` / `now` / `after`
 //! - [`ext`]：`Result` / `Option` 组合辅助 trait
 //! - [`types`]：`HasChanged`、`CursorPage` 等通用值类型
+//! - [`snowflake`]：分布式有序 ID 生成(`id-gen` feature)
 
 pub mod error;
 pub mod ext;
 pub mod time;
 pub mod types;
+
+/// 分布式有序 ID 生成(雪花算法,`id-gen` feature)。
+///
+/// 测试构建下也会编译(`cfg(test)`),以便单测不受 feature 开关影响。
+#[cfg(any(test, feature = "id-gen"))]
+pub mod snowflake;
 
 /// 统一 API 响应格式 `R`(axum 适配层共用)。
 #[cfg(feature = "axum")]

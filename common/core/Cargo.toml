@@ -2,7 +2,7 @@
 name = "common-core"
 version = "0.1.0"
 edition = "2024"
-description = "公共基础能力: 统一错误、时间、扩展 trait 与通用值类型"
+description = "公共基础能力: 统一错误、时间、扩展 trait、通用值类型与可选 ID 生成"
 
 [features]
 default = []
@@ -10,6 +10,7 @@ ts = ["dep:ts-rs"]
 axum = ["dep:axum"]
 tokio = ["dep:tokio"]
 multi-cache = ["dep:multi-level-cache"]
+id-gen = ["dep:snowflaked"]
 
 [dependencies]
 serde.workspace = true
@@ -27,3 +28,8 @@ tokio = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 ts-rs = { workspace = true, optional = true }
 multi-level-cache = { workspace = true, optional = true }
+snowflaked = { workspace = true, optional = true }
+
+[dev-dependencies]
+# `snowflake` 模块在测试构建下也会编译(见 lib.rs 的 cfg), 单测需要此依赖
+snowflaked.workspace = true

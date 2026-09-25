@@ -5,14 +5,13 @@ edition = "2024"
 
 [features]
 default = []
-recording = ["dep:common-crypto"]
+recording = ["common-core/id-gen"]
 metrics = []
 controller = ["dep:axum", "dep:common-web"]
 
 [dependencies]
 common-core = { workspace = true }
 common-metrics = { workspace = true }
-common-crypto = { workspace = true, optional = true }
 common-web = { workspace = true, optional = true }
 types-core = { workspace = true, features = ["orm"] }
 types-audit = { workspace = true, features = ["orm"] }

@@ -505,7 +505,6 @@ version = "0.3.0"
 dependencies = [
  "axum",
  "common-core",
- "common-crypto",
  "common-metrics",
  "common-web",
  "common_macros",
@@ -1101,6 +1100,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "snowflaked",
  "thiserror",
  "tokio",
  "tracing",
@@ -1123,7 +1123,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "snowflaked",
 ]
 
 [[package]]

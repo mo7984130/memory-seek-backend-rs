@@ -2,7 +2,7 @@
 name = "common-crypto"
 version = "0.1.0"
 edition = "2024"
-description = "密码与令牌能力: argon2/bcrypt 口令哈希、AEAD 令牌加解密、随机串与雪花 ID"
+description = "密码与令牌能力: argon2/bcrypt 口令哈希、AEAD 令牌加解密与随机串"
 
 [dependencies]
 common-core.path = "../core"
@@ -19,4 +19,3 @@ password-hash.workspace = true
 aes-gcm.workspace = true
 hkdf.workspace = true
 sha2.workspace = true
-snowflaked.workspace = true

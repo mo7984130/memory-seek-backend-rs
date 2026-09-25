@@ -56,7 +56,7 @@ impl AuditRecorder {
             use types_audit::AuditId;
 
             if event.event_id == AuditId(0) {
-                event.event_id = AuditId(common_crypto::snowflake::next_id());
+                event.event_id = AuditId(common_core::snowflake::next_id());
             }
             ActiveModel {
                 event_id: Set(event.event_id),
