@@ -3,10 +3,11 @@ use validator::{ValidationErrors, ValidationErrorsKind};
 use common_core::{ContextualError, error::AppError};
 
 pub fn handle_validation_error(err: ValidationErrors) -> ContextualError {
+    let msg = format_validation_errors(&err);
     ContextualError::warn_without_source(
         "validated_json_validate_error",
-        "校验失败",
-        AppError::bad_request(format_validation_errors(&err)),
+        format!("校验失败: {}", msg),
+        AppError::bad_request(msg),
     )
 }
 
