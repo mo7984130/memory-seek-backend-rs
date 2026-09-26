@@ -64,12 +64,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 并发与执行模式均由 Manager 统一管理; 全局 mode 覆盖所有场景注册
     let manager = ScenarioManager::new(
         ManagerConfig::new(16)
-            .with_run_mode(RunMode::Duration(Duration::from_secs(120)))
+            // .with_run_mode(RunMode::Duration(Duration::from_secs(120)))
+            .with_run_mode(RunMode::Times(128))
             .with_tui()
             .install_ctrl_c(),
     );
     let reports = manager.run_all(&ctx).await;
-    // let reports = manager.run_one("LoginScenario", &ctx).await.unwrap();
+    // let reports = manager
+    //     .run_one("UploadAvatarReplaceScenario", &ctx)
+    //     .await
+    //     .unwrap();
     println!("{}", reports.report_with_color());
 
     Ok(())
