@@ -3,33 +3,26 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
-use common::{
+use common_core::{
     Result,
     error::contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt},
     error::{AppError, ContextualError, contextual},
     ext::ToOk,
-    inc_counter, metrics_name, set_gauge,
     types::CursorPage,
-    utils::{GaugeGuard, MetricsTimer, MetricsTimerExt},
+};
+use common_metrics::{
+    GaugeGuard, MetricsTimer, MetricsTimerExt, inc_counter, metrics_name, set_gauge,
 };
 use image::{ImageBuffer, Rgb};
 use insight_face_rs::Face;
 use tokio::{spawn, sync::mpsc, task::spawn_blocking};
 use tracing::{debug, info, warn};
-use types::{
-    auth::user::{AdminId, UserId},
-    cursor::TimeIdCursor,
-    visual::{
-        FaceView,
-        dto::{
-            face::{FaceDeleteBatchResult, UnassignedFaceVisualCursorParam},
-            visual::VisualView,
-        },
-        face::{self, FaceId, FaceRecord},
-        models::FaceIds,
-        person::PersonId,
-        visual::{VisualId, VisualKind},
-    },
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::{AdminId, UserId};
+use types_visual::{
+    FaceView, dto::face::FaceDeleteBatchResult, dto::face::UnassignedFaceVisualCursorParam,
+    dto::visual::VisualView, face, face::FaceId, face::FaceRecord, models::FaceIds,
+    person::PersonId, visual::VisualId, visual::VisualKind,
 };
 
 use crate::{
@@ -51,7 +44,7 @@ impl FaceService {
     pub async fn compute(state: Arc<VisualState>, admin: AdminId, full: bool) -> Result<()> {
         let user_id = admin.into_inner();
         let admin = AdminId::new(user_id)?;
-        common::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(scoped & state.db, |txn| {
             AuditRecorder::append(
                 txn,
                 AuditEvent::new("face_compute")
@@ -381,7 +374,7 @@ impl FaceService {
         &self,
         _state: Arc<VisualState>,
         event: Arc<AfterVisualUpload>,
-    ) -> common::Result<()> {
+    ) -> common_core::Result<()> {
         if event.visual.kind != VisualKind::Image {
             return Ok(());
         }
@@ -438,7 +431,7 @@ impl FaceService {
     async fn process_face_event(
         state: &Arc<VisualState>,
         event: Arc<AfterVisualUpload>,
-    ) -> common::Result<()> {
+    ) -> common_core::Result<()> {
         if event.visual.kind != VisualKind::Image {
             return Ok(());
         }
@@ -471,7 +464,7 @@ impl FaceService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::visual_service::VisualDeleteContext,
-    ) -> common::error::contextual::Result<()> {
+    ) -> common_core::error::contextual::Result<()> {
         let visual_ids = ctx.visual_ids();
 
         // 加行锁读取待删照片的全部人脸, 阻止并发转移归属读到将删人脸

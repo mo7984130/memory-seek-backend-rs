@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::{
     repo::TimelineStatRepo, services::visual_service::AfterVisualUpload, state::VisualState,
 };
-use common::{Result, ext::ToOk};
-use types::visual::dto::timeline_stat::MonthStat;
+use common_core::{Result, ext::ToOk};
+use types_visual::dto::timeline_stat::MonthStat;
 
 pub(crate) struct TimelineStatService;
 
@@ -31,7 +31,7 @@ impl TimelineStatService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::visual_service::VisualDeleteContext,
-    ) -> common::error::contextual::Result<()> {
+    ) -> common_core::error::contextual::Result<()> {
         let created_ats = ctx
             .visuals
             .iter()
@@ -56,7 +56,7 @@ impl TimelineStatService {
         &self,
         state: Arc<VisualState>,
         event: Arc<AfterVisualUpload>,
-    ) -> common::Result<()> {
+    ) -> common_core::Result<()> {
         TimelineStatRepo::record_uploaded_visual(&state, event.visual.created_at).await?;
         Ok(())
     }

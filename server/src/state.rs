@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use common::tokio::TaskManager;
+use common_runtime::TaskManager;
 use deadpool_redis::Pool;
 use sea_orm::DatabaseConnection;
 
@@ -22,7 +22,7 @@ impl AppState {
         setup: &AppSetup,
         max_upload_bytes: u64,
         tmp_path: PathBuf,
-    ) -> common::Result<Self> {
+    ) -> common_core::Result<Self> {
         Ok(Self {
             db: setup
                 .registry

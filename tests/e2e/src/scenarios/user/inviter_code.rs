@@ -1,4 +1,4 @@
-use common::axum::{ErrR, SucR};
+use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -6,7 +6,7 @@ use memseek_test::{
     scenario::Scenario,
 };
 use serde_json::json;
-use types::user::InviterCodeView;
+use types_identity::user::InviterCodeView;
 
 use crate::context::Context;
 

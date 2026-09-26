@@ -20,7 +20,7 @@ visual = ["dep:visual", "_s3", "_token_cipher", "_cache"]
 audit = ["dep:audit"]
 backup = ["dep:backup", "_s3"]
 metrics = [
-    "common/metrics",
+    "dep:common-metrics",
     "dep:metrics",
     "dep:sysinfo",
     "dep:metrics-exporter-prometheus",
@@ -32,7 +32,7 @@ metrics = [
     "oss?/metrics",
     "email?/metrics",
 ]
-face-engine = ["dep:insight-face-rs", "visual/face", "backup"]
+face-engine = ["dep:insight-face-rs", "visual/face", "backup", "types-db-init/face-engine"]
 audit-recording = ["auth?/audit", "user?/audit", "visual?/audit", "backup?/audit"]
 
 # ============================================================
@@ -40,7 +40,7 @@ audit-recording = ["auth?/audit", "user?/audit", "visual?/audit", "backup?/audit
 # ============================================================
 _email = ["dep:email"]
 _s3 = ["dep:oss"]
-_token_cipher = []
+_token_cipher = ["dep:common-crypto"]
 _cache = ["dep:multi-level-cache"]
 
 [dependencies]
@@ -60,9 +60,16 @@ backup = { path = "../domains/backup", optional = true }
 audit = { path = "../domains/audit", features = ["controller"], optional = true }
 
 # 基础设施
-common = { path = "../common", features = ["axum", "tokio"] }
+common-core = { workspace = true, features = ["axum", "tokio"] }
+common-redis = { workspace = true }
+common-crypto = { workspace = true, optional = true }
+common-metrics = { workspace = true, optional = true }
+common-runtime = { workspace = true }
+common-web = { workspace = true }
+common_macros.path = "../libs/common_macros"
 constants = { path = "../domains/constants" }
-types = { path = "../types", features = ["orm"] }
+types-core = { workspace = true, features = ["orm"] }
+types-db-init.path = "../types/db-init"
 email = { path = "../libs/email", optional = true }
 config = { workspace = true }
 clap = { workspace = true }

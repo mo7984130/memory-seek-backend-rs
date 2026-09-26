@@ -1,4 +1,4 @@
-use common::error::{AppError, ContextualError};
+use common_core::error::{AppError, ContextualError};
 use thiserror::Error;
 
 /// 备份领域统一错误类型

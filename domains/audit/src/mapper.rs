@@ -1,4 +1,4 @@
-use common::{
+use common_core::{
     DbConn,
     error::contextual::{Result, ext::IntoContextualExt},
     time::DateTime,
@@ -8,11 +8,11 @@ use sea_orm::{
     ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, Expr, Func},
 };
-use types::audit::{AuditId, AuditRecord};
-use types::audit::{Column, Entity};
+use types_audit::{AuditId, AuditRecord};
+use types_audit::{Column, Entity};
 
-use types::auth::user::UserId;
-use types::cursor::TimeIdCursor;
+use types_core::UserId;
+use types_core::cursor::TimeIdCursor;
 pub(super) struct AuditMapper;
 
 impl AuditMapper {

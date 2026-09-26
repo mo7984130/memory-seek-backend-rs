@@ -1,0 +1,25 @@
+[package]
+name = "types-audit"
+version = "0.1.0"
+edition = "2024"
+description = "审计上下文契约: audit_event 实体与查询 DTO"
+
+[features]
+default = []
+ts = ["dep:ts-rs", "types-core/ts"]
+orm = ["dep:sea-orm", "dep:linkme", "dep:types-db-registry", "types-core/orm"]
+
+[dependencies]
+types-core.workspace = true
+common-core.path = "../../common/core"
+
+types-db-registry = { workspace = true, optional = true }
+
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+validator.workspace = true
+
+linkme = { workspace = true, optional = true }
+
+sea-orm = { workspace = true, features = ["sqlx-postgres", "macros", "entity-registry"], optional = true }
+ts-rs = { workspace = true, optional = true }

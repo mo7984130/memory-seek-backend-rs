@@ -1,7 +1,5 @@
-use common::{
-    axum::{ErrR, SucR},
-    ext::ToOk,
-};
+use common_core::ext::ToOk;
+use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -10,8 +8,8 @@ use memseek_test::{
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, SelectExt};
 use serde_json::json;
-use types::auth::{self};
-use types::user::UserInfo;
+use types_identity::auth::{self};
+use types_identity::user::UserInfo;
 
 use crate::context::Context;
 

@@ -4,15 +4,12 @@ use crate::{
     repo::CommentRepo,
     state::VisualState,
 };
-use common::{Result, ext::ToOk, types::CursorPage};
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::{
-        comment::CommentId,
-        dto::comment::{CommentCursorPageParam, CommentPublishParam, CommentView},
-        visual::VisualId,
-    },
+use common_core::{Result, ext::ToOk, types::CursorPage};
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{
+    comment::CommentId, dto::comment::CommentCursorPageParam, dto::comment::CommentPublishParam,
+    dto::comment::CommentView, visual::VisualId,
 };
 
 pub(crate) struct CommentService;
@@ -113,7 +110,7 @@ impl CommentService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::visual_service::VisualDeleteContext,
-    ) -> common::error::contextual::Result<()> {
+    ) -> common_core::error::contextual::Result<()> {
         let visual_ids = ctx.visual_ids();
         let comment_ids = CommentMapper::delete_by_visual_ids(txn, &visual_ids).await?;
 

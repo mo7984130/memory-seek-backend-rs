@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use axum::{Extension, Router, extract::State, routing::post};
-use common::{
-    Result,
-    axum::{R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedPath},
+use common_core::Result;
+use common_web::{
+    R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedPath,
 };
-use types::{auth::user::UserId, visual::comment::CommentId};
+use types_identity::auth::user::UserId;
+use types_visual::comment::CommentId;
 
 use crate::{services::comment_like_service::CommentLikeService, state::VisualState};
 

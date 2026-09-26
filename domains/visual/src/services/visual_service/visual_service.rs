@@ -1,7 +1,7 @@
 use std::{pin::Pin, sync::Arc};
 
 use bytes::Bytes;
-use common::{
+use common_core::{
     error::{
         AppError, ContextualError,
         contextual::{
@@ -10,10 +10,9 @@ use common::{
         },
     },
     ext::ToOk,
-    metrics_name,
     types::CursorPage,
-    utils::MetricsTimerExt,
 };
+use common_metrics::{MetricsTimerExt, metrics_name};
 use file_validator::{FileMetaData, FileValidator};
 use futures::Stream;
 use oss::OssError;
@@ -29,18 +28,16 @@ use crate::{
     state::VisualState,
 };
 use audit::{AuditEvent, AuditRecorder};
-use common::Result;
-use types::visual::{
+use common_core::Result;
+use types_visual::{
     VisualToken, VisualTokenType,
     dto::visual::{VisualCursorParam, VisualView},
     models::{DeleteVisualsParam, ExistsByHashBatchParam},
 };
 
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::visual::{VisualId, VisualKind},
-};
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{visual::VisualId, visual::VisualKind};
 
 pub struct VisualService;
 
@@ -193,7 +190,7 @@ impl VisualService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut VisualDeleteContext,
-    ) -> common::error::contextual::Result<()> {
+    ) -> common_core::error::contextual::Result<()> {
         let visual_ids = ctx.visual_ids();
         VisualMapper::delete_by_ids(txn, &visual_ids).await?;
         AuditRecorder::append(
@@ -222,7 +219,7 @@ impl VisualService {
         &self,
         state: Arc<VisualState>,
         event: Arc<AfterVisualDelete>,
-    ) -> common::Result<()> {
+    ) -> common_core::Result<()> {
         // 删除影像文件
         let file_ids = event
             .visuals
@@ -254,7 +251,7 @@ impl VisualService {
         &self,
         state: Arc<VisualState>,
         _event: Arc<AfterVisualUpload>,
-    ) -> common::Result<()> {
+    ) -> common_core::Result<()> {
         VisualRepo::after_visual_upload(&state).await;
         Ok(())
     }
@@ -301,7 +298,7 @@ impl VisualService {
             let db = state.db.clone();
             let token = token.clone();
             tokio::spawn(async move {
-                common::db_transaction!(contextual & db, |txn| {
+                common_db::db_transaction!(contextual & db, |txn| {
                     let Some(visual_id) =
                         VisualMapper::query_visual_id_by_file_id(txn, &token.file_id).await?
                     else {
@@ -413,7 +410,7 @@ impl VisualService {
 
     #[inline]
     pub fn get_visual_s3_key(uuid: &str, metadata: &FileMetaData) -> String {
-        let date_path = common::time::now().format("%Y/%m/%d");
+        let date_path = common_core::time::now().format("%Y/%m/%d");
         format!("visuals/{}/{}.{}", date_path, uuid, metadata.format)
     }
 }
@@ -424,7 +421,7 @@ mod tests {
     use crate::services::visual_service::{
         AFTER_MEDIA_DELETE_CONSUMERS, AFTER_MEDIA_UPLOAD_CONSUMERS, MEDIA_DELETE_STEPS,
     };
-    use common::pipeline::Step;
+    use common_db::pipeline::Step;
 
     /// 验证 `linkme` 定义即注册:全部清理步骤均被收集,且存在唯一的 final 步骤(主表删除)
     #[test]

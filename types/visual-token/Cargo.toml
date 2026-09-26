@@ -1,0 +1,23 @@
+[package]
+name = "types-visual-token"
+version = "0.1.0"
+edition = "2024"
+description = "视觉访问令牌契约(跨上下文协议)"
+
+[features]
+default = []
+ts = ["dep:ts-rs"]
+face-engine = ["dep:insight-face-rs"]
+
+[dependencies]
+types-core.workspace = true
+common-core.path = "../../common/core"
+common-crypto.path = "../../common/crypto"
+
+serde = { workspace = true, features = ["derive"] }
+
+insight-face-rs = { workspace = true, optional = true }
+ts-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true

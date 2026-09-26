@@ -5,17 +5,19 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "email/metrics"]
-controller = ["dep:axum", "common/axum"]
+metrics = ["email/metrics"]
+controller = ["dep:axum", "dep:common-web"]
 audit = ["audit/recording"]
 
 [dependencies]
 audit = { path = "../audit" }
-types = { workspace = true, features = ["orm"] }
-common = { path = "../../common", features = [
-    "metrics",
-    "tokio"
-] }
+types-identity = { workspace = true, features = ["orm"] }
+common-core = { workspace = true, features = ["tokio"] }
+common-redis = { workspace = true }
+common-crypto = { workspace = true }
+common-db = { workspace = true }
+common-metrics = { workspace = true }
+common-web = { workspace = true, optional = true }
 constants.path = "../constants"
 email.path = "../../libs/email"
 common_macros.path = "../../libs/common_macros"

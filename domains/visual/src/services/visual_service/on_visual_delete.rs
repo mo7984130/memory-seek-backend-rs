@@ -1,7 +1,5 @@
-use types::{
-    auth::user::UserId,
-    visual::visual::{VisualId, VisualRecord},
-};
+use types_identity::auth::user::UserId;
+use types_visual::{visual::VisualId, visual::VisualRecord};
 
 step_derive::declare_pipeline!(
     VisualDeleteContext,
@@ -25,6 +23,6 @@ impl VisualDeleteContext {
 pub async fn run_visual_delete_pipeline(
     db: &sea_orm::DatabaseConnection,
     ctx: &mut VisualDeleteContext,
-) -> common::Result<()> {
+) -> common_core::Result<()> {
     MEDIA_DELETE_PIPELINE.run(db, ctx).await
 }

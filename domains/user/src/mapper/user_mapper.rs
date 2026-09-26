@@ -1,10 +1,9 @@
-use common::ext::ToOk;
-use common::{DbConn, error::contextual::Result};
+use common_core::{DbConn, error::contextual::Result, ext::ToOk};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect, Set,
 };
-use types::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
+use types_identity::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
 use crate::error_ext::ContextualErrorExt;
 use crate::models::UserBriefRow;

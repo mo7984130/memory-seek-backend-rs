@@ -1,0 +1,15 @@
+[package]
+name = "common-runtime"
+version = "0.1.0"
+edition = "2024"
+description = "运行时基础设施: 任务管理器与事件"
+
+[dependencies]
+common-core.path = "../core"
+
+async-trait.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+dashmap.workspace = true
+chrono.workspace = true
+tracing.workspace = true

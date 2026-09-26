@@ -1,0 +1,19 @@
+[package]
+name = "types-db-init"
+version = "0.1.0"
+edition = "2024"
+description = "数据库初始化编排: 按注册表同步表结构并执行幂等索引回调"
+
+[features]
+default = []
+face-engine = ["types-visual/face-engine"]
+
+[dependencies]
+types-db-registry.workspace = true
+types-audit = { workspace = true, features = ["orm"] }
+types-identity = { workspace = true, features = ["orm"] }
+types-visual = { workspace = true, features = ["orm"] }
+
+common-core.path = "../../common/core"
+sea-orm = { workspace = true, features = ["sqlx-postgres", "macros", "schema-sync", "entity-registry"] }
+tracing.workspace = true

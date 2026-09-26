@@ -2,7 +2,7 @@ use bytes::Bytes;
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use common::error::{AppError, ContextualError};
+use common_core::error::{AppError, ContextualError};
 
 /// OSS / S3 / 其他 HTTP 对象存储服务的统一错误类型
 ///

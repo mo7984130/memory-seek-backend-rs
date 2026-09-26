@@ -1,6 +1,6 @@
-use common::error::contextual::Result;
+use common_core::error::contextual::Result;
 use sea_orm::DatabaseTransaction;
-use types::audit::AuditEvent;
+use types_audit::AuditEvent;
 
 pub struct AuditRecorder;
 
@@ -47,16 +47,16 @@ impl AuditRecorder {
         I: IntoIterator<Item = AuditEvent>,
         I::IntoIter: ExactSizeIterator,
     {
-        use common::utils::MetricsTimerExt;
+        use common_metrics::MetricsTimerExt;
         use sea_orm::{ActiveValue::Set, EntityTrait};
-        use types::audit::ActiveModel;
-        use types::audit::Entity;
+        use types_audit::ActiveModel;
+        use types_audit::Entity;
 
         let models = events.into_iter().map(|mut event| {
-            use types::audit::AuditId;
+            use types_audit::AuditId;
 
             if event.event_id == AuditId(0) {
-                event.event_id = AuditId(common::utils::snowflake::next_id());
+                event.event_id = AuditId(common_core::snowflake::next_id());
             }
             ActiveModel {
                 event_id: Set(event.event_id),
@@ -71,7 +71,7 @@ impl AuditRecorder {
 
         Entity::insert_many(models)
             .exec(txn)
-            .timed(common::metrics_name!("db_insert"))
+            .timed(common_metrics::metrics_name!("db_insert"))
             .await?;
         Ok(())
     }

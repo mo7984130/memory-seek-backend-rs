@@ -14,7 +14,8 @@ impl BinaryCopyImporter {
     ) -> Result<u64> {
         // 数据层计时：`backup:restore:restore_local`。
         #[cfg(feature = "metrics")]
-        let _timer = common::utils::MetricsTimer::start(common::metrics_name!("restore_local"));
+        let _timer =
+            common_metrics::MetricsTimer::start(common_metrics::metrics_name!("restore_local"));
 
         let mut connection = db.get_postgres_connection_pool().acquire().await?;
 

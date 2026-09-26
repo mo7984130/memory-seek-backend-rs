@@ -1,19 +1,16 @@
-use common::ext::ToOk;
-use common::types::CursorPage;
-use common::{
+use common_core::{
     DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
 };
+use common_core::{ext::ToOk, types::CursorPage};
 use sea_orm::ExprTrait;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
     QueryOrder, QuerySelect, sea_query::Expr,
 };
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::{comment::*, visual::VisualId},
-};
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{comment::*, visual::VisualId};
 
 pub struct CommentMapper;
 

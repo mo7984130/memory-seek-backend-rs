@@ -17,13 +17,13 @@ pub mod upload;
 
 use std::sync::LazyLock;
 
-use common::axum::SucR;
+use common_web::SucR;
 use memseek_test::TaskIndex;
 use memseek_test::ctxlibs::http_client::{HttpError, reqwest};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use types::auth::user::UserId;
-use types::visual::dto::visual::VisualView;
-use types::visual::visual as visual_entity;
+use types_identity::auth::user::UserId;
+use types_visual::dto::visual::VisualView;
+use types_visual::visual as visual_entity;
 
 use crate::context::Context;
 
@@ -121,14 +121,14 @@ pub fn seed_missing() -> HttpError {
 /// 写真用:断言视觉 token 与库中记录一致。
 pub fn token_matches(token: Option<&String>, file_id: &str, viewer: UserId) -> bool {
     token
-        .and_then(|t| types::visual::VisualToken::decrypt(t).ok())
+        .and_then(|t| types_visual::VisualToken::decrypt(t).ok())
         .is_some_and(|t| t.file_id == file_id && t.viewer_id == viewer)
 }
 
 /// 断言视觉 token 可解密且绑定到指定浏览者。
 pub fn token_viewer(token: Option<&String>, viewer: UserId) -> bool {
     token
-        .and_then(|t| types::visual::VisualToken::decrypt(t).ok())
+        .and_then(|t| types_visual::VisualToken::decrypt(t).ok())
         .is_some_and(|t| t.viewer_id == viewer)
 }
 

@@ -2,23 +2,22 @@ pub(crate) struct CollectionMapper;
 
 use std::collections::HashMap;
 
-use common::error::contextual::ext::OptionExt;
-use common::ext::ToOk;
-use common::time::now;
-use common::{
+use common_core::{
     DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
 };
+use common_core::{error::contextual::ext::OptionExt, ext::ToOk, time::now};
 use sea_orm::ActiveValue::Set;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DbBackend, EntityName, EntityTrait, ExprTrait, Iden, IdenStatic,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
 };
-use types::visual::collection::{self, CollectionId};
-use types::visual::collection_visual;
-use types::visual::visual::VisualId;
-use types::{auth::user::UserId, visual::collection::*};
+use types_identity::auth::user::UserId;
+use types_visual::collection::*;
+use types_visual::collection::{self, CollectionId};
+use types_visual::collection_visual;
+use types_visual::visual::VisualId;
 
 // 创建
 impl CollectionMapper {

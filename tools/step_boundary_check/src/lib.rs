@@ -1,4 +1,4 @@
-//! `step_boundary_check` — 静态检查 `common::pipeline::Step` 的表归属白名单约束
+//! `step_boundary_check` — 静态检查 `common_db::pipeline::Step` 的表归属白名单约束
 //!
 //! 规则(作用于所有 `impl ... Step for Xxx` 以及 `#[step_derive::declare_transaction_step(...)]`
 //! 标记的 impl 块的步骤方法体):
@@ -102,7 +102,7 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
             self.violations.push(Violation::new(
                 self.file,
                 item.span(),
-                "下层模块必须使用 common::error::contextual::Result，不能提前返回 common::Result/AppError",
+                "下层模块必须使用 common_core::error::contextual::Result，不能提前返回 common_core::Result/AppError",
             ));
         }
         syn::visit::visit_item_use(self, item);
@@ -115,15 +115,17 @@ impl<'ast> Visit<'ast> for ErrorBoundaryVisitor<'_> {
                 .iter()
                 .map(|segment| segment.ident.to_string())
                 .collect::<Vec<_>>();
-            if names.windows(2).any(|pair| pair == ["common", "Result"])
+            if names
+                .windows(2)
+                .any(|pair| pair == ["common_core", "Result"])
                 || names
                     .windows(3)
-                    .any(|parts| parts == ["common", "error", "Result"])
+                    .any(|parts| parts == ["common_core", "error", "Result"])
             {
                 self.violations.push(Violation::new(
                     self.file,
                     path.span(),
-                    "下层模块必须使用 common::error::contextual::Result，不能提前返回 common::Result/AppError",
+                    "下层模块必须使用 common_core::error::contextual::Result，不能提前返回 common_core::Result/AppError",
                 ));
             }
             if names.last().is_some_and(|name| {
@@ -205,13 +207,13 @@ fn imports_common_result(tree: &UseTree, prefix: &[String]) -> bool {
             imports_common_result(&path.tree, &next)
         }
         UseTree::Name(name) => {
-            matches!(prefix, [common] if common == "common") && name.ident == "Result"
-                || matches!(prefix, [common, error] if common == "common" && error == "error")
+            matches!(prefix, [core] if core == "common_core") && name.ident == "Result"
+                || matches!(prefix, [core, error] if core == "common_core" && error == "error")
                     && name.ident == "Result"
         }
         UseTree::Rename(rename) => {
-            matches!(prefix, [common] if common == "common") && rename.ident == "Result"
-                || matches!(prefix, [common, error] if common == "common" && error == "error")
+            matches!(prefix, [core] if core == "common_core") && rename.ident == "Result"
+                || matches!(prefix, [core, error] if core == "common_core" && error == "error")
                     && rename.ident == "Result"
         }
         UseTree::Group(group) => group
@@ -456,7 +458,7 @@ mod tests {
     fn source_with(execute_body: &str, owns: &str) -> String {
         format!(
             r#"
-use common::pipeline::Step;
+use common_db::pipeline::Step;
 struct MyStep;
 impl Step<Ctx> for MyStep {{
     fn name(&self) -> &'static str {{ "my_step" }}
@@ -494,7 +496,7 @@ impl Step<Ctx> for MyStep {{
     #[test]
     fn rejects_app_error_result_in_mapper() {
         let source = r#"
-            use common::Result;
+            use common_core::Result;
             async fn query() -> Result<()> {
                 None::<()>.ok_or_warn("db", "query", AppError::InternalServerError)?;
                 Ok(())
@@ -503,13 +505,13 @@ impl Step<Ctx> for MyStep {{
         let violations = check_source(source, "/repo/domains/visual/src/mappers/demo.rs");
         assert!(violations
             .iter()
-            .any(|v| v.message.contains("common::error::contextual::Result")));
+            .any(|v| v.message.contains("common_core::error::contextual::Result")));
     }
 
     #[test]
     fn allows_contextual_error_in_mapper() {
         let source = r#"
-            use common::error::contextual::Result;
+            use common_core::error::contextual::Result;
             async fn query() -> Result<()> { Ok(()) }
         "#;
         assert!(check_source(source, "/repo/domains/visual/src/mappers/demo.rs").is_empty());
@@ -518,13 +520,13 @@ impl Step<Ctx> for MyStep {{
     #[test]
     fn rejects_app_error_result_imported_from_error_module() {
         let source = r#"
-            use common::error::Result;
+            use common_core::error::Result;
             async fn query() -> Result<()> { Ok(()) }
         "#;
         let violations = check_source(source, "/repo/domains/visual/src/mappers/demo.rs");
         assert!(violations
             .iter()
-            .any(|v| v.message.contains("common::error::contextual::Result")));
+            .any(|v| v.message.contains("common_core::error::contextual::Result")));
     }
 
     #[test]
@@ -534,7 +536,7 @@ impl Step<Ctx> for MyStep {{
                 fn from(_: sea_orm::DbErr) -> Self { AppError::InternalServerError }
             }
         "#;
-        let violations = check_source(source, "/repo/common/src/error/db_error.rs");
+        let violations = check_source(source, "/repo/common/core/src/error/db_error.rs");
         assert!(violations.iter().any(|violation| {
             violation.message.contains("From<sea_orm::DbErr>")
                 && violation.message.contains("ContextualError")
@@ -616,7 +618,7 @@ impl Other {
 mod a {
     mod b {
         struct MyStep;
-        impl common::pipeline::Step<Ctx> for MyStep {
+        impl common_db::pipeline::Step<Ctx> for MyStep {
             fn name(&self) -> &'static str { "x" }
             fn owns(&self) -> &'static [&'static str] { &["A"] }
             async fn execute(&self) { CommentMapper::x(); }
@@ -639,7 +641,7 @@ mod a {
 method = on_visual_delete,
 )]
 impl FooService {
-    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
+    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common_core::Result<()> {
         let ids = ctx.visual_ids();
         CollectionVisualMapper::delete_by_visual_ids(txn, &ids).await?;
         CollectionMapper::update_visual_count_delta_batch(txn, &HashMap::new()).await?;
@@ -660,7 +662,7 @@ impl FooService {
 method = on_visual_delete,
 )]
 impl FooService {
-    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
+    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common_core::Result<()> {
         CommentMapper::delete_all(txn).await?;
         Ok(())
     }
@@ -681,7 +683,7 @@ impl FooService {
     method = on_visual_delete,
 )]
 impl FooService {
-    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
+    async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common_core::Result<()> {
         Entity::find().all(txn).await?;
         let _ = ActiveModel { ..Default::default() };
         Ok(())
@@ -703,7 +705,7 @@ mod a {
     method = on_visual_delete,
     )]
     impl FooService {
-        async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common::Result<()> {
+        async fn on_visual_delete(&self, txn: &sea_orm::DatabaseTransaction, ctx: &mut VisualDeleteContext) -> common_core::Result<()> {
             BMapper::x(txn).await?;
             Ok(())
         }

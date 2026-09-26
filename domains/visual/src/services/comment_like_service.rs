@@ -1,5 +1,6 @@
-use common::Result;
-use types::{auth::user::UserId, visual::comment::CommentId};
+use common_core::Result;
+use types_identity::auth::user::UserId;
+use types_visual::comment::CommentId;
 
 use crate::{repo::CommentRepo, state::VisualState};
 

@@ -1,4 +1,4 @@
-use common::error::{
+use common_core::error::{
     AppError,
     contextual::{Result, ext::ResultContextualExt},
 };
@@ -82,7 +82,7 @@ impl EmailClient {
     /// - `ContextualError`: 由调用 service 记录并转换为 `AppError`
     pub async fn send_message(&self, to: &str, subject: &str, body: String) -> Result<()> {
         // 操作级指标：email:send:attempts / duration_seconds / success
-        common::metrics_group!("send");
+        common_metrics::metrics_group!("send");
 
         let email = Message::builder()
             .from(
@@ -116,7 +116,7 @@ impl EmailClient {
 
         send_result?;
 
-        common::metrics_success!("send");
+        common_metrics::metrics_success!("send");
 
         Ok(())
     }

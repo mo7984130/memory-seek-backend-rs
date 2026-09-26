@@ -1,13 +1,14 @@
 use bytes::Bytes;
-use common::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt};
-use common::ext::{RedisExt, ResultInspectErrAsync, ToOk};
-use common::time::after;
-use common::utils::{MetricsTimerExt, rand_utils};
-use common::{
+use common_core::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt};
+use common_core::{
     Result,
     error::{AppError, ContextualError},
-    metrics_name, timed,
 };
+use common_core::{ext::ResultInspectErrAsync, ext::ToOk, time::after};
+use common_crypto::rand_utils;
+use common_metrics::MetricsTimerExt;
+use common_metrics::{metrics_name, timed};
+use common_redis::RedisExt;
 use constants::{PasswordHasher, RedisKeys};
 use file_validator::FileValidator;
 use sea_orm::sqlx::types::uuid;
@@ -16,12 +17,12 @@ use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
 use crate::UserState;
-use types::auth::user::UserId;
-use types::user::{
+use types_identity::auth::user::UserId;
+use types_identity::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
     UserBriefView, UserInfo,
 };
-use types::visual::{VisualToken, VisualTokenStr};
+use types_visual_token::{VisualToken, VisualTokenStr};
 
 use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL};
 

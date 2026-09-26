@@ -16,11 +16,11 @@ pub struct Config {
     pub force_path_style: bool,
 }
 
-#[common::register_async(
+#[common_macros::register_async(
     slice = crate::setup::libs::APP_LIBS,
     ty = crate::setup::InitFn,
 )]
-pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> common::Result<()> {
+pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> common_core::Result<()> {
     debug!("初始化 S3Client lib");
     let config = &config.s3;
     let client = S3Client::new(&config.to_oss_config());

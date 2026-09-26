@@ -4,7 +4,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use common::error::AppError;
+use common_core::error::AppError;
 use std::sync::Arc;
 
 /// 请求体大小预检中间件

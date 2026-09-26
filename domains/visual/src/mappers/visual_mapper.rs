@@ -2,22 +2,21 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common::error::contextual::ext::OptionExt;
-use common::ext::ToOk;
-use common::{
+use common_core::{
     DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
     time::DateTime,
     types::CursorPage,
 };
+use common_core::{error::contextual::ext::OptionExt, ext::ToOk};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ColumnTrait, EntityTrait, ExprTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
-use types::auth::user::UserId;
-use types::cursor::TimeIdCursor;
-use types::visual::{dto::visual::PageDirection, visual::*};
+use types_core::UserId;
+use types_core::cursor::TimeIdCursor;
+use types_visual::{dto::visual::PageDirection, visual::*};
 
 pub(crate) struct VisualMapper;
 

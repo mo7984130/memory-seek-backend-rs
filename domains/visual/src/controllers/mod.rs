@@ -28,7 +28,7 @@ use timeline_stat_controller::TimelineStatController;
 use visual_controller::VisualController;
 use visual_like_controller::VisualLikeController;
 
-use common::axum::controller_router::ControllerRouter;
+use common_web::controller_router::ControllerRouter;
 
 pub struct Controller;
 

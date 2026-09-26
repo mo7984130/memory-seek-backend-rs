@@ -5,22 +5,27 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics", "multi-level-cache/metrics", "oss/metrics"]
-controller = ["dep:axum", "common/axum"]
+metrics = ["multi-level-cache/metrics", "oss/metrics"]
+controller = ["dep:axum", "dep:common-web"]
 audit = ["audit/recording"]
 
 [dependencies]
-common = { path = "../../common", features = [
-    "metrics",
-    "tokio",
-    "multi-cache"
+common-core = { workspace = true, features = [
+    "multi-cache",
+    "tokio"
 ] }
+common-redis = { workspace = true }
+common-crypto = { workspace = true }
+common-db = { workspace = true }
+common-metrics = { workspace = true }
+common-web = { workspace = true, optional = true }
 file-validator.path = "../../libs/file_validator"
 common_macros.path = "../../libs/common_macros"
 audit.path = "../audit"
 constants.path = "../constants"
 oss.path = "../../libs/oss"
-types = { workspace = true, features = ["orm"] }
+types-identity = { workspace = true, features = ["orm"] }
+types-visual-token.workspace = true
 
 multi-level-cache.workspace = true
 serde.workspace = true

@@ -1,0 +1,8 @@
+[package]
+name = "types-backup"
+version = "0.1.0"
+edition = "2024"
+description = "备份上下文契约: 层级与恢复请求"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }

@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 初始化全局 token 加密器: 必须与 server 的 token_cipher 一致,
     // 否则响应中的 avatar_token(VisualTokenStr)无法解密, 反序列化会失败
-    common::utils::init_token_cipher(&common::utils::TokenCipherConfig {
+    common_crypto::init_token_cipher(&common_crypto::TokenCipherConfig {
         key: cfg.token_cipher.key.clone(),
         salt: cfg.token_cipher.salt.clone(),
     });
@@ -64,12 +64,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 并发与执行模式均由 Manager 统一管理; 全局 mode 覆盖所有场景注册
     let manager = ScenarioManager::new(
         ManagerConfig::new(16)
-            .with_run_mode(RunMode::Duration(Duration::from_secs(120)))
+            // .with_run_mode(RunMode::Duration(Duration::from_secs(120)))
+            .with_run_mode(RunMode::Times(128))
             .with_tui()
             .install_ctrl_c(),
     );
     let reports = manager.run_all(&ctx).await;
-    // let reports = manager.run_one("LoginScenario", &ctx).await.unwrap();
+    // let reports = manager
+    //     .run_one("UploadAvatarReplaceScenario", &ctx)
+    //     .await
+    //     .unwrap();
     println!("{}", reports.report_with_color());
 
     Ok(())

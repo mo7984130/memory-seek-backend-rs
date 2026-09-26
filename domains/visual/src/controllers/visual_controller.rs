@@ -8,23 +8,19 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
-use common::{
-    Result,
-    axum::{
-        R,
-        controller_router::ControllerRouter,
-        ext::ToROkExt,
-        extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
-    },
-    types::CursorPage,
+use common_core::{Result, types::CursorPage};
+use common_web::{
+    R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
+    extractors::ValidatedPath, extractors::ValidatedQuery,
 };
-use types::visual::{
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{
     VisualToken,
     dto::visual::{VisualCursorParam, VisualView},
     models::{DeleteVisualsParam, ExistsByHashBatchParam, UploadVisualParam},
     visual::VisualId,
 };
-use types::{auth::user::UserId, cursor::TimeIdCursor};
 
 use crate::{
     services::visual_service::{ImageDownloadData, VisualService},

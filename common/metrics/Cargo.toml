@@ -1,0 +1,13 @@
+[package]
+name = "common-metrics"
+version = "0.1.0"
+edition = "2024"
+description = "可观测性能力: metrics 宏与计时/并发工具"
+
+[features]
+default = ["metrics"]
+metrics = []
+
+[dependencies]
+metrics.workspace = true
+tracing.workspace = true

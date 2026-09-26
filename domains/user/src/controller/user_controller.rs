@@ -2,18 +2,18 @@ use axum::body::Body;
 use axum::extract::State;
 use axum::routing::{get, patch, post, put};
 use axum::{Extension, Router};
-use common::Result;
-use common::axum::{
+use common_core::Result;
+use common_core::error::{AppError, ContextualError};
+use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
 };
-use common::error::{AppError, ContextualError};
 use std::sync::Arc;
-use types::auth::user::UserId;
-use types::visual::VisualTokenStr;
+use types_identity::auth::user::UserId;
+use types_visual_token::VisualTokenStr;
 
 use crate::UserState;
 use crate::services as user_service;
-use types::user::{
+use types_identity::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
     UserBriefView, UserInfo,
 };
@@ -123,7 +123,7 @@ impl UserController {
         let file_data = axum::body::to_bytes(body, AVATAR_MAX_BYTES)
             .await
             .map_err(|error| {
-                if common::axum::body_util::is_body_limit_error(&error) {
+                if common_web::body_util::is_body_limit_error(&error) {
                     return ContextualError::warn_without_source(
                         "avatar_too_large",
                         "头像文件大小超过服务器限制",

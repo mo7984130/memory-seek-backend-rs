@@ -1,7 +1,7 @@
 //! 影像列表 / 哈希查存在 / 时间线统计。
 
-use common::axum::{ErrR, SucR};
-use common::types::CursorPage;
+use common_core::types::CursorPage;
+use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -9,11 +9,11 @@ use memseek_test::{
     scenario::Scenario,
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
-use types::cursor::TimeIdCursor;
-use types::visual::dto::timeline_stat::MonthStat;
-use types::visual::dto::visual::VisualView;
-use types::visual::visual as visual_entity;
-use types::visual::visual::VisualId;
+use types_core::cursor::TimeIdCursor;
+use types_visual::dto::timeline_stat::MonthStat;
+use types_visual::dto::visual::VisualView;
+use types_visual::visual as visual_entity;
+use types_visual::visual::VisualId;
 
 use crate::context::Context;
 

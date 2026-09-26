@@ -9,7 +9,7 @@ mod service;
 #[cfg(feature = "controller")]
 pub use service::AuditQueryer;
 pub use service::AuditRecorder;
-pub use types::audit::{AuditEvent, AuditRecord};
+pub use types_audit::{AuditEvent, AuditRecord};
 
 #[cfg(feature = "controller")]
 pub(crate) mod state;

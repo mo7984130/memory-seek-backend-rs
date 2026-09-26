@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use common::tokio::TaskManager;
-use common::{Pool, types::CursorPage};
+use common_core::types::CursorPage;
+use common_redis::Pool;
+use common_runtime::TaskManager;
 use multi_level_cache::CacheConfig;
 use multi_level_cache::MultiLevelCache;
 use oss::S3Client;
@@ -12,9 +13,9 @@ use std::path::PathBuf;
 #[cfg(feature = "face")]
 use backup::BackupState;
 
-use common::error::ContextualError;
-use types::visual::dto::timeline_stat::MonthStat;
-use types::visual::visual::{VisualId, VisualRecord};
+use common_core::error::ContextualError;
+use types_visual::dto::timeline_stat::MonthStat;
+use types_visual::visual::{VisualId, VisualRecord};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct CachedVisualLike {

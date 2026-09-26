@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use common::ext::ToOk;
-use common::{
+use common_core::ext::ToOk;
+use common_core::{
     DbConn as ConnectionTrait,
     error::contextual::Result,
     time::{DateTime, now},
@@ -9,9 +9,10 @@ use common::{
 };
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
-use types::cursor::TimeIdCursor;
-use types::visual::visual_like::*;
-use types::{auth::user::UserId, visual::visual::VisualId};
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::visual::VisualId;
+use types_visual::visual_like::*;
 
 pub struct VisualLikeMapper;
 

@@ -39,7 +39,7 @@ jobs:
             - uses: Swatinem/rust-cache@v2
 
             - name: Run clippy
-              run: cargo clippy --all-targets -- -D warnings
+              run: cargo clippy --release --all-targets -- -D warnings
 
             - name: Run step_boundary check
               run: cargo run --release --manifest-path tools/step_boundary_check/Cargo.toml -- --root .
@@ -62,7 +62,7 @@ jobs:
             - uses: Swatinem/rust-cache@v2
 
             - name: Run unit tests
-              run: cargo test --lib
+              run: cargo test --release --lib
 
     # build:
     #     name: 构建验证 (${{ matrix.features }})

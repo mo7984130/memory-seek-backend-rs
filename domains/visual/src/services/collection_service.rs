@@ -3,13 +3,10 @@ use crate::mappers::{
 };
 use crate::repo::CollectionRepo;
 use crate::state::VisualState;
-use common::Result;
-use common::ext::ToOk;
-use types::auth::user::UserId;
-use types::visual::collection::CollectionId;
-use types::visual::dto::collection::{
-    CollectionCreateParam, CollectionUpdateParam, CollectionView,
-};
+use common_core::{Result, ext::ToOk};
+use types_core::UserId;
+use types_visual::collection::CollectionId;
+use types_visual::dto::collection::{CollectionCreateParam, CollectionUpdateParam, CollectionView};
 
 pub(crate) struct CollectionService;
 
@@ -29,7 +26,7 @@ impl CollectionService {
         let result = collections
             .into_iter()
             .map(|c| CollectionView::from(c).with_generate_cover_token(user_id))
-            .collect::<common::error::contextual::Result<Vec<_>>>()?;
+            .collect::<common_core::error::contextual::Result<Vec<_>>>()?;
 
         Ok(result)
     }
@@ -106,7 +103,7 @@ impl CollectionService {
         &self,
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::visual_service::VisualDeleteContext,
-    ) -> common::error::contextual::Result<()> {
+    ) -> common_core::error::contextual::Result<()> {
         let visual_ids = ctx.visual_ids();
         let affected = CollectionVisualMapper::delete_by_visual_ids(txn, &visual_ids).await?;
         CollectionMapper::update_visual_count_delta_batch(txn, &affected).await?;

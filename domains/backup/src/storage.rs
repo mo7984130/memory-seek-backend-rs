@@ -4,7 +4,7 @@ use crate::manifest::{BackupManifest, FILE_NAME};
 use oss::S3Client;
 use std::path::PathBuf;
 
-pub use types::backup::{BackupSource, BackupTier};
+pub use types_backup::{BackupSource, BackupTier};
 
 /// 备份存储管理器
 #[derive(Clone)]

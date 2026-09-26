@@ -5,8 +5,9 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics"]
+metrics = ["common-metrics/metrics"]
 
 [dependencies]
-common.path = "../../common"
+common-core = { workspace = true }
+common-metrics = { workspace = true }
 lettre.workspace = true

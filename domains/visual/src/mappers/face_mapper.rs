@@ -1,4 +1,4 @@
-use common::{
+use common_core::{
     DbConn as ConnectionTrait,
     error::contextual::ext::{OptionExt, UintExt},
     error::{AppError, ContextualError, contextual::Result},
@@ -9,10 +9,8 @@ use sea_orm::{
     ColumnTrait, Condition, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Expr, Query},
 };
-use types::{
-    cursor::TimeIdCursor,
-    visual::{face::*, person::PersonId, visual::VisualId},
-};
+use types_core::cursor::TimeIdCursor;
+use types_visual::{face::*, person::PersonId, visual::VisualId};
 
 pub struct FaceMapper;
 
@@ -187,32 +185,32 @@ impl FaceMapper {
         previous_id: VisualId,
     ) -> Result<Vec<(VisualId, String)>> {
         let condition = if full {
-            Condition::all().add(types::visual::visual::Column::Id.gt(previous_id))
+            Condition::all().add(types_visual::visual::Column::Id.gt(previous_id))
         } else {
             let subquery = Query::select()
                 .expr(Expr::val(1))
-                .from(types::visual::face::Entity)
+                .from(types_visual::face::Entity)
                 .and_where(
                     Expr::col((
-                        types::visual::face::Entity,
-                        types::visual::face::Column::VisualId,
+                        types_visual::face::Entity,
+                        types_visual::face::Column::VisualId,
                     ))
                     .equals((
-                        types::visual::visual::Entity,
-                        types::visual::visual::Column::Id,
+                        types_visual::visual::Entity,
+                        types_visual::visual::Column::Id,
                     )),
                 )
                 .to_owned();
             Condition::all()
-                .add(types::visual::visual::Column::Id.gt(previous_id))
+                .add(types_visual::visual::Column::Id.gt(previous_id))
                 .add(Expr::exists(subquery).not())
         };
-        types::visual::visual::Entity::find()
+        types_visual::visual::Entity::find()
             .select_only()
-            .column(types::visual::visual::Column::Id)
-            .column(types::visual::visual::Column::FileId)
+            .column(types_visual::visual::Column::Id)
+            .column(types_visual::visual::Column::FileId)
             .filter(condition)
-            .order_by(types::visual::visual::Column::Id, sea_orm::Order::Asc)
+            .order_by(types_visual::visual::Column::Id, sea_orm::Order::Asc)
             .limit(size)
             .into_tuple::<(VisualId, String)>()
             .all(db)
@@ -256,28 +254,28 @@ impl FaceMapper {
             .expr(Expr::val(1))
             .from(Entity)
             .and_where(Expr::col((Entity, Column::VisualId)).equals((
-                types::visual::visual::Entity,
-                types::visual::visual::Column::Id,
+                types_visual::visual::Entity,
+                types_visual::visual::Column::Id,
             )))
             .and_where(Column::PersonId.is_null())
             .to_owned();
 
-        let mut query = types::visual::visual::Entity::find()
+        let mut query = types_visual::visual::Entity::find()
             .filter(Expr::exists(subquery))
-            .order_by(types::visual::visual::Column::CreatedAt, Order::Desc)
-            .order_by(types::visual::visual::Column::Id, Order::Desc)
+            .order_by(types_visual::visual::Column::CreatedAt, Order::Desc)
+            .order_by(types_visual::visual::Column::Id, Order::Desc)
             .limit(size + 1);
 
         if let Some(cursor) = cursor {
             query = query.filter(cursor.before(
-                types::visual::visual::Column::CreatedAt,
-                types::visual::visual::Column::Id,
+                types_visual::visual::Column::CreatedAt,
+                types_visual::visual::Column::Id,
             ));
         }
 
         let records = query
             .select_only()
-            .column(types::visual::visual::Column::Id)
+            .column(types_visual::visual::Column::Id)
             .into_tuple::<VisualId>()
             .all(db)
             .await?;
@@ -296,28 +294,28 @@ impl FaceMapper {
             .expr(Expr::val(1))
             .from(Entity)
             .and_where(Expr::col((Entity, Column::VisualId)).equals((
-                types::visual::visual::Entity,
-                types::visual::visual::Column::Id,
+                types_visual::visual::Entity,
+                types_visual::visual::Column::Id,
             )))
             .and_where(Column::PersonId.eq(person_id))
             .to_owned();
 
-        let mut query = types::visual::visual::Entity::find()
+        let mut query = types_visual::visual::Entity::find()
             .filter(Expr::exists(subquery))
-            .order_by(types::visual::visual::Column::CreatedAt, Order::Desc)
-            .order_by(types::visual::visual::Column::Id, Order::Desc)
+            .order_by(types_visual::visual::Column::CreatedAt, Order::Desc)
+            .order_by(types_visual::visual::Column::Id, Order::Desc)
             .limit(size + 1);
 
         if let Some(cursor) = cursor {
             query = query.filter(cursor.before(
-                types::visual::visual::Column::CreatedAt,
-                types::visual::visual::Column::Id,
+                types_visual::visual::Column::CreatedAt,
+                types_visual::visual::Column::Id,
             ));
         }
 
         let records = query
             .select_only()
-            .column(types::visual::visual::Column::Id)
+            .column(types_visual::visual::Column::Id)
             .into_tuple::<VisualId>()
             .all(db)
             .await?;

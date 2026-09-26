@@ -5,24 +5,16 @@ use axum::{
     extract::State,
     routing::{delete, get},
 };
-use common::{
-    Result,
-    axum::{
-        R,
-        controller_router::ControllerRouter,
-        ext::ToROkExt,
-        extractors::{ValidatedJson, ValidatedPath, ValidatedQuery},
-    },
-    types::CursorPage,
+use common_core::{Result, types::CursorPage};
+use common_web::{
+    R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
+    extractors::ValidatedPath, extractors::ValidatedQuery,
 };
-use types::{
-    auth::user::UserId,
-    cursor::TimeIdCursor,
-    visual::{
-        comment::CommentId,
-        dto::comment::{CommentCursorPageParam, CommentPublishParam, CommentView},
-        visual::VisualId,
-    },
+use types_core::cursor::TimeIdCursor;
+use types_identity::auth::user::UserId;
+use types_visual::{
+    comment::CommentId, dto::comment::CommentCursorPageParam, dto::comment::CommentPublishParam,
+    dto::comment::CommentView, visual::VisualId,
 };
 
 use crate::{services::comment_service::CommentService, state::VisualState};

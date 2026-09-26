@@ -1,4 +1,4 @@
-use common::axum::{ErrR, SucR};
+use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
@@ -7,7 +7,7 @@ use memseek_test::{
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, SelectExt};
 use serde_json::json;
-use types::auth::{self, LoginResponse, RefreshAccessTokenResponse, user::UserId};
+use types_identity::auth::{self, LoginResponse, RefreshAccessTokenResponse, user::UserId};
 
 use crate::context::Context;
 

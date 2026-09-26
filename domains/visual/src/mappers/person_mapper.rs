@@ -1,4 +1,4 @@
-use common::{
+use common_core::{
     DbConn as ConnectionTrait,
     error::contextual::ext::{OptionExt, UintExt},
     error::{AppError, contextual::Result},
@@ -11,13 +11,8 @@ use sea_orm::{
     ColumnTrait, Condition, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Expr, extension::postgres::PgExpr},
 };
-use types::{
-    cursor::CountIdCursor,
-    visual::{
-        face::{FaceId, FaceRecord},
-        person::*,
-    },
-};
+use types_core::cursor::CountIdCursor;
+use types_visual::{face::FaceId, face::FaceRecord, person::*};
 
 use crate::mappers::{face_mapper::FaceMapper, visual_mapper::VisualMapper};
 

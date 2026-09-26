@@ -1,9 +1,9 @@
-use common::Result;
+use common_core::Result;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
-use types::auth::user::UserId;
-use types::user::UserBriefView;
-use types::visual::VisualToken;
+use types_identity::auth::user::UserId;
+use types_identity::user::UserBriefView;
+use types_visual_token::VisualToken;
 
 /// 用户信息数据库查询结果（后端内部使用）
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
@@ -32,7 +32,7 @@ impl UserBriefRow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::utils::{TokenCipherConfig, init_token_cipher};
+    use common_crypto::{TokenCipherConfig, init_token_cipher};
 
     fn init_test_cipher() {
         init_token_cipher(&TokenCipherConfig {

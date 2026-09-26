@@ -5,10 +5,11 @@ edition = "2024"
 
 [features]
 default = []
-metrics = ["common/metrics"]
+metrics = ["common-metrics/metrics"]
 
 [dependencies]
-common.path = "../../common"
+common-core = { workspace = true }
+common-metrics = { workspace = true }
 serde.workspace = true
 bytes.workspace = true
 reqwest.workspace = true
