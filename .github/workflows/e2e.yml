@@ -34,15 +34,15 @@ jobs:
                   cache-on-failure: true
 
             - name: Build server
-              run: cargo build --features "$FEATURES"
+              run: cargo build --release --features "$FEATURES"
 
             - name: Prepare runtime libraries
               # insight-face-rs 以 load-dynamic 方式加载 onnxruntime, 需随二进制放置 .so
               run: |
-                  mkdir -p target/debug/libs
+                  mkdir -p target/release/libs
                   find thirdparty \( -type f -o -type l \) \
                     \( -name "*.so" -o -name "*.so.*" \) \
-                    -exec cp -a {} target/debug/libs/ \;
+                    -exec cp -a {} target/release/libs/ \;
 
             - name: 启动依赖容器 (PG / valkey / MailHog / rustfs)
               run: docker compose -f tests/docker-compose.yml up -d --wait
@@ -51,9 +51,9 @@ jobs:
               # tests/config.yml 的 face_engine 模型路径为 `./models/...`,
               # 故以 tests/ 为工作目录启动; 端口 7985 与 example.e2e.config.yml 一致。
               env:
-                  LD_LIBRARY_PATH: ../target/debug/libs
+                  LD_LIBRARY_PATH: ../target/release/libs
               run: |
-                  ( cd tests && exec ../target/debug/memory-seek-server --config config.yml ) \
+                  ( cd tests && exec ../target/release/memory-seek-server --config config.yml ) \
                     > server.log 2>&1 &
                   echo $! > server.pid
                   for i in $(seq 1 60); do
@@ -72,7 +72,7 @@ jobs:
               # 本地 e2e.config.yml 不入库, 由示例复制生成
               run: |
                   cp tests/e2e/example.e2e.config.yml tests/e2e/e2e.config.yml
-                  cargo run -p e2e -- -c tests/e2e/e2e.config.yml
+                  cargo run -p e2e --release -- -c tests/e2e/e2e.config.yml
 
             - name: 失败诊断
               if: failure()
