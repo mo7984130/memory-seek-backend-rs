@@ -19,12 +19,14 @@
 # 具体子目录由各类型的 export_to 属性决定(auth / user / visual / audit / common)。
 #
 # 用法: ./build/gen-ts.sh
+#
+# profile: 与仓库约定一致, 一律 --release(见 AGENTS.md 的"构建 profile")。
 set -e
 
 cd "$(dirname "$0")/.."
 
 echo '=== 生成 TS 类型契约 ==='
-cargo test \
+cargo test --release \
   -p types-core \
   -p common-core \
   -p types-visual-token \
