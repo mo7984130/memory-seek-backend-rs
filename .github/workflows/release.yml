@@ -34,7 +34,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build release binary
-        run: cargo build --release --all-features
+        # 只构建 server: 仓库根是 virtual manifest 且未设 default-members,
+        # 不带 -p 会把全部成员(含 tests/e2e)一起编译, 白白增加构建时间与缓存体积
+        run: cargo build --release --all-features -p server
 
       - name: 打包 Release
         run: |
