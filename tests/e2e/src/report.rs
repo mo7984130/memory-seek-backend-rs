@@ -139,6 +139,8 @@ pub struct JsonEnvironment {
     pub prepared: bool,
     /// 场景白名单(空字符串 = 全部场景)
     pub scenario_filter: String,
+    /// 场景黑名单(空字符串 = 不排除)
+    pub scenario_exclude: String,
     pub max_failure_rate: f64,
     pub max_timeout_rate: f64,
 }
@@ -239,6 +241,7 @@ impl JsonReport {
                 },
                 prepared,
                 scenario_filter: run.scenarios.clone(),
+                scenario_exclude: run.exclude.clone(),
                 max_failure_rate: run.max_failure_rate,
                 max_timeout_rate: run.max_timeout_rate,
             },
