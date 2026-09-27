@@ -54,7 +54,7 @@ services:
             - "8025:8025"
 
     rustfs:
-        image: docker.1panel.live/rustfs/rustfs:1.0.0-rc.4
+        image: docker.1panel.live/rustfs/rustfs:1.0.0
         container_name: memory-seek-test-rustfs
         command: /data
         environment:
@@ -82,3 +82,45 @@ services:
             mc mb --ignore-existing local/memory-seek-test;
             echo 'bucket created';
             "
+
+    server:
+        # 直接复用本地构建产物(build/build.sh 输出到 target/dist),
+        # 底座与 Dockerfile.build 一致(ubuntu 22.04), 保证 glibc 兼容。
+        # 官方镜像在 1panel 加速器下需带 library/ 前缀
+        image: docker.1panel.live/library/ubuntu:22.04
+        container_name: memory-seek-test-server
+        depends_on:
+            postgres-init:
+                condition: service_completed_successfully
+            valkey:
+                condition: service_started
+            mailhog:
+                condition: service_started
+            rustfs-init:
+                condition: service_completed_successfully
+        volumes:
+            - ../../target/dist/memory-seek-server:/app/memory-seek-server:ro
+            - ../../target/dist/libs:/app/libs:ro
+            - ../../target/dist/models:/app/models:ro
+            - ./config.yml:/app/config.yml:ro
+        environment:
+            # onnxruntime 等动态库
+            # LD_LIBRARY_PATH: /app/libs
+            # 容器内通过服务名访问依赖, 覆盖 config.yml 中的 localhost 映射地址
+            MEMORY_SEEK_DATABASE__URL: "postgres://memory_seek_test:memory_seek_test@postgres:5432/memory_seek_test"
+            MEMORY_SEEK_REDIS__URL: "redis://valkey:6379"
+            MEMORY_SEEK_SMTP__SERVER: mailhog
+            MEMORY_SEEK_S3__ENDPOINT: "http://rustfs:9000"
+            # config.yml 中模型路径指向宿主机的 ./target/dist/models, 容器内改为挂载路径
+            MEMORY_SEEK_FACE_ENGINE__DETECT_MODEL_PATH: /app/models/det.onnx
+            MEMORY_SEEK_FACE_ENGINE__RECOGNIZE_MODEL_PATH: /app/models/rec.onnx
+        ports:
+            - "7985:7985"
+        command: /app/memory-seek-server -c /app/config.yml
+        healthcheck:
+            # ubuntu:22.04 无 curl, 用 bash 的 /dev/tcp 探活
+            test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/7985' || exit 1"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+            start_period: 10s

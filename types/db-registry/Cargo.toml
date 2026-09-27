@@ -1,0 +1,11 @@
+[package]
+name = "types-db-registry"
+version = "0.1.0"
+edition = "2024"
+description = "实体注册表契约: schema 前缀与索引初始化回调的自我登记点"
+
+[dependencies]
+common-core.path = "../../common/core"
+
+linkme.workspace = true
+sea-orm = { workspace = true, features = ["sqlx-postgres", "macros"] }

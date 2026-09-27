@@ -1,5 +1,5 @@
-use common::error::contextual::ext::OptionExt;
-use common::error::{AppError, contextual::Result};
+use common_core::error::contextual::ext::OptionExt;
+use common_core::error::{AppError, contextual::Result};
 
 /// 用户领域中必须存在用户的查询结果扩展。
 pub(crate) trait ContextualErrorExt<T> {

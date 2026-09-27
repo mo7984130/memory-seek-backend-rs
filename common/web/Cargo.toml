@@ -1,0 +1,15 @@
+[package]
+name = "common-web"
+version = "0.1.0"
+edition = "2024"
+description = "HTTP 适配能力: axum 提取器、路由与响应辅助"
+
+[dependencies]
+common-core = { path = "../core", features = ["axum"] }
+
+axum.workspace = true
+validator.workspace = true
+http-body-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true

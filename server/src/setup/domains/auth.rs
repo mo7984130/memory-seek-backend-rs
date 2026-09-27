@@ -1,13 +1,14 @@
 use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
 use auth::AuthState;
-use common::{Result, axum::controller_router::ControllerRouter};
+use common_core::Result;
+use common_web::controller_router::ControllerRouter;
 use email::EmailClient;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{debug, info};
 
 /// 注册 Auth 模块路由
-#[common::register_async(
+#[common_macros::register_async(
     slice = crate::setup::domains::APP_DOMAINS,
     ty = crate::setup::InitFn,
 )]
@@ -24,7 +25,7 @@ pub async fn init(_config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .miss_dep("auth", "DatabaseConnection")?
             .clone(),
         register
-            .get::<common::Pool>()
+            .get::<common_redis::Pool>()
             .miss_dep("auth", "RedisPool")?
             .clone(),
         register

@@ -94,7 +94,7 @@
         func: 'update_avatar',
         steps: [
           // 写法二示例:显式 :duration_seconds 后缀的 histogram
-          { metric: 'validate_image:duration_seconds', label: '图片校验' },
+          { metric: 'validate_image:duration_seconds', label: '影像校验' },
           { metric: 's3_upload', label: 'S3 上传' },
           { metric: 'db_transaction', label: '数据库事务' },
           { metric: 'cache_invalidate', label: '缓存失效' },
@@ -140,24 +140,24 @@
     ],
   },
 
-  photo: {
-    crate: 'photo',
+  visual: {
+    crate: 'visual',
     ops: [
       {
-        rowTitle: '查询照片列表 (get_photo_cursor_page)',
-        name: '查询照片列表',
-        func: 'get_photo_cursor_page',
+        rowTitle: '查询影像列表 (get_visual_cursor_page)',
+        name: '查询影像列表',
+        func: 'get_visual_cursor_page',
         steps: [
           { metric: 'find_cursor_page_ids', label: '查询分页 ID' },
-          { metric: 'load_photos_info', label: '加载照片信息' },
+          { metric: 'load_visuals_info', label: '加载影像信息' },
         ],
       },
       {
-        rowTitle: '上传照片 (upload_photo)',
-        name: '上传照片',
-        func: 'upload_photo',
+        rowTitle: '上传影像 (upload_visual)',
+        name: '上传影像',
+        func: 'upload_visual',
         steps: [
-          { metric: 'validate_photo:duration_seconds', label: '图片校验' },
+          { metric: 'validate_visual:duration_seconds', label: '影像校验' },
           { metric: 'md5_hash:duration_seconds', label: 'MD5 计算' },
           { metric: 's3_upload', label: 'S3 上传' },
           { metric: 'db_insert', label: '数据库插入' },
@@ -167,15 +167,15 @@
         ],
       },
       {
-        rowTitle: '检查照片去重 (exists_by_md5_batch)',
-        name: '检查照片去重',
+        rowTitle: '检查影像去重 (exists_by_md5_batch)',
+        name: '检查影像去重',
         func: 'exists_by_md5_batch',
         steps: [],
       },
       {
-        rowTitle: '删除照片 (delete_photos)',
-        name: '删除照片',
-        func: 'delete_photos',
+        rowTitle: '删除影像 (delete_visuals)',
+        name: '删除影像',
+        func: 'delete_visuals',
         steps: [
           { metric: 'db_transaction', label: '数据库事务' },
           { metric: 's3_delete_batch', label: 'S3 批量删除' },
@@ -185,8 +185,8 @@
         ],
       },
       {
-        rowTitle: '获取图片 (download_image)',
-        name: '获取图片',
+        rowTitle: '获取影像 (download_image)',
+        name: '获取影像',
         func: 'download_image',
         steps: [
           { metric: 's3_download_process', label: 'S3 下载处理' },
@@ -226,33 +226,33 @@
         ],
       },
       {
-        rowTitle: '获取照片收藏夹 (get_collections_by_photo)',
-        name: '获取照片收藏夹',
-        func: 'get_collections_by_photo',
+        rowTitle: '获取影像收藏夹 (get_collections_by_visual)',
+        name: '获取影像收藏夹',
+        func: 'get_collections_by_visual',
         steps: [],
       },
       {
-        rowTitle: '获取收藏夹照片 (get_collection_photos)',
-        name: '获取收藏夹照片',
-        func: 'get_collection_photos',
+        rowTitle: '获取收藏夹影像 (get_collection_visuals)',
+        name: '获取收藏夹影像',
+        func: 'get_collection_visuals',
         steps: [
-          { metric: 'query_photo_ids', label: '查询照片 ID' },
-          { metric: 'load_photos_info', label: '加载照片信息' },
+          { metric: 'query_visual_ids', label: '查询影像 ID' },
+          { metric: 'load_visuals_info', label: '加载影像信息' },
         ],
       },
       {
-        rowTitle: '添加收藏夹照片 (add_collection_photos)',
-        name: '添加收藏夹照片',
-        func: 'add_collection_photos',
+        rowTitle: '添加收藏夹影像 (add_collection_visuals)',
+        name: '添加收藏夹影像',
+        func: 'add_collection_visuals',
         steps: [
           { metric: 'auth_check', label: '权限校验' },
           { metric: 'db_transaction', label: '数据库事务' },
         ],
       },
       {
-        rowTitle: '移除收藏夹照片 (remove_collection_photos)',
-        name: '移除收藏夹照片',
-        func: 'remove_collection_photos',
+        rowTitle: '移除收藏夹影像 (remove_collection_visuals)',
+        name: '移除收藏夹影像',
+        func: 'remove_collection_visuals',
         steps: [
           { metric: 'db_transaction', label: '数据库事务' },
         ],
@@ -271,7 +271,7 @@
         func: 'get_comment_cursor_page',
         steps: [
           { metric: 'query_hot_comments', label: '热门评论查询' },
-          { metric: 'query_by_photo_id', label: '评论列表查询' },
+          { metric: 'query_by_visual_id', label: '评论列表查询' },
           { metric: 'query_is_like', label: '点赞状态查询' },
         ],
       },
@@ -300,25 +300,25 @@
         ],
       },
       {
-        rowTitle: '点赞照片 (like_photo)',
-        name: '点赞照片',
-        func: 'like_photo',
+        rowTitle: '点赞影像 (like_visual)',
+        name: '点赞影像',
+        func: 'like_visual',
         steps: [
           { metric: 'db_transaction', label: '数据库事务' },
         ],
       },
       {
-        rowTitle: '取消点赞照片 (unlike_photo)',
-        name: '取消点赞照片',
-        func: 'unlike_photo',
+        rowTitle: '取消点赞影像 (unlike_visual)',
+        name: '取消点赞影像',
+        func: 'unlike_visual',
         steps: [
           { metric: 'db_transaction', label: '数据库事务' },
         ],
       },
       {
-        rowTitle: '查询点赞照片 (get_user_liked_photos)',
-        name: '查询点赞照片',
-        func: 'get_user_liked_photos',
+        rowTitle: '查询点赞影像 (get_user_liked_visuals)',
+        name: '查询点赞影像',
+        func: 'get_user_liked_visuals',
         steps: [
           { metric: 'query_ids', label: '查询点赞 ID' },
         ],
@@ -381,9 +381,9 @@
         steps: [
           { metric: 'query', label: '批次查询' },
           { metric: 'download_batch', label: '批量下载' },
-          { metric: 'photo_download', label: '单图下载' },
-          { metric: 'photo_decode', label: '图片解码' },
-          { metric: 'photo_detect', label: '单图检测' },
+          { metric: 'visual_download', label: '单图下载' },
+          { metric: 'visual_decode', label: '影像解码' },
+          { metric: 'visual_detect', label: '单图检测' },
           { metric: 'insert', label: '写入数据库' },
         ],
       },
@@ -396,33 +396,33 @@
         ],
       },
       {
-        rowTitle: '获取照片信息 (get_photo_info)',
-        name: '获取照片信息',
-        func: 'get_photo_info',
+        rowTitle: '获取影像信息 (get_visual_info)',
+        name: '获取影像信息',
+        func: 'get_visual_info',
         steps: [],
       },
       {
-        rowTitle: '获取人物照片 (get_person_photos)',
-        name: '获取人物照片',
-        func: 'get_person_photos',
+        rowTitle: '获取人物影像 (get_person_visuals)',
+        name: '获取人物影像',
+        func: 'get_person_visuals',
         steps: [
-          { metric: 'query_photo_ids', label: '查询照片 ID' },
-          { metric: 'load_photos_info', label: '加载照片信息' },
+          { metric: 'query_visual_ids', label: '查询影像 ID' },
+          { metric: 'load_visuals_info', label: '加载影像信息' },
         ],
       },
       {
-        rowTitle: '获取照片人脸 (get_faces_by_photo_id)',
-        name: '获取照片人脸',
-        func: 'get_faces_by_photo_id',
+        rowTitle: '获取影像人脸 (get_faces_by_visual_id)',
+        name: '获取影像人脸',
+        func: 'get_faces_by_visual_id',
         steps: [],
       },
       {
-        rowTitle: '获取未分配人脸照片 (get_unassigned_face_photos)',
-        name: '获取未分配人脸照片',
-        func: 'get_unassigned_face_photos',
+        rowTitle: '获取未分配人脸影像 (get_unassigned_face_visuals)',
+        name: '获取未分配人脸影像',
+        func: 'get_unassigned_face_visuals',
         steps: [
-          { metric: 'query_unassigned_face_photo_ids', label: '查询未分配人脸照片 ID' },
-          { metric: 'load_photos_info', label: '加载照片信息' },
+          { metric: 'query_unassigned_face_visual_ids', label: '查询未分配人脸影像 ID' },
+          { metric: 'load_visuals_info', label: '加载影像信息' },
         ],
       },
       {

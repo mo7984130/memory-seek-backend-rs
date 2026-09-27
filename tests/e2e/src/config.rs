@@ -7,8 +7,10 @@
 //! 如 `E2E__SEED__AUTH_USERS=100`。
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use config::{Config, Environment, File};
+use memseek_test::{BackoffConfig, RunMode};
 use serde::Deserialize;
 use tracing::info;
 
@@ -29,6 +31,128 @@ pub struct E2eConfig {
     pub token_cipher: TokenCipherConfig,
 
     pub seed: SeedConfig,
+
+    /// 运行参数(执行模式 / 并发 / 场景集 / 判定), 缺省时用内置默认值
+    #[serde(default)]
+    pub run: RunConfig,
+}
+
+/// e2e 运行参数。
+///
+/// 环境变量前缀 `E2E__RUN__` 可覆盖任意字段(如 `E2E__RUN__CONCURRENCY=32`),
+/// 因此 CI 无需为不同用途生成不同的配置文件。
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct RunConfig {
+    /// 执行模式: `times` = 固定轮次(正确性验收); `duration` = 固定时长(压测)
+    pub mode: RunModeKind,
+
+    /// `mode: times` 时的总轮次(所有并发任务之和)
+    pub times: u64,
+
+    /// `mode: duration` 时的时长(秒)
+    pub duration_secs: u64,
+
+    /// 并发度。必须 <= 种子池大小(auth_users / visual_users / uit_users),
+    /// 场景按 `task.index` 取账号, 池子不够会串号
+    pub concurrency: u64,
+
+    /// 场景白名单(逗号分隔, 空 = 全部场景)。用于压测裁剪或单场景调试
+    pub scenarios: String,
+
+    /// 超时退避初始值(毫秒), 0 = 关闭。压测建议关闭, 否则过载会自动减速
+    pub backoff_ms: u64,
+
+    /// 是否执行前置准备(preprea: 清空种子并重新灌入)。
+    /// 外部被测目标、或连续多轮压测复用同一份种子时置 false
+    pub prepare: bool,
+
+    /// 允许的失败率上限(失败 = run 失败 + validate 未通过), 超过则退出码 1
+    pub max_failure_rate: f64,
+
+    /// 允许的超时率上限(timeouts / times), 超过则退出码 1
+    pub max_timeout_rate: f64,
+}
+
+impl Default for RunConfig {
+    fn default() -> Self {
+        Self {
+            mode: RunModeKind::Times,
+            times: 128,
+            duration_secs: 120,
+            concurrency: 32,
+            scenarios: String::new(),
+            backoff_ms: 0,
+            prepare: true,
+            max_failure_rate: 0.0,
+            max_timeout_rate: 0.0,
+        }
+    }
+}
+
+/// 场景执行模式(与 `memseek_test::RunMode` 一一对应)。
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RunModeKind {
+    /// 固定轮次: 正确性验收
+    Times,
+    /// 固定时长: 压测
+    Duration,
+}
+
+impl RunConfig {
+    /// 构造框架执行模式。
+    pub fn run_mode(&self) -> RunMode {
+        match self.mode {
+            RunModeKind::Times => RunMode::Times(self.times),
+            RunModeKind::Duration => RunMode::Duration(Duration::from_secs(self.duration_secs)),
+        }
+    }
+
+    /// 场景白名单(空 = 全部场景)。
+    pub fn scenario_whitelist(&self) -> Vec<&str> {
+        self.scenarios
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect()
+    }
+
+    /// 超时退避配置(未启用时为 `None`, 超时后立即进入下一轮)。
+    pub fn backoff(&self) -> Option<BackoffConfig> {
+        (self.backoff_ms > 0).then(|| {
+            BackoffConfig::new(
+                Duration::from_millis(self.backoff_ms),
+                Duration::from_secs(3),
+                2.0,
+            )
+        })
+    }
+
+    /// 参数自检(启动即失败, 避免跑出一堆无意义结果)。
+    pub fn validate(&self) -> Result<(), String> {
+        if self.concurrency == 0 {
+            return Err("run.concurrency 不能为 0".to_string());
+        }
+        match self.mode {
+            RunModeKind::Times if self.times == 0 => {
+                return Err("run.mode=times 时 run.times 不能为 0".to_string());
+            }
+            RunModeKind::Duration if self.duration_secs == 0 => {
+                return Err("run.mode=duration 时 run.duration_secs 不能为 0".to_string());
+            }
+            _ => {}
+        }
+        for (name, rate) in [
+            ("max_failure_rate", self.max_failure_rate),
+            ("max_timeout_rate", self.max_timeout_rate),
+        ] {
+            if !(0.0..=1.0).contains(&rate) {
+                return Err(format!("run.{name} 必须落在 [0, 1]"));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,16 +211,16 @@ pub struct TokenCipherConfig {
 #[derive(Debug, Deserialize)]
 pub struct SeedConfig {
     pub auth_users: u64,
-    pub photo_users: u64,
-    pub photos_per_user: u64,
+    pub visual_users: u64,
+    pub visuals_per_user: u64,
     pub faces_per_person: u64,
     /// user 模块专属测试用户池大小(uit_user_* / uit_pwd_*), 需 >= Manager 并发度
     pub uit_users: u64,
 }
 
 impl SeedConfig {
-    pub fn photo_count(&self) -> u64 {
-        self.photo_users * self.photos_per_user
+    pub fn visual_count(&self) -> u64 {
+        self.visual_users * self.visuals_per_user
     }
 }
 

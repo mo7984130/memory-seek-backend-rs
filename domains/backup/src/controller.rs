@@ -1,15 +1,11 @@
 use crate::service::BackupService;
 use crate::state::BackupState;
 use axum::{Extension, Json, Router, extract::State, routing::post};
-use common::{
-    Result,
-    axum::{R, controller_router::ControllerRouter},
-};
+use common_core::Result;
+use common_web::{R, controller_router::ControllerRouter};
 use std::sync::Arc;
-use types::{
-    auth::user::{AdminId, UserId},
-    backup::RestoreRequest,
-};
+use types_backup::RestoreRequest;
+use types_core::{AdminId, UserId};
 
 pub struct BackupController;
 

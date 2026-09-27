@@ -1,0 +1,27 @@
+[package]
+name = "types-identity"
+version = "0.1.0"
+edition = "2024"
+description = "用户身份上下文契约: 认证 DTO、用户资料 DTO 与 auth_user 实体"
+
+[features]
+default = []
+orm = ["dep:sea-orm", "dep:linkme", "dep:types-db-registry", "types-core/orm"]
+ts = ["dep:ts-rs", "types-core/ts", "types-visual-token/ts"]
+
+[dependencies]
+types-core.workspace = true
+types-visual-token.workspace = true
+common-core.path = "../../common/core"
+
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+validator.workspace = true
+regex.workspace = true
+derive_more.workspace = true
+
+linkme = { workspace = true, optional = true }
+
+types-db-registry = { workspace = true, optional = true }
+sea-orm = { workspace = true, features = ["sqlx-postgres", "macros", "entity-registry"], optional = true }
+ts-rs = { workspace = true, optional = true }

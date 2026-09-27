@@ -2,8 +2,7 @@ pub mod bases;
 pub mod domains;
 pub mod libs;
 
-use common::Result;
-use common::utils::TypeMap;
+use common_core::{Result, TypeMap};
 use tokio_util::sync::CancellationToken;
 
 use crate::config::AppConfig;

@@ -7,7 +7,7 @@ use retry::metric_name;
 use retry::retry_429;
 
 use bytes::Bytes;
-use common::time::Duration;
+use common_core::time::Duration;
 use futures::{Stream, StreamExt};
 use s3::creds::Credentials;
 use s3::request::ResponseData;
@@ -249,9 +249,9 @@ impl S3Client {
         process: Option<String>,
     ) -> Result<String, OssError> {
         #[cfg(feature = "metrics")]
-        let _timer = common::utils::MetricsTimer::start(metric_name("sign", "duration_seconds"));
+        let _timer = common_metrics::MetricsTimer::start(metric_name("sign", "duration_seconds"));
         #[cfg(feature = "metrics")]
-        common::metrics::counter!(metric_name("sign", "requests")).increment(1);
+        common_metrics::metrics::counter!(metric_name("sign", "requests")).increment(1);
 
         let custom_queries = if let Some(p) = process {
             let mut queries = HashMap::new();
@@ -270,7 +270,7 @@ impl S3Client {
             Ok(url) => Ok(url),
             Err(error) => {
                 #[cfg(feature = "metrics")]
-                common::metrics::counter!(metric_name("sign", "errors")).increment(1);
+                common_metrics::metrics::counter!(metric_name("sign", "errors")).increment(1);
                 Err(OssError::from(error))
             }
         }
@@ -317,9 +317,9 @@ impl S3Client {
     /// - `OssError`: OSS 列举操作失败
     pub async fn exists(&self, key: &str) -> Result<bool, OssError> {
         #[cfg(feature = "metrics")]
-        let _timer = common::utils::MetricsTimer::start(metric_name("exists", "duration_seconds"));
+        let _timer = common_metrics::MetricsTimer::start(metric_name("exists", "duration_seconds"));
         #[cfg(feature = "metrics")]
-        common::metrics::counter!(metric_name("exists", "requests")).increment(1);
+        common_metrics::metrics::counter!(metric_name("exists", "requests")).increment(1);
 
         let key = key.trim_start_matches('/');
         let results = match self
@@ -332,7 +332,7 @@ impl S3Client {
             Ok(results) => results,
             Err(error) => {
                 #[cfg(feature = "metrics")]
-                common::metrics::counter!(metric_name("exists", "errors")).increment(1);
+                common_metrics::metrics::counter!(metric_name("exists", "errors")).increment(1);
                 return Err(error);
             }
         };
@@ -341,6 +341,34 @@ impl S3Client {
             .iter()
             .flat_map(|result| result.contents.iter())
             .any(|object| object.key.as_str() == key))
+    }
+
+    /// 列出指定前缀下的全部对象 key（底层自动处理分页）。
+    ///
+    /// # 参数
+    /// - `prefix`: 对象键前缀，如 `backup/scheduled/daily/`
+    ///
+    /// # 返回
+    /// 匹配前缀的全部对象 key 列表
+    ///
+    /// # 错误
+    /// - `OssError`: OSS 列举操作失败
+    pub async fn list(&self, prefix: &str) -> Result<Vec<String>, OssError> {
+        retry_429("list", prefix, || async {
+            self.inner
+                .bucket
+                .list(prefix.to_string(), None)
+                .await
+                .map_err(OssError::from)
+        })
+        .await
+        .map(|results| {
+            results
+                .into_iter()
+                .flat_map(|result| result.contents.into_iter())
+                .map(|object| object.key)
+                .collect()
+        })
     }
 
     /// 获取对象存储的流式下载响应.

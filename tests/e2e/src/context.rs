@@ -25,8 +25,36 @@ struct MailHogMessages {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct MailHogMessage {
+    /// MailHog 内部 id, 用于删单封邮件(字段名为全大写 `ID`)
+    #[serde(rename = "ID")]
+    id: Option<String>,
     to: Vec<MailHogAddress>,
     content: MailHogContent,
+}
+
+impl MailHogMessage {
+    /// 收件人是否包含该地址
+    fn is_to(&self, email: &str) -> bool {
+        self.to
+            .iter()
+            .any(|t| format!("{}@{}", t.mailbox, t.domain) == email)
+    }
+
+    /// 从邮件 HTML 正文提取验证码
+    fn code(&self) -> Option<String> {
+        // MailHog 的 Content.Body 为 MIME base64(76 字符换行), 解码前需去除空白
+        let cleaned: String = self
+            .content
+            .body
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        let body = base64::engine::general_purpose::STANDARD
+            .decode(cleaned)
+            .ok()
+            .and_then(|b| String::from_utf8(b).ok())?;
+        extract_code(&body)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,34 +82,78 @@ impl Context {
     /// 查询 MailHog 中发给指定邮箱的最新一封邮件(按时间倒序), 提取正文验证码。
     /// 未找到时返回 `HttpError::Status`(404)。
     pub async fn mailhog_latest_code(&self, email: &str) -> Result<String, HttpError> {
-        let messages = self
-            .mailhog
-            .request(
-                reqwest::Method::GET,
-                "/api/v2/messages?limit=100&order=desc",
-            )
-            .send_checked()
+        self.mailhog_messages(email)
             .await?
-            .json::<MailHogMessages>()
-            .await?;
-        let body_raw = &messages
-            .items
             .iter()
-            .find(|m| {
-                m.to.iter()
-                    .any(|t| format!("{}@{}", t.mailbox, t.domain) == email)
-            })
-            .ok_or_else(|| self.mailhog_not_found())?
-            .content
-            .body;
-        // MailHog 的 Content.Body 为 MIME base64(76 字符换行), 解码前需去除空白
-        let cleaned: String = body_raw.chars().filter(|c| !c.is_whitespace()).collect();
-        let body = base64::engine::general_purpose::STANDARD
-            .decode(cleaned)
-            .ok()
-            .and_then(|b| String::from_utf8(b).ok())
-            .ok_or_else(|| self.mailhog_not_found())?;
-        extract_code(&body).ok_or_else(|| self.mailhog_not_found())
+            .find_map(MailHogMessage::code)
+            .ok_or_else(|| self.mailhog_not_found())
+    }
+
+    /// 删除发给指定邮箱的全部邮件(收尾用), 返回删除封数。
+    ///
+    /// 只删该收件人的邮件: 压测并发下其它场景可能正在等自己那封验证码,
+    /// 不能使用 MailHog 的"删除全部"接口。
+    pub async fn mailhog_purge(&self, email: &str) -> Result<usize, HttpError> {
+        let messages = self.mailhog_messages(email).await?;
+        let mut deleted = 0;
+        for id in messages.iter().filter_map(|m| m.id.as_deref()) {
+            let path = format!("/api/v1/messages/{id}");
+            let response = self
+                .mailhog
+                .request(reqwest::Method::DELETE, &path)
+                .send()
+                .await?;
+            let status = response.status();
+            if status.is_success() || status == reqwest::StatusCode::NOT_FOUND {
+                deleted += 1;
+            } else {
+                tracing::warn!(%status, %id, "删除邮件失败(忽略)");
+            }
+        }
+        Ok(deleted)
+    }
+
+    /// 按收件人查询邮件(新的在前)。
+    ///
+    /// 优先走 v2 search 的服务端过滤: 压测下每秒上百封邮件时,
+    /// 全局 `limit=100` 的窗口会被其它任务的邮件挤出, 造成偶发"找不到邮件"。
+    /// search 不可用时退回全局列表 + 本地过滤。
+    async fn mailhog_messages(&self, email: &str) -> Result<Vec<MailHogMessage>, HttpError> {
+        const SEARCH_LIMIT: &str = "100";
+
+        let searched = self
+            .mailhog
+            .request(reqwest::Method::GET, "/api/v2/search")
+            .query("kind", "to")
+            .query("query", email)
+            .query("limit", SEARCH_LIMIT)
+            .query("order", "desc")
+            .send()
+            .await;
+
+        let items = match searched {
+            Ok(response) if response.status().is_success() => {
+                response.json::<MailHogMessages>().await?.items
+            }
+            _ => {
+                tracing::warn!("MailHog search 不可用, 退回全局列表过滤收件人");
+                self.mailhog
+                    .request(
+                        reqwest::Method::GET,
+                        "/api/v2/messages?limit=100&order=desc",
+                    )
+                    .send_checked()
+                    .await?
+                    .json::<MailHogMessages>()
+                    .await?
+                    .items
+            }
+        };
+        // search 命中与本地过滤都做一遍: 万一声明式过滤被忽略也不会串到别人的邮件
+        Ok(items
+            .into_iter()
+            .filter(|message| message.is_to(email))
+            .collect())
     }
 
     /// 轮询 MailHog 直到取到验证码(邮件异步投递)。
@@ -113,6 +185,15 @@ impl Context {
     pub async fn redis_get(&self, key: &str) -> Option<String> {
         let mut conn = self.redis.get().await.ok()?;
         conn.get(key).await.ok().flatten()
+    }
+
+    /// 删除 Redis key(收尾用), 返回是否删除成功。
+    pub async fn redis_del(&self, key: &str) -> bool {
+        let Ok(mut conn) = self.redis.get().await else {
+            return false;
+        };
+        let deleted: Result<u64, _> = conn.del(key).await;
+        deleted.is_ok()
     }
 
     /// 读取 Redis key 剩余 TTL(秒; `-1` 无过期, `-2` 不存在)。

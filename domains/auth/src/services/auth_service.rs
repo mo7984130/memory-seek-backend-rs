@@ -3,23 +3,27 @@ use crate::config::{ACCESS_TOKEN_EXPIRE, EMAIL_CODE_EXPIRE, REFRESH_TOKEN_EXPIRE
 use crate::error_ext::AuthOptionExt;
 use crate::mapper::{AuthInsertParam, AuthMapper};
 use audit::{AuditEvent, AuditRecorder};
-use common::Result;
-use common::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt, OptionExt};
-use common::error::{AppError, ContextualError};
-use common::ext::{RedisExt, ResultInspectErrAsync, ToOk};
-use common::metrics_name;
-use common::time::{after, now};
-use common::utils::{HashAlgorithm, MetricsTimerExt, rand_utils};
+use common_core::Result;
+use common_core::error::contextual::ext::{
+    BoolExt, ContextualResultExt, IntoContextualExt, OptionExt,
+};
+use common_core::error::{AppError, ContextualError};
+use common_core::time::{after, now};
+use common_core::{ext::ResultInspectErrAsync, ext::ToOk};
+use common_crypto::{HashAlgorithm, rand_utils};
+use common_metrics::MetricsTimerExt;
+use common_metrics::metrics_name;
+use common_redis::RedisExt;
 use constants::RedisKeys;
 use constants::redis_keys;
 use std::sync::LazyLock;
 use tokio::sync::Semaphore;
 use tokio::task::{self, spawn_blocking};
-use types::auth::user::UserId;
-use types::auth::{
+use types_identity::auth::user::UserId;
+use types_identity::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
 };
-use types::user::UserInfo;
+use types_identity::user::UserInfo;
 
 /// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
 static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
@@ -222,7 +226,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     };
 
     // 写入用户
-    let user_model = common::db_transaction!(scoped & state.db, |txn| {
+    let user_model = common_db::db_transaction!(scoped & state.db, |txn| {
         let user_model = AuthMapper::insert(txn, insert_param)
             .timed(metrics_name!("db_insert"))
             .await?;

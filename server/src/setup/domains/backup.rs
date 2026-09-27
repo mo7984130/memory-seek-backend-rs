@@ -1,8 +1,9 @@
 use crate::util::MissDepError;
 use crate::{config::AppConfig, setup::AppSetup};
 use backup::BackupState;
-use common::tokio::TaskManager;
-use common::{Result, axum::controller_router::ControllerRouter};
+use common_core::Result;
+use common_runtime::TaskManager;
+use common_web::controller_router::ControllerRouter;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
@@ -10,14 +11,14 @@ use tracing::{debug, info};
 
 pub use backup::BackupConfig as Config;
 
-/// 备份运行时资源，供其它域（如 photo/face-engine）按需获取。
+/// 备份运行时资源，供其它域（如 visual/face-engine）按需获取。
 pub struct BackupRuntime {
     #[allow(unused)]
     pub state: Arc<backup::BackupState>,
 }
 
 /// 注册备份管理接口。
-#[common::register_async(
+#[common_macros::register_async(
     slice = crate::setup::domains::APP_DOMAINS_FIRST,
     ty = crate::setup::InitFn,
 )]

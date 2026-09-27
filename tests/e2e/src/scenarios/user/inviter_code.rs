@@ -1,12 +1,12 @@
-use common::axum::{ErrR, SucR};
+use common_web::{ErrR, SucR};
 use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
     register_scenario,
-    scenario::Scenario,
+    scenario::{Scenario, TeardownMode},
 };
 use serde_json::json;
-use types::user::InviterCodeView;
+use types_identity::user::InviterCodeView;
 
 use crate::context::Context;
 
@@ -57,6 +57,25 @@ impl Scenario for GenerateInviterCodeScenario {
         let ttl_ok = ctx.redis_ttl(&key).await.is_some_and(|ttl| ttl > 0);
 
         Ok(stored.as_deref() == Some(expected.as_str()) && ttl_ok)
+    }
+
+    /// 收尾: 删除本轮生成的邀请码 key(每轮一个新码, 不回收会在 Redis 里堆积)
+    const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
+
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        _setup: &Self::Setup,
+        result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        let Some(Ok(view)) = result else {
+            return Ok(());
+        };
+        let key = constants::redis_keys::auth::inviter_code(&view.data.inviter_code);
+        if !ctx.redis_del(&key).await {
+            tracing::warn!(%key, "清理邀请码失败");
+        }
+        Ok(())
     }
 }
 

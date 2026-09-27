@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "0.4.1"
+version = "0.7.0"
 edition = "2024"
 
 [[bin]]
@@ -10,21 +10,21 @@ path = "src/main.rs"
 [features]
 # ============================================================
 # 对外功能开关:部署时通过 --features 按需开启(可多选)
-#   业务域:auth / user / photo / audit / backup
+#   业务域:auth / user / visual / audit / backup
 #   能力:   metrics / face-engine / audit-recording
 # ============================================================
 default = []
 auth = ["dep:auth", "_email", "_token_cipher"]
 user = ["dep:user", "_s3", "_token_cipher", "_cache"]
-photo = ["dep:photo", "_s3", "_token_cipher", "_cache"]
+visual = ["dep:visual", "_s3", "_token_cipher", "_cache"]
 audit = ["dep:audit"]
 backup = ["dep:backup", "_s3"]
 metrics = [
-    "common/metrics",
+    "dep:common-metrics",
     "dep:metrics",
     "dep:sysinfo",
     "dep:metrics-exporter-prometheus",
-    "photo?/metrics",
+    "visual?/metrics",
     "user?/metrics",
     "auth?/metrics",
     "backup?/metrics",
@@ -32,15 +32,15 @@ metrics = [
     "oss?/metrics",
     "email?/metrics",
 ]
-face-engine = ["dep:insight-face-rs", "photo/face", "backup"]
-audit-recording = ["auth?/audit", "user?/audit", "photo?/audit", "backup?/audit"]
+face-engine = ["dep:insight-face-rs", "visual/face", "backup", "types-db-init/face-engine"]
+audit-recording = ["auth?/audit", "user?/audit", "visual?/audit", "backup?/audit"]
 
 # ============================================================
 # 内部实现开关:仅由对外开关自动启用,请勿直接开启
 # ============================================================
 _email = ["dep:email"]
 _s3 = ["dep:oss"]
-_token_cipher = []
+_token_cipher = ["dep:common-crypto"]
 _cache = ["dep:multi-level-cache"]
 
 [dependencies]
@@ -55,14 +55,21 @@ tower-http = { version = "0.6", features = ["cors", "trace"] }
 # 业务模块
 auth = { path = "../domains/auth", features = ["controller"], optional = true }
 user = { path = "../domains/user", features = ["controller"], optional = true }
-photo = { path = "../domains/photo", features = ["controller"], optional = true }
+visual = { path = "../domains/visual", features = ["controller"], optional = true }
 backup = { path = "../domains/backup", optional = true }
 audit = { path = "../domains/audit", features = ["controller"], optional = true }
 
 # 基础设施
-common = { path = "../common", features = ["axum", "tokio"] }
+common-core = { workspace = true, features = ["axum", "tokio"] }
+common-redis = { workspace = true }
+common-crypto = { workspace = true, optional = true }
+common-metrics = { workspace = true, optional = true }
+common-runtime = { workspace = true }
+common-web = { workspace = true }
+common_macros.path = "../libs/common_macros"
 constants = { path = "../domains/constants" }
-types = { path = "../types", features = ["orm"] }
+types-core = { workspace = true, features = ["orm"] }
+types-db-init.path = "../types/db-init"
 email = { path = "../libs/email", optional = true }
 config = { workspace = true }
 clap = { workspace = true }

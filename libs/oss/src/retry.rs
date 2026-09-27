@@ -4,7 +4,7 @@
 //! 本模块提供仅针对 429 的退避重试，其余错误（网络、4xx 非 429、5xx）立即返回，
 //! 避免掩盖真实失败原因。
 
-use common::time::Duration;
+use common_core::time::Duration;
 use std::future::Future;
 
 use crate::error::OssError;
@@ -45,9 +45,9 @@ where
 {
     // 每个 op 调用埋 requests / duration_seconds，重试与失败分别埋 retries / errors。
     #[cfg(feature = "metrics")]
-    let _timer = common::utils::MetricsTimer::start(metric_name(op, "duration_seconds"));
+    let _timer = common_metrics::MetricsTimer::start(metric_name(op, "duration_seconds"));
     #[cfg(feature = "metrics")]
-    common::metrics::counter!(metric_name(op, "requests")).increment(1);
+    common_metrics::metrics::counter!(metric_name(op, "requests")).increment(1);
     #[cfg(not(feature = "metrics"))]
     let _ = op;
 
@@ -58,7 +58,7 @@ where
             Err(err) if err.is_rate_limited() && attempts < delays.len() => {
                 let delay = delays[attempts];
                 #[cfg(feature = "metrics")]
-                common::metrics::counter!(metric_name(op, "retries")).increment(1);
+                common_metrics::metrics::counter!(metric_name(op, "retries")).increment(1);
                 tracing::debug!(
                     key = %key,
                     attempt = attempts + 1,
@@ -71,7 +71,7 @@ where
             }
             Err(err) => {
                 #[cfg(feature = "metrics")]
-                common::metrics::counter!(metric_name(op, "errors")).increment(1);
+                common_metrics::metrics::counter!(metric_name(op, "errors")).increment(1);
                 return Err(err);
             }
         }

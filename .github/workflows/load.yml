@@ -1,5 +1,9 @@
 name: Load Test
 
+# 压测: 与 e2e.yml 共用 e2e crate 与同一套环境骨架(.github/actions/e2e-stack),
+# 差异只在 RunMode —— 这里用 duration(固定时长) + 32 并发, 只做指标与基线对比, 不做断言裁剪。
+#
+# 报告与判定: tests/e2e/ci/load_compare.py(逐场景 P95 对比基线 + 绝对阈值)。
 on:
     workflow_dispatch:
         inputs:
@@ -16,32 +20,23 @@ on:
                 required: false
                 type: string
                 default: "develop"
-            runs:
-                description: "每场景压测轮次(取中位数)"
+            duration_secs:
+                description: "每场景压测时长(秒)。串行执行全部场景, 总时长 ≈ 场景数(61) × 该值"
                 required: false
                 type: number
-                default: 3
+                default: 15
             pr_number:
                 description: "将报告发布为该 PR 评论(可选)"
                 required: false
                 type: number
                 default: 0
-            load_mode:
-                description: "both = target + SLO 容量搜索(默认); target = 仅目标 QPS; max-adaptive = 仅容量搜索"
-                required: true
-                type: choice
-                default: both
-                options:
-                    - both
-                    - target
-                    - max-adaptive
             server_cpus:
                 description: "被测 server 占用核数(控制变量, 默认 2)"
                 required: false
                 type: number
                 default: 2
             target_url:
-                description: "外部测试服务器完整 URL；留空则在 runner 自建环境。外部目标须含压测种子数据，且不得是生产环境"
+                description: "外部测试服务器完整 URL;留空则在 runner 自建环境。外部目标须已灌种子, 且其 PG/Redis/S3/MailHog 对 runner 可达(将跳过 preprea, 不写对方种子数据)"
                 required: false
                 type: string
                 default: ""
@@ -68,20 +63,35 @@ jobs:
     load:
         runs-on: ubuntu-latest
         env:
-            FEATURES: metrics,auth,user,photo,face-engine
-            # 合并到 main 默认完整跑 3 轮; 手动触发可覆盖 runs
-            RUNS: ${{ inputs.runs || 3 }}
-            # 容量搜索的每档都需要独立运行；默认单轮控制 Actions 耗时。
-            CAPACITY_RUNS: 1
-            # 负载模型: both(默认) = target + 容量搜索; target / max-adaptive = 仅单一
-            LOAD_SUITE: ${{ inputs.load_mode || 'both' }}
-            # 被测 server 占用核数(控制变量, 默认 2)
-            SERVER_CPUS: ${{ inputs.server_cpus || 2 }}
-            # 非空时只作为压测发起端，不启动服务、不灌库。
+            FEATURES: metrics,auth,user,visual,face-engine
+            # 被测服务地址: 留空 target_url 时用 runner 自建环境
             BASE_URL: ${{ inputs.target_url || 'http://127.0.0.1:7985' }}
+            # 被测 server 占用核数(控制变量)
+            SERVER_CPUS: ${{ inputs.server_cpus || 2 }}
+            # 每场景压测时长: Duration 是场景粒度, 全部场景串行 → 总时长 ≈ 61 × 该值
+            DURATION_SECS: ${{ inputs.duration_secs || 15 }}
             # schedule -> baseline, 其它(手动/PR) -> compare
             MODE: ${{ github.event_name == 'schedule' && 'baseline' || inputs.mode || 'compare' }}
             PR_NUMBER: ${{ inputs.pr_number != 0 && inputs.pr_number || github.event.pull_request.number || '0' }}
+            # ---- e2e crate 运行参数: 与 e2e.yml 的唯一差异就是 RunMode ----
+            E2E__SERVER__URL: ${{ inputs.target_url || 'http://127.0.0.1:7985' }}
+            E2E__RUN__MODE: duration
+            E2E__RUN__DURATION_SECS: ${{ inputs.duration_secs || 15 }}
+            E2E__RUN__CONCURRENCY: "32"
+            # 自建环境每轮重建种子; 外部目标跳过(否则会清空对方数据)
+            # 注意: push/schedule 触发时 inputs 为空, 必须用 `|| ''` 归一化后再比较
+            E2E__RUN__PREPARE: ${{ (inputs.target_url || '') == '' && 'true' || 'false' }}
+            # 压测放宽到 1% 失败 / 0.5% 超时(更严的判定交给 load_compare.py)
+            E2E__RUN__MAX_FAILURE_RATE: "0.01"
+            E2E__RUN__MAX_TIMEOUT_RATE: "0.005"
+            E2E_REPORT_JSON: load-report.json
+            # ---- 报告判定阈值 ----
+            MIN_PASS_RATE: "0.99"
+            MAX_P95_REGRESSION_PCT: "20"
+            MIN_RPS_RATIO: "0.9"
+            MAX_TIMEOUT_RATE: "0.005"
+            MAX_TEARDOWN_FAIL_RATE: "0.02"
+            BASELINE_DIR: tests/e2e/ci/baselines
         steps:
             - name: Checkout
               uses: actions/checkout@v7
@@ -90,117 +100,75 @@ jobs:
                   # ONNX 模型经 git-lfs 托管, 必须拉取真实文件(默认 lfs: false 只会得到指针)
                   lfs: true
 
-            - name: Install Rust
+            # 外部目标模式只做压测发起端: 不构建 server, 但仍需编译 e2e 二进制
+            - name: Install Rust (外部目标模式)
+              if: (inputs.target_url || '') != ''
               uses: dtolnay/rust-toolchain@stable
 
-            # 依赖/target 缓存(key 基于 Cargo.lock + 平台, 不随 commit 变;
-            # 默认不缓存最终可执行文件, 业务 crate 每次增量编译)
+            - name: Install mold (外部目标模式)
+              # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
+              if: (inputs.target_url || '') != ''
+              run: sudo apt-get update && sudo apt-get install -y mold
+
             - uses: Swatinem/rust-cache@v2
+              if: (inputs.target_url || '') != ''
               with:
-                  # 压测可能失败/取消: 失败也保存缓存, 否则 release 依赖从未落盘,
-                  # 每次都会全量编译
                   cache-on-failure: true
 
-            - name: Build (release + metrics)
-              if: inputs.target_url == ''
-              run: cargo build --release --features "$FEATURES"
-
-            - name: Prepare runtime libraries
-              if: inputs.target_url == ''
-              run: |
-                    mkdir -p target/release/libs
-                    find thirdparty \( -type f -o -type l \) \
-                      \( -name "*.so" -o -name "*.so.*" \) \
-                      -exec cp -a {} target/release/libs/ \;
-
-            - name: Install k6
-              uses: grafana/setup-k6-action@v1
+            - name: 构建并启动被测环境
+              if: (inputs.target_url || '') == ''
+              uses: ./.github/actions/e2e-stack
               with:
-                  # 场景脚本使用可选链 ?., 需 >= 0.50(0.49 编译器不支持)
-                  k6-version: 0.57.0
-
-            - name: 启动依赖容器 (PG / Redis)
-              if: inputs.target_url == ''
-              run: docker compose -f tests/load/docker-compose.load.yml up -d --wait
-
-            - name: 启动被测服务 (taskset 限核)
-              if: inputs.target_url == ''
-              # 固定 server 占用核数(SERVER_CPUS), 控制变量: 压测对比不随 runner 核数漂移
-              run: |
-                  taskset -c 0-$((SERVER_CPUS - 1)) \
-                      ./target/release/memory-seek-server \
-                      --config tests/load/ci/server-config.yml \
-                      > server.log 2>&1 &
-                  echo $! > server.pid
-                  for i in $(seq 1 60); do
-                      if curl -sf http://127.0.0.1:7985/health >/dev/null; then
-                          echo "server ready (cpus=$SERVER_CPUS)"
-                          exit 0
-                      fi
-                      sleep 1
-                  done
-                  echo "server failed to start"
-                  tail -100 server.log
-                  exit 1
-
-            - name: 种子数据 (建表 + 灌数据)
-              if: inputs.target_url == ''
-              # 不再容错: seed 失败必须暴露(否则压测会在无表库上全量报错)
-              run: make -C tests/load seed
+                  features: ${{ env.FEATURES }}
+                  server-config: tests/run/config.yml
+                  server-cpus: ${{ env.SERVER_CPUS }}
 
             - name: 检查外部测试服务器
-              if: inputs.target_url != ''
+              if: (inputs.target_url || '') != ''
               run: |
                   curl --fail --show-error --silent --max-time 15 "$BASE_URL/health" >/dev/null
                   echo "external load-test target is ready: $BASE_URL"
+                  echo "注意: 外部目标不灌种子(prepare=false), 请自行保证种子数据与运行前的干净状态"
 
-            - name: 全场景压测 target (${{ env.RUNS }} 轮)
-              # both/target 模式跑 target 负载(对比用, 结果进基线)
-              if: contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load run-all RUNS=$RUNS BASE_URL="$BASE_URL"
-
-            - name: 全场景容量搜索 (${{ env.CAPACITY_RUNS }} 轮)
-              # 每档仅在上一档满足 SLO 时加压，结果写入 max-adaptive-normalized。
-              if: contains(fromJSON('["both","max-adaptive"]'), env.LOAD_SUITE)
-              run: make -C tests/load run-max-adaptive RUNS=$CAPACITY_RUNS BASE_URL="$BASE_URL"
-
-            - name: 归一化 target (取中位数)
-              if: contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load collect BASE_URL="$BASE_URL"
-
-            - name: 归一化容量搜索 (取中位数)
-              if: contains(fromJSON('["both","max-adaptive"]'), env.LOAD_SUITE)
-              run: make -C tests/load collect-max-adaptive BASE_URL="$BASE_URL"
+            - name: 压测 (duration ${{ env.DURATION_SECS }}s/场景)
+              # 全部场景(含写场景, 各自在 teardown 回收产物), 逐场景串行执行;
+              # RunMode=Duration 是场景粒度, 总时长 ≈ 场景数 × 每场景时长
+              run: cargo run -p e2e --release -- -c tests/e2e/e2e.config.yml --report-json "$E2E_REPORT_JSON"
 
             - name: 服务端指标快照
-              run: make -C tests/load prometheus BASE_URL="$BASE_URL" || true
-
-            - name: 记录基线 (baseline 模式, target 负载)
-              if: env.MODE == 'baseline' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load record-baseline BASE_URL="$BASE_URL"
+              if: always()
+              run: curl --silent --max-time 15 "$BASE_URL/metrics" > prometheus.txt || true
 
             - name: 恢复基线缓存 (compare 模式)
-              if: env.MODE == 'compare' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
+              if: env.MODE == 'compare'
               uses: actions/cache/restore@v4
               with:
-                  path: tests/load/baselines
+                  path: tests/e2e/ci/baselines
                   key: load-baseline-develop-
                   restore-keys: load-baseline-develop-
 
-            - name: 判定 (compare 模式, target 负载)
-              if: env.MODE == 'compare' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load judge BASE_URL="$BASE_URL"
+            - name: 判定与报告 (compare 模式)
+              if: env.MODE == 'compare'
+              run: |
+                  python3 tests/e2e/ci/load_compare.py \
+                      --current "$E2E_REPORT_JSON" \
+                      --baseline "$BASELINE_DIR/load-baseline.json" \
+                      --markdown load-report.md
 
-            - name: 生成报告 (compare 模式)
-              if: env.MODE == 'compare' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
-              run: make -C tests/load report BASE_URL="$BASE_URL"
+            - name: 记录基线 (baseline 模式)
+              if: env.MODE == 'baseline'
+              run: |
+                  python3 tests/e2e/ci/load_compare.py \
+                      --current "$E2E_REPORT_JSON" \
+                      --write-baseline "$BASELINE_DIR/load-baseline.json" \
+                      --markdown load-report.md
 
-            - name: 保存基线缓存 (baseline 模式, target 负载)
-              if: env.MODE == 'baseline' && contains(fromJSON('["both","target"]'), env.LOAD_SUITE)
+            - name: 保存基线缓存 (baseline 模式)
+              if: env.MODE == 'baseline'
               continue-on-error: true # 同 sha 重复保存时忽略冲突
               uses: actions/cache/save@v4
               with:
-                  path: tests/load/baselines
+                  path: tests/e2e/ci/baselines
                   key: load-baseline-develop-${{ github.sha }}
 
             - name: 上传结果 (artifact, 无论成败)
@@ -209,27 +177,30 @@ jobs:
               with:
                   name: load-results-${{ env.MODE }}-${{ github.sha }}
                   path: |
-                      tests/load/results
+                      load-report.json
+                      load-report.md
+                      prometheus.txt
                       server.log
 
-            - name: 失败诊断 (打印 server.log 与结果目录)
+            - name: 失败诊断 (打印 server.log 与判定结论)
               if: failure()
               run: |
+                  echo "===== 判定 / 报告 ====="
+                  cat load-report.md 2>/dev/null || echo "(load-report.md 不存在)"
                   echo "===== server.log (tail 200) ====="
                   tail -200 server.log 2>/dev/null || echo "(server.log 不存在)"
-                  echo "===== results 目录 ====="
-                  ls -la tests/load/results/ 2>/dev/null || true
 
             - name: 发布结果评论 (commit 评论 + 关联 PR 评论)
-              if: env.MODE == 'compare' && (env.PR_NUMBER != '0' || github.event_name == 'push')
+              if: always() && env.MODE == 'compare' && (env.PR_NUMBER != '0' || github.event_name == 'push')
               uses: actions/github-script@v7
               with:
                   script: |
                       const fs = require('fs');
-                      const path = 'tests/load/results/report.md';
+                      const path = 'load-report.md';
                       if (!fs.existsSync(path)) {
-                          // 报告缺失必须暴露, 避免"静默无评论"误以为发布成功
-                          throw new Error('report.md 不存在, 无法发布评论(请检查 judge/report 步骤)');
+                          // 环境未起来(构建失败等)时没有报告, 不应把工作流自身的问题报成压测结论
+                          core.warning('load-report.md 不存在, 跳过发布评论');
+                          return;
                       }
                       let body = fs.readFileSync(path, 'utf8');
                       if (body.length > 60000) body = body.slice(0, 60000) + '\n...(已截断)';
@@ -269,3 +240,9 @@ jobs:
                               console.log('查询/发布关联 PR 评论失败(不影响 commit 评论): ' + e.message);
                           }
                       }
+
+            - name: 清理
+              if: always()
+              run: |
+                  if [ -f server.pid ]; then kill "$(cat server.pid)" 2>/dev/null || true; fi
+                  docker compose -f tests/run/docker-compose.yml down -v || true

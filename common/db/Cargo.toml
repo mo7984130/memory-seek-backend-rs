@@ -1,0 +1,13 @@
+[package]
+name = "common-db"
+version = "0.1.0"
+edition = "2024"
+description = "关系型持久化能力: 连接工具、表元数据、事务管道与事务宏"
+
+[dependencies]
+common-core.path = "../core"
+
+async-trait.workspace = true
+sea-orm.workspace = true
+serde.workspace = true
+tracing.workspace = true

@@ -1,11 +1,12 @@
 [package]
 name = "file-validator"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2024"
 
 [dependencies]
 const_format.workspace = true
 image.workspace = true
+nom-exif.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

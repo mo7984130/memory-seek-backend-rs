@@ -131,7 +131,7 @@ withReducer(value)
 PARAMETERS:
 
 * **value** (`string`)
-   - valid values: `"sum"`, `"mean"`, `"min"`, `"max"`, `"count"`, `"last"`, `"median"`
+   - valid values: `"sum"`, `"mean"`, `"min"`, `"max"`, `"count"`, `"last"`, `"visualn"`
 
 The reducer
 Possible enum values:
@@ -141,7 +141,7 @@ Possible enum values:
  - `"max"` 
  - `"count"` 
  - `"last"` 
- - `"median"` 
+ - `"visualn"` 
 ### fn withRefId
 
 ```jsonnet

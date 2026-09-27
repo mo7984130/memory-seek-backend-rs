@@ -158,7 +158,7 @@ PARAMETERS:
 
 * **panels** (`array`)
 
-`groupPanelsInRows` ensures that panels that come after a row panel in an array are added to the `row.panels` attribute. This can be useful to apply intermediate functions to only the panels that belong to a row. Finally the panel array should get processed by `resolveCollapsedFlagOnRows` to "unfold" the rows that are not collapsed into the main array.
+`groupPanelsInRows` ensures that panels that come after a row panel in an array are added to the `row.panels` attribute. This can be useful to apply intervisualte functions to only the panels that belong to a row. Finally the panel array should get processed by `resolveCollapsedFlagOnRows` to "unfold" the rows that are not collapsed into the main array.
 
 #### fn panel.mapToRows
 

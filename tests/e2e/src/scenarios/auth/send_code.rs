@@ -2,7 +2,7 @@ use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
     register_scenario,
-    scenario::Scenario,
+    scenario::{Scenario, TeardownMode},
 };
 use serde_json::json;
 
@@ -56,6 +56,22 @@ impl Scenario for SendCodeScenario {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
         Ok(false)
+    }
+
+    /// 收尾: 删除本轮发送的验证码邮件。
+    /// 邮箱按 task 复用且每轮发一封, 不回收会让 MailHog 无限膨胀(拖慢全部邮件校验)
+    const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
+
+    async fn teardown(
+        ctx: &Self::Ctx,
+        task: &TaskIndex,
+        _setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        let email = format!("e2e_{}@test.com", task.index);
+        let deleted = ctx.mailhog_purge(&email).await?;
+        tracing::debug!(%email, deleted, "清理验证码邮件");
+        Ok(())
     }
 }
 

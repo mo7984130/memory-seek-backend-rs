@@ -1,4 +1,4 @@
-use common::{Result, error::ContextualError};
+use common_core::{Result, error::ContextualError};
 use serde::Deserialize;
 
 use deadpool_redis::{Config as DeadpoolConfig, PoolConfig, Runtime};
@@ -31,7 +31,7 @@ const fn default_max_connections() -> u32 {
     16
 }
 
-#[common::register_async(
+#[common_macros::register_async(
     slice = crate::setup::bases::APP_BASES,
     ty = crate::setup::InitFn,
 )]
@@ -47,7 +47,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
                 "redis_pool_err",
                 "Redis连接池创建失败",
                 source,
-                common::error::AppError::InternalServerError,
+                common_core::error::AppError::InternalServerError,
             )
         })?;
     let mut conn = pool.get().await.map_err(|source| {
@@ -55,7 +55,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             "redis_conn_err",
             "无法从连接池获取连接",
             source,
-            common::error::AppError::InternalServerError,
+            common_core::error::AppError::InternalServerError,
         )
     })?;
 
@@ -67,7 +67,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
                 "redis_ping_err",
                 "Redis PING失败，连接不可用",
                 source,
-                common::error::AppError::InternalServerError,
+                common_core::error::AppError::InternalServerError,
             )
         })?;
     setup.registry.insert(pool);

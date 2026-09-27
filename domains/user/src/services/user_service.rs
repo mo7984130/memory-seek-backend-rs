@@ -1,13 +1,14 @@
 use bytes::Bytes;
-use common::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt};
-use common::ext::{RedisExt, ResultInspectErrAsync, ToOk};
-use common::time::after;
-use common::utils::{MetricsTimerExt, rand_utils};
-use common::{
+use common_core::error::contextual::ext::{BoolExt, ContextualResultExt, IntoContextualExt};
+use common_core::{
     Result,
     error::{AppError, ContextualError},
-    metrics_name, timed,
 };
+use common_core::{ext::ResultInspectErrAsync, ext::ToOk, time::after};
+use common_crypto::rand_utils;
+use common_metrics::MetricsTimerExt;
+use common_metrics::{metrics_name, timed};
+use common_redis::RedisExt;
 use constants::{PasswordHasher, RedisKeys};
 use file_validator::FileValidator;
 use sea_orm::sqlx::types::uuid;
@@ -16,12 +17,12 @@ use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
 use crate::UserState;
-use types::auth::user::UserId;
-use types::photo::{ImageToken, ImageTokenStr};
-use types::user::{
+use types_identity::auth::user::UserId;
+use types_identity::user::{
     ChangeNicknameParam, ChangePasswordParam, GetUserInfoBatchParam, InviterCodeView,
-    UpdateAvatarParam, UserBriefView, UserInfo,
+    UserBriefView, UserInfo,
 };
+use types_visual_token::{VisualToken, VisualTokenStr};
 
 use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL};
 
@@ -144,19 +145,16 @@ pub async fn update_avatar(
     state: &UserState,
     user_id: UserId,
     file_data: Bytes,
-    req: UpdateAvatarParam,
-) -> Result<ImageTokenStr> {
-    // 校验图片
+) -> Result<VisualTokenStr> {
+    // 校验图片（MIME 类型由文件头魔数嗅探确定，不信任客户端声明）
     let img_metadata = timed!("validate_image", {
-        FileValidator::validate_image(&file_data, &req.file_name, &req.content_type).map_err(
-            |error| {
-                ContextualError::warn_without_source(
-                    "file_validation_error",
-                    "文件校验失败",
-                    AppError::bad_request(error.to_string()),
-                )
-            },
-        )?
+        FileValidator::validate_image_mem(&file_data).map_err(|error| {
+            ContextualError::warn_without_source(
+                "file_validation_error",
+                "文件校验失败",
+                AppError::bad_request(error.to_string()),
+            )
+        })?
     });
 
     // 上传图片
@@ -202,7 +200,7 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token = ImageToken::thumbnail(user_id, new_key).into();
+    let avatar_token = VisualToken::image_thumbnail(user_id, new_key).into();
 
     Ok(avatar_token)
 }

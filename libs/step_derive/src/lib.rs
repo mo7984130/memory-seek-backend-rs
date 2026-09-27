@@ -1,22 +1,23 @@
-//! `declare_transaction_step` — 事务内 `common::pipeline::Step` 声明宏(attribute 宏)
+//! `declare_transaction_step` — 事务内 `common_db::pipeline::Step` 声明宏(attribute 宏)
 //!
 //! 作用于一个 `impl` 块,从其中提取目标类型并声明一个清理/变更步骤,同时
 //! **定义即注册**:通过 `linkme` 分布式切片将步骤注册进调用方声明的步骤集合。
 //!
 //! ```ignore
 //! #[step_derive::declare_transaction_step(
-//!     ctx = crate::services::photo_service::PhotoDeleteContext,
-//!     slice = crate::services::photo_service::PHOTO_DELETE_STEPS,
+//!     ctx = crate::services::visual_service::VisualDeleteContext,
+//!     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
 //!     name = "foo_cleanup",
 //!     owns = ["FooMapper", "BarMapper"],
 //!     is_final = true,          // 可选:最后执行的步骤(受外键约束时置位)
+//!     method = on_visual_delete, // 可选:步骤方法名(缺省为 on_photo_delete)
 //! )]
 //! impl FooService {
-//!     async fn on_photo_delete(
+//!     async fn on_visual_delete(
 //!         &self,
 //!         txn: &sea_orm::DatabaseTransaction,
-//!         ctx: &mut crate::services::photo_service::PhotoDeleteContext,
-//!     ) -> common::Result<()> {
+//!         ctx: &mut crate::services::visual_service::VisualDeleteContext,
+//!     ) -> common_core::Result<()> {
 //!         // 具体清理逻辑
 //!         Ok(())
 //!     }
@@ -24,13 +25,13 @@
 //! ```
 //!
 //! 宏展开为「原 impl 块 + `impl Step<Ctx> for FooService` + 一个 linkme 分布式切片元素」,
-//! 生成的 `execute` 委托调用块内的 `on_photo_delete(txn, ctx)` 方法:
-//! - 步骤方法名统一为 `on_photo_delete`;
+//! 生成的 `execute` 委托调用块内的步骤方法(txn, ctx):
+//! - 步骤方法名由 `method` 参数指定,缺省为 `on_photo_delete`;
 //! - 生成的步骤结构即为 service 本身(unit struct),无需额外定义 Step 结构体;
-//! - 宏不绑定任何业务类型:`ctx` / `slice` / `name` / `owns` / `is_final` 全部参数化。
+//! - 宏不绑定任何业务类型:`ctx` / `slice` / `name` / `owns` / `is_final` / `method` 全部参数化。
 //!
-//! 要求调用 crate 依赖 `common`、`sea-orm` 与 `linkme`(宏生成的路径)。
-//! `on_photo_delete` 的参数名任意(按位置传递),但参数类型必须与生成签名一致。
+//! 要求调用 crate 依赖 `common-db`、`common-core`、`sea-orm` 与 `linkme`(宏生成的路径)。
+//! 步骤方法的参数名任意(按位置传递),但参数类型必须与生成签名一致。
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -52,7 +53,7 @@ pub fn declare_transaction_step(attr: TokenStream, item: TokenStream) -> TokenSt
 
 /// `declare_async_event!(<状态类型>, <事件类型>, <切片名>, <发布函数名>, <事件名>)` — 声明提交后的异步事件。
 ///
-/// 展开为一个 `linkme` 分布式切片和调用 `common::tokio::event::dispatch_async_event` 的发布函数。
+/// 展开为一个 `linkme` 分布式切片和调用 `common_runtime::event::dispatch_async_event` 的发布函数。
 #[proc_macro]
 pub fn declare_async_event(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as EventArgs);
@@ -65,13 +66,13 @@ pub fn declare_async_event(input: TokenStream) -> TokenStream {
     } = args;
     quote! {
         #[::linkme::distributed_slice]
-        pub(crate) static #slice: [&'static dyn ::common::tokio::event::EventConsumer<#state, #event>] = [..];
+        pub(crate) static #slice: [&'static dyn ::common_runtime::event::EventConsumer<#state, #event>] = [..];
 
         pub(crate) fn #dispatch(
             state: ::std::sync::Arc<#state>,
             event: #event,
         ) {
-            ::common::tokio::event::dispatch_async_event(#name, state, event, &#slice);
+            ::common_runtime::event::dispatch_async_event(#name, state, event, &#slice);
         }
     }
     .into()
@@ -96,15 +97,15 @@ pub fn declare_event_consumer(attr: TokenStream, item: TokenStream) -> TokenStre
 /// 注册步骤(定义即注册)与直接执行(`<管道名>.run(...)`)使用:
 ///
 /// ```ignore
-/// step_derive::declare_pipeline!(PhotoDeleteContext, PHOTO_DELETE_STEPS, PIPELINE);
+/// step_derive::declare_pipeline!(VisualDeleteContext, MEDIA_DELETE_STEPS, PIPELINE);
 /// // 展开:
 /// #[linkme::distributed_slice]
-/// pub(crate) static PHOTO_DELETE_STEPS: [&'static dyn Step<PhotoDeleteContext>] = [..];
-/// static PIPELINE: LazyLock<StepPipeline<PhotoDeleteContext>> =
-///     LazyLock::new(|| StepPipeline::from_slice_stable(PHOTO_DELETE_STEPS.to_vec()));
+/// pub(crate) static MEDIA_DELETE_STEPS: [&'static dyn Step<VisualDeleteContext>] = [..];
+/// static PIPELINE: LazyLock<StepPipeline<VisualDeleteContext>> =
+///     LazyLock::new(|| StepPipeline::from_slice_stable(MEDIA_DELETE_STEPS.to_vec()));
 /// ```
 ///
-/// 要求调用 crate 依赖 `common` 与 `linkme`。
+/// 要求调用 crate 依赖 `common-db` 与 `linkme`。
 #[proc_macro]
 pub fn declare_pipeline(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as PipelineArgs);
@@ -115,11 +116,11 @@ pub fn declare_pipeline(input: TokenStream) -> TokenStream {
     } = args;
     let expanded = quote! {
         #[linkme::distributed_slice]
-        pub(crate) static #slice: [&'static dyn ::common::pipeline::Step<#ctx>] = [..];
+        pub(crate) static #slice: [&'static dyn ::common_db::pipeline::Step<#ctx>] = [..];
 
-        static #pipeline: ::std::sync::LazyLock<::common::pipeline::StepPipeline<#ctx>> =
+        static #pipeline: ::std::sync::LazyLock<::common_db::pipeline::StepPipeline<#ctx>> =
             ::std::sync::LazyLock::new(|| {
-                ::common::pipeline::StepPipeline::from_slice_stable(#slice.to_vec())
+                ::common_db::pipeline::StepPipeline::from_slice_stable(#slice.to_vec())
             });
     };
     expanded.into()
@@ -184,6 +185,7 @@ struct Args {
     is_final: Option<bool>,
     ctx: Option<Type>,
     slice: Option<Type>,
+    method: Option<Ident>,
 }
 
 struct EventConsumerArgs {
@@ -242,6 +244,7 @@ impl Parse for Args {
         let mut is_final: Option<bool> = None;
         let mut ctx: Option<Type> = None;
         let mut slice: Option<Type> = None;
+        let mut method: Option<Ident> = None;
 
         while !input.is_empty() {
             if input.peek(Token![,]) {
@@ -276,10 +279,13 @@ impl Parse for Args {
             } else if kw == "slice" {
                 slice = Some(input.parse()?);
                 input.parse::<Token![,]>()?;
+            } else if kw == "method" {
+                method = Some(input.parse()?);
+                input.parse::<Token![,]>()?;
             } else {
                 return Err(syn::Error::new(
                     kw.span(),
-                    format!("期望 `name` / `owns` / `is_final` / `ctx` / `slice`,发现 `{kw}`"),
+                    format!("期望 `name` / `owns` / `is_final` / `ctx` / `slice` / `method`,发现 `{kw}`"),
                 ));
             }
         }
@@ -290,6 +296,7 @@ impl Parse for Args {
             is_final,
             ctx,
             slice,
+            method,
         })
     }
 }
@@ -302,21 +309,23 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
         is_final,
         ctx,
         slice,
+        method,
     } = args;
 
     let ctx = ctx.ok_or_else(|| syn::Error::new(item_impl.span(), "缺少 `ctx = <Type>` 参数"))?;
     let slice =
         slice.ok_or_else(|| syn::Error::new(item_impl.span(), "缺少 `slice = <path>` 参数"))?;
     let self_ty = item_impl.self_ty.clone();
+    let method = method.unwrap_or_else(|| Ident::new("on_photo_delete", item_impl.span()));
 
     if !item_impl
         .items
         .iter()
-        .any(|item| matches!(item, ImplItem::Fn(method) if method.sig.ident == "on_photo_delete"))
+        .any(|item| matches!(item, ImplItem::Fn(m) if m.sig.ident == method))
     {
         return Err(syn::Error::new(
             item_impl.span(),
-            "impl 块内缺少 `async fn on_photo_delete(...)` 方法",
+            format!("impl 块内缺少 `async fn {method}(...)` 方法"),
         ));
     }
 
@@ -345,7 +354,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
 
     let generated = quote! {
         #[::async_trait::async_trait]
-        impl ::common::pipeline::Step<#ctx> for #self_ty {
+        impl ::common_db::pipeline::Step<#ctx> for #self_ty {
             fn name(&self) -> &'static str {
                 #name
             }
@@ -362,16 +371,16 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
                 &self,
                 txn: &::sea_orm::DatabaseTransaction,
                 ctx: &mut #ctx,
-            ) -> ::common::error::contextual::Result<()> {
-                self.on_photo_delete(txn, ctx).await
+            ) -> ::common_core::error::contextual::Result<()> {
+                self.#method(txn, ctx).await
             }
         }
 
         // 定义即注册:将步骤注册进调用方声明的 linkme 分布式切片
         #[allow(non_upper_case_globals)]
         #[::linkme::distributed_slice(#slice)]
-        static #step_static: &'static dyn ::common::pipeline::Step<#ctx> =
-            &#self_ty as &dyn ::common::pipeline::Step<#ctx>;
+        static #step_static: &'static dyn ::common_db::pipeline::Step<#ctx> =
+            &#self_ty as &dyn ::common_db::pipeline::Step<#ctx>;
     };
 
     Ok(quote! {
@@ -428,7 +437,7 @@ fn expand_event_consumer(
         #item_impl
 
         #[::async_trait::async_trait]
-        impl ::common::tokio::event::EventConsumer<#state, #event> for #self_ty {
+        impl ::common_runtime::event::EventConsumer<#state, #event> for #self_ty {
             fn name(&self) -> &'static str {
                 #name
             }
@@ -437,15 +446,15 @@ fn expand_event_consumer(
                 &self,
                 state: ::std::sync::Arc<#state>,
                 event: ::std::sync::Arc<#event>,
-            ) -> ::common::Result<()> {
+            ) -> ::common_core::Result<()> {
                 <#self_ty>::#consumer_method(self, state, event).await
             }
         }
 
         #[allow(non_upper_case_globals)]
         #[::linkme::distributed_slice(#slice)]
-        static #registration: &'static dyn ::common::tokio::event::EventConsumer<#state, #event> =
-            &#self_ty as &dyn ::common::tokio::event::EventConsumer<#state, #event>;
+        static #registration: &'static dyn ::common_runtime::event::EventConsumer<#state, #event> =
+            &#self_ty as &dyn ::common_runtime::event::EventConsumer<#state, #event>;
     })
 }
 

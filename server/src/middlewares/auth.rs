@@ -1,15 +1,15 @@
 use crate::state::AppState;
 use axum::{extract::Request, middleware::Next, response::Response};
-use common::{
+use common_core::{
     Result,
     error::{
         AppError, ContextualError,
         contextual::ext::{IntoContextualExt, OptionExt},
     },
-    ext::RedisExt,
 };
+use common_redis::RedisExt;
 use std::{str::FromStr, sync::Arc};
-use types::auth::user::UserId;
+use types_core::UserId;
 
 /// 认证中间件
 ///
