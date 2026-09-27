@@ -4,7 +4,7 @@ use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
     register_scenario,
-    scenario::{Scenario, SetupMode},
+    scenario::{Scenario, SetupMode, TeardownMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, SelectExt};
 use serde_json::json;
@@ -89,6 +89,38 @@ impl Scenario for RegisterScenario {
             .await
             .unwrap();
         Ok(exists)
+    }
+
+    /// 收尾: 删除本轮注册的账号与验证码邮件。
+    /// 长跑下每轮新增一个账号(无"注销账号"接口, 直连数据库清理),
+    /// 邮件每轮一封(按地址清, 不影响并发跑着的其它场景)
+    const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
+
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        // 邮件无论成败都清: run 失败也可能已经投递过
+        if let Err(error) = ctx.mailhog_purge(&setup.email).await {
+            tracing::warn!(email = %setup.email, %error, "清理验证码邮件失败");
+        }
+        if !matches!(result, Some(Ok(_))) {
+            // 未注册成功 = 没有账号可删
+            return Ok(());
+        }
+        if let Err(error) = auth::user::Entity::delete_many()
+            .filter(auth::user::Column::Username.eq(&setup.username))
+            .exec(&ctx.db)
+            .await
+        {
+            tracing::warn!(username = %setup.username, %error, "清理注册账号失败");
+            return Err(crate::cleanup::internal(format!(
+                "删除注册账号失败: {error}"
+            )));
+        }
+        Ok(())
     }
 }
 

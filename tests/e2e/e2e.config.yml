@@ -34,5 +34,24 @@ seed:
     visual_users: 2000
     visuals_per_user: 20
     faces_per_person: 5
-    # user 模块专属测试用户池大小(uit_user_* / uit_pwd_*)
-    uit_users: 32
+    # user 模块专属测试用户池大小(uit_user_* / uit_pwd_* / uit_me_* / uit_logout_*);
+    # 必须 >= 并发度(run.concurrency), 否则同池账号会串号
+    uit_users: 64
+
+# 运行参数(环境变量 E2E__RUN__* 可覆盖任意字段, CI 无需另建配置文件)
+run:
+    # times = 固定轮次(正确性验收); duration = 固定时长(压测)
+    mode: times
+    times: 128
+    duration_secs: 120
+    # 并发度, 约束见 seed 段(需 <= auth_users / visual_users / uit_users)
+    concurrency: 32
+    # 场景白名单(逗号分隔), 留空 = 全部场景
+    scenarios: ""
+    # 超时退避(毫秒), 0 = 关闭; 压测关闭才能暴露过载
+    backoff_ms: 0
+    # 前置准备(preprea 先清空再灌种子); 外部被测目标 / 复用种子时置 false
+    prepare: true
+    # 判定阈值: 超过则退出码 1(e2e 用 0; 压测可放宽, 如 0.01)
+    max_failure_rate: 0.0
+    max_timeout_rate: 0.0

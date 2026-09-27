@@ -5,9 +5,10 @@ use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
     register_scenario,
-    scenario::{Scenario, SetupMode},
+    scenario::{Scenario, SetupMode, TeardownMode},
 };
 use sea_orm::EntityTrait;
+use serde_json::json;
 use types_visual::visual as visual_entity;
 use types_visual::{dto::visual::VisualView, visual::VisualKind};
 
@@ -16,10 +17,12 @@ use crate::context::Context;
 use super::{Session, blake3_hex, session, token_matches, unique_png, unique_tag};
 
 /// 上传前置:登录 + 本次任务唯一影像字节。
+/// `uploaded_id` 供 setup 阶段就上传的场景(如重复上传)收尾时删除。
 #[derive(Default)]
 pub struct UploadSetup {
     pub session: Session,
     pub bytes: Vec<u8>,
+    pub uploaded_id: Option<i64>,
 }
 
 async fn prepare(ctx: &Context, task: &TaskIndex) -> Result<UploadSetup, HttpError> {
@@ -27,6 +30,7 @@ async fn prepare(ctx: &Context, task: &TaskIndex) -> Result<UploadSetup, HttpErr
     Ok(UploadSetup {
         session,
         bytes: unique_png(&unique_tag(task)),
+        uploaded_id: None,
     })
 }
 
@@ -104,6 +108,29 @@ impl Scenario for UploadVisualScenario {
 
         Ok(db_ok && view_ok && tokens_ok && s3_ok)
     }
+
+    /// 收尾: 删除本轮上传的影像(库记录 + S3 对象由服务端异步清理)。
+    /// 压测长跑下每轮新增一张, 不回收会写爆库与对象存储
+    const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
+
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        let Some(Ok(view)) = result else {
+            // run 失败 = 服务端未接受上传, 无产物可删
+            return Ok(());
+        };
+        crate::cleanup::delete(
+            ctx,
+            "/visual",
+            Some(&setup.session.auth_header()),
+            Some(json!({ "visualIds": [view.data.id] })),
+        )
+        .await
+    }
 }
 
 register_scenario!(UploadVisualScenario);
@@ -122,9 +149,12 @@ impl Scenario for UploadDuplicateVisualScenario {
     type Setup = UploadSetup;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        let setup = prepare(ctx, task).await?;
-        // 先成功上传一次, 为 run 制造哈希命中
-        super::upload(ctx, &setup.session, setup.bytes.clone()).await?;
+        let mut setup = prepare(ctx, task).await?;
+        // 先成功上传一次, 为 run 制造哈希命中; id 留给收尾删除
+        let view = super::upload(ctx, &setup.session, setup.bytes.clone())
+            .await?
+            .data;
+        setup.uploaded_id = Some(view.id.0);
         Ok(setup)
     }
 
@@ -152,6 +182,25 @@ impl Scenario for UploadDuplicateVisualScenario {
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         Ok(output.code == 400)
+    }
+
+    /// 收尾: setup 阶段为制造哈希命中上传的那张影像(每任务一张, 默认 Task 粒度)
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        let Some(visual_id) = setup.uploaded_id else {
+            return Ok(());
+        };
+        crate::cleanup::delete(
+            ctx,
+            "/visual",
+            Some(&setup.session.auth_header()),
+            Some(json!({ "visualIds": [visual_id] })),
+        )
+        .await
     }
 }
 

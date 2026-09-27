@@ -5,7 +5,7 @@ use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
     register_scenario,
-    scenario::{Scenario, SetupMode},
+    scenario::{Scenario, SetupMode, TeardownMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
@@ -96,6 +96,27 @@ impl Scenario for CreateCollectionScenario {
         };
         Ok(row.user_id == setup.user_id && row.name == output.data.name)
     }
+
+    /// 收尾: 删除本轮创建的收藏夹(长跑下每轮新增一个, 不回收会写爆库)
+    const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
+
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        let Some(Ok(view)) = result else {
+            return Ok(());
+        };
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/collections/{}", view.data.id),
+            Some(&setup.auth_header()),
+            None,
+        )
+        .await
+    }
 }
 
 register_scenario!(CreateCollectionScenario);
@@ -185,6 +206,22 @@ impl Scenario for GetCollectionsScenario {
     ) -> Result<bool, Self::Error> {
         Ok(output.data.iter().any(|c| c.id.0 == setup.collection_id))
     }
+
+    /// 收尾: 删除 setup 阶段创建的前置收藏夹
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/collections/{}", setup.collection_id),
+            Some(&setup.session.auth_header()),
+            None,
+        )
+        .await
+    }
 }
 
 register_scenario!(GetCollectionsScenario);
@@ -236,6 +273,22 @@ impl Scenario for UpdateCollectionScenario {
             .await
             .unwrap();
         Ok(row.is_some_and(|r| r.name == "e2e_renamed"))
+    }
+
+    /// 收尾: 删除 setup 阶段创建的前置收藏夹
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/collections/{}", setup.collection_id),
+            Some(&setup.session.auth_header()),
+            None,
+        )
+        .await
     }
 }
 
@@ -373,6 +426,22 @@ impl Scenario for AddVisualsToCollectionScenario {
                 .unwrap()
                 .is_some_and(|c| c.visual_count == 1);
         Ok(linked && count_ok && collection_ok)
+    }
+
+    /// 收尾: 删除 setup 阶段创建的前置收藏夹(关联记录由服务端一并清理)
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/collections/{}", setup.collection_id),
+            Some(&setup.session.auth_header()),
+            None,
+        )
+        .await
     }
 }
 

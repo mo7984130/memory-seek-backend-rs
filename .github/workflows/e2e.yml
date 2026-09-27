@@ -1,10 +1,12 @@
 name: E2E
 
-# 端到端测试(PG / valkey / MailHog / rustfs + 完整 features 的 server)。
+# 端到端正确性验收。
 #
-# 暂以 workflow_dispatch 手动触发: e2e 依赖 ONNX 模型、rustfs/MailHog 与
-# `tests/docker-compose.yml`(使用镜像加速前缀), 首次接入需在 runner 上
-# 实跑验证通过后, 再按需补 `push`/`pull_request`/`schedule` 触发。
+# 与 load.yml 共用 e2e crate 与同一套环境骨架(.github/actions/e2e-stack),
+# 差异只在 RunMode: 这里用 times(固定轮次) + 32 并发, 任何断言失败都以退出码暴露。
+#
+# 暂以 workflow_dispatch 手动触发: 首次接入需在 runner 上实跑验证通过后,
+# 再按需补 `push`/`pull_request`/`schedule` 触发。
 on:
     workflow_dispatch:
 
@@ -15,6 +17,20 @@ jobs:
         env:
             # server 需要 visual 表(依赖 face-engine)与 /metrics
             FEATURES: metrics,auth,user,visual,face-engine
+            # 小种子: 只需覆盖并发池与分页断言(preprea 每次全量重建, CI 里越小越快)
+            E2E__SEED__AUTH_USERS: "64"
+            E2E__SEED__VISUAL_USERS: "64"
+            E2E__SEED__VISUALS_PER_USER: "20"
+            E2E__SEED__FACES_PER_PERSON: "5"
+            E2E__SEED__UIT_USERS: "64"
+            # 运行参数(覆盖 tests/e2e/e2e.config.yml 的 run 段): 固定轮次 + 32 并发
+            E2E__RUN__MODE: times
+            E2E__RUN__TIMES: "128"
+            E2E__RUN__CONCURRENCY: "32"
+            # 阈值 0: 任何失败/超时都判失败(错误明细见 stdout 报告与 artifact)
+            E2E__RUN__MAX_FAILURE_RATE: "0"
+            E2E__RUN__MAX_TIMEOUT_RATE: "0"
+            E2E_REPORT_JSON: e2e-report.json
         steps:
             - name: Checkout
               uses: actions/checkout@v7
@@ -22,57 +38,24 @@ jobs:
                   # ONNX 模型经 git-lfs 托管, 必须拉取真实文件
                   lfs: true
 
-            - name: Install Rust
-              uses: dtolnay/rust-toolchain@stable
-
-            - name: Install mold
-              # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
-              run: sudo apt-get update && sudo apt-get install -y mold
-
-            - uses: Swatinem/rust-cache@v2
+            - name: 构建并启动被测环境
+              uses: ./.github/actions/e2e-stack
               with:
-                  cache-on-failure: true
+                  features: ${{ env.FEATURES }}
+                  server-config: tests/run/config.yml
 
-            - name: Build server
-              run: cargo build --release --features "$FEATURES"
+            - name: 运行 e2e (times)
+              # preprea 会灌入种子并清理上轮 e2e 数据, 场景串行执行, 断言失败 → 退出码 1
+              run: cargo run -p e2e --release -- -c tests/e2e/e2e.config.yml
 
-            - name: Prepare runtime libraries
-              # insight-face-rs 以 load-dynamic 方式加载 onnxruntime, 需随二进制放置 .so
-              run: |
-                  mkdir -p target/release/libs
-                  find thirdparty \( -type f -o -type l \) \
-                    \( -name "*.so" -o -name "*.so.*" \) \
-                    -exec cp -a {} target/release/libs/ \;
-
-            - name: 启动依赖容器 (PG / valkey / MailHog / rustfs)
-              run: docker compose -f tests/docker-compose.yml up -d --wait
-
-            - name: 启动被测服务
-              # tests/config.yml 的 face_engine 模型路径为 `./models/...`,
-              # 故以 tests/ 为工作目录启动; 端口 7985 与 example.e2e.config.yml 一致。
-              env:
-                  LD_LIBRARY_PATH: ../target/release/libs
-              run: |
-                  ( cd tests && exec ../target/release/memory-seek-server --config config.yml ) \
-                    > server.log 2>&1 &
-                  echo $! > server.pid
-                  for i in $(seq 1 60); do
-                      if curl -sf http://127.0.0.1:7985/health >/dev/null; then
-                          echo "server ready"
-                          exit 0
-                      fi
-                      sleep 1
-                  done
-                  echo "server failed to start"
-                  tail -100 server.log
-                  exit 1
-
-            - name: 运行 e2e
-              # preprea 会灌入种子并清理上轮 e2e 数据, 场景串行执行
-              # 本地 e2e.config.yml 不入库, 由示例复制生成
-              run: |
-                  cp tests/e2e/example.e2e.config.yml tests/e2e/e2e.config.yml
-                  cargo run -p e2e --release -- -c tests/e2e/e2e.config.yml
+            - name: 上传报告 (无论成败)
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-report-${{ github.sha }}
+                  path: |
+                      e2e-report.json
+                      server.log
 
             - name: 失败诊断
               if: failure()
@@ -84,4 +67,4 @@ jobs:
               if: always()
               run: |
                   if [ -f server.pid ]; then kill "$(cat server.pid)" 2>/dev/null || true; fi
-                  docker compose -f tests/docker-compose.yml down -v || true
+                  docker compose -f tests/run/docker-compose.yml down -v || true

@@ -1,0 +1,88 @@
+name: e2e stack
+description: >-
+    构建 server 并拉起被测环境(依赖容器 + server):e2e.yml 与 load.yml 共用同一套骨架,
+    两个工作流的差异只在传给 e2e crate 的运行参数(RunMode)。
+
+inputs:
+    features:
+        description: server 编译特性(如 metrics,auth,user,visual,face-engine)
+        required: true
+    server-config:
+        description: server 配置文件路径(相对仓库根)
+        required: true
+    server-cpus:
+        description: 被测 server 占用核数(taskset 限核, 控制变量);留空表示不限核
+        required: false
+        default: ""
+    health-timeout:
+        description: 等待 /health 就绪的秒数
+        required: false
+        default: "60"
+
+runs:
+    using: composite
+    steps:
+        - name: Install Rust
+          uses: dtolnay/rust-toolchain@stable
+
+        - name: Install mold
+          # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
+          shell: bash
+          run: sudo apt-get update && sudo apt-get install -y mold
+
+        - uses: Swatinem/rust-cache@v2
+          with:
+              # 压测可能失败/取消: 失败也保存缓存, 否则每次都会全量编译
+              cache-on-failure: true
+
+        - name: Build server (release)
+          shell: bash
+          run: cargo build --release -p server --features "${{ inputs.features }}"
+
+        - name: Prepare runtime libraries
+          # insight-face-rs 以 load-dynamic 方式加载 onnxruntime, 需随二进制放置 .so
+          shell: bash
+          run: |
+              mkdir -p target/release/libs
+              find thirdparty \( -type f -o -type l \) \
+                \( -name "*.so" -o -name "*.so.*" \) \
+                -exec cp -a {} target/release/libs/ \;
+
+        - name: Start dependencies (PG / valkey / MailHog / rustfs)
+          # 只起依赖服务: 显式列出服务名, 避开 compose 里依赖 target/dist 的 server 服务
+          shell: bash
+          run: docker compose -f tests/run/docker-compose.yml up -d --wait postgres postgres-init valkey mailhog rustfs rustfs-init
+
+        - name: Start server under test
+          shell: bash
+          env:
+              LD_LIBRARY_PATH: ${{ github.workspace }}/target/release/libs
+              # 配置里的模型路径指向 build.sh 产物 target/dist/models, CI 直接指回仓库内的 LFS 文件
+              MEMORY_SEEK_FACE_ENGINE__DETECT_MODEL_PATH: thirdparty/models/det.onnx
+              MEMORY_SEEK_FACE_ENGINE__RECOGNIZE_MODEL_PATH: thirdparty/models/rec.onnx
+              SERVER_CPUS: ${{ inputs.server-cpus }}
+              SERVER_CONFIG: ${{ inputs.server-config }}
+              HEALTH_TIMEOUT: ${{ inputs.health-timeout }}
+          run: |
+              # 固定 server 占用核数(控制变量): 压测对比不随 runner 核数漂移
+              if [ -n "$SERVER_CPUS" ]; then
+                  taskset -c "0-$((SERVER_CPUS - 1))" \
+                      ./target/release/memory-seek-server --config "$SERVER_CONFIG" \
+                      > server.log 2>&1 &
+                  echo "server cpus: 0-$((SERVER_CPUS - 1))"
+              else
+                  ./target/release/memory-seek-server --config "$SERVER_CONFIG" \
+                      > server.log 2>&1 &
+              fi
+              echo $! > server.pid
+
+              for _ in $(seq 1 "$HEALTH_TIMEOUT"); do
+                  if curl -sf http://127.0.0.1:7985/health >/dev/null; then
+                      echo "server ready"
+                      exit 0
+                  fi
+                  sleep 1
+              done
+              echo "server failed to start"
+              tail -100 server.log
+              exit 1

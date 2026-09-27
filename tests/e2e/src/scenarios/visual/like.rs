@@ -9,7 +9,7 @@ use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
     register_scenario,
-    scenario::{Scenario, SetupMode},
+    scenario::{Scenario, SetupMode, TeardownMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
@@ -121,6 +121,22 @@ impl Scenario for LikeVisualScenario {
             .unwrap()
             .is_some();
         Ok(liked)
+    }
+
+    /// 收尾: 取消本任务在种子影像上的点赞, 离开时不留状态
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/visual/{}/like", setup.visual_id),
+            Some(&setup.session.auth_header()),
+            None,
+        )
+        .await
     }
 }
 
@@ -268,14 +284,32 @@ impl Scenario for GetLikedVisualsScenario {
             .iter()
             .any(|p| p.id.0 == setup.visual_id))
     }
+
+    /// 收尾: 取消本任务的点赞, 让种子影像回到初始状态
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/visual/{}/like", setup.visual_id),
+            Some(&setup.session.auth_header()),
+            None,
+        )
+        .await
+    }
 }
 
 register_scenario!(GetLikedVisualsScenario);
 
 /// 点赞评论前置:登录 + 目标评论(种子影像 u=7)。
+/// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
 #[derive(Default)]
 pub struct LikeCommentSetup {
     pub session: Session,
+    pub visual_id: i64,
     pub comment_id: i64,
 }
 
@@ -300,6 +334,7 @@ impl Scenario for LikeCommentScenario {
         let comment_id = publish_comment(ctx, &session, visual.id).await?;
         Ok(LikeCommentSetup {
             session,
+            visual_id: visual.id.0,
             comment_id,
         })
     }
@@ -337,14 +372,34 @@ impl Scenario for LikeCommentScenario {
             .is_some();
         Ok(liked)
     }
+
+    /// 收尾: 删除 setup 阶段为点赞而发表的评论(服务端会一并清理其点赞)
+    const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
+
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/comment/{}/{}", setup.visual_id, setup.comment_id),
+            Some(&setup.session.auth_header()),
+            None,
+        )
+        .await
+    }
 }
 
 register_scenario!(LikeCommentScenario);
 
 /// 取消点赞评论前置:登录 + 已点赞目标评论(种子影像 u=8)。
+/// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
 #[derive(Default)]
 pub struct UnlikeCommentSetup {
     pub session: Session,
+    pub visual_id: i64,
     pub comment_id: i64,
 }
 
@@ -377,6 +432,7 @@ impl Scenario for UnlikeCommentScenario {
             .await?;
         Ok(UnlikeCommentSetup {
             session,
+            visual_id: visual.id.0,
             comment_id,
         })
     }
@@ -413,6 +469,24 @@ impl Scenario for UnlikeCommentScenario {
             .unwrap()
             .is_none();
         Ok(gone)
+    }
+
+    /// 收尾: 删除 setup 阶段为取消点赞而发表的评论
+    const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
+
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/comment/{}/{}", setup.visual_id, setup.comment_id),
+            Some(&setup.session.auth_header()),
+            None,
+        )
+        .await
     }
 }
 

@@ -1683,7 +1683,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "e2e"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -3208,9 +3208,9 @@ dependencies = [
 
 [[package]]
 name = "memseek-test"
-version = "0.22.2"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a1862999e39ced730db98c50bb19104c2953501d0e0f04dd92351e671fd569a"
+checksum = "5477fdfc2551870cfe13f8b5b6f11433653bd7315b99ea00cee3ba85967e66da"
 dependencies = [
  "futures",
  "hdrhistogram",

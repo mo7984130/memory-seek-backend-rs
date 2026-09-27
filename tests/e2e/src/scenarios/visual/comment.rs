@@ -6,7 +6,7 @@ use memseek_test::{
     TaskIndex,
     ctxlibs::http_client::{HttpError, reqwest},
     register_scenario,
-    scenario::{Scenario, SetupMode},
+    scenario::{Scenario, SetupMode, TeardownMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
@@ -51,8 +51,22 @@ pub struct CommentSetup {
 }
 
 async fn comment_setup(ctx: &Context, task: &TaskIndex) -> Result<CommentSetup, HttpError> {
+    comment_setup_on(ctx, task, 6).await
+}
+
+/// 指定种子影像序号的前置。
+///
+/// 各场景占用不同 ordinal 避免相互干扰: `GetComments` 断言"自己的评论在首页",
+/// 若与持续发表评论的 `PublishComment` 共用同一张影像, 长跑下会被新评论挤出首页。
+async fn comment_setup_on(
+    ctx: &Context,
+    task: &TaskIndex,
+    ordinal: u64,
+) -> Result<CommentSetup, HttpError> {
     let session = session(ctx, task.index).await?;
-    let visual = seed_visual(ctx, 6).await.ok_or_else(super::seed_missing)?;
+    let visual = seed_visual(ctx, ordinal)
+        .await
+        .ok_or_else(super::seed_missing)?;
     Ok(CommentSetup {
         session,
         visual_id: visual.id.0,
@@ -112,6 +126,28 @@ impl Scenario for PublishCommentScenario {
             .unwrap()
             .is_some_and(|p| p.comment_count > 0);
         Ok(row_ok && visual_ok)
+    }
+
+    /// 收尾: 删除本轮发表的评论(长跑下每轮新增一条)。
+    /// 服务端删评论时会一并清理该评论的点赞与计数
+    const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
+
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        let Some(Ok(view)) = result else {
+            return Ok(());
+        };
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/comment/{}/{}", setup.visual_id, view.data.id),
+            Some(&setup.session.auth_header()),
+            None,
+        )
+        .await
     }
 }
 
@@ -187,7 +223,9 @@ impl Scenario for GetCommentsScenario {
     type Setup = CommentListSetup;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        let base = comment_setup(ctx, task).await?;
+        // 独占种子影像(ordinal 9): 本场景在 Task 粒度只建一条前置评论,
+        // 与每轮都发表评论的 PublishComment 共用影像会让它被挤出首页
+        let base = comment_setup_on(ctx, task, 9).await?;
         let comment = publish(
             ctx,
             &base.session,
@@ -233,6 +271,22 @@ impl Scenario for GetCommentsScenario {
             .records
             .iter()
             .any(|c| c.id.0 == setup.comment_id))
+    }
+
+    /// 收尾: 删除 setup 阶段制造的前置评论
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            &format!("/visual/comment/{}/{}", setup.visual_id, setup.comment_id),
+            Some(&setup.session.auth_header()),
+            None,
+        )
+        .await
     }
 }
 

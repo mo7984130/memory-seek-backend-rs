@@ -6,6 +6,7 @@ use memseek_test::{
     register_scenario,
     scenario::Scenario,
 };
+use serde_json::json;
 use types_visual::dto::visual::VisualView;
 
 use crate::context::Context;
@@ -13,10 +14,13 @@ use crate::context::Context;
 use super::{Session, session, unique_png, unique_tag};
 
 /// 下载前置:登录 + 上传唯一影像, 记录原图 token 与字节。
+/// `visual_id` 供收尾删除(长跑下每任务每轮上传, 不回收会持续增长)。
 #[derive(Default)]
 pub struct DownloadSetup {
     pub bytes: Vec<u8>,
     pub original_token: String,
+    pub visual_id: i64,
+    pub auth_header: String,
 }
 
 /// 通过原图 token 下载: 服务端返回的字节与上传字节一致。
@@ -39,6 +43,8 @@ impl Scenario for DownloadOriginalScenario {
         Ok(DownloadSetup {
             bytes,
             original_token: view.original_token.unwrap_or_default(),
+            visual_id: view.id.0,
+            auth_header: session.auth_header(),
         })
     }
 
@@ -65,6 +71,22 @@ impl Scenario for DownloadOriginalScenario {
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         Ok(!setup.original_token.is_empty() && output.as_slice() == setup.bytes.as_slice())
+    }
+
+    /// 收尾: 删除 setup 阶段上传的影像(每任务一张, 默认 Task 粒度)
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            "/visual",
+            Some(&setup.auth_header),
+            Some(json!({ "visualIds": [setup.visual_id] })),
+        )
+        .await
     }
 }
 
