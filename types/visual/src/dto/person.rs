@@ -45,7 +45,7 @@ impl Default for PersonSearchParam {
 crate::out_dto!(PersonView, "visual/", rename = "Person"; {
     pub id: PersonId,
     pub name: String,
-    /// 封面图 token(加密串, 经 `GET /visual/image/{token}` 访问)
+    /// 封面图 token(加密串, 经 `GET /visual/{token}` 访问)
     #[cfg_attr(feature = "ts", ts(type = "string"))]
     pub cover_token: VisualTokenStr,
     pub face_count: u64
