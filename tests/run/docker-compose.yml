@@ -69,11 +69,14 @@ services:
             RUSTFS_SECRET_KEY: memory_seek_test
         ports:
             - "9000:9000"
-        tmpfs:
-            # rootless podman 的 tmpfs 默认属主是宿主 uid(=容器内 root),权限 750,
-            # 而镜像以非 root 用户 rustfs(uid 10001)运行,写 /data 会 Permission denied,
-            # 因此显式指定 mode=1777 与 Docker 默认 tmpfs 语义一致。
-            - /data:mode=1777
+        volumes:
+            # 磁盘承载的命名卷(替代原 tmpfs): 对象数据不再全驻内存,
+            # 避免上传大视频时 swap 打满、被 systemd-oomd 连容器一起杀掉。
+            # 卷默认持久化, 但测试要求每次启动都从空状态开始(旧 tmpfs 的临时语义),
+            # 因此启动前需执行 `down -v`:
+            #   docker compose -f tests/run/docker-compose.yml down -v   # 或 podman compose
+            # CI 已在 .github/actions/e2e-stack 的启动步骤里加上该清理。
+            - rustfs-data:/data
 
     rustfs-init:
         # 建桶初始化用 aws-cli(Docker Hub 官方镜像, 持续维护);
@@ -141,3 +144,7 @@ services:
             timeout: 3s
             retries: 10
             start_period: 10s
+
+volumes:
+    # rustfs 数据卷(命名卷=磁盘承载, 每次启动前 `down -v` 清空)
+    rustfs-data:

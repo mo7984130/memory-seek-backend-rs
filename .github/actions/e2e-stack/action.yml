@@ -52,6 +52,8 @@ runs:
           # 只起依赖服务: 显式列出服务名, 避开 compose 里依赖 target/dist 的 server 服务
           shell: bash
           run: |
+              # rustfs 数据卷是持久化命名卷: 启动前清空, 保证每次运行为空状态(旧 tmpfs 的临时语义)
+              docker compose -f tests/run/docker-compose.yml down -v || true
               # 长驻依赖: 等到健康/运行
               docker compose -f tests/run/docker-compose.yml up -d --wait postgres valkey mailhog rustfs
               # 一次性初始化(pg vector 扩展 / bucket): 不能用 up --wait 一起起,
