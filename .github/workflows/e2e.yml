@@ -5,10 +5,13 @@ name: E2E
 # 与 load.yml 共用 e2e crate 与同一套环境骨架(.github/actions/e2e-stack),
 # 差异只在 RunMode: 这里用 times(固定轮次) + 32 并发, 任何断言失败都以退出码暴露。
 #
-# 暂以 workflow_dispatch 手动触发: 首次接入需在 runner 上实跑验证通过后,
-# 再按需补 `push`/`pull_request`/`schedule` 触发。
+# 触发: develop 的 push / pull_request。每次提交实跑全套断言, 失败即红;
+# 需要手动重跑时临时加回 `workflow_dispatch:` 即可。
 on:
-    workflow_dispatch:
+    push:
+        branches: [develop]
+    pull_request:
+        branches: [develop]
 
 jobs:
     e2e:

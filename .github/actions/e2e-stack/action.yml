@@ -51,7 +51,15 @@ runs:
         - name: Start dependencies (PG / valkey / MailHog / rustfs)
           # 只起依赖服务: 显式列出服务名, 避开 compose 里依赖 target/dist 的 server 服务
           shell: bash
-          run: docker compose -f tests/run/docker-compose.yml up -d --wait postgres postgres-init valkey mailhog rustfs rustfs-init
+          run: |
+              # 长驻依赖: 等到健康/运行
+              docker compose -f tests/run/docker-compose.yml up -d --wait postgres valkey mailhog rustfs
+              # 一次性初始化(pg vector 扩展 / bucket): 不能用 up --wait 一起起,
+              # 容器退出会被 --wait 判为失败; 也不依赖别的服务用
+              # service_completed_successfully 引用它们(CI 不跑 compose 里的 server)。
+              # 改用 run: 阻塞到结束并继承退出码, 失败会直接红。
+              docker compose -f tests/run/docker-compose.yml run --rm postgres-init
+              docker compose -f tests/run/docker-compose.yml run --rm rustfs-init
 
         - name: Start server under test
           shell: bash

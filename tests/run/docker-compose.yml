@@ -1,6 +1,13 @@
+# 测试依赖(PG+pgvector / valkey / MailHog / rustfs)。
+#
+# 镜像一律使用官方名称, 便于 GitHub Actions 等境外环境直接拉取。
+# 中国大陆本地开发可在 podman 的 registries.conf 里给 docker.io 配置镜像站:
+#   [[registry]]
+#   prefix = "docker.io"
+#   location = "docker.1panel.live"
 services:
     postgres:
-        image: docker.1panel.live/pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg16
         container_name: memory-seek-test-pg
         environment:
             POSTGRES_USER: memory_seek_test
@@ -18,7 +25,7 @@ services:
             start_period: 10s
 
     postgres-init:
-        image: docker.1panel.live/pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg16
         container_name: memory-seek-test-pg-init
         depends_on:
             postgres:
@@ -38,7 +45,7 @@ services:
             - CREATE EXTENSION IF NOT EXISTS vector;
 
     valkey:
-        image: docker.1panel.live/valkey/valkey:8-alpine
+        image: valkey/valkey:8-alpine
         container_name: memory-seek-test-valkey
         command: ["valkey-server", "--save", "", "--appendonly", "no"]
         ports:
@@ -47,14 +54,14 @@ services:
             - /data
 
     mailhog:
-        image: docker.1panel.live/mailhog/mailhog
+        image: mailhog/mailhog:latest
         container_name: memory-seek-test-mailhog
         ports:
             - "1025:1025"
             - "8025:8025"
 
     rustfs:
-        image: docker.1panel.live/rustfs/rustfs:1.0.0
+        image: rustfs/rustfs:1.0.0
         container_name: memory-seek-test-rustfs
         command: /data
         environment:
@@ -69,25 +76,35 @@ services:
             - /data:mode=1777
 
     rustfs-init:
-        image: docker.1panel.live/minio/mc:latest
+        # 建桶初始化用 aws-cli(Docker Hub 官方镜像, 持续维护);
+        # 原 minio/mc 已从 Docker Hub 下架(MinIO 整体迁至 quay)。
+        # 自定义端点必须用 path-style 寻址: 默认 auto 会优先 virtual-host,
+        # 而容器名无法作为子域解析(官方文档: 该键对 s3/s3api 均生效)。
+        image: amazon/aws-cli:latest
         container_name: memory-seek-test-rustfs-init
         depends_on:
             - rustfs
         entrypoint: >
             /bin/sh -c "
-            until mc alias set local http://rustfs:9000 memory_seek_test memory_seek_test; do
+            set -e;
+            export AWS_ACCESS_KEY_ID=memory_seek_test;
+            export AWS_SECRET_ACCESS_KEY=memory_seek_test;
+            export AWS_DEFAULT_REGION=us-east-1;
+            aws configure set default.s3.addressing_style path;
+            until aws --endpoint-url http://rustfs:9000 s3api list-buckets >/dev/null 2>&1; do
                 echo 'waiting for RustFS...';
                 sleep 1;
             done;
-            mc mb --ignore-existing local/memory-seek-test;
-            echo 'bucket created';
+            if ! aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket memory-seek-test 2>/dev/null; then
+                aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket memory-seek-test;
+            fi;
+            echo 'bucket ready';
             "
 
     server:
         # 直接复用本地构建产物(build/build.sh 输出到 target/dist),
         # 底座与 Dockerfile.build 一致(ubuntu 22.04), 保证 glibc 兼容。
-        # 官方镜像在 1panel 加速器下需带 library/ 前缀
-        image: docker.1panel.live/library/ubuntu:22.04
+        image: ubuntu:22.04
         container_name: memory-seek-test-server
         depends_on:
             postgres-init:
