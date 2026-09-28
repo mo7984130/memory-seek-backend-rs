@@ -19,6 +19,7 @@ use super::{Session, session, unique_png, unique_tag};
 pub struct DownloadSetup {
     pub bytes: Vec<u8>,
     pub original_token: String,
+    pub thumbnail_token: String,
     pub visual_id: i64,
     pub auth_header: String,
 }
@@ -43,6 +44,7 @@ impl Scenario for DownloadOriginalScenario {
         Ok(DownloadSetup {
             bytes,
             original_token: view.original_token.unwrap_or_default(),
+            thumbnail_token: view.thumbnail_token.unwrap_or_default(),
             visual_id: view.id.0,
             auth_header: session.auth_header(),
         })
@@ -91,6 +93,90 @@ impl Scenario for DownloadOriginalScenario {
 }
 
 register_scenario!(DownloadOriginalScenario);
+
+/// 图片缩略图: 经图片处理后端(本地/OSS)产出 WebP。
+#[derive(Default)]
+pub struct DownloadImageThumbnailScenario;
+
+impl Scenario for DownloadImageThumbnailScenario {
+    type Ctx = Context;
+
+    type Error = HttpError;
+
+    /// (状态码, content-type, 字节)
+    type Output = (u16, Option<String>, Vec<u8>);
+
+    type Setup = DownloadSetup;
+
+    async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
+        let session: Session = session(ctx, task.index).await?;
+        let bytes = unique_png(&unique_tag(task));
+        let view: VisualView = super::upload(ctx, &session, bytes.clone()).await?.data;
+        Ok(DownloadSetup {
+            bytes,
+            original_token: view.original_token.unwrap_or_default(),
+            thumbnail_token: view.thumbnail_token.unwrap_or_default(),
+            visual_id: view.id.0,
+            auth_header: session.auth_header(),
+        })
+    }
+
+    async fn run(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+    ) -> Result<Self::Output, Self::Error> {
+        let resp = ctx
+            .client
+            .request(
+                reqwest::Method::GET,
+                &format!("/visual/{}", setup.thumbnail_token),
+            )
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        let content_type = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        let bytes = resp.bytes().await?.to_vec();
+        Ok((status, content_type, bytes))
+    }
+
+    async fn validate(
+        _ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        output: &Self::Output,
+    ) -> Result<bool, Self::Error> {
+        let (status, content_type, bytes) = output;
+        // 缩略图应为 WebP(RIFF 容器 + 偏移 8 处 "WEBP")
+        let is_webp = bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP";
+        Ok(!setup.thumbnail_token.is_empty()
+            && *status == 200
+            && content_type.as_deref() == Some("image/webp")
+            && is_webp)
+    }
+
+    /// 收尾: 删除 setup 阶段上传的影像。
+    async fn teardown(
+        ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        crate::cleanup::delete(
+            ctx,
+            "/visual",
+            Some(&setup.auth_header),
+            Some(json!({ "visualIds": [setup.visual_id] })),
+        )
+        .await
+    }
+}
+
+register_scenario!(DownloadImageThumbnailScenario);
 
 /// 非法 token: 期望非 2xx(token 解密失败)。
 #[derive(Default)]

@@ -82,8 +82,9 @@ jobs:
             # 而上传接口按 CPU 核数限流(CI 里 server 限 2 核 → 2 个许可), 饱和时返回 503,
             # 断言就退化成限流统计(实测通过率 25.5%)。正确性验收(e2e.yml)仍会跑它。
             # VideoDerivativeScenario 会触发真实视频转码(单 worker 串行), 压测下会拖长耗时
-            # 并增加 CPU 负载, 故同样只在正确性验收中跑。
-            E2E__RUN__EXCLUDE: UploadDuplicateVisualScenario,VideoDerivativeScenario
+            # 并增加 CPU 负载; DownloadImageThumbnailScenario 走本地图片处理(CPU)。
+            # 两者同 UploadDuplicateVisualScenario 一样只在正确性验收(e2e.yml)中跑。
+            E2E__RUN__EXCLUDE: UploadDuplicateVisualScenario,VideoDerivativeScenario,DownloadImageThumbnailScenario
             # 自建环境每轮重建种子; 外部目标跳过(否则会清空对方数据)
             # 注意: push/schedule 触发时 inputs 为空, 必须用 `|| ''` 归一化后再比较
             E2E__RUN__PREPARE: ${{ (inputs.target_url || '') == '' && 'true' || 'false' }}
