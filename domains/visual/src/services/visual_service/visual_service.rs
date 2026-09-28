@@ -261,9 +261,10 @@ impl VisualService {
 pub enum ImageDownloadData {
     /// 处理后的影像(缩略图/预览/裁剪/视频截帧),MIME 随处理方式变化
     Processed {
-        /// 处理后的影像字节
+        /// 处理产物字节
         bytes: Bytes,
-        /// 处理产物格式:图片处理为 `image/webp`,视频截帧为 `image/jpeg`
+        /// 处理产物 MIME,按其字节魔数嗅探(后端支持处理时为处理产物格式,
+        /// 后端忽略处理参数而原样返回时则为原始文件的真实格式)
         content_type: &'static str,
     },
     /// 原始影像,以流式返回,动态内容类型
@@ -346,9 +347,11 @@ impl VisualService {
                     .await
                     .into_contextual()?;
 
+                let content_type =
+                    FileValidator::sniff_content_type(&bytes).unwrap_or("application/octet-stream");
                 Ok(ImageDownloadData::Processed {
                     bytes,
-                    content_type: "image/webp",
+                    content_type,
                 })
             }
             // 视频:缩略图 / 预览为封面截帧,按时长中点取帧避免片头黑屏
@@ -370,9 +373,11 @@ impl VisualService {
                     .await
                     .into_contextual()?;
 
+                let content_type =
+                    FileValidator::sniff_content_type(&bytes).unwrap_or("application/octet-stream");
                 Ok(ImageDownloadData::Processed {
                     bytes,
-                    content_type: "image/jpeg",
+                    content_type,
                 })
             }
             // 原图 / 原视频:流式下载,MIME 按文件扩展名推断

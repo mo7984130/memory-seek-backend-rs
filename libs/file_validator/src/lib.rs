@@ -14,6 +14,10 @@ const ISOBMFF_TAG: [u8; 4] = *b"ftyp";
 const EBML_MAGIC: [u8; 4] = [0x1A, 0x45, 0xDF, 0xA3];
 /// QuickTime 的 major brand
 const QT_BRAND: [u8; 4] = *b"qt  ";
+/// RIFF 容器魔数(WebP 基于 RIFF)
+const RIFF_MAGIC: [u8; 4] = *b"RIFF";
+/// WebP 格式标识(RIFF 容器偏移 8 处)
+const WEBP_TAG: [u8; 4] = *b"WEBP";
 
 /// 魔数嗅探的媒体大类
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +41,10 @@ impl ContentFormat {
     const PNG: Self = Self {
         ext: "png",
         mime_type: "image/png",
+    };
+    const WEBP: Self = Self {
+        ext: "webp",
+        mime_type: "image/webp",
     };
     const MP4: Self = Self {
         ext: "mp4",
@@ -174,6 +182,15 @@ impl FileValidator {
             return Some(MediaKind::Video);
         }
         None
+    }
+
+    /// 按文件头魔数嗅探内存字节对应的规范 MIME 类型(仅用于下载响应推断)。
+    ///
+    /// 覆盖图片(JPEG/PNG/WebP)与视频(MP4/MOV/WebM/MKV);无法识别时返回 `None`。
+    pub fn sniff_content_type(head: &[u8]) -> Option<&'static str> {
+        Self::detect_image_format(head)
+            .or_else(|| Self::detect_video_format(head))
+            .map(|format| format.mime_type)
     }
 
     /// 校验媒体文件, 按魔数嗅探分发到图片/视频校验, 不依赖文件名。
@@ -327,6 +344,10 @@ impl FileValidator {
         if head.len() >= PNG_MAGIC.len() && head[..PNG_MAGIC.len()] == PNG_MAGIC {
             return Some(ContentFormat::PNG);
         }
+        // WebP: RIFF 容器,偏移 8 处为 "WEBP"
+        if head.len() >= 12 && head[..RIFF_MAGIC.len()] == RIFF_MAGIC && head[8..12] == WEBP_TAG {
+            return Some(ContentFormat::WEBP);
+        }
         None
     }
 
@@ -453,6 +474,39 @@ mod tests {
         let path = unique_temp_path();
         std::fs::write(&path, data).unwrap();
         path
+    }
+
+    #[test]
+    fn sniff_content_type_detects_mime_by_magic() {
+        // 图片
+        assert_eq!(
+            FileValidator::sniff_content_type(&[0xFF, 0xD8, 0xFF, 0xE0]),
+            Some("image/jpeg")
+        );
+        assert_eq!(
+            FileValidator::sniff_content_type(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+            Some("image/png")
+        );
+        // WebP: RIFF 容器 + 偏移 8 处 "WEBP"
+        let mut webp = [0u8; 16];
+        webp[..4].copy_from_slice(b"RIFF");
+        webp[8..12].copy_from_slice(b"WEBP");
+        assert_eq!(FileValidator::sniff_content_type(&webp), Some("image/webp"));
+        // 视频: ISOBMFF major_brand 区分 MP4/MOV
+        assert_eq!(
+            FileValidator::sniff_content_type(b"\x00\x00\x00\x18ftypisom"),
+            Some("video/mp4")
+        );
+        assert_eq!(
+            FileValidator::sniff_content_type(b"\x00\x00\x00\x18ftypqt  "),
+            Some("video/quicktime")
+        );
+        // EBML DocType 区分 WebM/MKV
+        let mut webm = vec![0x1A, 0x45, 0xDF, 0xA3];
+        webm.extend_from_slice(b"...webm...");
+        assert_eq!(FileValidator::sniff_content_type(&webm), Some("video/webm"));
+        // 无法识别
+        assert_eq!(FileValidator::sniff_content_type(b"not-a-media"), None);
     }
 
     #[test]
