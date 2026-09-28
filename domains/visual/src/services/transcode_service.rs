@@ -34,6 +34,11 @@ use crate::state::VisualState;
 /// 单次 ffmpeg 执行超时
 const FFMPEG_TIMEOUT: Duration = Duration::from_secs(600);
 
+/// 是否应重试: 已尝试次数(含本次)未达上限。
+fn should_retry(attempts: i32, max_attempts: u32) -> bool {
+    attempts > 0 && (attempts as u32) < max_attempts
+}
+
 /// 待转码任务
 struct TranscodeJob {
     id: VisualDerivativeId,
@@ -202,10 +207,47 @@ impl TranscodeService {
                 Ok(())
             }
             Err(error) => {
-                let _ = DerivativeMapper::mark_failed(&state.db, job.id, &error.to_string()).await;
+                let max_attempts = state.config.transcode.max_attempts;
+                let retry = match DerivativeMapper::bump_attempt(&state.db, job.id).await? {
+                    Some(attempts) => should_retry(attempts, max_attempts),
+                    None => false,
+                };
+                if retry {
+                    // 回退为待生成并退避重入队(不阻塞 worker)
+                    DerivativeMapper::mark_pending(&state.db, job.id).await?;
+                    let backoff_secs = state.config.transcode.retry_backoff_secs;
+                    warn!(
+                        visual_id = %job.visual_id,
+                        kind = ?job.kind,
+                        backoff_secs,
+                        error = %error,
+                        "视频转码失败, 稍后重试"
+                    );
+                    Self::schedule_retry(state, job, backoff_secs);
+                } else {
+                    let _ =
+                        DerivativeMapper::mark_failed(&state.db, job.id, &error.to_string()).await;
+                    warn!(
+                        visual_id = %job.visual_id,
+                        kind = ?job.kind,
+                        error = %error,
+                        "视频转码失败, 已达最大尝试次数"
+                    );
+                }
                 Err(error)
             }
         }
+    }
+
+    /// 退避后重新入队(不阻塞当前 worker)。
+    fn schedule_retry(state: &Arc<VisualState>, job: TranscodeJob, backoff_secs: u64) {
+        let task_manager = state.task_manager.clone();
+        task_manager.spawn("transcode_retry", async move {
+            tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+            if let Some(tx) = TRANSCODE_QUEUE.get() {
+                let _ = tx.send(job);
+            }
+        });
     }
 
     /// 下载原片、调用 ffmpeg 生成衍生片并上传, 返回衍生对象 key。
@@ -446,6 +488,19 @@ impl TranscodeService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn should_retry_until_max_attempts() {
+        // max=3: 第1、2 次失败后重试, 第3 次不再重试
+        assert!(should_retry(1, 3));
+        assert!(should_retry(2, 3));
+        assert!(!should_retry(3, 3));
+        // max=1: 只有一次机会
+        assert!(!should_retry(1, 1));
+        // 非法计数
+        assert!(!should_retry(0, 3));
+    }
+
     #[test]
     fn thumb_args_take_first_seconds_without_audio() {
         let cfg = TranscodeConfig::default();

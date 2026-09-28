@@ -93,3 +93,6 @@ visual:
     # 预览片: 目标高度、视频码率
     # preview_max_height: 1080
     # preview_bitrate: 4M
+    # 转码失败的有限重试: 最大尝试次数(含首次)与退避秒数
+    # max_attempts: 3
+    # retry_backoff_secs: 30

@@ -7,10 +7,13 @@
 //! 仅缩不放), 由 [`crate::config::ImageProcessor`] 选择。
 
 use bytes::Bytes;
-use common_core::AppError;
 use common_core::error::contextual::Result;
 use common_core::error::contextual::ext::{IntoContextualExt, ResultContextualExt};
+use common_core::time::Duration;
+use common_core::{AppError, ContextualError};
+use constants::RedisKeys;
 use image::{DynamicImage, ImageFormat, imageops::FilterType};
+use multi_level_cache::MultiLevelCache;
 use oss::S3Client;
 use std::io::Cursor;
 use types_visual::{FaceBBox, ImageDimensions};
@@ -23,6 +26,9 @@ const THUMBNAIL_WIDTH: u32 = 300;
 const PREVIEW_WIDTH: u32 = 1920;
 /// 人脸裁剪目标宽度
 const CROP_WIDTH: u32 = 200;
+
+/// 处理产物缓存 TTL(与下载响应 `Cache-Control` 一致: 7 天)。
+const PROCESSED_CACHE_TTL: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// 图片处理意图(语义化, 与具体后端无关)
 #[derive(Clone)]
@@ -50,10 +56,53 @@ impl ProcessOp {
             }
         }
     }
+
+    /// 缓存桶标识(含后端与参数), 与 file_id 共同构成缓存键。
+    fn cache_key(&self, backend: ResolvedImageProcessor) -> String {
+        let backend = match backend {
+            ResolvedImageProcessor::Oss => "oss",
+            ResolvedImageProcessor::Local => "local",
+        };
+        match self {
+            Self::Thumbnail => format!("{backend}:thumb"),
+            Self::Preview => format!("{backend}:preview"),
+            Self::Crop { bbox, source } => {
+                let (x, y, w, h) = bbox.to_pixel_rect(source.width, source.height);
+                format!("{backend}:crop:{x}_{y}_{w}_{h}")
+            }
+        }
+    }
 }
 
-/// 依后端处理图片, 返回处理产物字节(WebP)。
+/// 依后端处理图片, 返回处理产物字节(WebP); 命中服务端缓存则直接返回。
 pub async fn process_image(
+    s3: &S3Client,
+    backend: ResolvedImageProcessor,
+    cache: &MultiLevelCache<String, ContextualError>,
+    file_id: &str,
+    op: &ProcessOp,
+) -> Result<Bytes> {
+    use base64::Engine as _;
+
+    let key = RedisKeys::visual::visual::visual_processed(file_id, &op.cache_key(backend));
+    let encoded = cache
+        .get_or_load(key.as_str(), PROCESSED_CACHE_TTL, || async {
+            let bytes = render(s3, backend, file_id, op).await?;
+            Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+        })
+        .await?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded.as_bytes())
+        .context_err(
+            "image_cache_decode_err",
+            "图片缓存解码失败",
+            AppError::InternalServerError,
+        )?;
+    Ok(Bytes::from(bytes))
+}
+
+/// 真实执行图片处理(不走缓存)。
+async fn render(
     s3: &S3Client,
     backend: ResolvedImageProcessor,
     file_id: &str,
@@ -118,6 +167,57 @@ fn fit_width(image: DynamicImage, max_width: u32) -> DynamicImage {
     image.resize(max_width, target_height, FilterType::Lanczos3)
 }
 
+/// 等比缩放到 `max_width×max_height` 框内(仅缩小, 不放大)。
+fn fit_within(image: DynamicImage, max_width: u32, max_height: u32) -> DynamicImage {
+    if image.width() <= max_width && image.height() <= max_height {
+        return image;
+    }
+    image.resize(max_width, max_height, FilterType::Lanczos3)
+}
+
+/// 供人脸检测取图: 按后端处理为「限制在 `max_width×max_height` 内」的位图(仅缩不放)。
+///
+/// - `Oss`: 复用服务端处理 `image/resize,m_lfit`;
+/// - `Local`: 下载原图后本地缩放。
+pub async fn fetch_for_detection(
+    s3: &S3Client,
+    backend: ResolvedImageProcessor,
+    file_id: &str,
+    max_width: u32,
+    max_height: u32,
+) -> Result<DynamicImage> {
+    match backend {
+        ResolvedImageProcessor::Oss => {
+            let param = format!("image/resize,m_lfit,{max_width},{max_height}");
+            let bytes = s3
+                .download_with_process(file_id, &param)
+                .await
+                .into_contextual()?;
+            decode(bytes).await
+        }
+        ResolvedImageProcessor::Local => {
+            let bytes = s3.download(file_id).await.into_contextual()?;
+            let image = decode(bytes).await?;
+            tokio::task::spawn_blocking(move || fit_within(image, max_width, max_height))
+                .await
+                .into_contextual()
+        }
+    }
+}
+
+/// 在阻塞线程中解码图片字节。
+async fn decode(bytes: Bytes) -> Result<DynamicImage> {
+    tokio::task::spawn_blocking(move || {
+        image::load_from_memory(&bytes).context_err(
+            "media_decode_err",
+            "图片解码失败",
+            AppError::bad_request("图片解码失败"),
+        )
+    })
+    .await
+    .into_contextual()?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +256,17 @@ mod tests {
     fn small_image_is_not_upscaled() {
         let output = local_process(&sample_png(100, 80), &ProcessOp::Thumbnail).unwrap();
         assert_eq!(decode(&output).width(), 100);
+    }
+
+    #[test]
+    fn fit_within_downscales_and_never_upscales() {
+        let big = DynamicImage::ImageRgb8(RgbImage::from_pixel(4000, 2000, Rgb([1, 2, 3])));
+        let fitted = fit_within(big, 1920, 1920);
+        assert_eq!((fitted.width(), fitted.height()), (1920, 960));
+
+        let small = DynamicImage::ImageRgb8(RgbImage::from_pixel(100, 80, Rgb([1, 2, 3])));
+        let kept = fit_within(small, 1920, 1920);
+        assert_eq!((kept.width(), kept.height()), (100, 80));
     }
 
     #[test]

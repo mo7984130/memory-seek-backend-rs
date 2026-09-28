@@ -1,12 +1,15 @@
 #[cfg(feature = "face-engine")]
 use crate::setup::domains::backup::BackupRuntime;
 use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
-use common_core::Result;
+use common_core::{AppError, ContextualError, Result};
 use common_runtime::TaskManager;
 use common_web::controller_router::ControllerRouter;
 use sea_orm::DatabaseConnection;
 #[cfg(feature = "face-engine")]
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::process::Command;
+use tokio::time::timeout;
 use tracing::{debug, info};
 use visual::VisualState;
 
@@ -20,6 +23,10 @@ pub use visual::VisualConfig as Config;
 )]
 pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     debug!("初始化 visual domain");
+
+    // 转码配置校验 + ffmpeg 可用性探测: 缺 ffmpeg/配置非法时尽快暴露,
+    // 而非等到运行时让每个视频静默 failed。
+    validate_transcode(config).await?;
 
     let register = &mut setup.registry;
     let router = &mut setup.router;
@@ -66,4 +73,57 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     info!("初始化 Visual Domain 成功");
 
     Ok(())
+}
+
+/// 校验视频转码配置并探测 ffmpeg 可用性。
+///
+/// `transcode.enabled` 时若配置非法或 ffmpeg 不可执行, 直接启动失败(fail-fast)。
+async fn validate_transcode(config: &AppConfig) -> Result<()> {
+    let transcode = &config.visual.transcode;
+
+    if let Err(reason) = transcode.validate() {
+        return Err(ContextualError::warn_without_source(
+            "visual_transcode_config_invalid",
+            format!("视频转码配置非法: {reason}"),
+            AppError::InternalServerError,
+        )
+        .emit());
+    }
+
+    if !transcode.enabled {
+        return Ok(());
+    }
+
+    match timeout(
+        Duration::from_secs(5),
+        Command::new(&transcode.ffmpeg_path)
+            .arg("-version")
+            .output(),
+    )
+    .await
+    {
+        Ok(Ok(output)) if output.status.success() => Ok(()),
+        Ok(Ok(output)) => Err(ContextualError::warn_without_source(
+            "visual_ffmpeg_unavailable",
+            format!(
+                "ffmpeg 执行失败(退出码 {:?}), 请检查 transcode.ffmpeg_path",
+                output.status.code()
+            ),
+            AppError::InternalServerError,
+        )
+        .emit()),
+        Ok(Err(error)) => Err(ContextualError::error(
+            "visual_ffmpeg_unavailable",
+            "无法执行 ffmpeg, 请确认已安装并在 PATH(或配置 transcode.ffmpeg_path)",
+            error,
+            AppError::InternalServerError,
+        )
+        .emit()),
+        Err(_elapsed) => Err(ContextualError::warn_without_source(
+            "visual_ffmpeg_timeout",
+            "ffmpeg 可用性探测超时",
+            AppError::InternalServerError,
+        )
+        .emit()),
+    }
 }

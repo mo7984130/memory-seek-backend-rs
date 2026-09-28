@@ -349,6 +349,7 @@ impl VisualService {
                 let bytes = media::process_image(
                     &state.s3_client,
                     state.image_backend,
+                    &state.cache_image_processed,
                     &token.file_id,
                     &op,
                 )

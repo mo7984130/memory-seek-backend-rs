@@ -8,6 +8,7 @@
 
 pub mod collection;
 pub mod comment;
+pub mod crop;
 pub mod delete;
 pub mod detail;
 pub mod download;

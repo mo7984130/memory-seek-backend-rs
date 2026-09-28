@@ -89,6 +89,10 @@ mod entity {
         /// 最近一次失败原因
         pub error: Option<String>,
 
+        /// 已尝试次数(含首次); 用于有限重试
+        #[sea_orm(default_value = 0)]
+        pub attempts: i32,
+
         /// 更新时间
         #[sea_orm(default_expr = "sea_orm::sea_query::Expr::current_timestamp()")]
         pub updated_at: DateTime,
@@ -111,6 +115,7 @@ mod entity {
         pub status: DerivativeStatus,
         pub object_key: Option<String>,
         pub error: Option<String>,
+        pub attempts: i32,
     }
 
     impl From<Model> for DerivativeRecord {
@@ -122,6 +127,7 @@ mod entity {
                 status: model.status,
                 object_key: model.object_key,
                 error: model.error,
+                attempts: model.attempts,
             }
         }
     }

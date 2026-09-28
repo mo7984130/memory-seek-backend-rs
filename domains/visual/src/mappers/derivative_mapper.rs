@@ -2,7 +2,7 @@ use common_core::DbConn as ConnectionTrait;
 use common_core::error::contextual::Result;
 use common_core::time::now;
 use sea_orm::sea_query::Expr;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 use types_visual::derivative::{
     ActiveModel, Column, DerivativeKind, DerivativeRecord, DerivativeStatus, Entity,
     NewDerivativeRecord, VisualDerivativeId,
@@ -83,7 +83,33 @@ impl DerivativeMapper {
         .await
     }
 
-    /// 重置为待生成(启动恢复将卡住的 running 复位); 返回是否命中记录。
+    /// 递增尝试次数并返回新值; 记录不存在时返回 `None`。
+    pub async fn bump_attempt(
+        db: &impl ConnectionTrait,
+        id: VisualDerivativeId,
+    ) -> Result<Option<i32>> {
+        let current: Option<i32> = Entity::find()
+            .select_only()
+            .column(Column::Attempts)
+            .filter(Column::Id.eq(id))
+            .into_tuple::<i32>()
+            .one(db)
+            .await?;
+        let Some(current) = current else {
+            return Ok(None);
+        };
+        let next = current + 1;
+        let rows = Entity::update_many()
+            .filter(Column::Id.eq(id))
+            .col_expr(Column::Attempts, Expr::value(next))
+            .col_expr(Column::UpdatedAt, Expr::value(now()))
+            .exec(db)
+            .await?
+            .rows_affected;
+        Ok((rows > 0).then_some(next))
+    }
+
+    /// 重置为待生成(启动恢复将卡住的 running 复位); 返回是否命中记录.
     pub async fn mark_pending(db: &impl ConnectionTrait, id: VisualDerivativeId) -> Result<bool> {
         Self::update_status(db, id, DerivativeStatus::Pending, None, None).await
     }
