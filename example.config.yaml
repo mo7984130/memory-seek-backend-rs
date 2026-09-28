@@ -83,7 +83,8 @@ visual:
     # 视频转码(生成缩略/预览衍生片); 关闭后不生成
     # 环境变量覆盖: MEMORY_SEEK_VISUAL__TRANSCODE__ENABLED=false
     enabled: true
-    # ffmpeg 可执行文件路径(或 PATH 中的命令名), 默认 ffmpeg
+    # ffmpeg 可执行文件路径(或 PATH 中的命令名)。
+    # 注意: 视频转码依赖部署主机上已安装 ffmpeg, 默认 "ffmpeg"(取自 PATH)
     # ffmpeg_path: ffmpeg
     # 缩略片: 片头前 N 秒、目标宽度、视频码率
     # thumb_duration_secs: 4

@@ -14,6 +14,7 @@ pub mod download;
 pub mod like;
 pub mod list;
 pub mod upload;
+pub mod video;
 
 use std::sync::LazyLock;
 
@@ -77,10 +78,31 @@ pub async fn upload(
     session: &Session,
     data: Vec<u8>,
 ) -> Result<SucR<VisualView>, HttpError> {
+    upload_with_content_type(ctx, session, data, "image/png").await
+}
+
+/// 上传一个视频(request body 即文件字节), 返回影像视图。
+pub async fn upload_video(
+    ctx: &Context,
+    session: &Session,
+    data: Vec<u8>,
+) -> Result<SucR<VisualView>, HttpError> {
+    upload_with_content_type(ctx, session, data, "video/mp4").await
+}
+
+/// 以指定 content-type 上传影像字节。
+///
+/// 服务端按文件头魔数判定媒体类型, 不依赖 content-type。
+pub async fn upload_with_content_type(
+    ctx: &Context,
+    session: &Session,
+    data: Vec<u8>,
+    content_type: &'static str,
+) -> Result<SucR<VisualView>, HttpError> {
     ctx.client
         .request(reqwest::Method::POST, "/visual")
         .header("Authorization", &session.auth_header())
-        .header("content-type", "image/png")
+        .header("content-type", content_type)
         .body(data)
         .send_checked()
         .await?
