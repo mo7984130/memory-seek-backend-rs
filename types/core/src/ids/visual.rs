@@ -12,3 +12,4 @@ crate::id_type!(VisualLikeId, "visual/");
 crate::id_type!(TimelineStatId, String, "visual/");
 crate::id_type!(FaceId, "visual/");
 crate::id_type!(PersonId, "visual/");
+crate::id_type!(VisualDerivativeId, "visual/");

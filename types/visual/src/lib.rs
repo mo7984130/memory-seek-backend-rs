@@ -9,6 +9,7 @@ pub mod collection;
 pub mod collection_visual;
 pub mod comment;
 pub mod comment_like;
+pub mod derivative;
 pub mod dto;
 pub mod face;
 pub mod models;

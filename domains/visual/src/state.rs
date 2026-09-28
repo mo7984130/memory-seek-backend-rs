@@ -10,6 +10,8 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::config::VisualConfig;
+
 #[cfg(feature = "face")]
 use backup::BackupState;
 
@@ -39,6 +41,8 @@ pub struct VisualState {
     pub(crate) upload_semaphore: Arc<tokio::sync::Semaphore>,
     /// 上传落盘临时目录
     pub(crate) tmp_dir: PathBuf,
+    /// 影像域配置(图片处理后端选择、视频转码参数等)
+    pub(crate) config: VisualConfig,
     #[cfg(feature = "face")]
     pub face_engine: Arc<insight_face_rs::FaceEngine>,
     #[cfg(feature = "face")]
@@ -56,6 +60,7 @@ impl VisualState {
         #[cfg(feature = "face")] face_engine: Arc<insight_face_rs::FaceEngine>,
         #[cfg(feature = "face")] backup_state: Arc<BackupState>,
         task_manager: TaskManager,
+        config: VisualConfig,
     ) -> Arc<Self> {
         let state = Arc::new(Self {
             db,
@@ -94,6 +99,7 @@ impl VisualState {
                     .into(),
             )),
             tmp_dir,
+            config,
             #[cfg(feature = "face")]
             face_engine,
             #[cfg(feature = "face")]
@@ -102,6 +108,9 @@ impl VisualState {
 
         #[cfg(all(feature = "face", feature = "controller"))]
         crate::services::face_service::FaceService::start_face_consumer(Arc::clone(&state));
+
+        #[cfg(feature = "controller")]
+        crate::services::transcode_service::TranscodeService::start_worker(Arc::clone(&state));
 
         state
     }

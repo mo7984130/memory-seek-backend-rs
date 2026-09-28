@@ -1,3 +1,4 @@
+pub mod config;
 #[cfg(feature = "controller")]
 pub mod controllers;
 #[cfg(feature = "controller")]
@@ -8,6 +9,7 @@ mod repo;
 pub(crate) mod services;
 mod state;
 
+pub use config::VisualConfig;
 #[cfg(feature = "controller")]
 pub use controllers::Controller;
 #[cfg(feature = "controller")]

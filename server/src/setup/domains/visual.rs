@@ -10,6 +10,9 @@ use std::sync::Arc;
 use tracing::{debug, info};
 use visual::VisualState;
 
+/// 影像域配置(由 `visual` crate 定义, 在 server 配置中重导出)
+pub use visual::VisualConfig as Config;
+
 /// 注册 Visual 模块路由
 #[common_macros::register_async(
     slice = crate::setup::domains::APP_DOMAINS,
@@ -51,6 +54,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .get::<TaskManager>()
             .miss_dep("Visual", "TaskManager")?
             .clone(),
+        config.visual.clone(),
     );
 
     // 获取路由

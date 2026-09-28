@@ -73,3 +73,22 @@ backup:
 face_engine:
   detect_model_path: "/path/to/model"
   recognize_model_path: "/path/to/model"
+
+visual:
+  # 图片处理后端: auto | oss | local
+  #   auto(默认): 对象存储为阿里云 OSS 时走服务端处理, 否则本地处理
+  # 环境变量覆盖: MEMORY_SEEK_VISUAL__IMAGE_PROCESSOR=local
+  image_processor: auto
+  transcode:
+    # 视频转码(生成缩略/预览衍生片); 关闭后不生成
+    # 环境变量覆盖: MEMORY_SEEK_VISUAL__TRANSCODE__ENABLED=false
+    enabled: true
+    # ffmpeg 可执行文件路径(或 PATH 中的命令名), 默认 ffmpeg
+    # ffmpeg_path: ffmpeg
+    # 缩略片: 片头前 N 秒、目标宽度、视频码率
+    # thumb_duration_secs: 4
+    # thumb_max_width: 640
+    # thumb_bitrate: 600k
+    # 预览片: 目标高度、视频码率
+    # preview_max_height: 1080
+    # preview_bitrate: 4M

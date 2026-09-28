@@ -447,9 +447,9 @@ mod tests {
         let consumers = AFTER_MEDIA_UPLOAD_CONSUMERS.to_vec();
 
         #[cfg(feature = "face")]
-        assert_eq!(consumers.len(), 3);
+        assert_eq!(consumers.len(), 4);
         #[cfg(not(feature = "face"))]
-        assert_eq!(consumers.len(), 2);
+        assert_eq!(consumers.len(), 3);
         assert!(
             consumers
                 .iter()
