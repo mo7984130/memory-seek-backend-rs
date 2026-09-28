@@ -3,6 +3,7 @@ pub mod config;
 pub mod controllers;
 #[cfg(feature = "controller")]
 pub(crate) mod mappers;
+pub mod media;
 #[cfg(feature = "controller")]
 mod repo;
 #[cfg(feature = "controller")]

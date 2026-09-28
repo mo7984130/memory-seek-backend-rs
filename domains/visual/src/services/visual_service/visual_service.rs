@@ -20,6 +20,7 @@ use tracing::instrument;
 
 use crate::{
     mappers::{derivative_mapper::DerivativeMapper, visual_mapper::VisualMapper},
+    media,
     repo::VisualRepo,
     services::visual_service::{
         AfterVisualDelete, AfterVisualUpload, VisualDeleteContext, publish_after_visual_delete,
@@ -330,26 +331,29 @@ impl VisualService {
                 | VisualTokenType::Preview
                 | VisualTokenType::Crop { .. },
             ) => {
-                let process_param: String = match &token.token_type {
-                    VisualTokenType::Thumbnail => "image/resize,w_300/format,webp".to_string(),
-                    VisualTokenType::Preview => "image/resize,w_1920/format,webp".to_string(),
+                let op = match &token.token_type {
+                    VisualTokenType::Thumbnail => media::ProcessOp::Thumbnail,
+                    VisualTokenType::Preview => media::ProcessOp::Preview,
                     VisualTokenType::Crop {
                         bbox,
                         source_dimensions,
-                    } => {
-                        let size = 200;
-                        let (x, y, w, h) =
-                            bbox.to_pixel_rect(source_dimensions.width, source_dimensions.height);
-                        format!("image/crop,x_{x},y_{y},w_{w},h_{h}/resize,w_{size}/format,webp")
-                    }
+                    } => media::ProcessOp::Crop {
+                        bbox: *bbox,
+                        source: types_visual::ImageDimensions {
+                            width: source_dimensions.width,
+                            height: source_dimensions.height,
+                        },
+                    },
                     _ => unreachable!(),
                 };
-                let bytes = state
-                    .s3_client
-                    .download_with_process(&token.file_id, &process_param)
-                    .timed(metrics_name!("s3_download_process"))
-                    .await
-                    .into_contextual()?;
+                let bytes = media::process_image(
+                    &state.s3_client,
+                    state.image_backend,
+                    &token.file_id,
+                    &op,
+                )
+                .timed(metrics_name!("s3_download_process"))
+                .await?;
 
                 let content_type =
                     FileValidator::sniff_content_type(&bytes).unwrap_or("application/octet-stream");

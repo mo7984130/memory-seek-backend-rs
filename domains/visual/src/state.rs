@@ -10,7 +10,7 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::config::VisualConfig;
+use crate::config::{ResolvedImageProcessor, VisualConfig};
 
 #[cfg(feature = "face")]
 use backup::BackupState;
@@ -43,6 +43,8 @@ pub struct VisualState {
     pub(crate) tmp_dir: PathBuf,
     /// 影像域配置(图片处理后端选择、视频转码参数等)
     pub(crate) config: VisualConfig,
+    /// 图片处理后端(由配置 + 对象存储端点解析所得)
+    pub image_backend: ResolvedImageProcessor,
     #[cfg(feature = "face")]
     pub face_engine: Arc<insight_face_rs::FaceEngine>,
     #[cfg(feature = "face")]
@@ -62,6 +64,7 @@ impl VisualState {
         task_manager: TaskManager,
         config: VisualConfig,
     ) -> Arc<Self> {
+        let image_backend = config.image_processor.resolve(s3_client.endpoint());
         let state = Arc::new(Self {
             db,
             cache_visual_info: MultiLevelCache::new_with_name(
@@ -100,6 +103,7 @@ impl VisualState {
             )),
             tmp_dir,
             config,
+            image_backend,
             #[cfg(feature = "face")]
             face_engine,
             #[cfg(feature = "face")]
