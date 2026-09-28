@@ -26,7 +26,7 @@ use uuid::Uuid;
 
 use crate::config::TranscodeConfig;
 use crate::mappers::{derivative_mapper::DerivativeMapper, visual_mapper::VisualMapper};
-use crate::services::visual_service::AfterVisualUpload;
+use crate::services::visual_service::{AfterVisualDelete, AfterVisualUpload};
 use crate::state::VisualState;
 
 /// 单次 ffmpeg 执行超时
@@ -374,10 +374,61 @@ impl TranscodeService {
     }
 }
 
+// 视频衍生片: 随影像删除清理 DB 记录(事务步骤)与对象(删除后消费者)
+#[step_derive::declare_transaction_step(
+    ctx = crate::services::visual_service::VisualDeleteContext,
+    slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
+    name = "derivative_cleanup",
+    owns = ["DerivativeMapper"],
+    method = on_visual_delete,
+)]
+impl TranscodeService {
+    /// 删除影像事务中, 清理其衍生片 DB 记录。
+    async fn on_visual_delete(
+        &self,
+        txn: &sea_orm::DatabaseTransaction,
+        ctx: &mut crate::services::visual_service::VisualDeleteContext,
+    ) -> common_core::error::contextual::Result<()> {
+        DerivativeMapper::delete_by_visual_ids(txn, &ctx.visual_ids()).await?;
+        Ok(())
+    }
+}
+
+#[step_derive::declare_event_consumer(
+    state = crate::state::VisualState,
+    event = crate::services::visual_service::AfterVisualDelete,
+    slice = crate::services::visual_service::AFTER_MEDIA_DELETE_CONSUMERS,
+    name = "derivative_delete_cleanup",
+)]
+impl TranscodeService {
+    /// 删除影像后, 清理其视频衍生片对象(键由 file_id 推导, 删除幂等)。
+    async fn on_after_visual_delete(
+        &self,
+        state: Arc<VisualState>,
+        event: Arc<AfterVisualDelete>,
+    ) -> common_core::Result<()> {
+        let keys = event
+            .visuals
+            .iter()
+            .filter(|visual| visual.kind == VisualKind::Video)
+            .flat_map(|visual| {
+                [
+                    derivative_key(&visual.file_id, DerivativeKind::Thumbnail),
+                    derivative_key(&visual.file_id, DerivativeKind::Preview),
+                ]
+            })
+            .collect::<Vec<_>>();
+        if keys.is_empty() {
+            return Ok(());
+        }
+        state.s3_client.delete_batch(keys).await.into_contextual()?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn thumb_args_take_first_seconds_without_audio() {
         let cfg = TranscodeConfig::default();

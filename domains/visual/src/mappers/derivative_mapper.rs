@@ -92,6 +92,32 @@ impl DerivativeMapper {
         Ok(models.into_iter().map(DerivativeRecord::from).collect())
     }
 
+    /// 查询某张影像指定类型的衍生片记录.
+    pub async fn query_one(
+        db: &impl ConnectionTrait,
+        visual_id: VisualId,
+        kind: DerivativeKind,
+    ) -> Result<Option<DerivativeRecord>> {
+        let model = Entity::find()
+            .filter(Column::VisualId.eq(visual_id))
+            .filter(Column::Kind.eq(kind))
+            .one(db)
+            .await?;
+        Ok(model.map(DerivativeRecord::from))
+    }
+
+    /// 删除若干影像的全部衍生片记录(随影像删除).
+    pub async fn delete_by_visual_ids(
+        db: &impl ConnectionTrait,
+        visual_ids: &[VisualId],
+    ) -> Result<()> {
+        Entity::delete_many()
+            .filter(Column::VisualId.is_in(visual_ids.iter().copied()))
+            .exec(db)
+            .await?;
+        Ok(())
+    }
+
     /// 查询需要重新入队的记录(待生成 / 卡在生成中的, 用于启动恢复).
     pub async fn query_recoverable(db: &impl ConnectionTrait) -> Result<Vec<DerivativeRecord>> {
         let models = Entity::find()
