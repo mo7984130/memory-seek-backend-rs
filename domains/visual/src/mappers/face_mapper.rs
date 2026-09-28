@@ -10,7 +10,11 @@ use sea_orm::{
     sea_query::{Expr, Query},
 };
 use types_core::cursor::TimeIdCursor;
-use types_visual::{face::*, person::PersonId, visual::VisualId};
+use types_visual::{
+    face::*,
+    person::PersonId,
+    visual::{VisualId, VisualKind},
+};
 
 pub struct FaceMapper;
 
@@ -177,7 +181,7 @@ impl FaceMapper {
             .to_ok()
     }
 
-    // 查询人脸计算所需的照片id和file_id
+    // 查询人脸计算所需的照片id和file_id(仅图片, 视频无人脸)
     pub async fn query_face_compute_visuals(
         db: &impl ConnectionTrait,
         full: bool,
@@ -210,6 +214,8 @@ impl FaceMapper {
             .column(types_visual::visual::Column::Id)
             .column(types_visual::visual::Column::FileId)
             .filter(condition)
+            // 仅图片: 视频不参与人脸计算, 否则会白白下载并在解码时失败
+            .filter(types_visual::visual::Column::Kind.eq(VisualKind::Image))
             .order_by(types_visual::visual::Column::Id, sea_orm::Order::Asc)
             .limit(size)
             .into_tuple::<(VisualId, String)>()
