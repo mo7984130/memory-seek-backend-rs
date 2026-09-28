@@ -11,7 +11,9 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use common_core::error::contextual::Result;
-use common_core::error::contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt};
+use common_core::error::contextual::ext::{
+    ContextualResultExt, IntoContextualExt, OptionExt, ResultContextualExt,
+};
 use common_core::{AppError, ContextualError, TempFile};
 use futures::StreamExt;
 use tokio::process::Command;
@@ -175,19 +177,32 @@ impl TranscodeService {
 
     /// 生成单个衍生片: 下载原片 -> ffmpeg -> 上传 -> 更新状态。
     async fn process_job(state: &Arc<VisualState>, job: TranscodeJob) -> Result<()> {
-        DerivativeMapper::mark_running(&state.db, job.id).await?;
+        // 记录已不存在(影像已被删除)时无需处理
+        if !DerivativeMapper::mark_running(&state.db, job.id).await? {
+            return Ok(());
+        }
         match Self::generate(state, &job).await {
             Ok(object_key) => {
-                DerivativeMapper::mark_ready(&state.db, job.id, &object_key).await?;
+                if !DerivativeMapper::mark_ready(&state.db, job.id, &object_key).await? {
+                    // 生成期间影像被删: 补偿删除刚上传的衍生对象, 避免 S3 残留
+                    warn!(
+                        visual_id = %job.visual_id,
+                        object_key = %object_key,
+                        "衍生记录已删除, 补偿清理衍生对象"
+                    );
+                    state
+                        .s3_client
+                        .delete(&object_key)
+                        .await
+                        .into_contextual()
+                        .emit_if_err();
+                    return Ok(());
+                }
                 info!(visual_id = %job.visual_id, kind = ?job.kind, "视频衍生片生成完成");
                 Ok(())
             }
             Err(error) => {
-                if let Err(mark_error) =
-                    DerivativeMapper::mark_failed(&state.db, job.id, &error.to_string()).await
-                {
-                    warn!(derivative_id = %job.id, error = ?mark_error, "记录转码失败状态时出错");
-                }
+                let _ = DerivativeMapper::mark_failed(&state.db, job.id, &error.to_string()).await;
                 Err(error)
             }
         }
@@ -241,6 +256,16 @@ impl TranscodeService {
                 AppError::InternalServerError,
             )?;
 
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.into_contextual()?;
+            temp.file().write_all(&chunk).context_err(
+                "transcode_write_temp_err",
+                "写入转码输入临时文件失败",
+                AppError::InternalServerError,
+            )?;
+        }
+
+        // set_extension 会关闭写句柄, 必须在写完后再调用(供 ffmpeg 按扩展名探测输入格式)
         let ext = file_id
             .rsplit_once('.')
             .map(|(_, ext)| ext)
@@ -251,14 +276,6 @@ impl TranscodeService {
             AppError::InternalServerError,
         )?;
 
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.into_contextual()?;
-            temp.file().write_all(&chunk).context_err(
-                "transcode_write_temp_err",
-                "写入转码输入临时文件失败",
-                AppError::InternalServerError,
-            )?;
-        }
         Ok(temp)
     }
 

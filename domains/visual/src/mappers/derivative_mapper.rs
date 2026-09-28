@@ -1,9 +1,8 @@
 use common_core::DbConn as ConnectionTrait;
 use common_core::error::contextual::Result;
 use common_core::time::now;
-use sea_orm::ActiveValue::Set;
-use sea_orm::sea_query::OnConflict;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::sea_query::Expr;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use types_visual::derivative::{
     ActiveModel, Column, DerivativeKind, DerivativeRecord, DerivativeStatus, Entity,
     NewDerivativeRecord, VisualDerivativeId,
@@ -15,7 +14,8 @@ pub struct DerivativeMapper;
 impl DerivativeMapper {
     /// 幂等插入待生成的衍生片记录(已存在则跳过).
     ///
-    /// `(visual_id, kind)` 上有唯一索引, 重复上传事件不会产生多条记录。
+    /// 不使用 DB 唯一约束: 依赖先查后插保证幂等, 避免裸 SQL 唯一索引与
+    /// sea-orm schema-sync 在重启时冲突。
     pub async fn insert_pending(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -24,31 +24,39 @@ impl DerivativeMapper {
         if kinds.is_empty() {
             return Ok(());
         }
-        let records = kinds
+        let existing_kinds: Vec<DerivativeKind> = Entity::find()
+            .filter(Column::VisualId.eq(visual_id))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|model| model.kind)
+            .collect();
+        let pending: Vec<ActiveModel> = kinds
             .iter()
-            .map(|&kind| NewDerivativeRecord { visual_id, kind });
-        Entity::insert_many(records.map(ActiveModel::from))
-            .on_conflict(
-                OnConflict::columns([Column::VisualId, Column::Kind])
-                    .do_nothing()
-                    .to_owned(),
-            )
+            .copied()
+            .filter(|kind| !existing_kinds.contains(kind))
+            .map(|kind| NewDerivativeRecord { visual_id, kind }.into())
+            .collect();
+        if pending.is_empty() {
+            return Ok(());
+        }
+        Entity::insert_many(pending)
             .exec_without_returning(db)
             .await?;
         Ok(())
     }
 
-    /// 标记为生成中.
-    pub async fn mark_running(db: &impl ConnectionTrait, id: VisualDerivativeId) -> Result<()> {
+    /// 标记为生成中; 返回是否命中记录(影像被删后记录不存在时为 `false`)。
+    pub async fn mark_running(db: &impl ConnectionTrait, id: VisualDerivativeId) -> Result<bool> {
         Self::update_status(db, id, DerivativeStatus::Running, None, None).await
     }
 
-    /// 标记为已就绪, 并记录对象 key.
+    /// 标记为已就绪并记录对象 key; 返回是否命中记录。
     pub async fn mark_ready(
         db: &impl ConnectionTrait,
         id: VisualDerivativeId,
         object_key: &str,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         Self::update_status(
             db,
             id,
@@ -59,12 +67,12 @@ impl DerivativeMapper {
         .await
     }
 
-    /// 标记为生成失败, 并记录原因.
+    /// 标记为生成失败并记录原因; 返回是否命中记录。
     pub async fn mark_failed(
         db: &impl ConnectionTrait,
         id: VisualDerivativeId,
         error: &str,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         Self::update_status(
             db,
             id,
@@ -75,8 +83,8 @@ impl DerivativeMapper {
         .await
     }
 
-    /// 标记为待生成(用于启动恢复将卡住的 running 重置).
-    pub async fn mark_pending(db: &impl ConnectionTrait, id: VisualDerivativeId) -> Result<()> {
+    /// 重置为待生成(启动恢复将卡住的 running 复位); 返回是否命中记录。
+    pub async fn mark_pending(db: &impl ConnectionTrait, id: VisualDerivativeId) -> Result<bool> {
         Self::update_status(db, id, DerivativeStatus::Pending, None, None).await
     }
 
@@ -127,26 +135,28 @@ impl DerivativeMapper {
         Ok(models.into_iter().map(DerivativeRecord::from).collect())
     }
 
+    /// 按主键更新状态, 返回是否命中记录.
+    ///
+    /// 用 `update_many` 而非 `ActiveModel::update`: 目标记录可能已被删除
+    /// (影像删除时连带清理), 0 行受影响应视为"记录已不存在"而非错误。
     async fn update_status(
         db: &impl ConnectionTrait,
         id: VisualDerivativeId,
         status: DerivativeStatus,
         object_key: Option<String>,
         error: Option<String>,
-    ) -> Result<()> {
-        let mut active = ActiveModel {
-            id: Set(id),
-            status: Set(status),
-            updated_at: Set(now()),
-            ..Default::default()
-        };
+    ) -> Result<bool> {
+        let mut update = Entity::update_many()
+            .filter(Column::Id.eq(id))
+            .col_expr(Column::Status, Expr::value(status))
+            .col_expr(Column::UpdatedAt, Expr::value(now()));
         if let Some(object_key) = object_key {
-            active.object_key = Set(Some(object_key));
+            update = update.col_expr(Column::ObjectKey, Expr::value(object_key));
         }
         if let Some(error) = error {
-            active.error = Set(Some(error));
+            update = update.col_expr(Column::Error, Expr::value(error));
         }
-        active.update(db).await?;
-        Ok(())
+        let result = update.exec(db).await?;
+        Ok(result.rows_affected > 0)
     }
 }

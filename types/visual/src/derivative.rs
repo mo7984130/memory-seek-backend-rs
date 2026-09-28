@@ -10,10 +10,8 @@ pub use types_core::VisualDerivativeId;
 
 #[cfg(feature = "orm")]
 mod entity {
-    use common_core::ContextualResult;
     use common_core::time::DateTime;
     use sea_orm::entity::prelude::*;
-    use sea_orm::sea_query::Index;
     use serde::{Deserialize, Serialize};
 
     use super::*;
@@ -103,26 +101,6 @@ mod entity {
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
     pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
-
-    /// (visual_id, kind) 唯一索引: 每张影像每种衍生片至多一条
-    #[common_macros::register_async(
-        send,
-        slice = types_db_registry::INIT_INDEXES,
-        ty = types_db_registry::InitIndexFn
-    )]
-    async fn init_index(db: &DatabaseConnection) -> ContextualResult<()> {
-        let stmt = Index::create()
-            .name("uidx_visual_derivative_visual_id_kind")
-            .table(Entity)
-            .col(Column::VisualId)
-            .col(Column::Kind)
-            .unique()
-            .if_not_exists()
-            .to_owned();
-        db.execute_raw(db.get_database_backend().build(&stmt))
-            .await?;
-        Ok(())
-    }
 
     /// 衍生片记录(强类型)
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
