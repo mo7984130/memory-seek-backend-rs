@@ -10,6 +10,8 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::config::{ResolvedImageProcessor, VisualConfig};
+
 #[cfg(feature = "face")]
 use backup::BackupState;
 
@@ -31,6 +33,8 @@ pub struct VisualState {
     pub(crate) cache_visual_cursor_ids: MultiLevelCache<CursorPage<VisualId, ()>, ContextualError>,
     pub(crate) cache_visual_dimensions: MultiLevelCache<(u32, u32), ContextualError>,
     pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
+    /// 图片处理产物缓存(base64 字符串, 见 [`crate::media::process_image`])
+    pub(crate) cache_image_processed: MultiLevelCache<String, ContextualError>,
     pub redis: Pool,
     pub s3_client: S3Client,
     /// 后台任务托管(人脸检测常驻 worker 等)
@@ -39,6 +43,10 @@ pub struct VisualState {
     pub(crate) upload_semaphore: Arc<tokio::sync::Semaphore>,
     /// 上传落盘临时目录
     pub(crate) tmp_dir: PathBuf,
+    /// 影像域配置(图片处理后端选择、视频转码参数等)
+    pub(crate) config: VisualConfig,
+    /// 图片处理后端(由配置 + 对象存储端点解析所得)
+    pub image_backend: ResolvedImageProcessor,
     #[cfg(feature = "face")]
     pub face_engine: Arc<insight_face_rs::FaceEngine>,
     #[cfg(feature = "face")]
@@ -47,6 +55,9 @@ pub struct VisualState {
 
 impl VisualState {
     /// 组装影像域所需的仓储, 对象存储和备份组件.
+    ///
+    /// 参数较多(依赖组装), 不适合拆成结构体; 关闭该条 lint。
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,
@@ -56,7 +67,9 @@ impl VisualState {
         #[cfg(feature = "face")] face_engine: Arc<insight_face_rs::FaceEngine>,
         #[cfg(feature = "face")] backup_state: Arc<BackupState>,
         task_manager: TaskManager,
+        config: VisualConfig,
     ) -> Arc<Self> {
+        let image_backend = config.image_processor.resolve(s3_client.endpoint());
         let state = Arc::new(Self {
             db,
             cache_visual_info: MultiLevelCache::new_with_name(
@@ -84,6 +97,11 @@ impl VisualState {
                 redis.clone(),
                 cache_config,
             ),
+            cache_image_processed: MultiLevelCache::new_with_name(
+                "visual_image_processed",
+                redis.clone(),
+                cache_config,
+            ),
             redis,
             s3_client,
             task_manager,
@@ -91,9 +109,12 @@ impl VisualState {
             upload_semaphore: Arc::new(tokio::sync::Semaphore::new(
                 std::thread::available_parallelism()
                     .expect("获取可用并行数错误")
-                    .into(),
+                    .get()
+                    * 2,
             )),
             tmp_dir,
+            config,
+            image_backend,
             #[cfg(feature = "face")]
             face_engine,
             #[cfg(feature = "face")]
@@ -102,6 +123,9 @@ impl VisualState {
 
         #[cfg(all(feature = "face", feature = "controller"))]
         crate::services::face_service::FaceService::start_face_consumer(Arc::clone(&state));
+
+        #[cfg(feature = "controller")]
+        crate::services::transcode_service::TranscodeService::start_worker(Arc::clone(&state));
 
         state
     }

@@ -1,0 +1,47 @@
+# build/Dockerfile.runtime
+#
+# 运行镜像: debian 12(glibc 2.36 >= 产物所需 2.34) + 预编译 ffmpeg。
+#
+# ffmpeg 取自 BtbN FFmpeg-Builds 的 linux64-gpl 构建: 单个自包含二进制, 但
+# 动态链接 glibc(libc/libm/libdl/librt/libpthread/libmvec/libgcc_s), 仅需 glibc 2.28+。
+#
+# 注意: 应用产物(server 二进制 / libs / models)不打进镜像, 仍由 compose 挂载;
+# 本镜像只负责“底座 + ffmpeg + 系统运行库”, 仅供测试/自建环境使用, 不作为分发产物。
+
+# ---- 阶段 1: 拉取 ffmpeg ----
+FROM debian:12-slim AS ffmpeg
+
+ARG FFMPEG_URL
+ARG FFMPEG_SHA256
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates xz-utils \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    test -n "$FFMPEG_URL"; \
+    test -n "$FFMPEG_SHA256"; \
+    curl -fsSL "$FFMPEG_URL" -o /tmp/ffmpeg.tar.xz; \
+    echo "$FFMPEG_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c -; \
+    mkdir -p /opt/ffmpeg; \
+    tar -xJf /tmp/ffmpeg.tar.xz -C /opt/ffmpeg --strip-components=1; \
+    /opt/ffmpeg/bin/ffmpeg -version
+
+# ---- 阶段 2: 运行镜像 ----
+FROM debian:12-slim
+
+# libstdc++6: onnxruntime 依赖(会一并带入 libgcc-s1);
+# ca-certificates: 供 S3 等 HTTPS 访问;
+# bash: compose 健康检查基于 /dev/tcp(非 POSIX, dash 不支持)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libstdc++6 ca-certificates bash \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ffmpeg /opt/ffmpeg/bin/ffmpeg /usr/local/bin/ffmpeg
+
+# 在最小运行层实跑 ffmpeg: 缺依赖/glibc 过旧会在此处直接构建失败
+RUN ffmpeg -version >/dev/null
+
+# 应用代码 / 配置 / 模型由运行时挂载提供, 这里只预置默认启动命令
+WORKDIR /app
+CMD ["/app/memory-seek-server", "-c", "/app/config.yml"]

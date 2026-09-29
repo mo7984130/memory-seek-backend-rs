@@ -72,6 +72,8 @@ mod column_default_tests {
         #[cfg(feature = "face-engine")]
         assert!(has_default(types_visual::face::Column::CreatedAt));
         #[cfg(feature = "face-engine")]
+        assert!(has_default(types_visual::face_task::Column::CreatedAt));
+        #[cfg(feature = "face-engine")]
         assert!(has_default(types_visual::person::Column::CreatedAt));
         assert!(has_default(types_visual::visual_like::Column::CreatedAt));
         assert!(has_default(types_visual::timeline_stat::Column::CreatedAt));
@@ -85,6 +87,8 @@ mod column_default_tests {
         assert!(has_default(types_visual::comment::Column::UpdatedAt));
         #[cfg(feature = "face-engine")]
         assert!(has_default(types_visual::face::Column::UpdatedAt));
+        #[cfg(feature = "face-engine")]
+        assert!(has_default(types_visual::face_task::Column::UpdatedAt));
         #[cfg(feature = "face-engine")]
         assert!(has_default(types_visual::person::Column::UpdatedAt));
         assert!(has_default(types_visual::timeline_stat::Column::UpdatedAt));

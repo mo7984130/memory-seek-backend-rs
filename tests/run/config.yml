@@ -37,3 +37,9 @@ metrics:
 face_engine:
   detect_model_path: "./target/dist/models/det.onnx"
   recognize_model_path: "./target/dist/models/rec.onnx"
+
+visual:
+  # 视频转码依赖运行 server 的主机上的 ffmpeg; CI 由 e2e-stack action 显式安装
+  transcode:
+    enabled: true
+    ffmpeg_path: ffmpeg

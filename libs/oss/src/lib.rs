@@ -25,6 +25,7 @@ static CONCURRENCY: usize = 16;
 struct S3ClientInner {
     bucket: Bucket,
     public_url: String,
+    endpoint: String,
 }
 
 #[derive(Clone)]
@@ -87,6 +88,7 @@ impl S3Client {
                     .unwrap_or_else(|| s3_config.endpoint.clone())
                     .trim_end_matches('/')
                     .to_string(),
+                endpoint: s3_config.endpoint.clone(),
             }),
         }
     }
@@ -202,6 +204,11 @@ impl S3Client {
             Ok(())
         }
         .await
+    }
+
+    /// 获取对象存储端点(创建时的 `endpoint` 配置值).
+    pub fn endpoint(&self) -> &str {
+        &self.inner.endpoint
     }
 
     /// 获取文件的公开访问 URL

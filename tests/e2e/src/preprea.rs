@@ -4,7 +4,7 @@
 //! 幂等灌入账号 / 影像 / 人脸 / 人物 / 时间线统计, 与 server 直连同一数据库。
 //! 策略: 每次执行先清空种子数据(保 admin 等非种子数据), 再整批灌入。
 //!
-//! 前置要求: postgres 服务已启动(`docker compose -f tests/docker-compose.yml up -d --wait`),
+//! 前置要求: postgres 服务已启动(`podman compose -f tests/run/docker-compose.yml up -d --wait`),
 //! 且表结构已就绪(server 启动时 `types_db_init::init_db` 自动同步),
 //! vector 扩展由 compose 的 postgres-init 服务创建。
 //! 数据量等参数见 `e2e.config.yml`(seed 段)。
@@ -36,8 +36,9 @@ const SEED_STATEMENTS: [&str; 22] = [
     // 6. 清理 e2e 上传的影像(hash 全局唯一, 不清理会阻塞下次同内容上传;
     //    种子影像 file_id 以 seed_file_ 开头, 保留)
     "DELETE FROM visual_visual WHERE file_id NOT LIKE 'seed_file_%'",
-    // 7. 清空人脸/人物表(纯 seed 表, 无外键约束, TRUNCATE 重建保证 id 从头开始)
-    "TRUNCATE visual_face, visual_person RESTART IDENTITY",
+    // 7. 清空人脸/人物表与人脸检测任务(纯 seed 表, 无外键约束, TRUNCATE 重建保证 id 从头开始;
+    //    任务表主键为 visual_id 无自增列, RESTART IDENTITY 对其为空操作)
+    "TRUNCATE visual_face, visual_person, visual_face_task RESTART IDENTITY",
     // 8. 清空种子影像元数据
     "DELETE FROM visual_visual WHERE file_id LIKE 'seed_file_%'",
     // 9. 清空种子账号(保 admin), e2e 自建/测试池账号一并清理保证可重复运行

@@ -8,14 +8,17 @@
 
 pub mod collection;
 pub mod comment;
+pub mod crop;
 pub mod delete;
 pub mod detail;
 pub mod download;
 pub mod like;
 pub mod list;
 pub mod upload;
+pub mod video;
 
 use std::sync::LazyLock;
+use std::time::Duration;
 
 use common_web::SucR;
 use memseek_test::TaskIndex;
@@ -77,16 +80,64 @@ pub async fn upload(
     session: &Session,
     data: Vec<u8>,
 ) -> Result<SucR<VisualView>, HttpError> {
-    ctx.client
-        .request(reqwest::Method::POST, "/visual")
-        .header("Authorization", &session.auth_header())
-        .header("content-type", "image/png")
-        .body(data)
-        .send_checked()
-        .await?
-        .json::<SucR<VisualView>>()
-        .await
-        .map_err(HttpError::from)
+    upload_with_content_type(ctx, session, data, "image/png").await
+}
+
+/// 上传一个视频(request body 即文件字节), 返回影像视图。
+pub async fn upload_video(
+    ctx: &Context,
+    session: &Session,
+    data: Vec<u8>,
+) -> Result<SucR<VisualView>, HttpError> {
+    upload_with_content_type(ctx, session, data, "video/mp4").await
+}
+
+/// 以指定 content-type 上传影像字节。
+///
+/// 服务端按文件头魔数判定媒体类型, 不依赖 content-type。
+///
+/// 上传接口按 CPU 核数限流: 信号量获取失败即返回 503(`upload_busy`), 此时尚未产生
+/// 任何副作用, 属于可重试的过载。并发 setup 下偶发的 503 不应被当作正确性失败,
+/// 这里仅对 503 做有限次退避重试; 其它状态码/传输错误原样上抛。
+pub async fn upload_with_content_type(
+    ctx: &Context,
+    session: &Session,
+    data: Vec<u8>,
+    content_type: &'static str,
+) -> Result<SucR<VisualView>, HttpError> {
+    // 503(过载)时的最大尝试次数与退避上限
+    const MAX_ATTEMPTS: u32 = 5;
+    const MAX_BACKOFF: Duration = Duration::from_millis(400);
+
+    let mut attempt = 1;
+    let mut backoff = Duration::from_millis(50);
+    loop {
+        let result = ctx
+            .client
+            .request(reqwest::Method::POST, "/visual")
+            .header("Authorization", &session.auth_header())
+            .header("content-type", content_type)
+            .body(data.clone())
+            .send_checked()
+            .await;
+
+        match result {
+            Ok(resp) => {
+                return resp
+                    .json::<SucR<VisualView>>()
+                    .await
+                    .map_err(HttpError::from);
+            }
+            Err(HttpError::Status { status, .. })
+                if status == reqwest::StatusCode::SERVICE_UNAVAILABLE && attempt < MAX_ATTEMPTS =>
+            {
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(MAX_BACKOFF);
+                attempt += 1;
+            }
+            Err(err) => return Err(err),
+        }
+    }
 }
 
 /// 计算字节内容的 blake3 十六进制串(与 server 的 `blake3` 计算方式一致)。

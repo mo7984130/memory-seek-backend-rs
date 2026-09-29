@@ -60,6 +60,12 @@ pub struct RunConfig {
     /// 场景白名单(逗号分隔, 空 = 全部场景)。用于压测裁剪或单场景调试
     pub scenarios: String,
 
+    /// 场景黑名单(逗号分隔, 空 = 不排除)。
+    ///
+    /// 用于压测时剔除"断言型"场景: 饱和负载下它们的断言会退化为限流统计
+    /// (如上传接口按 CPU 核数限流, 过载时返回 503 而非场景期望的 400)。
+    pub exclude: String,
+
     /// 超时退避初始值(毫秒), 0 = 关闭。压测建议关闭, 否则过载会自动减速
     pub backoff_ms: u64,
 
@@ -82,6 +88,7 @@ impl Default for RunConfig {
             duration_secs: 120,
             concurrency: 32,
             scenarios: String::new(),
+            exclude: String::new(),
             backoff_ms: 0,
             prepare: true,
             max_failure_rate: 0.0,
@@ -111,11 +118,12 @@ impl RunConfig {
 
     /// 场景白名单(空 = 全部场景)。
     pub fn scenario_whitelist(&self) -> Vec<&str> {
-        self.scenarios
-            .split(',')
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .collect()
+        split_list(&self.scenarios)
+    }
+
+    /// 场景黑名单(空 = 不排除)。
+    pub fn scenario_blacklist(&self) -> Vec<&str> {
+        split_list(&self.exclude)
     }
 
     /// 超时退避配置(未启用时为 `None`, 超时后立即进入下一轮)。
@@ -263,4 +271,12 @@ impl E2eConfig {
     pub fn base_url(&self) -> String {
         self.server.url.trim_end_matches('/').to_string()
     }
+}
+
+/// 解析逗号分隔的场景名单(空项与首尾空白已剔除)。
+fn split_list(raw: &str) -> Vec<&str> {
+    raw.split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .collect()
 }

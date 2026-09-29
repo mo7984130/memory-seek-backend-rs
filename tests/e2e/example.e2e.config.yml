@@ -13,7 +13,7 @@ database:
 redis:
     url: "redis://localhost:63799"
 
-# MailHog(收件验证码): docker-compose 已映射 8025
+# MailHog(收件验证码): compose 测试栈已映射 8025
 mailhog:
     url: "http://localhost:8025"
 
@@ -54,6 +54,9 @@ run:
     concurrency: 32
     # 场景白名单(逗号分隔), 留空 = 全部场景
     scenarios: ""
+    # 场景黑名单(逗号分隔), 留空 = 不排除。压测时用它剔除"断言型"场景
+    # (饱和负载下断言会退化为限流统计, 例如上传接口过载返回 503 而非期望的 400)
+    exclude: ""
     # 超时退避(毫秒), 0 = 关闭; 压测关闭才能暴露过载
     backoff_ms: 0
     # 前置准备(preprea 先清空再灌种子); 外部被测目标 / 复用种子时置 false

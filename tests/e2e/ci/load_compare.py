@@ -168,6 +168,7 @@ def evaluate(
             ("mode", "模式"),
             ("concurrency", "并发"),
             ("planned_duration_secs", "时长"),
+            ("scenario_exclude", "场景排除"),
             ("server_url", "目标"),
         ):
             if base_env.get(key) != environment.get(key):

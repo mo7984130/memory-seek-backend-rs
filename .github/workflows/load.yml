@@ -21,7 +21,7 @@ on:
                 type: string
                 default: "develop"
             duration_secs:
-                description: "每场景压测时长(秒)。串行执行全部场景, 总时长 ≈ 场景数(61) × 该值"
+                description: "每场景压测时长(秒)。串行执行全部场景, 总时长 ≈ 场景数 × 该值"
                 required: false
                 type: number
                 default: 15
@@ -68,7 +68,7 @@ jobs:
             BASE_URL: ${{ inputs.target_url || 'http://127.0.0.1:7985' }}
             # 被测 server 占用核数(控制变量)
             SERVER_CPUS: ${{ inputs.server_cpus || 2 }}
-            # 每场景压测时长: Duration 是场景粒度, 全部场景串行 → 总时长 ≈ 61 × 该值
+            # 每场景压测时长: Duration 是场景粒度, 全部场景串行 → 总时长 ≈ 场景数 × 该值
             DURATION_SECS: ${{ inputs.duration_secs || 15 }}
             # schedule -> baseline, 其它(手动/PR) -> compare
             MODE: ${{ github.event_name == 'schedule' && 'baseline' || inputs.mode || 'compare' }}
@@ -78,6 +78,13 @@ jobs:
             E2E__RUN__MODE: duration
             E2E__RUN__DURATION_SECS: ${{ inputs.duration_secs || 15 }}
             E2E__RUN__CONCURRENCY: "32"
+            # 剔除"断言型"场景: UploadDuplicateVisualScenario 每轮都打上传接口(期望 400),
+            # 而上传接口按 CPU 核数限流(CI 里 server 限 2 核 → 2 个许可), 饱和时返回 503,
+            # 断言就退化成限流统计(实测通过率 25.5%)。正确性验收(e2e.yml)仍会跑它。
+            # VideoDerivativeScenario 会触发真实视频转码(单 worker 串行), 压测下会拖长耗时
+            # 并增加 CPU 负载; DownloadImageThumbnailScenario 走本地图片处理(CPU)。
+            # 两者同 UploadDuplicateVisualScenario 一样只在正确性验收(e2e.yml)中跑。
+            E2E__RUN__EXCLUDE: UploadDuplicateVisualScenario,VideoDerivativeScenario,DownloadImageThumbnailScenario,DownloadImageCropScenario
             # 自建环境每轮重建种子; 外部目标跳过(否则会清空对方数据)
             # 注意: push/schedule 触发时 inputs 为空, 必须用 `|| ''` 归一化后再比较
             E2E__RUN__PREPARE: ${{ (inputs.target_url || '') == '' && 'true' || 'false' }}
@@ -139,6 +146,11 @@ jobs:
               if: always()
               run: curl --silent --max-time 15 "$BASE_URL/metrics" > prometheus.txt || true
 
+            - name: 收敛服务端日志 (控制 artifact 体积)
+              # duration 模式下过载告警可能达数百 MB; 只留尾部足够定位问题
+              if: always()
+              run: tail -n 20000 server.log > server.log.tail 2>/dev/null || true
+
             - name: 恢复基线缓存 (compare 模式)
               if: env.MODE == 'compare'
               uses: actions/cache/restore@v4
@@ -172,6 +184,7 @@ jobs:
                   key: load-baseline-develop-${{ github.sha }}
 
             - name: 上传结果 (artifact, 无论成败)
+              id: load-results
               if: always()
               uses: actions/upload-artifact@v4
               with:
@@ -180,7 +193,7 @@ jobs:
                       load-report.json
                       load-report.md
                       prometheus.txt
-                      server.log
+                      server.log.tail
 
             - name: 失败诊断 (打印 server.log 与判定结论)
               if: failure()
@@ -204,6 +217,13 @@ jobs:
                       }
                       let body = fs.readFileSync(path, 'utf8');
                       if (body.length > 60000) body = body.slice(0, 60000) + '\n...(已截断)';
+                      // 附上本次跑批与结果产物链接, 便于从评论直接点进去
+                      const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+                      const artifactUrl = '${{ steps.load-results.outputs.artifact-url }}';
+                      const links = artifactUrl
+                          ? `> 本次跑批: [run #${context.runNumber}](${runUrl}) · [结果产物](${artifactUrl})\n\n`
+                          : `> 本次跑批: [run #${context.runNumber}](${runUrl})\n\n`;
+                      body = links + body;
                       const prNum = Number('${{ env.PR_NUMBER }}');
                       if (prNum > 0) {
                           // 手动触发指定 PR 号: 发 PR 评论

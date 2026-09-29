@@ -124,6 +124,12 @@ impl VisualController {
                 .header(header::CACHE_CONTROL, "public, max-age=604800")
                 .body(Body::from_stream(stream))
                 .unwrap(),
+            // 视频衍生片仍在异步转码, 告知客户端稍后重试
+            ImageDownloadData::NotReady => Response::builder()
+                .status(StatusCode::ACCEPTED)
+                .header(header::RETRY_AFTER, "3")
+                .body(Body::empty())
+                .unwrap(),
         };
 
         Ok(resp)

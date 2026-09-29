@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let scenarios = select_scenarios(&cfg);
     if scenarios.is_empty() {
-        eprintln!("没有可执行的场景(检查 run.scenarios 白名单)");
+        eprintln!("没有可执行的场景(检查 run.scenarios / run.exclude)");
         std::process::exit(2);
     }
 
@@ -146,24 +146,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// 按 `run.scenarios` 白名单挑场景(为空则全部)。
+/// 按 `run.scenarios`(白名单)与 `run.exclude`(黑名单)挑场景。
 ///
-/// 白名单里出现未注册的名字时直接退出: 名字拼错不能变成"静默少跑"。
+/// 名单里出现未注册的名字时直接退出: 名字拼错不能变成"静默少跑/多跑"。
 fn select_scenarios(cfg: &E2eConfig) -> Vec<&'static ScenarioRegistration> {
     let all = ScenarioRegistry::scenarios::<Context>();
     let whitelist = cfg.run.scenario_whitelist();
-    if whitelist.is_empty() {
-        return all;
-    }
+    let blacklist = cfg.run.scenario_blacklist();
 
     let unknown: Vec<&str> = whitelist
         .iter()
+        .chain(blacklist.iter())
         .copied()
         .filter(|name| !all.iter().any(|entry| entry.name == *name))
         .collect();
     if !unknown.is_empty() {
         eprintln!(
-            "场景白名单包含未注册的场景: {}\n已注册: {}",
+            "场景名单包含未注册的场景: {}\n已注册: {}",
             unknown.join(", "),
             all.iter()
                 .map(|entry| entry.name)
@@ -174,6 +173,7 @@ fn select_scenarios(cfg: &E2eConfig) -> Vec<&'static ScenarioRegistration> {
     }
 
     all.into_iter()
-        .filter(|entry| whitelist.contains(&entry.name))
+        .filter(|entry| whitelist.is_empty() || whitelist.contains(&entry.name))
+        .filter(|entry| !blacklist.contains(&entry.name))
         .collect()
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # 渲染 jsonnet 目录下所有 dashboard 到 Grafana provisioning 目录:
 #   tests/monitoring/grafana/dashboards/
-# (docker-compose 将其挂载为容器内 /var/lib/grafana/dashboards)
+# (compose 将其挂载为容器内 /var/lib/grafana/dashboards)
 # 依赖:go-jsonnet 二进制(https://github.com/google/go-jsonnet/releases)
 # 用法:
 #   sh generate.sh                  # 渲染全部

@@ -1,5 +1,9 @@
 # 测试依赖(PG+pgvector / valkey / MailHog / rustfs)。
 #
+# 本地/自建环境统一使用 podman(构建与运行都在 podman 上), 命令如:
+#   podman compose -f tests/run/docker-compose.yml up -d --wait
+# 注意: CI(GitHub Actions)只有 docker, 仍用 `docker compose` 起依赖(CI 不跑此处的 server 服务)。
+#
 # 镜像一律使用官方名称, 便于 GitHub Actions 等境外环境直接拉取。
 # 中国大陆本地开发可在 podman 的 registries.conf 里给 docker.io 配置镜像站:
 #   [[registry]]
@@ -69,11 +73,14 @@ services:
             RUSTFS_SECRET_KEY: memory_seek_test
         ports:
             - "9000:9000"
-        tmpfs:
-            # rootless podman 的 tmpfs 默认属主是宿主 uid(=容器内 root),权限 750,
-            # 而镜像以非 root 用户 rustfs(uid 10001)运行,写 /data 会 Permission denied,
-            # 因此显式指定 mode=1777 与 Docker 默认 tmpfs 语义一致。
-            - /data:mode=1777
+        volumes:
+            # 磁盘承载的命名卷(替代原 tmpfs): 对象数据不再全驻内存,
+            # 避免上传大视频时 swap 打满、被 systemd-oomd 连容器一起杀掉。
+            # 卷默认持久化, 但测试要求每次启动都从空状态开始(旧 tmpfs 的临时语义),
+            # 因此启动前需执行 `down -v`:
+            #   podman compose -f tests/run/docker-compose.yml down -v
+            # CI 已在 .github/actions/e2e-stack 的启动步骤里加上该清理。
+            - rustfs-data:/data
 
     rustfs-init:
         # 建桶初始化用 aws-cli(Docker Hub 官方镜像, 持续维护);
@@ -102,9 +109,9 @@ services:
             "
 
     server:
-        # 直接复用本地构建产物(build/build.sh 输出到 target/dist),
-        # 底座与 Dockerfile.build 一致(ubuntu 22.04), 保证 glibc 兼容。
-        image: ubuntu:22.04
+        # 运行镜像: debian12 + 预编译 ffmpeg(内置, 见 build/Dockerfile.runtime),
+        # 由 build/build.sh 构建。应用产物仍从 target/dist 挂载。
+        image: memory-seek-server-test:local
         container_name: memory-seek-test-server
         depends_on:
             postgres-init:
@@ -135,9 +142,13 @@ services:
             - "7985:7985"
         command: /app/memory-seek-server -c /app/config.yml
         healthcheck:
-            # ubuntu:22.04 无 curl, 用 bash 的 /dev/tcp 探活
+            # 基础镜像(debian slim)无 curl, 用 bash 的 /dev/tcp 探活
             test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/7985' || exit 1"]
             interval: 5s
             timeout: 3s
             retries: 10
             start_period: 10s
+
+volumes:
+    # rustfs 数据卷(命名卷=磁盘承载, 每次启动前 `down -v` 清空)
+    rustfs-data:

@@ -38,6 +38,10 @@ pub struct AppConfig {
 
     #[cfg(feature = "face-engine")]
     pub face_engine: crate::setup::libs::face_engine::Config,
+
+    #[cfg(feature = "visual")]
+    #[serde(default)]
+    pub visual: crate::setup::domains::visual::Config,
 }
 
 #[derive(Debug, Deserialize)]
