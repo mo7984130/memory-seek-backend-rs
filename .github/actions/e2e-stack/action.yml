@@ -25,10 +25,12 @@ runs:
         - name: Install Rust
           uses: dtolnay/rust-toolchain@stable
 
-        - name: Install mold
-          # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
+        - name: Install mold / ffmpeg
+          # mold: .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
+          # ffmpeg: server 视频转码(缩略/预览衍生片)在宿主机调用 ffmpeg,
+          #         ubuntu-latest 镜像未预装, 需显式安装
           shell: bash
-          run: sudo apt-get update && sudo apt-get install -y mold
+          run: sudo apt-get update && sudo apt-get install -y mold ffmpeg
 
         - uses: Swatinem/rust-cache@v2
           with:
