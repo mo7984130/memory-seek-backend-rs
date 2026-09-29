@@ -109,7 +109,8 @@ impl VisualState {
             upload_semaphore: Arc::new(tokio::sync::Semaphore::new(
                 std::thread::available_parallelism()
                     .expect("获取可用并行数错误")
-                    .into(),
+                    .get()
+                    * 2,
             )),
             tmp_dir,
             config,
