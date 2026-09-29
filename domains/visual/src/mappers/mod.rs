@@ -10,4 +10,6 @@ pub(crate) mod visual_mapper;
 #[cfg(feature = "face")]
 pub(crate) mod face_mapper;
 #[cfg(feature = "face")]
+pub(crate) mod face_task_mapper;
+#[cfg(feature = "face")]
 pub(crate) mod person_mapper;

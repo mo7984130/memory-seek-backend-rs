@@ -2,6 +2,7 @@ use audit::{AuditEvent, AuditRecorder};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 use common_core::{
     Result,
@@ -21,13 +22,16 @@ use types_core::cursor::TimeIdCursor;
 use types_identity::auth::user::{AdminId, UserId};
 use types_visual::{
     FaceView, dto::face::FaceDeleteBatchResult, dto::face::UnassignedFaceVisualCursorParam,
-    dto::visual::VisualView, face, face::FaceId, face::FaceRecord, models::FaceIds,
-    person::PersonId, visual::VisualId, visual::VisualKind,
+    dto::visual::VisualView, face, face::FaceId, face::FaceRecord, face_task::FaceTaskStatus,
+    models::FaceIds, person::PersonId, visual::VisualId, visual::VisualKind,
 };
 
 use crate::{
     VisualState,
-    mappers::{face_mapper::FaceMapper, person_mapper::PersonMapper},
+    mappers::{
+        face_mapper::FaceMapper, face_task_mapper::FaceTaskMapper, person_mapper::PersonMapper,
+        visual_mapper::VisualMapper,
+    },
     repo::FaceRepo,
     services::visual_service::{AfterVisualUpload, VisualService},
 };
@@ -365,12 +369,17 @@ impl FaceService {
     #[tracing::instrument(name = "face_enqueue", skip_all)]
     async fn on_after_visual_upload(
         &self,
-        _state: Arc<VisualState>,
+        state: Arc<VisualState>,
         event: Arc<AfterVisualUpload>,
     ) -> common_core::Result<()> {
         if event.visual.kind != VisualKind::Image {
             return Ok(());
         }
+        let visual_id = event.visual.id;
+        // 先登记持久化任务(outbox), 再入队: 进程崩溃后由启动恢复兜底
+        FaceTaskMapper::insert_pending(&state.db, visual_id)
+            .timed(metrics_name!("db_insert"))
+            .await?;
         FACE_QUEUE
             .get()
             .ok_or_error(
@@ -378,7 +387,10 @@ impl FaceService {
                 "人脸检测队列未初始化",
                 AppError::InternalServerError,
             )?
-            .send(event)
+            .send(FaceJob {
+                visual_id,
+                source: FaceJobSource::Uploaded(event),
+            })
             .context_err(
                 "face_queue_closed",
                 "人脸检测队列已关闭",
@@ -388,11 +400,40 @@ impl FaceService {
     }
 }
 
-/// 上传后待做人脸检测的事件队列: 消费者仅入队, 由常驻单 worker 串行消费,
-/// 避免大量上传时无限 spawn 任务造成内存压力。
-static FACE_QUEUE: OnceLock<mpsc::UnboundedSender<Arc<AfterVisualUpload>>> = OnceLock::new();
+/// 单次人脸检测的最大尝试次数(含首次); 超过后置为终态 failed
+const FACE_MAX_ATTEMPTS: u32 = 3;
 
-// 常驻 worker: 消费上传事件队列, 串行执行人脸检测
+/// 检测失败后的重试退避(秒)
+const FACE_RETRY_BACKOFF_SECS: u64 = 30;
+
+/// 待检测任务。
+#[derive(Clone)]
+struct FaceJob {
+    visual_id: VisualId,
+    source: FaceJobSource,
+}
+
+/// 任务取图来源。
+#[derive(Clone)]
+enum FaceJobSource {
+    /// 热路径: 上传落盘的临时文件(随事件 Arc 保活, 消费后由守卫删除)
+    Uploaded(Arc<AfterVisualUpload>),
+    /// 恢复路径: 按 file_id 从对象存储重新下载
+    Stored { file_id: String },
+}
+
+/// 上传后待做人脸检测的任务队列: 消费者仅入队, 由常驻单 worker 串行消费,
+/// 避免大量上传时无限 spawn 任务造成内存压力。
+///
+/// 队列仅作进程内唤醒; 持久化状态见 `visual_face_task`, 崩溃后由启动恢复重新入队。
+static FACE_QUEUE: OnceLock<mpsc::UnboundedSender<FaceJob>> = OnceLock::new();
+
+/// 是否应重试: 已尝试次数(含本次)未达上限。
+fn should_retry(attempts: i32, max_attempts: u32) -> bool {
+    attempts > 0 && (attempts as u32) < max_attempts
+}
+
+// 常驻 worker: 消费任务队列, 串行执行人脸检测
 impl FaceService {
     /// 启动单线程人脸检测 worker, 由 [`crate::VisualState::new`] 调用;
     /// 重复调用直接 panic。
@@ -403,11 +444,12 @@ impl FaceService {
             .unwrap_or_else(|_| panic!("FACE_QUEUE 重复初始化"));
         let task_manager = state.task_manager.clone();
         task_manager.spawn("face_consumer_worker", async move {
-            while let Some(event) = rx.recv().await {
-                if let Err(error) = Self::process_face_event(&state, event).await {
+            Self::recover_pending(&state).await;
+            while let Some(job) = rx.recv().await {
+                if let Err(error) = Self::process_job(&state, job).await {
                     ContextualError::warn(
                         "face_consume_failed",
-                        "人脸检测消费上传事件失败",
+                        "人脸检测消费任务失败",
                         error,
                         AppError::InternalServerError,
                     )
@@ -417,29 +459,153 @@ impl FaceService {
         });
     }
 
-    /// 单张照片的人脸检测与入库, 由 worker 串行调用。
-    /// 直接对落盘临时文件执行人脸检测(引擎内部解码), 不再持有解码缓冲;
-    /// 守卫在消费结束后删除文件。
+    /// 启动恢复: 将未完成的任务重新入队(卡在 running 的先重置为 pending),
+    /// 恢复路径改从对象存储下载原图。任务随影像删除已连带清理, 不会出现孤儿。
+    async fn recover_pending(state: &Arc<VisualState>) {
+        let records = match FaceTaskMapper::query_recoverable(&state.db).await {
+            Ok(records) => records,
+            Err(error) => {
+                ContextualError::warn(
+                    "face_recover_query_failed",
+                    "查询待恢复人脸检测任务失败",
+                    error,
+                    AppError::InternalServerError,
+                )
+                .emit();
+                return;
+            }
+        };
+        if records.is_empty() {
+            return;
+        }
+        info!("恢复 {} 个未完成的人脸检测任务", records.len());
+
+        for record in records {
+            if record.status == FaceTaskStatus::Running
+                && let Err(error) = FaceTaskMapper::mark_pending(&state.db, record.visual_id).await
+            {
+                warn!(visual_id = %record.visual_id, error = ?error, "重置人脸检测任务状态失败");
+            }
+            let file_id = match VisualMapper::query_file_id_by_id(&state.db, record.visual_id).await
+            {
+                Ok(file_id) => file_id,
+                Err(error) => {
+                    warn!(visual_id = %record.visual_id, error = ?error, "恢复人脸检测任务时查询 file_id 失败, 跳过");
+                    continue;
+                }
+            };
+            let Some(tx) = FACE_QUEUE.get() else {
+                return;
+            };
+            let _ = tx.send(FaceJob {
+                visual_id: record.visual_id,
+                source: FaceJobSource::Stored { file_id },
+            });
+        }
+    }
+
+    /// 处理单个任务: 标记进行中 -> 检测 -> 原子落库(人脸 + 完成任务)。
+    ///
+    /// 检测期间影像被删时任务记录会连带删除, `mark_running` / `mark_done` 均不命中,
+    /// 因此不会留下孤儿人脸; 已完成任务被重复入队也会直接跳过。
     #[tracing::instrument(name = "face_compute", skip_all)]
-    async fn process_face_event(
-        state: &Arc<VisualState>,
-        event: Arc<AfterVisualUpload>,
-    ) -> common_core::Result<()> {
-        if event.visual.kind != VisualKind::Image {
+    async fn process_job(state: &Arc<VisualState>, job: FaceJob) -> common_core::Result<()> {
+        let visual_id = job.visual_id;
+        // 仅消费待检测任务(已完成/已删除则跳过, 保证重复入队幂等)
+        if !FaceTaskMapper::mark_running(&state.db, visual_id).await? {
             return Ok(());
         }
-        let faces = Self::detect_visual_from_file(state, event.temp_file.path())
-            .timed(metrics_name!("visual_detect"))
-            .await?;
-        let faces = faces
-            .into_iter()
-            .map(|face| face::NewFaceRecord::from_detected(event.visual.id, face))
-            .collect();
-        Self::insert_faces(state, faces)
-            .timed(metrics_name!("insert"))
-            .await?;
-        info!("照片 id: {} 人脸检测完成", event.visual.id);
+
+        match Self::detect_for_job(state, &job).await {
+            Ok(faces) => {
+                let faces = faces
+                    .into_iter()
+                    .map(|face| face::NewFaceRecord::from_detected(visual_id, face))
+                    .collect();
+                Self::save_detection(state, visual_id, faces)
+                    .timed(metrics_name!("insert"))
+                    .await?;
+                info!("照片 id: {} 人脸检测完成", visual_id);
+                Ok(())
+            }
+            Err(error) => {
+                let retry = match FaceTaskMapper::bump_attempt(&state.db, visual_id).await? {
+                    Some(attempts) => should_retry(attempts, FACE_MAX_ATTEMPTS),
+                    None => false,
+                };
+                if retry {
+                    // 回退为待检测并退避重入队(不阻塞 worker)
+                    FaceTaskMapper::mark_pending(&state.db, visual_id).await?;
+                    warn!(
+                        visual_id = %visual_id,
+                        backoff_secs = FACE_RETRY_BACKOFF_SECS,
+                        error = %error,
+                        "人脸检测失败, 稍后重试"
+                    );
+                    Self::schedule_retry(state, job, FACE_RETRY_BACKOFF_SECS);
+                } else {
+                    let _ =
+                        FaceTaskMapper::mark_failed(&state.db, visual_id, &error.to_string()).await;
+                    warn!(
+                        visual_id = %visual_id,
+                        error = %error,
+                        "人脸检测失败, 已达最大尝试次数"
+                    );
+                }
+                Err(error)
+            }
+        }
+    }
+
+    /// 依任务来源取图并检测: 热路径直接读临时文件, 恢复路径从对象存储下载后检测。
+    async fn detect_for_job(
+        state: &Arc<VisualState>,
+        job: &FaceJob,
+    ) -> common_core::Result<Vec<Face>> {
+        match &job.source {
+            FaceJobSource::Uploaded(event) => {
+                Self::detect_visual_from_file(state, event.temp_file.path())
+                    .timed(metrics_name!("visual_detect"))
+                    .await
+            }
+            FaceJobSource::Stored { file_id } => {
+                let img = Self::download_visual(state, file_id).await?;
+                Self::detect_visual(state, img)
+                    .timed(metrics_name!("visual_detect"))
+                    .await
+            }
+        }
+    }
+
+    /// 原子落库: 命中检测中任务则插入人脸并置为完成, 二者同事务。
+    async fn save_detection(
+        state: &Arc<VisualState>,
+        visual_id: VisualId,
+        faces: Vec<face::NewFaceRecord>,
+    ) -> common_core::Result<()> {
+        common_db::db_transaction!(contextual & state.db, |txn| {
+            // 任务在检测期间被删(影像被删)则不落库
+            if !FaceTaskMapper::mark_done(txn, visual_id).await? {
+                return Ok(());
+            }
+            if !faces.is_empty() {
+                FaceMapper::inserts(txn, faces).await?;
+            }
+            Ok(())
+        })
+        .await?;
         Ok(())
+    }
+
+    /// 退避后重新入队(不阻塞当前 worker)。
+    fn schedule_retry(state: &Arc<VisualState>, job: FaceJob, backoff_secs: u64) {
+        let task_manager = state.task_manager.clone();
+        task_manager.spawn("face_retry", async move {
+            tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+            if let Some(tx) = FACE_QUEUE.get() {
+                let _ = tx.send(job);
+            }
+        });
     }
 }
 
@@ -449,7 +615,7 @@ impl FaceService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "face_cleanup",
-    owns = ["FaceMapper", "PersonMapper"],
+    owns = ["FaceMapper", "PersonMapper", "FaceTaskMapper"],
     method = on_visual_delete,
 )]
 impl FaceService {
@@ -459,6 +625,9 @@ impl FaceService {
         ctx: &mut crate::services::visual_service::VisualDeleteContext,
     ) -> common_core::error::contextual::Result<()> {
         let visual_ids = ctx.visual_ids();
+
+        // 连带清理待检测任务(outbox), 避免影像删除后任务被启动恢复重新入队
+        FaceTaskMapper::delete_by_visual_ids(txn, &visual_ids).await?;
 
         // 加行锁读取待删照片的全部人脸, 阻止并发转移归属读到将删人脸
         let faces = FaceMapper::lock_by_visual_ids(txn, &visual_ids).await?;
@@ -491,5 +660,22 @@ impl FaceService {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_retry;
+
+    #[test]
+    fn should_retry_until_max_attempts() {
+        // max=3: 第1、2 次失败后重试, 第3 次不再重试
+        assert!(should_retry(1, 3));
+        assert!(should_retry(2, 3));
+        assert!(!should_retry(3, 3));
+        // max=1: 只有一次机会
+        assert!(!should_retry(1, 1));
+        // 非法计数
+        assert!(!should_retry(0, 3));
     }
 }

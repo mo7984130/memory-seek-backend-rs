@@ -36,8 +36,9 @@ const SEED_STATEMENTS: [&str; 22] = [
     // 6. 清理 e2e 上传的影像(hash 全局唯一, 不清理会阻塞下次同内容上传;
     //    种子影像 file_id 以 seed_file_ 开头, 保留)
     "DELETE FROM visual_visual WHERE file_id NOT LIKE 'seed_file_%'",
-    // 7. 清空人脸/人物表(纯 seed 表, 无外键约束, TRUNCATE 重建保证 id 从头开始)
-    "TRUNCATE visual_face, visual_person RESTART IDENTITY",
+    // 7. 清空人脸/人物表与人脸检测任务(纯 seed 表, 无外键约束, TRUNCATE 重建保证 id 从头开始;
+    //    任务表主键为 visual_id 无自增列, RESTART IDENTITY 对其为空操作)
+    "TRUNCATE visual_face, visual_person, visual_face_task RESTART IDENTITY",
     // 8. 清空种子影像元数据
     "DELETE FROM visual_visual WHERE file_id LIKE 'seed_file_%'",
     // 9. 清空种子账号(保 admin), e2e 自建/测试池账号一并清理保证可重复运行
