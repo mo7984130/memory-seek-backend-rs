@@ -9,7 +9,7 @@ database:
 redis:
     url: "redis://localhost:63799"
 
-# MailHog(收件验证码): docker-compose 已映射 8025
+# MailHog(收件验证码): compose 测试栈已映射 8025
 mailhog:
     url: "http://localhost:8025"
 
