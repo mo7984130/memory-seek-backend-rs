@@ -19,7 +19,8 @@ use oss::OssError;
 use tracing::instrument;
 
 use crate::{
-    mappers::visual_mapper::VisualMapper,
+    mappers::{derivative_mapper::DerivativeMapper, visual_mapper::VisualMapper},
+    media,
     repo::VisualRepo,
     services::visual_service::{
         AfterVisualDelete, AfterVisualUpload, VisualDeleteContext, publish_after_visual_delete,
@@ -29,6 +30,7 @@ use crate::{
 };
 use audit::{AuditEvent, AuditRecorder};
 use common_core::Result;
+use types_visual::derivative::{DerivativeKind, DerivativeStatus};
 use types_visual::{
     VisualToken, VisualTokenType,
     dto::visual::{VisualCursorParam, VisualView},
@@ -259,7 +261,7 @@ impl VisualService {
 
 /// 影像下载结果，Controller 根据此类型构建 HTTP 响应
 pub enum ImageDownloadData {
-    /// 处理后的影像(缩略图/预览/裁剪/视频截帧),MIME 随处理方式变化
+    /// 处理后的图片(缩略图/预览/裁剪),MIME 随处理方式变化
     Processed {
         /// 处理产物字节
         bytes: Bytes,
@@ -267,13 +269,15 @@ pub enum ImageDownloadData {
         /// 后端忽略处理参数而原样返回时则为原始文件的真实格式)
         content_type: &'static str,
     },
-    /// 原始影像,以流式返回,动态内容类型
+    /// 原始影像 / 视频衍生片,以流式返回,动态内容类型
     Original {
         /// 影像字节流
         stream: Pin<Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>>,
         /// 根据已验证文件格式推断的 MIME 类型
         content_type: &'static str,
     },
+    /// 视频衍生片尚未生成完成(异步转码中), 客户端应稍后重试
+    NotReady,
 }
 
 // 影像下载
@@ -281,7 +285,8 @@ impl VisualService {
     /// 根据 VisualToken 下载影像,返回处理后的数据或原始流
     ///
     /// - 图片:缩略图/预览/人脸裁剪走 OSS 图片处理,原图走流式下载
-    /// - 视频:缩略图/预览为按时长中点截取的封面帧(OSS `video/snapshot`),原视频走流式下载
+    /// - 视频:缩略图/预览为异步生成的衍生片(转码中返回 [`ImageDownloadData::NotReady`]),
+    ///   原视频走流式下载
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
@@ -326,26 +331,30 @@ impl VisualService {
                 | VisualTokenType::Preview
                 | VisualTokenType::Crop { .. },
             ) => {
-                let process_param: String = match &token.token_type {
-                    VisualTokenType::Thumbnail => "image/resize,w_300/format,webp".to_string(),
-                    VisualTokenType::Preview => "image/resize,w_1920/format,webp".to_string(),
+                let op = match &token.token_type {
+                    VisualTokenType::Thumbnail => media::ProcessOp::Thumbnail,
+                    VisualTokenType::Preview => media::ProcessOp::Preview,
                     VisualTokenType::Crop {
                         bbox,
                         source_dimensions,
-                    } => {
-                        let size = 200;
-                        let (x, y, w, h) =
-                            bbox.to_pixel_rect(source_dimensions.width, source_dimensions.height);
-                        format!("image/crop,x_{x},y_{y},w_{w},h_{h}/resize,w_{size}/format,webp")
-                    }
+                    } => media::ProcessOp::Crop {
+                        bbox: *bbox,
+                        source: types_visual::ImageDimensions {
+                            width: source_dimensions.width,
+                            height: source_dimensions.height,
+                        },
+                    },
                     _ => unreachable!(),
                 };
-                let bytes = state
-                    .s3_client
-                    .download_with_process(&token.file_id, &process_param)
-                    .timed(metrics_name!("s3_download_process"))
-                    .await
-                    .into_contextual()?;
+                let bytes = media::process_image(
+                    &state.s3_client,
+                    state.image_backend,
+                    &state.cache_image_processed,
+                    &token.file_id,
+                    &op,
+                )
+                .timed(metrics_name!("s3_download_process"))
+                .await?;
 
                 let content_type =
                     FileValidator::sniff_content_type(&bytes).unwrap_or("application/octet-stream");
@@ -354,63 +363,90 @@ impl VisualService {
                     content_type,
                 })
             }
-            // 视频:缩略图 / 预览为封面截帧,按时长中点取帧避免片头黑屏
+            // 视频:缩略图 / 预览为异步生成的衍生片(缩略片前 N 秒 / 预览片整片压缩)
             (VisualKind::Video, VisualTokenType::Thumbnail | VisualTokenType::Preview) => {
-                let db = state.db.clone();
-                let duration_ms = VisualMapper::query_duration_by_file_id(&db, &token.file_id)
+                let kind = match token.token_type {
+                    VisualTokenType::Thumbnail => DerivativeKind::Thumbnail,
+                    VisualTokenType::Preview => DerivativeKind::Preview,
+                    _ => unreachable!(),
+                };
+                // 未启用转码时无衍生片, 回退为原视频流
+                if !state.config.transcode.enabled {
+                    return Self::stream_original(state, &token).await;
+                }
+                let visual_id = VisualMapper::query_visual_id_by_file_id(&state.db, &token.file_id)
                     .await?
                     .ok_or_warn(
                         "video_file_id_not_found",
                         "视频文件不存在",
                         AppError::not_found("视频文件不存在"),
                     )?;
-                let t_ms = (duration_ms / 2).max(1);
-                let process_param = format!("video/snapshot,t_{t_ms},f_jpg,w_640,m_fast");
-                let bytes = state
-                    .s3_client
-                    .download_with_process(&token.file_id, &process_param)
-                    .timed(metrics_name!("s3_download_process"))
-                    .await
-                    .into_contextual()?;
-
-                let content_type =
-                    FileValidator::sniff_content_type(&bytes).unwrap_or("application/octet-stream");
-                Ok(ImageDownloadData::Processed {
-                    bytes,
-                    content_type,
-                })
-            }
-            // 原图 / 原视频:流式下载,MIME 按文件扩展名推断
-            (_, VisualTokenType::Original) => {
+                let derivative = DerivativeMapper::query_one(&state.db, visual_id, kind).await?;
+                let object_key = match derivative {
+                    Some(record) if record.status == DerivativeStatus::Ready => record.object_key,
+                    // 已失败: 不再让客户端轮询
+                    Some(record) if record.status == DerivativeStatus::Failed => {
+                        return Err(ContextualError::warn_without_source(
+                            "video_derivative_failed",
+                            "视频衍生片生成失败",
+                            AppError::not_found("视频衍生片生成失败"),
+                        )
+                        .emit());
+                    }
+                    // 仍在转码中
+                    _ => None,
+                };
+                let Some(object_key) = object_key else {
+                    return Ok(ImageDownloadData::NotReady);
+                };
                 let stream_resp = state
                     .s3_client
-                    .get_download_stream_response(&token.file_id)
+                    .get_download_stream_response(&object_key)
                     .timed(metrics_name!("s3_download_stream"))
                     .await
                     .into_contextual()?;
-
                 let stream: Pin<
                     Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>,
                 > = Box::pin(stream_resp);
-
-                let content_type = match token.kind {
-                    VisualKind::Image => {
-                        FileValidator::image_content_type(&token.file_id).unwrap_or("image/jpeg")
-                    }
-                    VisualKind::Video => {
-                        FileValidator::video_content_type(&token.file_id).unwrap_or("video/mp4")
-                    }
-                };
                 Ok(ImageDownloadData::Original {
                     stream,
-                    content_type,
+                    content_type: kind.mime_type(),
                 })
             }
+            // 原图 / 原视频:流式下载,MIME 按文件扩展名推断
+            (_, VisualTokenType::Original) => Self::stream_original(state, &token).await,
             // 视频不支持人脸裁剪
             (VisualKind::Video, VisualTokenType::Crop { .. }) => {
                 Err(AppError::bad_request("视频不支持裁剪 token"))
             }
         }
+    }
+
+    /// 流式下载原始影像(原图 / 原视频)。
+    async fn stream_original(
+        state: &VisualState,
+        token: &VisualToken,
+    ) -> Result<ImageDownloadData> {
+        let stream_resp = state
+            .s3_client
+            .get_download_stream_response(&token.file_id)
+            .timed(metrics_name!("s3_download_stream"))
+            .await
+            .into_contextual()?;
+        let stream: Pin<Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>> =
+            Box::pin(stream_resp);
+        let content_type = match token.kind {
+            VisualKind::Image => {
+                FileValidator::image_content_type(&token.file_id).unwrap_or("image/jpeg")
+            }
+            VisualKind::Video => {
+                FileValidator::video_content_type(&token.file_id).unwrap_or("video/mp4")
+            }
+        };
+        Ok(ImageDownloadData::Original {
+            stream,
+            content_type,
+        })
     }
 
     #[inline]
@@ -434,9 +470,9 @@ mod tests {
         let steps: Vec<&'static dyn Step<VisualDeleteContext>> = MEDIA_DELETE_STEPS.to_vec();
 
         #[cfg(feature = "face")]
-        assert_eq!(steps.len(), 6);
+        assert_eq!(steps.len(), 7);
         #[cfg(not(feature = "face"))]
-        assert_eq!(steps.len(), 5);
+        assert_eq!(steps.len(), 6);
 
         let finals: Vec<_> = steps.iter().filter(|step| step.is_final()).collect();
         assert_eq!(finals.len(), 1);
@@ -447,9 +483,9 @@ mod tests {
         let consumers = AFTER_MEDIA_UPLOAD_CONSUMERS.to_vec();
 
         #[cfg(feature = "face")]
-        assert_eq!(consumers.len(), 3);
+        assert_eq!(consumers.len(), 4);
         #[cfg(not(feature = "face"))]
-        assert_eq!(consumers.len(), 2);
+        assert_eq!(consumers.len(), 3);
         assert!(
             consumers
                 .iter()
@@ -467,7 +503,7 @@ mod tests {
     fn after_delete_registry_collects_cache_consumers() {
         let consumers = AFTER_MEDIA_DELETE_CONSUMERS.to_vec();
 
-        assert_eq!(consumers.len(), 2);
+        assert_eq!(consumers.len(), 3);
         assert!(
             consumers
                 .iter()

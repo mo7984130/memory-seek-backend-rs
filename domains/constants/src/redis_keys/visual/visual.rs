@@ -56,6 +56,22 @@ pub fn visual_cursor_page_ids(direction: PageDirection) -> &'static str {
     }
 }
 
+/// 生成影像处理产物（缩略/预览/裁剪 WebP 等）的 Redis 缓存键。
+///
+/// 产物同时取决于原图与处理方式(含后端与参数), 故键包含 file_id 与 `op_key`。
+///
+/// # 参数
+/// - `file_id`: 影像文件 ID
+/// - `op_key`: 处理方式标识(如 `local:thumb`、`oss:preview`、`local:crop:0_0_200_200`)
+///
+/// # 返回
+/// 格式为 `v:v:p:{op_key}:{file_id}` 的缓存键
+#[inline]
+pub fn visual_processed(file_id: &str, op_key: &str) -> String {
+    //visual:visual:processed
+    format!("v:v:p:{op_key}:{file_id}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,5 +105,11 @@ mod tests {
     fn visual_cursor_page_ids_returns_correct_format() {
         assert_eq!(visual_cursor_page_ids(PageDirection::Next), "v:v:c:n");
         assert_eq!(visual_cursor_page_ids(PageDirection::Prev), "v:v:c:p");
+    }
+
+    #[test]
+    fn visual_processed_returns_correct_format() {
+        let key = visual_processed("visuals/2024/01/01/abc.jpg", "local:thumb");
+        assert_eq!(key, "v:v:p:local:thumb:visuals/2024/01/01/abc.jpg");
     }
 }

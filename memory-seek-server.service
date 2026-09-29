@@ -1,4 +1,9 @@
 # ── Memory Seek 后端服务 systemd 单元示例 ──
+#
+# 前置依赖(裸机/systemd 部署):
+#   - 视频转码需要宿主机已安装 ffmpeg(apt install ffmpeg), 与 config 的
+#     visual.transcode.ffmpeg_path(默认 "ffmpeg", 取自 PATH)对应;
+#   - 容器部署则无需在宿主机安装, 运行镜像已内置(见 build/Dockerfile.runtime)。
 
 [Unit]
 Description=Memory Seek Backend Server

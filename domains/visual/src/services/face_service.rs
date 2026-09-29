@@ -36,6 +36,9 @@ pub(crate) struct FaceService;
 
 type Img = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
+/// 人脸检测取图的最大边长(限制尺寸, 减少解码与检测开销)
+const DETECT_IMAGE_MAX_EDGE: u32 = 1920;
+
 // 创建
 impl FaceService {
     /// 人脸计算.
@@ -157,36 +160,26 @@ impl FaceService {
         Ok(())
     }
 
-    /// 从对象存储下载照片并解码为图像缓冲区.
+    /// 从对象存储取图并解码为图像缓冲区(按 `image_processor` 选择处理后端).
     async fn download_visual(state: &VisualState, file_id: &String) -> Result<Img> {
         debug!("下载照片{}", file_id);
-        let bytes = state
-            .s3_client
-            .download_with_process(file_id, "image/resize,m_lfit,w_1920,h_1920")
+        let image = crate::media::fetch_for_detection(
+            &state.s3_client,
+            state.image_backend,
+            file_id,
+            DETECT_IMAGE_MAX_EDGE,
+            DETECT_IMAGE_MAX_EDGE,
+        )
+        .await?;
+
+        // 转 RGB 的 CPU 工作放到阻塞线程, 并保留 visual_decode 步骤指标
+        let img = spawn_blocking(move || image.into_rgb8())
+            .timed(metrics_name!("visual_decode"))
             .await
             .into_contextual()?;
 
-        let img = Self::decode_visual(bytes).await?;
-
         debug!("下载完成");
         Ok(img)
-    }
-
-    /// 在阻塞线程中解码图片字节, 避免占用异步执行器.
-    async fn decode_visual(bytes: bytes::Bytes) -> Result<Img> {
-        let _decode_timer = MetricsTimer::start(metrics_name!("visual_decode"));
-        let decode_result = tokio::task::spawn_blocking(move || -> contextual::Result<Img> {
-            image::load_from_memory(&bytes)
-                .map(|img| img.into_rgb8())
-                .context_err(
-                    "decode_image_error",
-                    "解码图片失败",
-                    AppError::bad_request("解码图片失败, 请上传正确的照片"),
-                )
-        })
-        .await
-        .into_contextual()?;
-        Ok(decode_result?)
     }
 
     /// 在阻塞线程中直接对落盘图片文件执行人脸检测, 避免占用异步执行器.

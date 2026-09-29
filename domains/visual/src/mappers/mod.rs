@@ -2,6 +2,7 @@ pub(crate) mod collection_mapper;
 pub(crate) mod collection_visual_mapper;
 pub(crate) mod comment_like_mapper;
 pub(crate) mod comment_mapper;
+pub(crate) mod derivative_mapper;
 pub(crate) mod timeline_stat_mapper;
 pub(crate) mod visual_like_mapper;
 pub(crate) mod visual_mapper;

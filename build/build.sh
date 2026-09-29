@@ -15,6 +15,12 @@ IMAGE_NAME="ubuntu22.04-rust-build-base"
 PROJECT_NAME="memory-seek-server"
 FEATURES="metrics,auth,user,visual,face-engine,audit,audit-recording,backup"
 
+# 运行镜像(内置 ffmpeg)与 ffmpeg 来源
+# 锁定 BtbN autobuild tag + sha256, 保证可复现; 需要加速时可换镜像站
+RUNTIME_IMAGE="memory-seek-server-test:local"
+FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-27-13-04/ffmpeg-n9.0.2-12-gc867e13549-linux64-gpl-9.0.tar.xz"
+FFMPEG_SHA256="16ca27dbb0d113d74fc6072ef3436fcb66efff2c501416317e6b6961b242f992"
+
 # 构建基础镜像（如果不存在）
 if ! podman image exists $IMAGE_NAME; then
     echo -e "${YELLOW}构建基础镜像 $IMAGE_NAME...${NC}"
@@ -101,3 +107,17 @@ cp -r thirdparty/models "$DIST"/
 
 echo "Build completed:"
 tree "$DIST"
+
+# -------------------------
+# 构建运行镜像(内置 ffmpeg)
+# -------------------------
+# 应用产物仍由 compose 挂载, 该镜像只提供底座 + ffmpeg + 系统运行库。
+echo -e "${GREEN}构建运行镜像 $RUNTIME_IMAGE...${NC}"
+podman build \
+  -t "$RUNTIME_IMAGE" \
+  -f "$SCRIPT_DIR/Dockerfile.runtime" \
+  --build-arg "FFMPEG_URL=$FFMPEG_URL" \
+  --build-arg "FFMPEG_SHA256=$FFMPEG_SHA256" \
+  "$SCRIPT_DIR"
+
+echo -e "${GREEN}运行镜像构建完成: $RUNTIME_IMAGE${NC}"

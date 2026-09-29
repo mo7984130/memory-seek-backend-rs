@@ -6581,6 +6581,7 @@ dependencies = [
  "audit",
  "axum",
  "backup",
+ "base64 0.22.1",
  "blake3",
  "bytes",
  "common-core",
