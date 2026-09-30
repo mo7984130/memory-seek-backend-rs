@@ -5,7 +5,9 @@ use common_core::time::DateTime;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use super::{CursorDecodeError, KeysetDirection};
+use super::CursorDecodeError;
+#[cfg(feature = "orm")]
+use super::KeysetDirection;
 
 /// 通用时间+ID 复合游标，适用于 `(created_at, id)` 排序的分页场景。
 ///

@@ -4,7 +4,9 @@ use base64::Engine;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use super::{CursorDecodeError, KeysetDirection};
+use super::CursorDecodeError;
+#[cfg(feature = "orm")]
+use super::KeysetDirection;
 
 /// 通用"计数+ID"复合游标, 用于按计数(如 `face_count`)主排序的 keyset 分页。
 ///
