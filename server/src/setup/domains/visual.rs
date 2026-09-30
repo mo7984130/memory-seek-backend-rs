@@ -1,3 +1,4 @@
+use crate::setup::bases::tmp_dir::TmpDir;
 #[cfg(feature = "face-engine")]
 use crate::setup::domains::backup::BackupRuntime;
 use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
@@ -45,7 +46,11 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .get::<oss::S3Client>()
             .miss_dep("Visual", "S3Client")?
             .clone(),
-        config.server.tmp_path.clone(),
+        register
+            .get::<TmpDir>()
+            .miss_dep("Visual", "TmpDir")?
+            .0
+            .clone(),
         #[cfg(feature = "face-engine")]
         register
             .get::<Arc<insight_face_rs::FaceEngine>>()

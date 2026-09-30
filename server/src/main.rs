@@ -4,10 +4,7 @@ use axum::middleware::{from_fn, from_fn_with_state};
 
 use clap::Parser;
 use common_core::Result;
-use common_core::error::{
-    AppError,
-    contextual::ext::{IntoContextualExt, ResultContextualExt},
-};
+use common_core::error::contextual::ext::IntoContextualExt;
 use common_core::time::Duration;
 use tracing::{error, info};
 
@@ -46,35 +43,12 @@ async fn main() -> Result<()> {
     setup::bases::log::init();
 
     // 加载配置
-    let mut cfg = AppConfig::load(cli.config);
+    let cfg = AppConfig::load(cli.config);
 
-    // 创建统一临时文件目录(上传落盘等)
-    std::fs::create_dir_all(&cfg.server.tmp_path)
-        .into_contextual()
-        .context_err(
-            "create_tmp_dir_failed",
-            "创建临时目录失败",
-            AppError::InternalServerError,
-        )?;
-    // 规范化为绝对路径并回写: 日志展示与下游(临时文件创建/清理)统一使用完整路径
-    let tmp_path = std::path::absolute(&cfg.server.tmp_path)
-        .into_contextual()
-        .context_err(
-            "resolve_tmp_dir_failed",
-            "解析临时目录绝对路径失败",
-            AppError::InternalServerError,
-        )?;
-    cfg.server.tmp_path = tmp_path;
-    info!(path = %cfg.server.tmp_path.display(), "临时文件目录已就绪");
-
-    // 初始化应用
+    // 初始化应用(临时文件目录在 AppSetup 的 base 阶段创建)
     let mut app_setup = AppSetup::init(&cfg).await?;
 
-    let state = AppState::from_setup(
-        &app_setup,
-        cfg.server.max_upload_bytes,
-        cfg.server.tmp_path.clone(),
-    )?;
+    let state = AppState::from_setup(&app_setup, cfg.server.max_upload_bytes)?;
     let state = Arc::new(state);
 
     // 合并路由并添加中间件

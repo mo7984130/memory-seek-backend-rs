@@ -5,6 +5,7 @@ use deadpool_redis::Pool;
 use sea_orm::DatabaseConnection;
 
 use crate::setup::AppSetup;
+use crate::setup::bases::tmp_dir::TmpDir;
 use crate::util::MissDepError;
 
 pub struct AppState {
@@ -18,11 +19,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn from_setup(
-        setup: &AppSetup,
-        max_upload_bytes: u64,
-        tmp_path: PathBuf,
-    ) -> common_core::Result<Self> {
+    pub fn from_setup(setup: &AppSetup, max_upload_bytes: u64) -> common_core::Result<Self> {
         Ok(Self {
             db: setup
                 .registry
@@ -40,7 +37,12 @@ impl AppState {
                 .miss_dep("AppState", "TaskManager")?
                 .clone(),
             max_upload_bytes,
-            tmp_path,
+            tmp_path: setup
+                .registry
+                .get::<TmpDir>()
+                .miss_dep("AppState", "TmpDir")?
+                .0
+                .clone(),
         })
     }
 }
