@@ -211,7 +211,7 @@ impl VisualRepo {
     }
 
     /// 查询单个影像哈希值是否存在.
-    pub async fn exists_by_hash(state: &VisualState, hash: &str) -> Result<bool> {
+    pub async fn exists_by_hash(state: &VisualState, hash: &str) -> Result<Option<VisualId>> {
         VisualMapper::exists_by_hash(&state.db, hash)
             .timed(metrics_name!("db_query"))
             .await
