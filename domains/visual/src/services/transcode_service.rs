@@ -34,6 +34,35 @@ use crate::state::VisualState;
 /// 单次 ffmpeg 执行超时
 const FFMPEG_TIMEOUT: Duration = Duration::from_secs(600);
 
+/// 失败时保留的 ffmpeg stderr 末尾行数(避免整段版本 banner / 进度刷屏日志)
+const STDERR_TAIL_LINES: usize = 8;
+
+/// 从 ffmpeg stderr 中解析其自述收到的信号号(`Exiting normally, received signal N.`)。
+///
+/// ffmpeg 捕获 SIGINT/SIGTERM 后会优雅退出并打印该提示(退出码 255), 据此可将其与
+/// 真正的转码失败区分开。
+fn received_signal(stderr: &[u8]) -> Option<u32> {
+    const MARKER: &str = "received signal ";
+    let text = String::from_utf8_lossy(stderr);
+    let rest = text.rsplit_once(MARKER)?.1;
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    digits.parse().ok()
+}
+
+/// 取 ffmpeg stderr 末尾若干有效行, 供日志展示。
+///
+/// ffmpeg 的进度行以 `\r` 反复覆盖, 仅最后一次覆盖有意义, 故每行只保留 `\r` 之后的内容。
+fn stderr_tail(stderr: &[u8], max_lines: usize) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let lines: Vec<&str> = text
+        .lines()
+        .map(|line| line.rsplit('\r').next().unwrap_or_default().trim_end())
+        .filter(|line| !line.is_empty())
+        .collect();
+    let start = lines.len().saturating_sub(max_lines);
+    lines[start..].join("\n")
+}
+
 /// 是否应重试: 已尝试次数(含本次)未达上限。
 fn should_retry(attempts: i32, max_attempts: u32) -> bool {
     attempts > 0 && (attempts as u32) < max_attempts
@@ -366,10 +395,26 @@ impl TranscodeService {
         };
 
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+            // ffmpeg 收到 SIGINT/SIGTERM 时会优雅退出并打印 `received signal N`(退出码 255),
+            // 这是外部中断而非转码错误(常见于运维 Ctrl+C 或服务关闭), 单独说明, 避免误导。
+            if let Some(signal) = received_signal(&output.stderr) {
+                return Err(ContextualError::warn_without_source(
+                    "ffmpeg_interrupted",
+                    format!(
+                        "视频转码被信号中断(ffmpeg received signal {signal}, 退出码 {:?}); 通常是进程收到 SIGINT/SIGTERM(如 Ctrl+C 或服务关闭), 非转码错误",
+                        output.status.code()
+                    ),
+                    AppError::InternalServerError,
+                ));
+            }
+            let stderr = stderr_tail(&output.stderr, STDERR_TAIL_LINES);
             return Err(ContextualError::warn_without_source(
                 "ffmpeg_failed",
-                format!("视频转码失败: {}", stderr.trim()),
+                format!(
+                    "视频转码失败(退出码 {:?}): {}",
+                    output.status.code(),
+                    stderr
+                ),
                 AppError::InternalServerError,
             ));
         }
@@ -552,5 +597,21 @@ mod tests {
         assert!(joined.contains("scale=-2:min(1080\\,ih)"));
         assert!(joined.contains("-c:a aac"));
         assert!(joined.contains("-b:a 128k"));
+    }
+
+    #[test]
+    fn stderr_tail_keeps_last_lines_and_final_progress_only() {
+        // 进度行以 \r 覆盖, 仅保留最后一次; 且只取末尾 max_lines 行
+        let raw = b"ffmpeg version 4.4\rframe=1\rframe=2\rframe=3\r\nLast error line\n";
+        assert_eq!(stderr_tail(raw, 2), "frame=3\nLast error line");
+    }
+
+    #[test]
+    fn received_signal_parses_ffmpeg_signal_only_when_present() {
+        assert_eq!(
+            received_signal(b"...\rExiting normally, received signal 2.\n"),
+            Some(2)
+        );
+        assert_eq!(received_signal(b"conversion failed"), None);
     }
 }

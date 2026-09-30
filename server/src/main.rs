@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
     setup::bases::log::init();
 
     // 加载配置
-    let cfg = AppConfig::load(cli.config);
+    let mut cfg = AppConfig::load(cli.config);
 
     // 创建统一临时文件目录(上传落盘等)
     std::fs::create_dir_all(&cfg.server.tmp_path)
@@ -56,6 +56,15 @@ async fn main() -> Result<()> {
             "创建临时目录失败",
             AppError::InternalServerError,
         )?;
+    // 规范化为绝对路径并回写: 日志展示与下游(临时文件创建/清理)统一使用完整路径
+    let tmp_path = std::path::absolute(&cfg.server.tmp_path)
+        .into_contextual()
+        .context_err(
+            "resolve_tmp_dir_failed",
+            "解析临时目录绝对路径失败",
+            AppError::InternalServerError,
+        )?;
+    cfg.server.tmp_path = tmp_path;
     info!(path = %cfg.server.tmp_path.display(), "临时文件目录已就绪");
 
     // 初始化应用
@@ -105,7 +114,7 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(&cfg.server_addr())
         .await
         .into_contextual()?;
-    tracing::info!("Server listening on {}", cfg.server_addr());
+    tracing::info!("监听 {}", cfg.server_addr());
 
     axum::serve(
         listener,
