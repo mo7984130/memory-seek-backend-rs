@@ -560,8 +560,8 @@
       {
         "current": {
           "selected": true,
-          "text": "photo_info",
-          "value": "photo_info"
+          "text": "visual_info",
+          "value": "visual_info"
         },
         "hide": 0,
         "label": "缓存实例",
@@ -579,18 +579,13 @@
           },
           {
             "selected": false,
-            "text": "photo_info",
-            "value": "photo_info"
+            "text": "visual_info",
+            "value": "visual_info"
           },
           {
             "selected": false,
-            "text": "photo_dimensions",
-            "value": "photo_dimensions"
-          },
-          {
-            "selected": false,
-            "text": "photo_md5",
-            "value": "photo_md5"
+            "text": "visual_dimensions",
+            "value": "visual_dimensions"
           },
           {
             "selected": false,
@@ -603,7 +598,7 @@
             "value": "person"
           }
         ],
-        "query": "user_info, user_info_single, photo_info, photo_dimensions, photo_md5, timeline_stat, person",
+        "query": "user_info, user_info_single, visual_info, visual_dimensions, timeline_stat, person",
         "skipUrlSync": false,
         "type": "custom"
       }

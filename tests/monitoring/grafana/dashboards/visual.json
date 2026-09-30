@@ -87,7 +87,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(server_http_requests_total{module=\"photo\"}[5m])) by (route, method) > 0",
+          "expr": "sum(rate(server_http_requests_total{module=\"visual\"}[5m])) by (route, method) > 0",
           "legendFormat": "{{method}} {{route}}",
           "refId": "A"
         }
@@ -149,7 +149,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(server_http_requests_total{status_class=\"5xx\",module=\"photo\"}[5m])) by (route, method) / sum(rate(server_http_requests_total{module=\"photo\"}[5m])) by (route, method) * 100",
+          "expr": "sum(rate(server_http_requests_total{status_class=\"5xx\",module=\"visual\"}[5m])) by (route, method) / sum(rate(server_http_requests_total{module=\"visual\"}[5m])) by (route, method) * 100",
           "legendFormat": "{{method}} {{route}}",
           "refId": "A"
         }
@@ -211,7 +211,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module=\"photo\"}[5m])) by (le, route, method)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(server_http_duration_seconds_bucket{module=\"visual\"}[5m])) by (le, route, method)) * 1000",
           "legendFormat": "{{method}} {{route}}",
           "refId": "A"
         }
@@ -229,7 +229,7 @@
       },
       "id": 11,
       "panels": [],
-      "title": "查询照片列表 (get_photo_cursor_page)",
+      "title": "查询影像列表 (get_visual_cursor_page)",
       "type": "row"
     },
     {
@@ -298,7 +298,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_photo_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_visual_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -307,7 +307,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_photo_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_visual_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -316,12 +316,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_photo_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_visual_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "查询照片列表耗时",
+      "title": "查询影像列表耗时",
       "type": "timeseries"
     },
     {
@@ -382,7 +382,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_photo_cursor_page:find_cursor_page_ids_sum[5m]) / rate(photo:get_photo_cursor_page:find_cursor_page_ids_count[5m]) * 1000",
+          "expr": "rate(visual:get_visual_cursor_page:find_cursor_page_ids_sum[5m]) / rate(visual:get_visual_cursor_page:find_cursor_page_ids_count[5m]) * 1000",
           "legendFormat": "查询分页 ID",
           "refId": "A"
         },
@@ -391,12 +391,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_photo_cursor_page:load_photos_info_sum[5m]) / rate(photo:get_photo_cursor_page:load_photos_info_count[5m]) * 1000",
-          "legendFormat": "加载照片信息",
+          "expr": "rate(visual:get_visual_cursor_page:load_visuals_info_sum[5m]) / rate(visual:get_visual_cursor_page:load_visuals_info_count[5m]) * 1000",
+          "legendFormat": "加载影像信息",
           "refId": "B"
         }
       ],
-      "title": "查询照片列表子步骤耗时",
+      "title": "查询影像列表子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -503,7 +503,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_photo_cursor_page:attempts[5m])",
+          "expr": "rate(visual:get_visual_cursor_page:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -512,12 +512,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_photo_cursor_page:success[5m]) / rate(photo:get_photo_cursor_page:attempts[5m]) * 100",
+          "expr": "rate(visual:get_visual_cursor_page:success[5m]) / rate(visual:get_visual_cursor_page:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "查询照片列表调用量成功率",
+      "title": "查询影像列表调用量成功率",
       "type": "timeseries"
     },
     {
@@ -530,7 +530,7 @@
       },
       "id": 21,
       "panels": [],
-      "title": "上传照片 (upload_photo)",
+      "title": "上传影像 (upload_visual)",
       "type": "row"
     },
     {
@@ -599,7 +599,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:upload_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:upload_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -608,7 +608,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:upload_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:upload_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -617,12 +617,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:upload_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:upload_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "上传照片耗时",
+      "title": "上传影像耗时",
       "type": "timeseries"
     },
     {
@@ -683,8 +683,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:validate_photo:duration_seconds_sum[5m]) / rate(photo:upload_photo:validate_photo:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "图片校验",
+          "expr": "rate(visual:upload_visual:validate_visual:duration_seconds_sum[5m]) / rate(visual:upload_visual:validate_visual:duration_seconds_count[5m]) * 1000",
+          "legendFormat": "影像校验",
           "refId": "A"
         },
         {
@@ -692,8 +692,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:md5_hash:duration_seconds_sum[5m]) / rate(photo:upload_photo:md5_hash:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "MD5 计算",
+          "expr": "rate(visual:upload_visual:s3_upload_sum[5m]) / rate(visual:upload_visual:s3_upload_count[5m]) * 1000",
+          "legendFormat": "S3 上传",
           "refId": "B"
         },
         {
@@ -701,8 +701,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:s3_upload_sum[5m]) / rate(photo:upload_photo:s3_upload_count[5m]) * 1000",
-          "legendFormat": "S3 上传",
+          "expr": "rate(visual:upload_visual:db_insert_sum[5m]) / rate(visual:upload_visual:db_insert_count[5m]) * 1000",
+          "legendFormat": "数据库插入",
           "refId": "C"
         },
         {
@@ -710,39 +710,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:db_insert_sum[5m]) / rate(photo:upload_photo:db_insert_count[5m]) * 1000",
-          "legendFormat": "数据库插入",
-          "refId": "D"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(photo:upload_photo:cache_get_or_load_sum[5m]) / rate(photo:upload_photo:cache_get_or_load_count[5m]) * 1000",
-          "legendFormat": "缓存读取",
-          "refId": "E"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(photo:upload_photo:cache_put_sum[5m]) / rate(photo:upload_photo:cache_put_count[5m]) * 1000",
-          "legendFormat": "缓存写入",
-          "refId": "F"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(photo:upload_photo:cache_invalidate_sum[5m]) / rate(photo:upload_photo:cache_invalidate_count[5m]) * 1000",
+          "expr": "rate(visual:upload_visual:cache_invalidate_sum[5m]) / rate(visual:upload_visual:cache_invalidate_count[5m]) * 1000",
           "legendFormat": "缓存失效",
-          "refId": "G"
+          "refId": "D"
         }
       ],
-      "title": "上传照片子步骤耗时",
+      "title": "上传影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -849,7 +822,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:attempts[5m])",
+          "expr": "rate(visual:upload_visual:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -858,12 +831,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:upload_photo:success[5m]) / rate(photo:upload_photo:attempts[5m]) * 100",
+          "expr": "rate(visual:upload_visual:success[5m]) / rate(visual:upload_visual:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "上传照片调用量成功率",
+      "title": "上传影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -876,7 +849,7 @@
       },
       "id": 31,
       "panels": [],
-      "title": "检查照片去重 (exists_by_md5_batch)",
+      "title": "检查影像去重 (exists_by_hash_batch)",
       "type": "row"
     },
     {
@@ -945,7 +918,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:exists_by_md5_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:exists_by_hash_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -954,7 +927,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:exists_by_md5_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:exists_by_hash_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -963,12 +936,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:exists_by_md5_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:exists_by_hash_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "检查照片去重耗时",
+      "title": "检查影像去重耗时",
       "type": "timeseries"
     },
     {
@@ -1075,7 +1048,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:exists_by_md5_batch:attempts[5m])",
+          "expr": "rate(visual:exists_by_hash_batch:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -1084,12 +1057,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:exists_by_md5_batch:success[5m]) / rate(photo:exists_by_md5_batch:attempts[5m]) * 100",
+          "expr": "rate(visual:exists_by_hash_batch:success[5m]) / rate(visual:exists_by_hash_batch:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "检查照片去重调用量成功率",
+      "title": "检查影像去重调用量成功率",
       "type": "timeseries"
     },
     {
@@ -1102,7 +1075,7 @@
       },
       "id": 41,
       "panels": [],
-      "title": "删除照片 (delete_photos)",
+      "title": "删除影像 (delete_visuals)",
       "type": "row"
     },
     {
@@ -1171,7 +1144,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:delete_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:delete_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -1180,7 +1153,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:delete_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:delete_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -1189,12 +1162,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:delete_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:delete_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "删除照片耗时",
+      "title": "删除影像耗时",
       "type": "timeseries"
     },
     {
@@ -1255,8 +1228,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_photos:db_transaction_sum[5m]) / rate(photo:delete_photos:db_transaction_count[5m]) * 1000",
-          "legendFormat": "数据库事务",
+          "expr": "rate(visual:delete_visuals:s3_delete_batch_sum[5m]) / rate(visual:delete_visuals:s3_delete_batch_count[5m]) * 1000",
+          "legendFormat": "S3 批量删除",
           "refId": "A"
         },
         {
@@ -1264,8 +1237,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_photos:s3_delete_batch_sum[5m]) / rate(photo:delete_photos:s3_delete_batch_count[5m]) * 1000",
-          "legendFormat": "S3 批量删除",
+          "expr": "rate(visual:delete_visuals:cache_invalidate_sum[5m]) / rate(visual:delete_visuals:cache_invalidate_count[5m]) * 1000",
+          "legendFormat": "缓存失效",
           "refId": "B"
         },
         {
@@ -1273,8 +1246,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_photos:cache_invalidate_sum[5m]) / rate(photo:delete_photos:cache_invalidate_count[5m]) * 1000",
-          "legendFormat": "缓存失效",
+          "expr": "rate(visual:delete_visuals:cache_invalidate_dimensions_sum[5m]) / rate(visual:delete_visuals:cache_invalidate_dimensions_count[5m]) * 1000",
+          "legendFormat": "缓存失效 (尺寸)",
           "refId": "C"
         },
         {
@@ -1282,21 +1255,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_photos:cache_invalidate_dimensions_sum[5m]) / rate(photo:delete_photos:cache_invalidate_dimensions_count[5m]) * 1000",
-          "legendFormat": "缓存失效 (尺寸)",
+          "expr": "rate(visual:delete_visuals:cache_invalidate_cursor_ids_sum[5m]) / rate(visual:delete_visuals:cache_invalidate_cursor_ids_count[5m]) * 1000",
+          "legendFormat": "缓存失效 (游标)",
           "refId": "D"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "Prometheus"
-          },
-          "expr": "rate(photo:delete_photos:cache_invalidate_timeline_sum[5m]) / rate(photo:delete_photos:cache_invalidate_timeline_count[5m]) * 1000",
-          "legendFormat": "缓存失效 (时间线)",
-          "refId": "E"
         }
       ],
-      "title": "删除照片子步骤耗时",
+      "title": "删除影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -1403,7 +1367,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_photos:attempts[5m])",
+          "expr": "rate(visual:delete_visuals:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -1412,12 +1376,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_photos:success[5m]) / rate(photo:delete_photos:attempts[5m]) * 100",
+          "expr": "rate(visual:delete_visuals:success[5m]) / rate(visual:delete_visuals:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "删除照片调用量成功率",
+      "title": "删除影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -1430,7 +1394,7 @@
       },
       "id": 51,
       "panels": [],
-      "title": "获取图片 (download_image)",
+      "title": "获取影像 (download_visual)",
       "type": "row"
     },
     {
@@ -1499,7 +1463,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:download_image:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:download_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -1508,7 +1472,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:download_image:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:download_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -1517,12 +1481,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:download_image:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:download_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "获取图片耗时",
+      "title": "获取影像耗时",
       "type": "timeseries"
     },
     {
@@ -1583,7 +1547,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:download_image:s3_download_process_sum[5m]) / rate(photo:download_image:s3_download_process_count[5m]) * 1000",
+          "expr": "rate(visual:download_visual:s3_download_process_sum[5m]) / rate(visual:download_visual:s3_download_process_count[5m]) * 1000",
           "legendFormat": "S3 下载处理",
           "refId": "A"
         },
@@ -1592,12 +1556,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:download_image:s3_download_stream_sum[5m]) / rate(photo:download_image:s3_download_stream_count[5m]) * 1000",
+          "expr": "rate(visual:download_visual:s3_download_stream_sum[5m]) / rate(visual:download_visual:s3_download_stream_count[5m]) * 1000",
           "legendFormat": "S3 流式下载",
           "refId": "B"
         }
       ],
-      "title": "获取图片子步骤耗时",
+      "title": "获取影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -1704,7 +1668,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:download_image:attempts[5m])",
+          "expr": "rate(visual:download_visual:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -1713,12 +1677,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:download_image:success[5m]) / rate(photo:download_image:attempts[5m]) * 100",
+          "expr": "rate(visual:download_visual:success[5m]) / rate(visual:download_visual:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "获取图片调用量成功率",
+      "title": "获取影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -1813,7 +1777,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_collection_list:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_collection_list:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -1822,7 +1786,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_collection_list:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_collection_list:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -1831,7 +1795,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_collection_list:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_collection_list:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -1897,7 +1861,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_list:query_by_user_id_sum[5m]) / rate(photo:get_collection_list:query_by_user_id_count[5m]) * 1000",
+          "expr": "rate(visual:get_collection_list:query_by_user_id_sum[5m]) / rate(visual:get_collection_list:query_by_user_id_count[5m]) * 1000",
           "legendFormat": "按用户查询",
           "refId": "A"
         }
@@ -2009,7 +1973,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_list:attempts[5m])",
+          "expr": "rate(visual:get_collection_list:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -2018,7 +1982,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_list:success[5m]) / rate(photo:get_collection_list:attempts[5m]) * 100",
+          "expr": "rate(visual:get_collection_list:success[5m]) / rate(visual:get_collection_list:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -2105,7 +2069,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:create_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:create_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -2114,7 +2078,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:create_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:create_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -2123,7 +2087,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:create_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:create_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -2189,7 +2153,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:create_collection:db_insert_sum[5m]) / rate(photo:create_collection:db_insert_count[5m]) * 1000",
+          "expr": "rate(visual:create_collection:db_insert_sum[5m]) / rate(visual:create_collection:db_insert_count[5m]) * 1000",
           "legendFormat": "数据库插入",
           "refId": "A"
         }
@@ -2301,7 +2265,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:create_collection:attempts[5m])",
+          "expr": "rate(visual:create_collection:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -2310,7 +2274,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:create_collection:success[5m]) / rate(photo:create_collection:attempts[5m]) * 100",
+          "expr": "rate(visual:create_collection:success[5m]) / rate(visual:create_collection:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -2397,7 +2361,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:update_collection_info:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:update_collection_info:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -2406,7 +2370,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:update_collection_info:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:update_collection_info:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -2415,7 +2379,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:update_collection_info:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:update_collection_info:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -2481,7 +2445,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:update_collection_info:db_update_sum[5m]) / rate(photo:update_collection_info:db_update_count[5m]) * 1000",
+          "expr": "rate(visual:update_collection_info:db_update_sum[5m]) / rate(visual:update_collection_info:db_update_count[5m]) * 1000",
           "legendFormat": "数据库更新",
           "refId": "A"
         }
@@ -2593,7 +2557,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:update_collection_info:attempts[5m])",
+          "expr": "rate(visual:update_collection_info:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -2602,7 +2566,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:update_collection_info:success[5m]) / rate(photo:update_collection_info:attempts[5m]) * 100",
+          "expr": "rate(visual:update_collection_info:success[5m]) / rate(visual:update_collection_info:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -2689,7 +2653,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:delete_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:delete_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -2698,7 +2662,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:delete_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:delete_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -2707,7 +2671,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:delete_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:delete_collection:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -2773,7 +2737,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_collection:db_transaction_sum[5m]) / rate(photo:delete_collection:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:delete_collection:db_transaction_sum[5m]) / rate(visual:delete_collection:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
@@ -2885,7 +2849,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_collection:attempts[5m])",
+          "expr": "rate(visual:delete_collection:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -2894,7 +2858,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_collection:success[5m]) / rate(photo:delete_collection:attempts[5m]) * 100",
+          "expr": "rate(visual:delete_collection:success[5m]) / rate(visual:delete_collection:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -2912,7 +2876,7 @@
       },
       "id": 101,
       "panels": [],
-      "title": "获取照片收藏夹 (get_collections_by_photo)",
+      "title": "获取影像收藏夹 (get_collections_by_visual)",
       "type": "row"
     },
     {
@@ -2981,7 +2945,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_collections_by_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_collections_by_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -2990,7 +2954,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_collections_by_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_collections_by_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -2999,12 +2963,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_collections_by_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_collections_by_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "获取照片收藏夹耗时",
+      "title": "获取影像收藏夹耗时",
       "type": "timeseries"
     },
     {
@@ -3111,7 +3075,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collections_by_photo:attempts[5m])",
+          "expr": "rate(visual:get_collections_by_visual:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -3120,12 +3084,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collections_by_photo:success[5m]) / rate(photo:get_collections_by_photo:attempts[5m]) * 100",
+          "expr": "rate(visual:get_collections_by_visual:success[5m]) / rate(visual:get_collections_by_visual:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "获取照片收藏夹调用量成功率",
+      "title": "获取影像收藏夹调用量成功率",
       "type": "timeseries"
     },
     {
@@ -3138,7 +3102,7 @@
       },
       "id": 111,
       "panels": [],
-      "title": "获取收藏夹照片 (get_collection_photos)",
+      "title": "获取收藏夹影像 (get_collection_visuals)",
       "type": "row"
     },
     {
@@ -3207,7 +3171,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_collection_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -3216,7 +3180,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_collection_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -3225,12 +3189,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_collection_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "获取收藏夹照片耗时",
+      "title": "获取收藏夹影像耗时",
       "type": "timeseries"
     },
     {
@@ -3291,8 +3255,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_photos:query_photo_ids_sum[5m]) / rate(photo:get_collection_photos:query_photo_ids_count[5m]) * 1000",
-          "legendFormat": "查询照片 ID",
+          "expr": "rate(visual:get_collection_visuals:query_visual_ids_sum[5m]) / rate(visual:get_collection_visuals:query_visual_ids_count[5m]) * 1000",
+          "legendFormat": "查询影像 ID",
           "refId": "A"
         },
         {
@@ -3300,12 +3264,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_photos:load_photos_info_sum[5m]) / rate(photo:get_collection_photos:load_photos_info_count[5m]) * 1000",
-          "legendFormat": "加载照片信息",
+          "expr": "rate(visual:get_collection_visuals:load_visuals_info_sum[5m]) / rate(visual:get_collection_visuals:load_visuals_info_count[5m]) * 1000",
+          "legendFormat": "加载影像信息",
           "refId": "B"
         }
       ],
-      "title": "获取收藏夹照片子步骤耗时",
+      "title": "获取收藏夹影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -3412,7 +3376,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_photos:attempts[5m])",
+          "expr": "rate(visual:get_collection_visuals:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -3421,12 +3385,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_collection_photos:success[5m]) / rate(photo:get_collection_photos:attempts[5m]) * 100",
+          "expr": "rate(visual:get_collection_visuals:success[5m]) / rate(visual:get_collection_visuals:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "获取收藏夹照片调用量成功率",
+      "title": "获取收藏夹影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -3439,7 +3403,7 @@
       },
       "id": 121,
       "panels": [],
-      "title": "添加收藏夹照片 (add_collection_photos)",
+      "title": "添加收藏夹影像 (add_collection_visuals)",
       "type": "row"
     },
     {
@@ -3508,7 +3472,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:add_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:add_collection_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -3517,7 +3481,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:add_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:add_collection_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -3526,12 +3490,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:add_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:add_collection_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "添加收藏夹照片耗时",
+      "title": "添加收藏夹影像耗时",
       "type": "timeseries"
     },
     {
@@ -3592,8 +3556,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:add_collection_photos:auth_check_sum[5m]) / rate(photo:add_collection_photos:auth_check_count[5m]) * 1000",
-          "legendFormat": "权限校验",
+          "expr": "rate(visual:add_collection_visuals:ensure_belong_sum[5m]) / rate(visual:add_collection_visuals:ensure_belong_count[5m]) * 1000",
+          "legendFormat": "校验归属",
           "refId": "A"
         },
         {
@@ -3601,12 +3565,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:add_collection_photos:db_transaction_sum[5m]) / rate(photo:add_collection_photos:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:add_collection_visuals:db_transaction_sum[5m]) / rate(visual:add_collection_visuals:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "B"
         }
       ],
-      "title": "添加收藏夹照片子步骤耗时",
+      "title": "添加收藏夹影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -3713,7 +3677,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:add_collection_photos:attempts[5m])",
+          "expr": "rate(visual:add_collection_visuals:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -3722,12 +3686,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:add_collection_photos:success[5m]) / rate(photo:add_collection_photos:attempts[5m]) * 100",
+          "expr": "rate(visual:add_collection_visuals:success[5m]) / rate(visual:add_collection_visuals:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "添加收藏夹照片调用量成功率",
+      "title": "添加收藏夹影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -3740,7 +3704,7 @@
       },
       "id": 131,
       "panels": [],
-      "title": "移除收藏夹照片 (remove_collection_photos)",
+      "title": "移除收藏夹影像 (remove_collection_visuals)",
       "type": "row"
     },
     {
@@ -3809,7 +3773,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:remove_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:remove_collection_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -3818,7 +3782,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:remove_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:remove_collection_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -3827,12 +3791,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:remove_collection_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:remove_collection_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "移除收藏夹照片耗时",
+      "title": "移除收藏夹影像耗时",
       "type": "timeseries"
     },
     {
@@ -3893,12 +3857,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:remove_collection_photos:db_transaction_sum[5m]) / rate(photo:remove_collection_photos:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:remove_collection_visuals:db_transaction_sum[5m]) / rate(visual:remove_collection_visuals:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
       ],
-      "title": "移除收藏夹照片子步骤耗时",
+      "title": "移除收藏夹影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -4005,7 +3969,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:remove_collection_photos:attempts[5m])",
+          "expr": "rate(visual:remove_collection_visuals:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -4014,12 +3978,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:remove_collection_photos:success[5m]) / rate(photo:remove_collection_photos:attempts[5m]) * 100",
+          "expr": "rate(visual:remove_collection_visuals:success[5m]) / rate(visual:remove_collection_visuals:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "移除收藏夹照片调用量成功率",
+      "title": "移除收藏夹影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -4114,7 +4078,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:publish_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:publish_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -4123,7 +4087,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:publish_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:publish_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -4132,7 +4096,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:publish_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:publish_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -4198,7 +4162,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:publish_comment:db_transaction_sum[5m]) / rate(photo:publish_comment:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:publish_comment:db_transaction_sum[5m]) / rate(visual:publish_comment:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
@@ -4310,7 +4274,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:publish_comment:attempts[5m])",
+          "expr": "rate(visual:publish_comment:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -4319,7 +4283,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:publish_comment:success[5m]) / rate(photo:publish_comment:attempts[5m]) * 100",
+          "expr": "rate(visual:publish_comment:success[5m]) / rate(visual:publish_comment:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -4406,7 +4370,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_comment_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_comment_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -4415,7 +4379,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_comment_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_comment_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -4424,7 +4388,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_comment_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_comment_cursor_page:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -4490,7 +4454,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_comment_cursor_page:query_hot_comments_sum[5m]) / rate(photo:get_comment_cursor_page:query_hot_comments_count[5m]) * 1000",
+          "expr": "rate(visual:get_comment_cursor_page:query_hot_comments_sum[5m]) / rate(visual:get_comment_cursor_page:query_hot_comments_count[5m]) * 1000",
           "legendFormat": "热门评论查询",
           "refId": "A"
         },
@@ -4499,7 +4463,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_comment_cursor_page:query_by_photo_id_sum[5m]) / rate(photo:get_comment_cursor_page:query_by_photo_id_count[5m]) * 1000",
+          "expr": "rate(visual:get_comment_cursor_page:query_by_visual_id_sum[5m]) / rate(visual:get_comment_cursor_page:query_by_visual_id_count[5m]) * 1000",
           "legendFormat": "评论列表查询",
           "refId": "B"
         },
@@ -4508,7 +4472,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_comment_cursor_page:query_is_like_sum[5m]) / rate(photo:get_comment_cursor_page:query_is_like_count[5m]) * 1000",
+          "expr": "rate(visual:get_comment_cursor_page:query_is_like_sum[5m]) / rate(visual:get_comment_cursor_page:query_is_like_count[5m]) * 1000",
           "legendFormat": "点赞状态查询",
           "refId": "C"
         }
@@ -4620,7 +4584,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_comment_cursor_page:attempts[5m])",
+          "expr": "rate(visual:get_comment_cursor_page:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -4629,7 +4593,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_comment_cursor_page:success[5m]) / rate(photo:get_comment_cursor_page:attempts[5m]) * 100",
+          "expr": "rate(visual:get_comment_cursor_page:success[5m]) / rate(visual:get_comment_cursor_page:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -4716,7 +4680,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:delete_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:delete_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -4725,7 +4689,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:delete_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:delete_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -4734,7 +4698,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:delete_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:delete_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -4800,7 +4764,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_comment:db_transaction_sum[5m]) / rate(photo:delete_comment:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:delete_comment:db_transaction_sum[5m]) / rate(visual:delete_comment:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
@@ -4912,7 +4876,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_comment:attempts[5m])",
+          "expr": "rate(visual:delete_comment:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -4921,7 +4885,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_comment:success[5m]) / rate(photo:delete_comment:attempts[5m]) * 100",
+          "expr": "rate(visual:delete_comment:success[5m]) / rate(visual:delete_comment:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -5008,7 +4972,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:like_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:like_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -5017,7 +4981,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:like_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:like_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -5026,7 +4990,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:like_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:like_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -5092,7 +5056,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:like_comment:db_transaction_sum[5m]) / rate(photo:like_comment:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:like_comment:db_transaction_sum[5m]) / rate(visual:like_comment:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
@@ -5204,7 +5168,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:like_comment:attempts[5m])",
+          "expr": "rate(visual:like_comment:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -5213,7 +5177,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:like_comment:success[5m]) / rate(photo:like_comment:attempts[5m]) * 100",
+          "expr": "rate(visual:like_comment:success[5m]) / rate(visual:like_comment:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -5300,7 +5264,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:unlike_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:unlike_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -5309,7 +5273,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:unlike_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:unlike_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -5318,7 +5282,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:unlike_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:unlike_comment:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -5384,7 +5348,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:unlike_comment:db_transaction_sum[5m]) / rate(photo:unlike_comment:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:unlike_comment:db_transaction_sum[5m]) / rate(visual:unlike_comment:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
@@ -5496,7 +5460,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:unlike_comment:attempts[5m])",
+          "expr": "rate(visual:unlike_comment:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -5505,7 +5469,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:unlike_comment:success[5m]) / rate(photo:unlike_comment:attempts[5m]) * 100",
+          "expr": "rate(visual:unlike_comment:success[5m]) / rate(visual:unlike_comment:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -5523,7 +5487,7 @@
       },
       "id": 191,
       "panels": [],
-      "title": "点赞照片 (like_photo)",
+      "title": "点赞影像 (like_visual)",
       "type": "row"
     },
     {
@@ -5592,7 +5556,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:like_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:like_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -5601,7 +5565,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:like_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:like_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -5610,12 +5574,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:like_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:like_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "点赞照片耗时",
+      "title": "点赞影像耗时",
       "type": "timeseries"
     },
     {
@@ -5676,12 +5640,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:like_photo:db_transaction_sum[5m]) / rate(photo:like_photo:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:like_visual:db_transaction_sum[5m]) / rate(visual:like_visual:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
       ],
-      "title": "点赞照片子步骤耗时",
+      "title": "点赞影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -5788,7 +5752,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:like_photo:attempts[5m])",
+          "expr": "rate(visual:like_visual:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -5797,12 +5761,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:like_photo:success[5m]) / rate(photo:like_photo:attempts[5m]) * 100",
+          "expr": "rate(visual:like_visual:success[5m]) / rate(visual:like_visual:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "点赞照片调用量成功率",
+      "title": "点赞影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -5815,7 +5779,7 @@
       },
       "id": 201,
       "panels": [],
-      "title": "取消点赞照片 (unlike_photo)",
+      "title": "取消点赞影像 (unlike_visual)",
       "type": "row"
     },
     {
@@ -5884,7 +5848,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:unlike_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:unlike_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -5893,7 +5857,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:unlike_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:unlike_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -5902,12 +5866,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:unlike_photo:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:unlike_visual:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "取消点赞照片耗时",
+      "title": "取消点赞影像耗时",
       "type": "timeseries"
     },
     {
@@ -5968,12 +5932,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:unlike_photo:db_transaction_sum[5m]) / rate(photo:unlike_photo:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:unlike_visual:db_transaction_sum[5m]) / rate(visual:unlike_visual:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
       ],
-      "title": "取消点赞照片子步骤耗时",
+      "title": "取消点赞影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -6080,7 +6044,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:unlike_photo:attempts[5m])",
+          "expr": "rate(visual:unlike_visual:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -6089,12 +6053,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:unlike_photo:success[5m]) / rate(photo:unlike_photo:attempts[5m]) * 100",
+          "expr": "rate(visual:unlike_visual:success[5m]) / rate(visual:unlike_visual:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "取消点赞照片调用量成功率",
+      "title": "取消点赞影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -6107,7 +6071,7 @@
       },
       "id": 211,
       "panels": [],
-      "title": "查询点赞照片 (get_user_liked_photos)",
+      "title": "查询点赞影像 (get_user_liked_visuals)",
       "type": "row"
     },
     {
@@ -6176,7 +6140,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_user_liked_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_user_liked_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -6185,7 +6149,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_user_liked_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_user_liked_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -6194,12 +6158,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_user_liked_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_user_liked_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "查询点赞照片耗时",
+      "title": "查询点赞影像耗时",
       "type": "timeseries"
     },
     {
@@ -6260,12 +6224,21 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_user_liked_photos:query_ids_sum[5m]) / rate(photo:get_user_liked_photos:query_ids_count[5m]) * 1000",
+          "expr": "rate(visual:get_user_liked_visuals:query_ids_sum[5m]) / rate(visual:get_user_liked_visuals:query_ids_count[5m]) * 1000",
           "legendFormat": "查询点赞 ID",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(visual:get_user_liked_visuals:load_visuals_info_sum[5m]) / rate(visual:get_user_liked_visuals:load_visuals_info_count[5m]) * 1000",
+          "legendFormat": "加载影像信息",
+          "refId": "B"
         }
       ],
-      "title": "查询点赞照片子步骤耗时",
+      "title": "查询点赞影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -6372,7 +6345,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_user_liked_photos:attempts[5m])",
+          "expr": "rate(visual:get_user_liked_visuals:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -6381,12 +6354,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_user_liked_photos:success[5m]) / rate(photo:get_user_liked_photos:attempts[5m]) * 100",
+          "expr": "rate(visual:get_user_liked_visuals:success[5m]) / rate(visual:get_user_liked_visuals:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "查询点赞照片调用量成功率",
+      "title": "查询点赞影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -6468,7 +6441,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:rename_person:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:rename_person:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -6477,7 +6450,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:rename_person:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:rename_person:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -6486,7 +6459,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:rename_person:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:rename_person:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -6552,7 +6525,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:rename_person:db_transaction_sum[5m]) / rate(photo:rename_person:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:rename_person:db_transaction_sum[5m]) / rate(visual:rename_person:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
@@ -6664,7 +6637,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:rename_person:attempts[5m])",
+          "expr": "rate(visual:rename_person:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -6673,7 +6646,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:rename_person:success[5m]) / rate(photo:rename_person:attempts[5m]) * 100",
+          "expr": "rate(visual:rename_person:success[5m]) / rate(visual:rename_person:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -6760,7 +6733,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:merge_person:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:merge_person:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -6769,7 +6742,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:merge_person:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:merge_person:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -6778,7 +6751,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:merge_person:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:merge_person:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -6844,7 +6817,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:merge_person:db_transaction_sum[5m]) / rate(photo:merge_person:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:merge_person:db_transaction_sum[5m]) / rate(visual:merge_person:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         },
@@ -6853,7 +6826,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:merge_person:cache_get_or_load_sum[5m]) / rate(photo:merge_person:cache_get_or_load_count[5m]) * 1000",
+          "expr": "rate(visual:merge_person:cache_get_or_load_sum[5m]) / rate(visual:merge_person:cache_get_or_load_count[5m]) * 1000",
           "legendFormat": "缓存读取",
           "refId": "B"
         }
@@ -6965,7 +6938,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:merge_person:attempts[5m])",
+          "expr": "rate(visual:merge_person:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -6974,7 +6947,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:merge_person:success[5m]) / rate(photo:merge_person:attempts[5m]) * 100",
+          "expr": "rate(visual:merge_person:success[5m]) / rate(visual:merge_person:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -7061,7 +7034,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -7070,7 +7043,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -7079,7 +7052,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -7145,7 +7118,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_persons:query_page_sum[5m]) / rate(photo:get_persons:query_page_count[5m]) * 1000",
+          "expr": "rate(visual:get_persons:query_page_sum[5m]) / rate(visual:get_persons:query_page_count[5m]) * 1000",
           "legendFormat": "分页查询",
           "refId": "A"
         }
@@ -7257,7 +7230,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_persons:attempts[5m])",
+          "expr": "rate(visual:get_persons:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -7266,7 +7239,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_persons:success[5m]) / rate(photo:get_persons:attempts[5m]) * 100",
+          "expr": "rate(visual:get_persons:success[5m]) / rate(visual:get_persons:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -7353,7 +7326,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:search_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:search_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -7362,7 +7335,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:search_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:search_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -7371,7 +7344,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:search_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:search_persons:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -7437,7 +7410,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:search_persons:query_search_sum[5m]) / rate(photo:search_persons:query_search_count[5m]) * 1000",
+          "expr": "rate(visual:search_persons:query_search_sum[5m]) / rate(visual:search_persons:query_search_count[5m]) * 1000",
           "legendFormat": "搜索查询",
           "refId": "A"
         }
@@ -7549,7 +7522,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:search_persons:attempts[5m])",
+          "expr": "rate(visual:search_persons:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -7558,7 +7531,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:search_persons:success[5m]) / rate(photo:search_persons:attempts[5m]) * 100",
+          "expr": "rate(visual:search_persons:success[5m]) / rate(visual:search_persons:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -7622,7 +7595,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 6,
         "x": 0,
         "y": 230
       },
@@ -7645,7 +7618,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:change_face_belonging:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:change_face_belonging:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -7654,7 +7627,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:change_face_belonging:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:change_face_belonging:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -7663,12 +7636,78 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:change_face_belonging:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:change_face_belonging:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
       "title": "修改人脸归属耗时",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 230
+      },
+      "id": 263,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(visual:change_face_belonging:db_transaction_sum[5m]) / rate(visual:change_face_belonging:db_transaction_count[5m]) * 1000",
+          "legendFormat": "数据库事务",
+          "refId": "A"
+        }
+      ],
+      "title": "修改人脸归属子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -7775,7 +7814,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:change_face_belonging:attempts[5m])",
+          "expr": "rate(visual:change_face_belonging:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -7784,7 +7823,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:change_face_belonging:success[5m]) / rate(photo:change_face_belonging:attempts[5m]) * 100",
+          "expr": "rate(visual:change_face_belonging:success[5m]) / rate(visual:change_face_belonging:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -7871,7 +7910,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:delete_face:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:delete_face:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -7880,7 +7919,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:delete_face:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:delete_face:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -7889,7 +7928,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:delete_face:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:delete_face:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -8001,7 +8040,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_face:attempts[5m])",
+          "expr": "rate(visual:delete_face:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -8010,7 +8049,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_face:success[5m]) / rate(photo:delete_face:attempts[5m]) * 100",
+          "expr": "rate(visual:delete_face:success[5m]) / rate(visual:delete_face:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -8097,7 +8136,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:delete_faces_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:delete_faces_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -8106,7 +8145,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:delete_faces_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:delete_faces_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -8115,7 +8154,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:delete_faces_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:delete_faces_batch:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -8227,7 +8266,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_faces_batch:attempts[5m])",
+          "expr": "rate(visual:delete_faces_batch:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -8236,7 +8275,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_faces_batch:success[5m]) / rate(photo:delete_faces_batch:attempts[5m]) * 100",
+          "expr": "rate(visual:delete_faces_batch:success[5m]) / rate(visual:delete_faces_batch:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -8323,7 +8362,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -8332,7 +8371,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -8341,7 +8380,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:face_compute:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -8407,7 +8446,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:face_compute:query_sum[5m]) / rate(photo:face_compute:query_count[5m]) * 1000",
+          "expr": "rate(visual:face_compute:query_sum[5m]) / rate(visual:face_compute:query_count[5m]) * 1000",
           "legendFormat": "批次查询",
           "refId": "A"
         },
@@ -8416,7 +8455,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:face_compute:download_batch_sum[5m]) / rate(photo:face_compute:download_batch_count[5m]) * 1000",
+          "expr": "rate(visual:face_compute:download_batch_sum[5m]) / rate(visual:face_compute:download_batch_count[5m]) * 1000",
           "legendFormat": "批量下载",
           "refId": "B"
         },
@@ -8425,7 +8464,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:face_compute:photo_download_sum[5m]) / rate(photo:face_compute:photo_download_count[5m]) * 1000",
+          "expr": "rate(visual:face_compute:visual_download_sum[5m]) / rate(visual:face_compute:visual_download_count[5m]) * 1000",
           "legendFormat": "单图下载",
           "refId": "C"
         },
@@ -8434,8 +8473,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:face_compute:photo_decode_sum[5m]) / rate(photo:face_compute:photo_decode_count[5m]) * 1000",
-          "legendFormat": "图片解码",
+          "expr": "rate(visual:face_compute:visual_decode_sum[5m]) / rate(visual:face_compute:visual_decode_count[5m]) * 1000",
+          "legendFormat": "影像解码",
           "refId": "D"
         },
         {
@@ -8443,7 +8482,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:face_compute:photo_detect_sum[5m]) / rate(photo:face_compute:photo_detect_count[5m]) * 1000",
+          "expr": "rate(visual:face_compute:visual_detect_sum[5m]) / rate(visual:face_compute:visual_detect_count[5m]) * 1000",
           "legendFormat": "单图检测",
           "refId": "E"
         },
@@ -8452,7 +8491,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:face_compute:insert_sum[5m]) / rate(photo:face_compute:insert_count[5m]) * 1000",
+          "expr": "rate(visual:face_compute:insert_sum[5m]) / rate(visual:face_compute:insert_count[5m]) * 1000",
           "legendFormat": "写入数据库",
           "refId": "F"
         }
@@ -8564,7 +8603,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:face_compute:attempts[5m])",
+          "expr": "rate(visual:face_compute:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -8573,7 +8612,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:face_compute:success[5m]) / rate(photo:face_compute:attempts[5m]) * 100",
+          "expr": "rate(visual:face_compute:success[5m]) / rate(visual:face_compute:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -8645,7 +8684,7 @@
       },
       "targets": [
         {
-          "expr": "photo:face_compute:running",
+          "expr": "visual:face_compute:running",
           "refId": "A"
         }
       ],
@@ -8716,7 +8755,7 @@
       },
       "targets": [
         {
-          "expr": "photo:face_compute:mode",
+          "expr": "visual:face_compute:mode",
           "refId": "A"
         }
       ],
@@ -8769,7 +8808,7 @@
       },
       "targets": [
         {
-          "expr": "photo:face_compute:batch",
+          "expr": "visual:face_compute:batch",
           "refId": "A"
         }
       ],
@@ -8823,11 +8862,11 @@
       },
       "targets": [
         {
-          "expr": "photo:face_compute:total_photos",
+          "expr": "visual:face_compute:total_visuals",
           "refId": "A"
         }
       ],
-      "title": "累计照片",
+      "title": "累计影像",
       "type": "stat"
     },
     {
@@ -8877,7 +8916,7 @@
       },
       "targets": [
         {
-          "expr": "photo:face_compute:total_faces",
+          "expr": "visual:face_compute:total_faces",
           "refId": "A"
         }
       ],
@@ -8931,7 +8970,7 @@
       },
       "targets": [
         {
-          "expr": "photo:face_compute:total_no_face",
+          "expr": "visual:face_compute:total_no_face",
           "refId": "A"
         }
       ],
@@ -9004,17 +9043,17 @@
       },
       "targets": [
         {
-          "expr": "rate(photo:face_compute:photos_processed[1m]) * 60",
-          "legendFormat": "处理照片/分钟",
+          "expr": "rate(visual:face_compute:visuals_processed[1m]) * 60",
+          "legendFormat": "处理影像/分钟",
           "refId": "A"
         },
         {
-          "expr": "rate(photo:face_compute:faces_detected[1m]) * 60",
+          "expr": "rate(visual:face_compute:faces_detected[1m]) * 60",
           "legendFormat": "检出人脸/分钟",
           "refId": "B"
         },
         {
-          "expr": "rate(photo:face_compute:no_face_photos[1m]) * 60",
+          "expr": "rate(visual:face_compute:no_face_visuals[1m]) * 60",
           "legendFormat": "无人脸/分钟",
           "refId": "C"
         }
@@ -9088,17 +9127,17 @@
       },
       "targets": [
         {
-          "expr": "photo:face_compute:total_photos",
-          "legendFormat": "累计照片",
+          "expr": "visual:face_compute:total_visuals",
+          "legendFormat": "累计影像",
           "refId": "A"
         },
         {
-          "expr": "photo:face_compute:total_faces",
+          "expr": "visual:face_compute:total_faces",
           "legendFormat": "累计人脸",
           "refId": "B"
         },
         {
-          "expr": "photo:face_compute:total_no_face",
+          "expr": "visual:face_compute:total_no_face",
           "legendFormat": "累计无人脸",
           "refId": "C"
         }
@@ -9185,7 +9224,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -9194,7 +9233,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -9203,7 +9242,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_monthly_stats:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -9269,7 +9308,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_monthly_stats:cache_get_or_load_sum[5m]) / rate(photo:get_monthly_stats:cache_get_or_load_count[5m]) * 1000",
+          "expr": "rate(visual:get_monthly_stats:cache_get_or_load_sum[5m]) / rate(visual:get_monthly_stats:cache_get_or_load_count[5m]) * 1000",
           "legendFormat": "缓存读取",
           "refId": "A"
         }
@@ -9381,7 +9420,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_monthly_stats:attempts[5m])",
+          "expr": "rate(visual:get_monthly_stats:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -9390,7 +9429,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_monthly_stats:success[5m]) / rate(photo:get_monthly_stats:attempts[5m]) * 100",
+          "expr": "rate(visual:get_monthly_stats:success[5m]) / rate(visual:get_monthly_stats:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -9408,7 +9447,7 @@
       },
       "id": 311,
       "panels": [],
-      "title": "获取照片信息 (get_photo_info)",
+      "title": "获取影像信息 (get_visual_info)",
       "type": "row"
     },
     {
@@ -9454,7 +9493,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 6,
         "x": 0,
         "y": 287
       },
@@ -9477,7 +9516,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_photo_info:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_visual_info:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -9486,7 +9525,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_photo_info:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_visual_info:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -9495,12 +9534,78 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_photo_info:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_visual_info:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "获取照片信息耗时",
+      "title": "获取影像信息耗时",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 40,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 287
+      },
+      "id": 313,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(visual:get_visual_info:load_visuals_info_sum[5m]) / rate(visual:get_visual_info:load_visuals_info_count[5m]) * 1000",
+          "legendFormat": "加载影像信息",
+          "refId": "A"
+        }
+      ],
+      "title": "获取影像信息子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -9607,7 +9712,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_photo_info:attempts[5m])",
+          "expr": "rate(visual:get_visual_info:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -9616,12 +9721,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_photo_info:success[5m]) / rate(photo:get_photo_info:attempts[5m]) * 100",
+          "expr": "rate(visual:get_visual_info:success[5m]) / rate(visual:get_visual_info:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "获取照片信息调用量成功率",
+      "title": "获取影像信息调用量成功率",
       "type": "timeseries"
     },
     {
@@ -9634,7 +9739,7 @@
       },
       "id": 321,
       "panels": [],
-      "title": "获取人物照片 (get_person_photos)",
+      "title": "获取人物影像 (get_person_visuals)",
       "type": "row"
     },
     {
@@ -9703,7 +9808,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_person_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_person_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -9712,7 +9817,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_person_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_person_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -9721,12 +9826,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_person_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_person_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "获取人物照片耗时",
+      "title": "获取人物影像耗时",
       "type": "timeseries"
     },
     {
@@ -9787,8 +9892,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_person_photos:query_photo_ids_sum[5m]) / rate(photo:get_person_photos:query_photo_ids_count[5m]) * 1000",
-          "legendFormat": "查询照片 ID",
+          "expr": "rate(visual:get_person_visuals:query_visual_ids_sum[5m]) / rate(visual:get_person_visuals:query_visual_ids_count[5m]) * 1000",
+          "legendFormat": "查询影像 ID",
           "refId": "A"
         },
         {
@@ -9796,12 +9901,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_person_photos:load_photos_info_sum[5m]) / rate(photo:get_person_photos:load_photos_info_count[5m]) * 1000",
-          "legendFormat": "加载照片信息",
+          "expr": "rate(visual:get_person_visuals:load_visuals_info_sum[5m]) / rate(visual:get_person_visuals:load_visuals_info_count[5m]) * 1000",
+          "legendFormat": "加载影像信息",
           "refId": "B"
         }
       ],
-      "title": "获取人物照片子步骤耗时",
+      "title": "获取人物影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -9908,7 +10013,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_person_photos:attempts[5m])",
+          "expr": "rate(visual:get_person_visuals:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -9917,12 +10022,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_person_photos:success[5m]) / rate(photo:get_person_photos:attempts[5m]) * 100",
+          "expr": "rate(visual:get_person_visuals:success[5m]) / rate(visual:get_person_visuals:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "获取人物照片调用量成功率",
+      "title": "获取人物影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -9935,7 +10040,7 @@
       },
       "id": 331,
       "panels": [],
-      "title": "获取照片人脸 (get_faces_by_photo_id)",
+      "title": "获取影像人脸 (get_faces_by_visual_id)",
       "type": "row"
     },
     {
@@ -10004,7 +10109,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_faces_by_photo_id:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_faces_by_visual_id:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -10013,7 +10118,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_faces_by_photo_id:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_faces_by_visual_id:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -10022,12 +10127,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_faces_by_photo_id:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_faces_by_visual_id:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "获取照片人脸耗时",
+      "title": "获取影像人脸耗时",
       "type": "timeseries"
     },
     {
@@ -10134,7 +10239,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_faces_by_photo_id:attempts[5m])",
+          "expr": "rate(visual:get_faces_by_visual_id:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -10143,12 +10248,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_faces_by_photo_id:success[5m]) / rate(photo:get_faces_by_photo_id:attempts[5m]) * 100",
+          "expr": "rate(visual:get_faces_by_visual_id:success[5m]) / rate(visual:get_faces_by_visual_id:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "获取照片人脸调用量成功率",
+      "title": "获取影像人脸调用量成功率",
       "type": "timeseries"
     },
     {
@@ -10161,7 +10266,7 @@
       },
       "id": 341,
       "panels": [],
-      "title": "获取未分配人脸照片 (get_unassigned_face_photos)",
+      "title": "获取未分配人脸影像 (get_unassigned_face_visuals)",
       "type": "row"
     },
     {
@@ -10230,7 +10335,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:get_unassigned_face_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:get_unassigned_face_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -10239,7 +10344,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:get_unassigned_face_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:get_unassigned_face_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -10248,12 +10353,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:get_unassigned_face_photos:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:get_unassigned_face_visuals:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "获取未分配人脸照片耗时",
+      "title": "获取未分配人脸影像耗时",
       "type": "timeseries"
     },
     {
@@ -10314,8 +10419,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_unassigned_face_photos:query_unassigned_face_photo_ids_sum[5m]) / rate(photo:get_unassigned_face_photos:query_unassigned_face_photo_ids_count[5m]) * 1000",
-          "legendFormat": "查询未分配人脸照片 ID",
+          "expr": "rate(visual:get_unassigned_face_visuals:query_unassigned_face_visual_ids_sum[5m]) / rate(visual:get_unassigned_face_visuals:query_unassigned_face_visual_ids_count[5m]) * 1000",
+          "legendFormat": "查询未分配人脸影像 ID",
           "refId": "A"
         },
         {
@@ -10323,12 +10428,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_unassigned_face_photos:load_photos_info_sum[5m]) / rate(photo:get_unassigned_face_photos:load_photos_info_count[5m]) * 1000",
-          "legendFormat": "加载照片信息",
+          "expr": "rate(visual:get_unassigned_face_visuals:load_visuals_info_sum[5m]) / rate(visual:get_unassigned_face_visuals:load_visuals_info_count[5m]) * 1000",
+          "legendFormat": "加载影像信息",
           "refId": "B"
         }
       ],
-      "title": "获取未分配人脸照片子步骤耗时",
+      "title": "获取未分配人脸影像子步骤耗时",
       "type": "timeseries"
     },
     {
@@ -10435,7 +10540,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_unassigned_face_photos:attempts[5m])",
+          "expr": "rate(visual:get_unassigned_face_visuals:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -10444,12 +10549,12 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:get_unassigned_face_photos:success[5m]) / rate(photo:get_unassigned_face_photos:attempts[5m]) * 100",
+          "expr": "rate(visual:get_unassigned_face_visuals:success[5m]) / rate(visual:get_unassigned_face_visuals:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
       ],
-      "title": "获取未分配人脸照片调用量成功率",
+      "title": "获取未分配人脸影像调用量成功率",
       "type": "timeseries"
     },
     {
@@ -10531,7 +10636,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:delete_person:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:delete_person:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -10540,7 +10645,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:delete_person:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:delete_person:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -10549,7 +10654,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:delete_person:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:delete_person:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -10615,7 +10720,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_person:db_transaction_sum[5m]) / rate(photo:delete_person:db_transaction_count[5m]) * 1000",
+          "expr": "rate(visual:delete_person:db_transaction_sum[5m]) / rate(visual:delete_person:db_transaction_count[5m]) * 1000",
           "legendFormat": "数据库事务",
           "refId": "A"
         }
@@ -10727,7 +10832,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_person:attempts[5m])",
+          "expr": "rate(visual:delete_person:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -10736,7 +10841,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:delete_person:success[5m]) / rate(photo:delete_person:attempts[5m]) * 100",
+          "expr": "rate(visual:delete_person:success[5m]) / rate(visual:delete_person:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -10823,7 +10928,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:person_full_scan:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:person_full_scan:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -10832,7 +10937,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:person_full_scan:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:person_full_scan:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -10841,7 +10946,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:person_full_scan:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:person_full_scan:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -10953,7 +11058,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:person_full_scan:attempts[5m])",
+          "expr": "rate(visual:person_full_scan:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -10962,7 +11067,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:person_full_scan:success[5m]) / rate(photo:person_full_scan:attempts[5m]) * 100",
+          "expr": "rate(visual:person_full_scan:success[5m]) / rate(visual:person_full_scan:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -11049,7 +11154,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(photo:person_secondary_cluster:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.5, sum(rate(visual:person_secondary_cluster:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -11058,7 +11163,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(photo:person_secondary_cluster:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(visual:person_secondary_cluster:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -11067,7 +11172,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(photo:person_secondary_cluster:duration_seconds_bucket[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.99, sum(rate(visual:person_secondary_cluster:duration_seconds_bucket[5m])) by (le)) * 1000",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -11179,7 +11284,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:person_secondary_cluster:attempts[5m])",
+          "expr": "rate(visual:person_secondary_cluster:attempts[5m])",
           "legendFormat": "QPS",
           "refId": "A"
         },
@@ -11188,7 +11293,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "rate(photo:person_secondary_cluster:success[5m]) / rate(photo:person_secondary_cluster:attempts[5m]) * 100",
+          "expr": "rate(visual:person_secondary_cluster:success[5m]) / rate(visual:person_secondary_cluster:attempts[5m]) * 100",
           "legendFormat": "成功率",
           "refId": "B"
         }
@@ -11200,7 +11305,7 @@
   "refresh": "5s",
   "schemaVersion": 39,
   "tags": [
-    "photo",
+    "visual",
     "api",
     "monitoring"
   ],
@@ -11213,6 +11318,6 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Photo 模块监控",
-  "uid": "photo-module-monitoring"
+  "title": "Visual 模块监控",
+  "uid": "visual-module-monitoring"
 }

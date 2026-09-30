@@ -293,17 +293,17 @@ L1 本地 moka → L2 Redis → L3 数据库（loader）。
 | 函数 | 指标 |
 |------|------|
 | get_visual_cursor_page | `visual:get_visual_cursor_page:attempts` `visual:get_visual_cursor_page:success` `visual:get_visual_cursor_page:duration_seconds`<br>`visual:get_visual_cursor_page:find_cursor_page_ids` `visual:get_visual_cursor_page:load_visuals_info` |
-| upload_visual | `visual:upload_visual:attempts` `visual:upload_visual:success` `visual:upload_visual:duration_seconds`<br>`visual:upload_visual:validate_visual:duration_seconds` `visual:upload_visual:md5_hash:duration_seconds` `visual:upload_visual:s3_upload` `visual:upload_visual:db_insert`<br>`visual:upload_visual:cache_get_or_load` `visual:upload_visual:cache_put` `visual:upload_visual:cache_invalidate` |
-| exists_by_md5_batch | `visual:exists_by_md5_batch:attempts` `visual:exists_by_md5_batch:success` `visual:exists_by_md5_batch:duration_seconds` |
-| delete_visuals | `visual:delete_visuals:attempts` `visual:delete_visuals:success` `visual:delete_visuals:duration_seconds`<br>`visual:delete_visuals:db_transaction` `visual:delete_visuals:s3_delete_batch` `visual:delete_visuals:cache_invalidate` `visual:delete_visuals:cache_invalidate_dimensions` `visual:delete_visuals:cache_invalidate_timeline` |
-| download_image | `visual:download_image:attempts` `visual:download_image:success` `visual:download_image:duration_seconds`<br>`visual:download_image:s3_download_process` `visual:download_image:s3_download_stream` |
+| upload_visual | `visual:upload_visual:attempts` `visual:upload_visual:success` `visual:upload_visual:duration_seconds`<br>`visual:upload_visual:validate_visual:duration_seconds` `visual:upload_visual:s3_upload` `visual:upload_visual:db_insert`<br>`visual:upload_visual:cache_invalidate` |
+| exists_by_hash_batch | `visual:exists_by_hash_batch:attempts` `visual:exists_by_hash_batch:success` `visual:exists_by_hash_batch:duration_seconds` |
+| delete_visuals | `visual:delete_visuals:attempts` `visual:delete_visuals:success` `visual:delete_visuals:duration_seconds`<br>`visual:delete_visuals:s3_delete_batch` `visual:delete_visuals:cache_invalidate` `visual:delete_visuals:cache_invalidate_dimensions` `visual:delete_visuals:cache_invalidate_cursor_ids` |
+| download_visual | `visual:download_visual:attempts` `visual:download_visual:success` `visual:download_visual:duration_seconds`<br>`visual:download_visual:s3_download_process` `visual:download_visual:s3_download_stream` |
 | get_collection_list | `visual:get_collection_list:attempts` `visual:get_collection_list:success` `visual:get_collection_list:duration_seconds`<br>`visual:get_collection_list:query_by_user_id` |
 | create_collection | `visual:create_collection:attempts` `visual:create_collection:success` `visual:create_collection:duration_seconds`<br>`visual:create_collection:db_insert` |
 | update_collection_info | `visual:update_collection_info:attempts` `visual:update_collection_info:success` `visual:update_collection_info:duration_seconds`<br>`visual:update_collection_info:db_update` |
 | delete_collection | `visual:delete_collection:attempts` `visual:delete_collection:success` `visual:delete_collection:duration_seconds`<br>`visual:delete_collection:db_transaction` |
 | get_collections_by_visual | `visual:get_collections_by_visual:attempts` `visual:get_collections_by_visual:success` `visual:get_collections_by_visual:duration_seconds` |
 | get_collection_visuals | `visual:get_collection_visuals:attempts` `visual:get_collection_visuals:success` `visual:get_collection_visuals:duration_seconds`<br>`visual:get_collection_visuals:query_visual_ids` `visual:get_collection_visuals:load_visuals_info` |
-| add_collection_visuals | `visual:add_collection_visuals:attempts` `visual:add_collection_visuals:success` `visual:add_collection_visuals:duration_seconds`<br>`visual:add_collection_visuals:auth_check` `visual:add_collection_visuals:db_transaction` |
+| add_collection_visuals | `visual:add_collection_visuals:attempts` `visual:add_collection_visuals:success` `visual:add_collection_visuals:duration_seconds`<br>`visual:add_collection_visuals:ensure_belong` `visual:add_collection_visuals:db_transaction` |
 | remove_collection_visuals | `visual:remove_collection_visuals:attempts` `visual:remove_collection_visuals:success` `visual:remove_collection_visuals:duration_seconds`<br>`visual:remove_collection_visuals:db_transaction` |
 | publish_comment | `visual:publish_comment:attempts` `visual:publish_comment:success` `visual:publish_comment:duration_seconds`<br>`visual:publish_comment:db_transaction` |
 | get_comment_cursor_page | `visual:get_comment_cursor_page:attempts` `visual:get_comment_cursor_page:success` `visual:get_comment_cursor_page:duration_seconds`<br>`visual:get_comment_cursor_page:query_hot_comments` `visual:get_comment_cursor_page:query_by_visual_id` `visual:get_comment_cursor_page:query_is_like` |
@@ -425,6 +425,14 @@ HTTP 视角仍由 `server.http.*{module="audit"}` 覆盖（`/admin/audits`；`/a
 
 ## 更新记录
 
+- 2026-09-29: 对齐 dashboard 与代码（visual 重构后的改名/步骤变更）：操作重命名
+  `download_image` → `download_visual`、`exists_by_md5_batch` → `exists_by_hash_batch`；
+  `upload_visual` 移除已不存在的 `md5_hash` / `cache_get_or_load` / `cache_put`（上传改为流式落盘 + BLAKE3，缓存改由事件失效）；
+  `delete_visuals` 移除 `db_transaction` / `cache_invalidate_timeline`，新增 `cache_invalidate_cursor_ids`；
+  `add_collection_visuals` 的 `auth_check` 改为 `ensure_belong`；auth `login` / `register` /
+  `send_email_code` 补齐 `db_update` / `redis_delete` / `acquire_permit`；`get_visual_info` /
+  `get_user_liked_visuals` / `change_face_belonging` 补齐子步骤；同步重新渲染并提交全部
+  dashboard 产物（`photo.json` 重命名为 `visual.json`）。
 - 2026-09-12: 补齐剩余缺口。子步骤：auth `login:db_update` / `register:redis_delete` /
   `send_email_code:acquire_permit`；visual `get_visual_info:load_visuals_info` /
   `get_user_liked_visuals:load_visuals_info` / `change_face_belonging:db_transaction`；
