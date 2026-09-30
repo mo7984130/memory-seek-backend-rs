@@ -55,30 +55,26 @@ impl TaskManager {
     /// 注册并启动一个后台任务，返回该任务的子取消令牌。
     ///
     /// 同名任务允许共存：每次注册都会追加到同名任务列表，互不覆盖。
-    /// 取消语义为强中断：令牌取消时该任务立即被终止（适用于一次性/短任务）。
-    /// 若需要“跑完当前这轮再退出”的长任务，请使用 [`Self::spawn_schedule`] 等。
-    pub fn spawn<F>(&self, name: impl Into<String>, future: F) -> CancellationToken
+    ///
+    /// 取消语义为**协作式**：取消只会通过传入的 [`CancellationToken`] 通知任务，
+    /// 不会强中断它；任务应在合适的边界（如完成当前一轮后）自行返回。
+    /// 因此 [`Self::shutdown`] 会等待任务自然结束，而不会丢弃它。
+    /// 若任务不监听令牌，则取消对其无影响，关闭时将一直等待其结束。
+    pub fn spawn<F, Fut>(&self, name: impl Into<String>, task: F) -> CancellationToken
     where
-        F: std::future::Future<Output = ()> + Send + 'static,
+        F: FnOnce(CancellationToken) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = ()> + Send + 'static,
     {
         let name = name.into();
         let child_token = self.inner.cancel_token.child_token();
-        let token_clone = child_token.clone();
+        let token = child_token.clone();
         let task_name = name.clone();
 
         debug!("启动后台任务: {}", task_name);
 
         let handle = tokio::spawn(async move {
-            tokio::select! {
-                // biased：若任务恰好在取消同一瞬间自然完成，优先记为正常完成
-                biased;
-                _ = future => {
-                    debug!("任务 '{}' 正常完成", task_name);
-                }
-                _ = token_clone.cancelled() => {
-                    debug!("任务 '{}' 被取消", task_name);
-                }
-            }
+            task(token).await;
+            debug!("任务 '{}' 已结束", task_name);
         });
 
         self.push_handle(name, handle);

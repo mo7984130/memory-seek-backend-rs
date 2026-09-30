@@ -113,17 +113,29 @@ impl TranscodeService {
             .set(tx)
             .unwrap_or_else(|_| panic!("TRANSCODE_QUEUE 重复初始化"));
         let task_manager = state.task_manager.clone();
-        task_manager.spawn("video_transcode_worker", async move {
+        task_manager.spawn("video_transcode_worker", move |token| async move {
             Self::recover_pending(&state).await;
-            while let Some(job) = rx.recv().await {
-                if let Err(error) = Self::process_job(&state, job).await {
-                    ContextualError::warn(
-                        "transcode_job_failed",
-                        "视频转码任务失败",
-                        error,
-                        AppError::InternalServerError,
-                    )
-                    .emit();
+            loop {
+                tokio::select! {
+                    // 取消优先: 收到关闭信号后不再领取新任务
+                    biased;
+                    _ = token.cancelled() => {
+                        info!("转码 worker 收到关闭信号, 完成当前任务后退出");
+                        break;
+                    }
+                    job = rx.recv() => {
+                        let Some(job) = job else { break };
+                        // 执行阶段不参与取消竞速: 当前任务一定跑完
+                        if let Err(error) = Self::process_job(&state, job).await {
+                            ContextualError::warn(
+                                "transcode_job_failed",
+                                "视频转码任务失败",
+                                error,
+                                AppError::InternalServerError,
+                            )
+                            .emit();
+                        }
+                    }
                 }
             }
         });
@@ -242,8 +254,13 @@ impl TranscodeService {
     /// 退避后重新入队(不阻塞当前 worker)。
     fn schedule_retry(state: &Arc<VisualState>, job: TranscodeJob, backoff_secs: u64) {
         let task_manager = state.task_manager.clone();
-        task_manager.spawn("transcode_retry", async move {
-            tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+        task_manager.spawn("transcode_retry", move |token| async move {
+            // 退避期间收到关闭信号直接放弃重试, 避免拖住关闭
+            tokio::select! {
+                biased;
+                _ = token.cancelled() => return,
+                _ = tokio::time::sleep(Duration::from_secs(backoff_secs)) => {}
+            }
             if let Some(tx) = TRANSCODE_QUEUE.get() {
                 let _ = tx.send(job);
             }
@@ -330,6 +347,8 @@ impl TranscodeService {
     ) -> Result<()> {
         let mut cmd = Command::new(&cfg.ffmpeg_path);
         cmd.args(Self::build_args(cfg, kind, input, output));
+        // 超时 / 任务被 drop / 进程退出时, 连同 ffmpeg 子进程一起终止, 避免留下孤儿进程
+        cmd.kill_on_drop(true);
 
         let output = match timeout(FFMPEG_TIMEOUT, cmd.output()).await {
             Err(_elapsed) => {
