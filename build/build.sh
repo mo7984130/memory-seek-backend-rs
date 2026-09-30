@@ -15,6 +15,12 @@ IMAGE_NAME="ubuntu22.04-rust-build-base"
 PROJECT_NAME="memory-seek-server"
 FEATURES="metrics,auth,user,visual,face-engine,audit,audit-recording,backup"
 
+# 容器内 cargo 产物目录(容器专用), 与宿主 target/ 完全隔离:
+# 1) 两边 glibc 不同(宿主较新), 编译产物(尤其 proc-macro .so)不可互相加载;
+# 2) 共享同一 target 时, 宿主一次 cargo check 就会改写 rustc 指纹
+#    (target/.rustc_info.json), 导致容器缓存整体失效、全量重编译。
+CONTAINER_TARGET_DIR="target/container"
+
 # 运行镜像(内置 ffmpeg)与 ffmpeg 来源
 # 锁定 BtbN autobuild tag + sha256, 保证可复现; 需要加速时可换镜像站
 RUNTIME_IMAGE="memory-seek-server-test:local"
@@ -50,9 +56,11 @@ if ! podman run --rm $IMAGE_NAME sh -c 'command -v mold >/dev/null'; then
 fi
 
 echo -e "${GREEN}开始构建项目...${NC}"
+# 容器使用独立 target($CONTAINER_TARGET_DIR), 与宿主 target/ 隔离, 避免缓存互相失效。
 podman run -it --rm \
   --http-proxy=false \
   --name rust-build-$(date +%s) \
+  -e CARGO_TARGET_DIR="/app/$CONTAINER_TARGET_DIR" \
   -v "$REPO_ROOT:/app:Z" \
   -v "$HOME/.rustup:/root/.rustup:Z" \
   -v "$HOME/.cargo:/root/.cargo:Z" \
@@ -79,7 +87,7 @@ podman run -it --rm \
   "
 
 # 检查构建结果
-if [ ! -f "target/release/$PROJECT_NAME" ]; then
+if [ ! -f "$CONTAINER_TARGET_DIR/release/$PROJECT_NAME" ]; then
     echo -e "${RED}错误: 构建失败，未找到 $PROJECT_NAME${NC}"
     exit 1
 fi
@@ -96,7 +104,7 @@ rm -rf "$DIST"
 mkdir -p "$DIST/libs"
 
 # 可执行文件
-cp target/release/memory-seek-server "$DIST/"
+cp "$CONTAINER_TARGET_DIR/release/memory-seek-server" "$DIST/"
 
 # libs
 find thirdparty \( -type f -o -type l \) \
