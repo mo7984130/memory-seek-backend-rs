@@ -1286,7 +1286,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(user:update_avatar:validate_image:duration_seconds_sum[5m]) / rate(user:update_avatar:validate_image:duration_seconds_count[5m]) * 1000",
-          "legendFormat": "图片校验",
+          "legendFormat": "影像校验",
           "refId": "A"
         },
         {

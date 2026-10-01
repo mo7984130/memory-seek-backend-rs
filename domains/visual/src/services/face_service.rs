@@ -438,25 +438,27 @@ impl FaceService {
     /// 启动单线程人脸检测 worker, 由 [`crate::VisualState::new`] 调用;
     /// 重复调用直接 panic。
     pub(crate) fn start_face_consumer(state: Arc<VisualState>) {
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        FACE_QUEUE
-            .set(tx)
-            .unwrap_or_else(|_| panic!("FACE_QUEUE 重复初始化"));
-        let task_manager = state.task_manager.clone();
-        task_manager.spawn("face_consumer_worker", async move {
-            Self::recover_pending(&state).await;
-            while let Some(job) = rx.recv().await {
-                if let Err(error) = Self::process_job(&state, job).await {
-                    ContextualError::warn(
-                        "face_consume_failed",
-                        "人脸检测消费任务失败",
-                        error,
-                        AppError::InternalServerError,
-                    )
-                    .emit();
+        let recover_state = state.clone();
+        let handler_state = state.clone();
+        state.task_manager.spawn_consumer(
+            "face_consumer_worker",
+            &FACE_QUEUE,
+            move || async move { Self::recover_pending(&recover_state).await },
+            move |job| {
+                let state = handler_state.clone();
+                async move {
+                    if let Err(error) = Self::process_job(&state, job).await {
+                        ContextualError::warn(
+                            "face_consume_failed",
+                            "人脸检测消费任务失败",
+                            error,
+                            AppError::InternalServerError,
+                        )
+                        .emit();
+                    }
                 }
-            }
-        });
+            },
+        );
     }
 
     /// 启动恢复: 将未完成的任务重新入队(卡在 running 的先重置为 pending),
@@ -600,8 +602,13 @@ impl FaceService {
     /// 退避后重新入队(不阻塞当前 worker)。
     fn schedule_retry(state: &Arc<VisualState>, job: FaceJob, backoff_secs: u64) {
         let task_manager = state.task_manager.clone();
-        task_manager.spawn("face_retry", async move {
-            tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+        task_manager.spawn("face_retry", move |token| async move {
+            // 退避期间收到关闭信号直接放弃重试, 避免拖住关闭
+            tokio::select! {
+                biased;
+                _ = token.cancelled() => return,
+                _ = tokio::time::sleep(Duration::from_secs(backoff_secs)) => {}
+            }
             if let Some(tx) = FACE_QUEUE.get() {
                 let _ = tx.send(job);
             }

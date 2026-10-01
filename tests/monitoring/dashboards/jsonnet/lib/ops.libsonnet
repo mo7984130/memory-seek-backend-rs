@@ -21,9 +21,10 @@
         func: 'login',
         steps: [
           { metric: 'db_query', label: '数据库查询' },
+          { metric: 'acquire_permit', label: '获取许可' },
           { metric: 'verify_password', label: '密码验证' },
           { metric: 'redis_set', label: 'Redis 写入' },
-          { metric: 'acquire_permit', label: '获取许可' },
+          { metric: 'db_update', label: '数据库更新' },
         ],
       },
       {
@@ -35,6 +36,7 @@
           { metric: 'verify_inviter_code', label: '验证邀请码' },
           { metric: 'hash_password', label: '密码哈希' },
           { metric: 'db_insert', label: '数据库插入' },
+          { metric: 'redis_delete', label: 'Redis 删除' },
         ],
       },
       {
@@ -43,6 +45,7 @@
         func: 'send_email_code',
         steps: [
           { metric: 'redis_set', label: 'Redis 写入' },
+          { metric: 'acquire_permit', label: '获取许可' },
           { metric: 'send_message', label: '发送邮件' },
         ],
       },
@@ -158,18 +161,15 @@
         func: 'upload_visual',
         steps: [
           { metric: 'validate_visual:duration_seconds', label: '影像校验' },
-          { metric: 'md5_hash:duration_seconds', label: 'MD5 计算' },
           { metric: 's3_upload', label: 'S3 上传' },
           { metric: 'db_insert', label: '数据库插入' },
-          { metric: 'cache_get_or_load', label: '缓存读取' },
-          { metric: 'cache_put', label: '缓存写入' },
           { metric: 'cache_invalidate', label: '缓存失效' },
         ],
       },
       {
-        rowTitle: '检查影像去重 (exists_by_md5_batch)',
+        rowTitle: '检查影像去重 (exists_by_hash_batch)',
         name: '检查影像去重',
-        func: 'exists_by_md5_batch',
+        func: 'exists_by_hash_batch',
         steps: [],
       },
       {
@@ -177,17 +177,16 @@
         name: '删除影像',
         func: 'delete_visuals',
         steps: [
-          { metric: 'db_transaction', label: '数据库事务' },
           { metric: 's3_delete_batch', label: 'S3 批量删除' },
           { metric: 'cache_invalidate', label: '缓存失效' },
           { metric: 'cache_invalidate_dimensions', label: '缓存失效 (尺寸)' },
-          { metric: 'cache_invalidate_timeline', label: '缓存失效 (时间线)' },
+          { metric: 'cache_invalidate_cursor_ids', label: '缓存失效 (游标)' },
         ],
       },
       {
-        rowTitle: '获取影像 (download_image)',
+        rowTitle: '获取影像 (download_visual)',
         name: '获取影像',
-        func: 'download_image',
+        func: 'download_visual',
         steps: [
           { metric: 's3_download_process', label: 'S3 下载处理' },
           { metric: 's3_download_stream', label: 'S3 流式下载' },
@@ -245,7 +244,7 @@
         name: '添加收藏夹影像',
         func: 'add_collection_visuals',
         steps: [
-          { metric: 'auth_check', label: '权限校验' },
+          { metric: 'ensure_belong', label: '校验归属' },
           { metric: 'db_transaction', label: '数据库事务' },
         ],
       },
@@ -321,6 +320,7 @@
         func: 'get_user_liked_visuals',
         steps: [
           { metric: 'query_ids', label: '查询点赞 ID' },
+          { metric: 'load_visuals_info', label: '加载影像信息' },
         ],
       },
       {
@@ -360,7 +360,9 @@
         rowTitle: '修改人脸归属 (change_face_belonging)',
         name: '修改人脸归属',
         func: 'change_face_belonging',
-        steps: [],
+        steps: [
+          { metric: 'db_transaction', label: '数据库事务' },
+        ],
       },
       {
         rowTitle: '删除人脸 (delete_face)',
@@ -399,7 +401,9 @@
         rowTitle: '获取影像信息 (get_visual_info)',
         name: '获取影像信息',
         func: 'get_visual_info',
-        steps: [],
+        steps: [
+          { metric: 'load_visuals_info', label: '加载影像信息' },
+        ],
       },
       {
         rowTitle: '获取人物影像 (get_person_visuals)',

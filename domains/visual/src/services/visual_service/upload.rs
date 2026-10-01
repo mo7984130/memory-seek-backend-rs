@@ -191,11 +191,11 @@ impl VisualService {
         })?;
 
         // BLAKE3 去重校验(controller 写盘时已同步计算)
-        if VisualRepo::exists_by_hash(&state, &visual_hash).await? {
+        if let Some(id) = VisualRepo::exists_by_hash(&state, &visual_hash).await? {
             return Err(ContextualError::warn_without_source(
                 "upload_visual:img_exist",
                 "影像已存在",
-                AppError::bad_request("影像已存在"),
+                AppError::bad_request(format!("影像已存在: id = {}", id)),
             )
             .emit());
         }

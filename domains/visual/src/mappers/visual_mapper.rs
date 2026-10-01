@@ -100,9 +100,18 @@ impl VisualMapper {
     }
 
     /// 检查哈希值是否存在.
-    pub async fn exists_by_hash(db: &impl ConnectionTrait, hash: impl AsRef<str>) -> Result<bool> {
-        let results = Self::exists_by_hash_batch(db, &[hash.as_ref()]).await?;
-        Ok(!results.is_empty())
+    pub async fn exists_by_hash(
+        db: &impl ConnectionTrait,
+        hash: impl AsRef<str>,
+    ) -> Result<Option<VisualId>> {
+        Entity::find()
+            .filter(Column::Hash.eq(hash.as_ref()))
+            .select_only()
+            .column(Column::Id)
+            .into_tuple::<VisualId>()
+            .one(db)
+            .await?
+            .to_ok()
     }
 
     /// 构建影像游标查询, 并统一处理时间与 ID 的排序边界.

@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
+use std::process::Stdio;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -33,6 +34,23 @@ use crate::state::VisualState;
 
 /// 单次 ffmpeg 执行超时
 const FFMPEG_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// 失败时保留的 ffmpeg stderr 末尾行数(避免整段版本 banner / 进度刷屏日志)
+const STDERR_TAIL_LINES: usize = 8;
+
+/// 取 ffmpeg stderr 末尾若干有效行, 供日志展示。
+///
+/// ffmpeg 的进度行以 `\r` 反复覆盖, 仅最后一次覆盖有意义, 故每行只保留 `\r` 之后的内容。
+fn stderr_tail(stderr: &[u8], max_lines: usize) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let lines: Vec<&str> = text
+        .lines()
+        .map(|line| line.rsplit('\r').next().unwrap_or_default().trim_end())
+        .filter(|line| !line.is_empty())
+        .collect();
+    let start = lines.len().saturating_sub(max_lines);
+    lines[start..].join("\n")
+}
 
 /// 是否应重试: 已尝试次数(含本次)未达上限。
 fn should_retry(attempts: i32, max_attempts: u32) -> bool {
@@ -108,25 +126,27 @@ impl TranscodeService {
 
     /// 启动常驻转码 worker, 由 [`crate::VisualState::new`] 调用; 重复调用直接 panic。
     pub(crate) fn start_worker(state: Arc<VisualState>) {
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        TRANSCODE_QUEUE
-            .set(tx)
-            .unwrap_or_else(|_| panic!("TRANSCODE_QUEUE 重复初始化"));
-        let task_manager = state.task_manager.clone();
-        task_manager.spawn("video_transcode_worker", async move {
-            Self::recover_pending(&state).await;
-            while let Some(job) = rx.recv().await {
-                if let Err(error) = Self::process_job(&state, job).await {
-                    ContextualError::warn(
-                        "transcode_job_failed",
-                        "视频转码任务失败",
-                        error,
-                        AppError::InternalServerError,
-                    )
-                    .emit();
+        let recover_state = state.clone();
+        let handler_state = state.clone();
+        state.task_manager.spawn_consumer(
+            "video_transcode_worker",
+            &TRANSCODE_QUEUE,
+            move || async move { Self::recover_pending(&recover_state).await },
+            move |job| {
+                let state = handler_state.clone();
+                async move {
+                    if let Err(error) = Self::process_job(&state, job).await {
+                        ContextualError::warn(
+                            "transcode_job_failed",
+                            "视频转码任务失败",
+                            error,
+                            AppError::InternalServerError,
+                        )
+                        .emit();
+                    }
                 }
-            }
-        });
+            },
+        );
     }
 
     /// 启动恢复: 将未完成的记录重新入队(卡在 running 的先重置为 pending)。
@@ -242,8 +262,13 @@ impl TranscodeService {
     /// 退避后重新入队(不阻塞当前 worker)。
     fn schedule_retry(state: &Arc<VisualState>, job: TranscodeJob, backoff_secs: u64) {
         let task_manager = state.task_manager.clone();
-        task_manager.spawn("transcode_retry", async move {
-            tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+        task_manager.spawn("transcode_retry", move |token| async move {
+            // 退避期间收到关闭信号直接放弃重试, 避免拖住关闭
+            tokio::select! {
+                biased;
+                _ = token.cancelled() => return,
+                _ = tokio::time::sleep(Duration::from_secs(backoff_secs)) => {}
+            }
             if let Some(tx) = TRANSCODE_QUEUE.get() {
                 let _ = tx.send(job);
             }
@@ -330,6 +355,16 @@ impl TranscodeService {
     ) -> Result<()> {
         let mut cmd = Command::new(&cfg.ffmpeg_path);
         cmd.args(Self::build_args(cfg, kind, input, output));
+        // 超时 / 任务被 drop / 进程退出时, 连同 ffmpeg 子进程一起终止, 避免留下孤儿进程
+        cmd.kill_on_drop(true);
+        // 独立进程组: 终端的 Ctrl+C(发给前台进程组)不再波及 ffmpeg, 关闭时
+        // 当前任务得以自然跑完(见 start_worker "完成当前任务后退出")。
+        #[cfg(unix)]
+        cmd.process_group(0);
+        // ffmpeg 默认会读 stdin(支持按 q 退出等交互)。若 stdin 仍是终端, 而 ffmpeg 又处于
+        // 独立(后台)进程组, 读终端会触发作业控制信号(SIGTTIN/SIGTTOU)使其被停止
+        // (CPU 空闲、表现为挂起直到超时)。置空 stdin: ffmpeg 不接触终端, 也不会抢读按键。
+        cmd.stdin(Stdio::null());
 
         let output = match timeout(FFMPEG_TIMEOUT, cmd.output()).await {
             Err(_elapsed) => {
@@ -347,10 +382,14 @@ impl TranscodeService {
         };
 
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stderr = stderr_tail(&output.stderr, STDERR_TAIL_LINES);
             return Err(ContextualError::warn_without_source(
                 "ffmpeg_failed",
-                format!("视频转码失败: {}", stderr.trim()),
+                format!(
+                    "视频转码失败(退出码 {:?}): {}",
+                    output.status.code(),
+                    stderr
+                ),
                 AppError::InternalServerError,
             ));
         }
@@ -533,5 +572,12 @@ mod tests {
         assert!(joined.contains("scale=-2:min(1080\\,ih)"));
         assert!(joined.contains("-c:a aac"));
         assert!(joined.contains("-b:a 128k"));
+    }
+
+    #[test]
+    fn stderr_tail_keeps_last_lines_and_final_progress_only() {
+        // 进度行以 \r 覆盖, 仅保留最后一次; 且只取末尾 max_lines 行
+        let raw = b"ffmpeg version 4.4\rframe=1\rframe=2\rframe=3\r\nLast error line\n";
+        assert_eq!(stderr_tail(raw, 2), "frame=3\nLast error line");
     }
 }

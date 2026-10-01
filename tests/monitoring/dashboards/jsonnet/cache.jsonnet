@@ -94,6 +94,7 @@ local cacheVariable = {
   hide: 0,
   label: '缓存实例',
   name: 'cache',
+  query: 'user_info, user_info_single, visual_info, visual_dimensions, timeline_stat, person',
   options: [
     { selected: false, text: 'user_info', value: 'user_info' },
     { selected: false, text: 'user_info_single', value: 'user_info_single' },

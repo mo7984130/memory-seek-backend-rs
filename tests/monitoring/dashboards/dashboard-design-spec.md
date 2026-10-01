@@ -335,6 +335,9 @@ Auth 模块监控
 
 ## 更新记录
 
+- 2026-09-29: 依据当前代码重新同步各 dashboard 指标名（visual 域重构后的操作/步骤改名与增删，
+  详见 metrics-naming.md 同日记录；auth `login` / `register` / `send_email_code` 补齐子步骤）；
+  重新渲染全部产物并纳入版本控制，旧产物 `photo.json` 重命名为 `visual.json`。
 - 2026-09-15: HTTP 请求汇总行（QPS / 错误率 / 延迟）改为按 `route` + `method` 分组，图例
   `{{method}} {{route}}`，区分同一路径下的不同请求方式；QPS 面板过滤零流量序列；system dashboard
   图例改为不可见，与模块 dashboard 一致。

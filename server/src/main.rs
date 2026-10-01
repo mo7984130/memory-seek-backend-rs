@@ -4,11 +4,7 @@ use axum::middleware::{from_fn, from_fn_with_state};
 
 use clap::Parser;
 use common_core::Result;
-use common_core::error::{
-    AppError,
-    contextual::ext::{IntoContextualExt, ResultContextualExt},
-};
-use common_core::time::Duration;
+use common_core::error::contextual::ext::IntoContextualExt;
 use tracing::{error, info};
 
 use std::net::SocketAddr;
@@ -48,24 +44,10 @@ async fn main() -> Result<()> {
     // 加载配置
     let cfg = AppConfig::load(cli.config);
 
-    // 创建统一临时文件目录(上传落盘等)
-    std::fs::create_dir_all(&cfg.server.tmp_path)
-        .into_contextual()
-        .context_err(
-            "create_tmp_dir_failed",
-            "创建临时目录失败",
-            AppError::InternalServerError,
-        )?;
-    info!(path = %cfg.server.tmp_path.display(), "临时文件目录已就绪");
-
-    // 初始化应用
+    // 初始化应用(临时文件目录在 AppSetup 的 base 阶段创建)
     let mut app_setup = AppSetup::init(&cfg).await?;
 
-    let state = AppState::from_setup(
-        &app_setup,
-        cfg.server.max_upload_bytes,
-        cfg.server.tmp_path.clone(),
-    )?;
+    let state = AppState::from_setup(&app_setup, cfg.server.max_upload_bytes)?;
     let state = Arc::new(state);
 
     // 合并路由并添加中间件
@@ -105,31 +87,42 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(&cfg.server_addr())
         .await
         .into_contextual()?;
-    tracing::info!("Server listening on {}", cfg.server_addr());
-
-    let shutdown_signal = shutdown_signal(Arc::clone(&state));
+    tracing::info!("监听 {}", cfg.server_addr());
 
     axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .with_graceful_shutdown(shutdown_signal)
+    .with_graceful_shutdown(shutdown_trigger())
     .await
     .into_contextual()?;
+
+    // 走到这里说明在途连接已排空, 再统一收尾:
+    // 停后台任务 -> 清理临时目录 -> 关闭连接池, 避免误伤在途请求。
+    state.task_manager.shutdown(None).await;
+
+    // 删除统一临时文件目录(优雅关闭时)
+    common_core::remove_dir_all(&state.tmp_path);
+    info!(path = %state.tmp_path.display(), "临时文件目录已删除");
+
+    if let Err(e) = state.db.clone().close().await {
+        error!(error = %e, "关闭数据库连接池失败");
+    } else {
+        info!("数据库连接池已关闭");
+    }
+    state.redis.close();
+    info!("Redis 连接池已关闭");
 
     tracing::info!("服务已完全关闭");
     Ok(())
 }
 
-/// 优雅关闭信号处理
+/// 优雅关闭信号触发器。
 ///
-/// 流程：
-/// 1. 等待 SIGINT 或 SIGTERM
-/// 2. 通过 TaskManager 取消所有后台任务并等待（带超时）。
-///    定时备份、指标采集等任务共享根取消令牌，一次取消全部生效。
-/// 3. 关闭数据库连接池
-/// 4. 关闭 Redis 连接池
-async fn shutdown_signal(state: Arc<crate::state::AppState>) {
+/// 仅负责等待 SIGINT / SIGTERM。真正的收尾(停止后台任务、清理临时目录、
+/// 关闭数据库与 Redis)统一放在 [`axum::serve`] 返回之后执行, 确保在途请求
+/// 已全部排空后再释放其依赖的资源。
+async fn shutdown_trigger() {
     let sigint = async {
         tokio::signal::ctrl_c()
             .await
@@ -153,22 +146,5 @@ async fn shutdown_signal(state: Arc<crate::state::AppState>) {
     #[cfg(not(unix))]
     sigint.await;
 
-    tracing::info!("收到关闭信号，开始关闭");
-
-    // 关闭后台任务
-    state.task_manager.shutdown(Duration::from_secs(0)).await;
-
-    // 删除统一临时文件目录(优雅关闭时)
-    common_core::remove_dir_all(&state.tmp_path);
-    info!(path = %state.tmp_path.display(), "临时文件目录已删除");
-
-    if let Err(e) = state.db.clone().close().await {
-        error!(error = %e, "关闭数据库连接池失败");
-    } else {
-        info!("数据库连接池已关闭");
-    }
-    state.redis.close();
-    info!("Redis 连接池已关闭");
-
-    info!("关闭完成，服务退出");
+    tracing::info!("收到关闭信号，开始排空在途请求");
 }
