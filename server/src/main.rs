@@ -5,7 +5,6 @@ use axum::middleware::{from_fn, from_fn_with_state};
 use clap::Parser;
 use common_core::Result;
 use common_core::error::contextual::ext::IntoContextualExt;
-use common_core::time::Duration;
 use tracing::{error, info};
 
 use std::net::SocketAddr;
@@ -100,7 +99,7 @@ async fn main() -> Result<()> {
 
     // 走到这里说明在途连接已排空, 再统一收尾:
     // 停后台任务 -> 清理临时目录 -> 关闭连接池, 避免误伤在途请求。
-    state.task_manager.shutdown(Duration::from_secs(0)).await;
+    state.task_manager.shutdown(None).await;
 
     // 删除统一临时文件目录(优雅关闭时)
     common_core::remove_dir_all(&state.tmp_path);

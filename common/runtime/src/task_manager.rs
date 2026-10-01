@@ -1,8 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::future::Future;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use chrono::Local;
 use dashmap::DashMap;
+use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, trace};
@@ -170,41 +172,95 @@ impl TaskManager {
         child_token
     }
 
+    /// 启动常驻单消费者 worker: 创建队列并登记到 `queue`, 执行一次 `recover`,
+    /// 再串行消费 `handler`。
+    ///
+    /// - 取消优先: 收到关闭信号后不再领取新任务; 已领取的任务一定跑完再退出;
+    /// - 通道关闭(发送端全部 drop)时退出。
+    ///
+    /// `queue` 在 spawn 之前同步登记, 保证发送端先就绪, `recover` 入队的任务不会丢。
+    /// 返回该 worker 的子取消令牌。
+    pub fn spawn_consumer<T, R, RFut, H, HFut>(
+        &self,
+        name: impl Into<String>,
+        queue: &'static OnceLock<UnboundedSender<T>>,
+        recover: R,
+        handler: H,
+    ) -> CancellationToken
+    where
+        T: Send + 'static,
+        R: FnOnce() -> RFut + Send + 'static,
+        RFut: Future<Output = ()> + Send + 'static,
+        H: Fn(T) -> HFut + Send + 'static,
+        HFut: Future<Output = ()> + Send + 'static,
+    {
+        let name = name.into();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        queue
+            .set(tx)
+            .unwrap_or_else(|_| panic!("{name} 队列重复初始化"));
+
+        let log_name = name.clone();
+        self.spawn(name, move |token| async move {
+            recover().await;
+            loop {
+                tokio::select! {
+                    // 取消优先: 收到关闭信号后不再领取新任务
+                    biased;
+                    _ = token.cancelled() => break,
+                    job = rx.recv() => {
+                        let Some(job) = job else { break };
+                        // 执行阶段不参与取消竞速: 当前任务一定跑完
+                        handler(job).await;
+                    }
+                }
+            }
+            info!("{log_name} 处理完成");
+        })
+    }
+
     pub fn cancel_all(&self) {
         self.inner.cancel_token.cancel();
     }
 
     /// 取消所有任务并等待其完成。
-    pub async fn shutdown(&self, timeout: Duration) -> bool {
+    ///
+    /// `timeout` 为 `None` 时无限等待; 为 `Some(d)` 时最多等待 `d` 后放弃等待。
+    pub async fn shutdown(&self, timeout: Option<Duration>) -> bool {
         self.cancel_all();
         self.wait_for_all(timeout).await
     }
 
-    pub async fn wait_for_all(&self, timeout: Duration) -> bool {
+    /// 等待所有后台任务完成。
+    ///
+    /// `timeout` 为 `None` 时无限等待; 为 `Some(d)` 时最多等待 `d`, 超时返回 `false`。
+    pub async fn wait_for_all(&self, timeout: Option<Duration>) -> bool {
         if self.inner.tasks.is_empty() {
             return true;
         }
 
         match timeout {
-            Duration::ZERO => {
+            None => {
                 self.wait_all().await;
                 info!("所有后台任务已完成");
                 true
             }
-            _ => match tokio::time::timeout(timeout, async { self.wait_all().await }).await {
-                Ok(_) => {
-                    info!("所有后台任务已完成");
-                    true
+            Some(timeout) => {
+                match tokio::time::timeout(timeout, async { self.wait_all().await }).await {
+                    Ok(_) => {
+                        info!("所有后台任务已完成");
+                        true
+                    }
+                    Err(_) => {
+                        error!(
+                            "等待后台任务超时 ({}s)，仍在运行的任务: {:?}，强制退出",
+                            timeout.as_secs(),
+                            self.running_names()
+                        );
+                        false
+                    }
                 }
-                Err(_) => {
-                    error!(
-                        "等待后台任务超时 ({}s)，仍在运行的任务: {:?}，强制退出",
-                        timeout.as_secs(),
-                        self.running_names()
-                    );
-                    false
-                }
-            },
+            }
         }
     }
 
@@ -214,6 +270,10 @@ impl TaskManager {
     }
 
     async fn wait_all(&self) {
+        // 每个后台任务各记一条: 便于排查哪些任务收到了关闭信号、正在排空
+        for name in self.running_names() {
+            info!("{name} 收到关闭信号");
+        }
         loop {
             // 取一个待处理的任务组名
             let group_name = {
@@ -341,7 +401,7 @@ mod tests {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        assert!(tm.shutdown(Duration::from_secs(2)).await);
+        assert!(tm.shutdown(Some(Duration::from_secs(2))).await);
         // 取消后不再触发新一轮执行
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(count.load(Ordering::SeqCst), 1, "取消后仍触发了新一轮执行");
@@ -359,8 +419,48 @@ mod tests {
         // 等待任务进入执行阶段（首次 tick 立即触发）
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let finished = tm.shutdown(Duration::from_millis(100)).await;
+        let finished = tm.shutdown(Some(Duration::from_millis(100))).await;
         assert!(!finished, "长任务未退出，应判定超时");
         assert_eq!(tm.running_names(), vec!["long-running"]);
+    }
+
+    /// `spawn_consumer`: 取消后不再领取新任务, 已领取的任务一定跑完再退出。
+    #[tokio::test]
+    async fn consumer_drains_in_flight_job_then_exits_on_cancel() {
+        static QUEUE: OnceLock<UnboundedSender<u32>> = OnceLock::new();
+
+        let tm = TaskManager::new();
+        let started = Arc::new(AtomicBool::new(false));
+        let processed = Arc::new(AtomicU32::new(0));
+
+        let started_handler = started.clone();
+        let processed_handler = processed.clone();
+        tm.spawn_consumer(
+            "test_consumer",
+            &QUEUE,
+            || async {},
+            move |job: u32| {
+                let started = started_handler.clone();
+                let processed = processed_handler.clone();
+                async move {
+                    started.store(true, Ordering::SeqCst);
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                    processed.fetch_add(job, Ordering::SeqCst);
+                }
+            },
+        );
+
+        let tx = QUEUE.get().expect("队列应已登记").clone();
+        tx.send(1).unwrap();
+        // 等第一个任务真正开始执行
+        while !started.load(Ordering::SeqCst) {
+            tokio::task::yield_now().await;
+        }
+        // 排一个后续任务: 关闭后不应被领取
+        tx.send(2).unwrap();
+
+        // 无限等待关闭: 已领取的任务必须跑完
+        assert!(tm.shutdown(None).await);
+        assert_eq!(processed.load(Ordering::SeqCst), 1);
     }
 }
