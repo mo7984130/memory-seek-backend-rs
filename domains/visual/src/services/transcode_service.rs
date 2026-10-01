@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
+use std::process::Stdio;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -360,6 +361,10 @@ impl TranscodeService {
         // 当前任务得以自然跑完(见 start_worker "完成当前任务后退出")。
         #[cfg(unix)]
         cmd.process_group(0);
+        // ffmpeg 默认会读 stdin(支持按 q 退出等交互)。若 stdin 仍是终端, 而 ffmpeg 又处于
+        // 独立(后台)进程组, 读终端会触发作业控制信号(SIGTTIN/SIGTTOU)使其被停止
+        // (CPU 空闲、表现为挂起直到超时)。置空 stdin: ffmpeg 不接触终端, 也不会抢读按键。
+        cmd.stdin(Stdio::null());
 
         let output = match timeout(FFMPEG_TIMEOUT, cmd.output()).await {
             Err(_elapsed) => {
