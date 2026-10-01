@@ -37,18 +37,6 @@ const FFMPEG_TIMEOUT: Duration = Duration::from_secs(600);
 /// 失败时保留的 ffmpeg stderr 末尾行数(避免整段版本 banner / 进度刷屏日志)
 const STDERR_TAIL_LINES: usize = 8;
 
-/// 从 ffmpeg stderr 中解析其自述收到的信号号(`Exiting normally, received signal N.`)。
-///
-/// ffmpeg 捕获 SIGINT/SIGTERM 后会优雅退出并打印该提示(退出码 255), 据此可将其与
-/// 真正的转码失败区分开。
-fn received_signal(stderr: &[u8]) -> Option<u32> {
-    const MARKER: &str = "received signal ";
-    let text = String::from_utf8_lossy(stderr);
-    let rest = text.rsplit_once(MARKER)?.1;
-    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-    digits.parse().ok()
-}
-
 /// 取 ffmpeg stderr 末尾若干有效行, 供日志展示。
 ///
 /// ffmpeg 的进度行以 `\r` 反复覆盖, 仅最后一次覆盖有意义, 故每行只保留 `\r` 之后的内容。
@@ -137,37 +125,27 @@ impl TranscodeService {
 
     /// 启动常驻转码 worker, 由 [`crate::VisualState::new`] 调用; 重复调用直接 panic。
     pub(crate) fn start_worker(state: Arc<VisualState>) {
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        TRANSCODE_QUEUE
-            .set(tx)
-            .unwrap_or_else(|_| panic!("TRANSCODE_QUEUE 重复初始化"));
-        let task_manager = state.task_manager.clone();
-        task_manager.spawn("video_transcode_worker", move |token| async move {
-            Self::recover_pending(&state).await;
-            loop {
-                tokio::select! {
-                    // 取消优先: 收到关闭信号后不再领取新任务
-                    biased;
-                    _ = token.cancelled() => {
-                        info!("转码 worker 收到关闭信号, 完成当前任务后退出");
-                        break;
-                    }
-                    job = rx.recv() => {
-                        let Some(job) = job else { break };
-                        // 执行阶段不参与取消竞速: 当前任务一定跑完
-                        if let Err(error) = Self::process_job(&state, job).await {
-                            ContextualError::warn(
-                                "transcode_job_failed",
-                                "视频转码任务失败",
-                                error,
-                                AppError::InternalServerError,
-                            )
-                            .emit();
-                        }
+        let recover_state = state.clone();
+        let handler_state = state.clone();
+        state.task_manager.spawn_consumer(
+            "video_transcode_worker",
+            &TRANSCODE_QUEUE,
+            move || async move { Self::recover_pending(&recover_state).await },
+            move |job| {
+                let state = handler_state.clone();
+                async move {
+                    if let Err(error) = Self::process_job(&state, job).await {
+                        ContextualError::warn(
+                            "transcode_job_failed",
+                            "视频转码任务失败",
+                            error,
+                            AppError::InternalServerError,
+                        )
+                        .emit();
                     }
                 }
-            }
-        });
+            },
+        );
     }
 
     /// 启动恢复: 将未完成的记录重新入队(卡在 running 的先重置为 pending)。
@@ -378,6 +356,10 @@ impl TranscodeService {
         cmd.args(Self::build_args(cfg, kind, input, output));
         // 超时 / 任务被 drop / 进程退出时, 连同 ffmpeg 子进程一起终止, 避免留下孤儿进程
         cmd.kill_on_drop(true);
+        // 独立进程组: 终端的 Ctrl+C(发给前台进程组)不再波及 ffmpeg, 关闭时
+        // 当前任务得以自然跑完(见 start_worker "完成当前任务后退出")。
+        #[cfg(unix)]
+        cmd.process_group(0);
 
         let output = match timeout(FFMPEG_TIMEOUT, cmd.output()).await {
             Err(_elapsed) => {
@@ -395,18 +377,6 @@ impl TranscodeService {
         };
 
         if !output.status.success() {
-            // ffmpeg 收到 SIGINT/SIGTERM 时会优雅退出并打印 `received signal N`(退出码 255),
-            // 这是外部中断而非转码错误(常见于运维 Ctrl+C 或服务关闭), 单独说明, 避免误导。
-            if let Some(signal) = received_signal(&output.stderr) {
-                return Err(ContextualError::warn_without_source(
-                    "ffmpeg_interrupted",
-                    format!(
-                        "视频转码被信号中断(ffmpeg received signal {signal}, 退出码 {:?}); 通常是进程收到 SIGINT/SIGTERM(如 Ctrl+C 或服务关闭), 非转码错误",
-                        output.status.code()
-                    ),
-                    AppError::InternalServerError,
-                ));
-            }
             let stderr = stderr_tail(&output.stderr, STDERR_TAIL_LINES);
             return Err(ContextualError::warn_without_source(
                 "ffmpeg_failed",
@@ -604,14 +574,5 @@ mod tests {
         // 进度行以 \r 覆盖, 仅保留最后一次; 且只取末尾 max_lines 行
         let raw = b"ffmpeg version 4.4\rframe=1\rframe=2\rframe=3\r\nLast error line\n";
         assert_eq!(stderr_tail(raw, 2), "frame=3\nLast error line");
-    }
-
-    #[test]
-    fn received_signal_parses_ffmpeg_signal_only_when_present() {
-        assert_eq!(
-            received_signal(b"...\rExiting normally, received signal 2.\n"),
-            Some(2)
-        );
-        assert_eq!(received_signal(b"conversion failed"), None);
     }
 }
