@@ -200,7 +200,6 @@ impl TaskManager {
             .set(tx)
             .unwrap_or_else(|_| panic!("{name} 队列重复初始化"));
 
-        let log_name = name.clone();
         self.spawn(name, move |token| async move {
             recover().await;
             loop {
@@ -215,7 +214,6 @@ impl TaskManager {
                     }
                 }
             }
-            info!("{log_name} 处理完成");
         })
     }
 
@@ -270,10 +268,6 @@ impl TaskManager {
     }
 
     async fn wait_all(&self) {
-        // 每个后台任务各记一条: 便于排查哪些任务收到了关闭信号、正在排空
-        for name in self.running_names() {
-            info!("{name} 收到关闭信号");
-        }
         loop {
             // 取一个待处理的任务组名
             let group_name = {
@@ -292,6 +286,7 @@ impl TaskManager {
 
             // 记录当前正在等待的组，便于超时时报告仍在运行的任务
             *self.inner.waiting.lock().unwrap() = Some(name.clone());
+            debug!("等待任务组 {}", name);
             for task in entries {
                 let _ = task.await;
             }
