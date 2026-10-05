@@ -5,7 +5,7 @@ use std::panic::Location;
 use tracing::Level;
 
 #[track_caller]
-pub(crate) fn log_and_map(
+pub(crate) fn log(
     level: Level,
     reason: &'static str,
     context: Cow<'static, str>,

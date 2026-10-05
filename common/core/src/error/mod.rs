@@ -14,4 +14,4 @@ pub use contextual::ContextualError;
 pub use contextual::ContextualResult;
 
 mod base;
-pub(crate) use base::log_and_map;
+pub(crate) use base::log;

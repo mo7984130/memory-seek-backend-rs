@@ -5,7 +5,7 @@ use std::{
 
 use tracing::Level;
 
-use crate::error::{AppError, log_and_map};
+use crate::error::{AppError, log};
 
 /// 尚未记录日志的应用错误
 pub struct ContextualError(Box<dyn ContextualReport>);
@@ -36,7 +36,7 @@ where
 
     #[track_caller]
     fn emit(self: Box<Self>) -> AppError {
-        log_and_map(
+        log(
             self.level,
             self.reason,
             self.context,
@@ -61,7 +61,7 @@ impl ContextualReport for ReportWithoutSource {
 
     #[track_caller]
     fn emit(self: Box<Self>) -> AppError {
-        log_and_map(self.level, self.reason, self.context, None, self.app_error)
+        log(self.level, self.reason, self.context, None, self.app_error)
     }
 }
 
