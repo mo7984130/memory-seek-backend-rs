@@ -9,8 +9,8 @@ pub(crate) fn log(
     level: Level,
     reason: &'static str,
     context: Cow<'static, str>,
-    err: Option<&dyn Debug>,
-    app_err: AppError,
+    err: Option<&(dyn Debug + Send + Sync)>,
+    app_error: AppError,
 ) -> AppError {
     let loc = Location::caller();
     macro_rules! emit {
@@ -43,5 +43,5 @@ pub(crate) fn log(
         Level::TRACE => emit!(trace),
     }
 
-    app_err
+    app_error
 }

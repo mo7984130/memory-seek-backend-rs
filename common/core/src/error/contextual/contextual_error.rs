@@ -8,68 +8,28 @@ use tracing::Level;
 use crate::error::{AppError, log};
 
 /// 尚未记录日志的应用错误
-pub struct ContextualError(Box<dyn ContextualReport>);
-
-trait ContextualReport: Debug + Send + Sync {
-    fn error(&self) -> &AppError;
-
-    #[track_caller]
-    fn emit(self: Box<Self>) -> AppError;
-}
-
 #[derive(Debug)]
-struct Report<E> {
+pub struct ContextualError {
     level: Level,
     reason: &'static str,
     context: Cow<'static, str>,
-    source: E,
+    source: Option<Box<dyn Debug + Send + Sync>>,
     app_error: AppError,
-}
-
-impl<E> ContextualReport for Report<E>
-where
-    E: Debug + Send + Sync + 'static,
-{
-    fn error(&self) -> &AppError {
-        &self.app_error
-    }
-
-    #[track_caller]
-    fn emit(self: Box<Self>) -> AppError {
-        log(
-            self.level,
-            self.reason,
-            self.context,
-            Some(&self.source),
-            self.app_error,
-        )
-    }
-}
-
-#[derive(Debug)]
-struct ReportWithoutSource {
-    level: Level,
-    reason: &'static str,
-    context: Cow<'static, str>,
-    app_error: AppError,
-}
-
-impl ContextualReport for ReportWithoutSource {
-    fn error(&self) -> &AppError {
-        &self.app_error
-    }
-
-    #[track_caller]
-    fn emit(self: Box<Self>) -> AppError {
-        log(self.level, self.reason, self.context, None, self.app_error)
-    }
 }
 
 impl ContextualError {
     /// 记录错误上下文并返回对应的应用错误。
     #[track_caller]
     pub fn emit(self) -> AppError {
-        self.0.emit()
+        let Self {
+            level,
+            reason,
+            context,
+            source,
+            app_error,
+        } = self;
+
+        log(level, reason, context, source.as_deref(), app_error)
     }
 
     /// 创建带 ERROR 日志级别和原始错误来源的上下文错误.
@@ -120,13 +80,13 @@ impl ContextualError {
     where
         E: Debug + Send + Sync + 'static,
     {
-        Self(Box::new(Report {
+        Self {
             level,
             reason,
             context: context.into(),
-            source,
+            source: Some(Box::new(source)),
             app_error,
-        }))
+        }
     }
 
     /// 构造不携带原始错误来源的延迟上下文.
@@ -136,24 +96,19 @@ impl ContextualError {
         context: impl Into<Cow<'static, str>>,
         app_error: AppError,
     ) -> Self {
-        Self(Box::new(ReportWithoutSource {
+        Self {
             level,
             reason,
             context: context.into(),
+            source: None,
             app_error,
-        }))
-    }
-}
-
-impl Debug for ContextualError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.0, f)
+        }
     }
 }
 
 impl Display for ContextualError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self.0.error(), f)
+        Display::fmt(&self.app_error, f)
     }
 }
 
