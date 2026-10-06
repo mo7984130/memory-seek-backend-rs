@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use common_core::error::contextual::Result;
 use common_core::error::contextual::ext::{
-    ContextualResultExt, IntoContextualExt, OptionExt, ResultContextualExt,
+    ContextualResultExt, IntoContextualExt, OptionExt, ResultExt,
 };
 use common_core::{AppError, ContextualError, TempFile};
 use futures::StreamExt;
@@ -115,7 +115,7 @@ impl TranscodeService {
                 kind: record.kind,
                 file_id: visual.file_id.clone(),
             })
-            .context_err(
+            .context_error(
                 "transcode_queue_closed",
                 "转码队列已关闭",
                 AppError::InternalServerError,
@@ -280,12 +280,12 @@ impl TranscodeService {
         let input = Self::download_to_temp(state, &job.file_id).await?;
 
         let mut output = TempFile::create_in(&state.tmp_dir, &Uuid::new_v4().to_string())
-            .context_err(
+            .context_error(
                 "transcode_output_temp_err",
                 "创建转码输出临时文件失败",
                 AppError::InternalServerError,
             )?;
-        output.set_extension("mp4").context_err(
+        output.set_extension("mp4").context_error(
             "transcode_output_ext_err",
             "设置转码输出扩展名失败",
             AppError::InternalServerError,
@@ -317,7 +317,7 @@ impl TranscodeService {
             .into_contextual()?;
 
         let mut temp = TempFile::create_in(&state.tmp_dir, &Uuid::new_v4().to_string())
-            .context_err(
+            .context_error(
                 "transcode_input_temp_err",
                 "创建转码输入临时文件失败",
                 AppError::InternalServerError,
@@ -325,7 +325,7 @@ impl TranscodeService {
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.into_contextual()?;
-            temp.file().write_all(&chunk).context_err(
+            temp.file().write_all(&chunk).context_error(
                 "transcode_write_temp_err",
                 "写入转码输入临时文件失败",
                 AppError::InternalServerError,
@@ -337,7 +337,7 @@ impl TranscodeService {
             .rsplit_once('.')
             .map(|(_, ext)| ext)
             .unwrap_or("mp4");
-        temp.set_extension(ext).context_err(
+        temp.set_extension(ext).context_error(
             "transcode_input_ext_err",
             "设置转码输入扩展名失败",
             AppError::InternalServerError,
@@ -374,7 +374,7 @@ impl TranscodeService {
                     AppError::InternalServerError,
                 ));
             }
-            Ok(result) => result.context_err(
+            Ok(result) => result.context_error(
                 "ffmpeg_spawn_err",
                 "启动 ffmpeg 失败",
                 AppError::InternalServerError,

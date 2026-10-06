@@ -41,7 +41,7 @@ impl FaceMapper {
             .exec(db)
             .await?
             .rows_affected
-            .no_zero_or_warn(
+            .nonzero_or_warn(
                 "update_person_id_fail",
                 "修改人脸的人物id失败",
                 AppError::bad_request("修改人脸人物失败"),

@@ -10,14 +10,14 @@ pub trait OptionExt<T> {
         self,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_err: AppError,
+        app_error: AppError,
     ) -> ContextualResult<T>;
 
     fn ok_or_error(
         self,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_err: AppError,
+        app_error: AppError,
     ) -> ContextualResult<T>;
 }
 
@@ -27,11 +27,11 @@ impl<T> OptionExt<T> for Option<T> {
         self,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_err: AppError,
+        app_error: AppError,
     ) -> ContextualResult<T> {
         match self {
             Some(v) => Ok(v),
-            None => ContextualError::warn_without_source(reason, context, app_err).to_err(),
+            None => ContextualError::warn_without_source(reason, context, app_error).to_err(),
         }
     }
 
@@ -40,11 +40,11 @@ impl<T> OptionExt<T> for Option<T> {
         self,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_err: AppError,
+        app_error: AppError,
     ) -> ContextualResult<T> {
         match self {
             Some(v) => Ok(v),
-            None => ContextualError::error_without_source(reason, context, app_err).to_err(),
+            None => ContextualError::error_without_source(reason, context, app_error).to_err(),
         }
     }
 }

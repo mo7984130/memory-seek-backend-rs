@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use common_core::error::contextual::ext::{IntoContextualExt, ResultContextualExt};
+use common_core::error::contextual::ext::{IntoContextualExt, ResultExt};
 use common_core::{AppError, Result};
 use tracing::{debug, info};
 
@@ -26,7 +26,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     let tmp_path = &config.server.tmp_path;
     std::fs::create_dir_all(tmp_path)
         .into_contextual()
-        .context_err(
+        .context_error(
             "create_tmp_dir_failed",
             "创建临时目录失败",
             AppError::InternalServerError,
@@ -34,7 +34,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     // 规范化为绝对路径: 使日志展示与下游创建/清理临时文件统一使用完整路径
     let absolute = std::path::absolute(tmp_path)
         .into_contextual()
-        .context_err(
+        .context_error(
             "resolve_tmp_dir_failed",
             "解析临时目录绝对路径失败",
             AppError::InternalServerError,

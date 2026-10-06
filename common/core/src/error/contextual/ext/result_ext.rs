@@ -1,31 +1,32 @@
+use std::borrow::Cow;
 use std::fmt::Debug;
 
 use crate::error::{AppError, ContextualError, ContextualResult};
 
-pub trait ResultContextualExt<T> {
-    fn context_err(
+pub trait ResultExt<T> {
+    fn context_error(
         self,
         reason: &'static str,
-        context: &'static str,
+        context: impl Into<Cow<'static, str>>,
         app_error: AppError,
     ) -> ContextualResult<T>;
 
     fn context_warn(
         self,
         reason: &'static str,
-        context: &'static str,
+        context: impl Into<Cow<'static, str>>,
         app_error: AppError,
     ) -> ContextualResult<T>;
 }
 
-impl<T, E> ResultContextualExt<T> for std::result::Result<T, E>
+impl<T, E> ResultExt<T> for std::result::Result<T, E>
 where
     E: Debug + Send + Sync + 'static,
 {
-    fn context_err(
+    fn context_error(
         self,
         reason: &'static str,
-        context: &'static str,
+        context: impl Into<Cow<'static, str>>,
         app_error: AppError,
     ) -> ContextualResult<T> {
         match self {
@@ -37,7 +38,7 @@ where
     fn context_warn(
         self,
         reason: &'static str,
-        context: &'static str,
+        context: impl Into<Cow<'static, str>>,
         app_error: AppError,
     ) -> ContextualResult<T> {
         match self {

@@ -1,5 +1,5 @@
 use axum::extract::{FromRequestParts, Path};
-use common_core::error::{AppError, contextual::ext::ResultContextualExt};
+use common_core::error::{AppError, contextual::ext::ResultExt};
 use serde::de::DeserializeOwned;
 use std::ops::Deref;
 

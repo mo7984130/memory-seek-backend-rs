@@ -3,7 +3,7 @@ use axum::{
     body::Bytes,
     extract::{FromRequest, Request},
 };
-use common_core::error::{AppError, ContextualError, contextual::ext::ResultContextualExt};
+use common_core::error::{AppError, ContextualError, contextual::ext::ResultExt};
 use serde::de::DeserializeOwned;
 use std::ops::Deref;
 use validator::Validate;

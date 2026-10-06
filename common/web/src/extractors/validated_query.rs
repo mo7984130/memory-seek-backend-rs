@@ -1,6 +1,6 @@
 use crate::extractors::handle_validation_error;
 use axum::extract::{FromRequestParts, Query};
-use common_core::error::{AppError, contextual::ext::ResultContextualExt};
+use common_core::error::{AppError, contextual::ext::ResultExt};
 use serde::de::DeserializeOwned;
 use std::ops::Deref;
 use validator::Validate;

@@ -8,7 +8,7 @@
 
 use bytes::Bytes;
 use common_core::error::contextual::Result;
-use common_core::error::contextual::ext::{IntoContextualExt, ResultContextualExt};
+use common_core::error::contextual::ext::{IntoContextualExt, ResultExt};
 use common_core::time::Duration;
 use common_core::{AppError, ContextualError};
 use constants::RedisKeys;
@@ -93,7 +93,7 @@ pub async fn process_image(
         .await?;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(encoded.as_bytes())
-        .context_err(
+        .context_error(
             "image_cache_decode_err",
             "图片缓存解码失败",
             AppError::InternalServerError,
@@ -126,7 +126,7 @@ async fn render(
 
 /// 本地处理: 解码 -> 缩放/裁剪 -> 编码 WebP。
 fn local_process(bytes: &[u8], op: &ProcessOp) -> Result<Bytes> {
-    let image = image::load_from_memory(bytes).context_err(
+    let image = image::load_from_memory(bytes).context_error(
         "local_image_decode_err",
         "本地图片解码失败",
         AppError::bad_request("图片解码失败"),
@@ -149,7 +149,7 @@ fn local_process(bytes: &[u8], op: &ProcessOp) -> Result<Bytes> {
     let mut buffer = Vec::new();
     processed
         .write_to(&mut Cursor::new(&mut buffer), ImageFormat::WebP)
-        .context_err(
+        .context_error(
             "local_image_encode_err",
             "本地图片编码失败",
             AppError::InternalServerError,
@@ -208,7 +208,7 @@ pub async fn fetch_for_detection(
 /// 在阻塞线程中解码图片字节。
 async fn decode(bytes: Bytes) -> Result<DynamicImage> {
     tokio::task::spawn_blocking(move || {
-        image::load_from_memory(&bytes).context_err(
+        image::load_from_memory(&bytes).context_error(
             "media_decode_err",
             "图片解码失败",
             AppError::bad_request("图片解码失败"),

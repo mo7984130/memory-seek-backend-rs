@@ -291,7 +291,7 @@ impl PersonMapper {
             .exec(db)
             .await?
             .rows_affected
-            .no_zero_or_error(
+            .nonzero_or_error(
                 "delete_person_err",
                 "删除人物失败",
                 AppError::InternalServerError,

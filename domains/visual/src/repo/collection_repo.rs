@@ -259,7 +259,7 @@ impl CollectionRepo {
             // 删除收藏夹
             CollectionMapper::delete_by_id(txn, id, user_id)
                 .await?
-                .no_zero_or_warn(
+                .nonzero_or_warn(
                     "delete_collection_fail",
                     "删除收藏夹失败",
                     AppError::bad_request("删除收藏夹失败"),

@@ -11,7 +11,7 @@ use common_core::{
     Result,
     error::{
         AppError,
-        contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt},
+        contextual::ext::{IntoContextualExt, OptionExt, ResultExt},
     },
     ext::ToOk,
     types::CursorPage,
@@ -62,7 +62,7 @@ impl PersonService {
                 .iter()
                 .flat_map(|f| f.embedding.iter().copied())
                 .collect();
-            Array2::from_shape_vec((faces.len(), DIMS), embeddings).context_err(
+            Array2::from_shape_vec((faces.len(), DIMS), embeddings).context_error(
                 "ndarray_from_shape_error",
                 "人脸聚类时, 转换 NdArray 错误",
                 AppError::InternalServerError,

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use common_core::{
     Result,
-    error::contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt},
+    error::contextual::ext::{IntoContextualExt, OptionExt, ResultExt},
     error::{AppError, ContextualError, contextual},
     ext::ToOk,
     types::CursorPage,
@@ -208,7 +208,7 @@ impl FaceService {
                     "run_from_file 解码失败诊断"
                 );
             }
-            result.context_err(
+            result.context_error(
                 "face-engine_run_error",
                 "人脸检测模型运行失败",
                 AppError::InternalServerError,
@@ -224,7 +224,7 @@ impl FaceService {
         debug!("检测照片中");
         let face_engine_clone = Arc::clone(&state.face_engine);
         let detect_result = spawn_blocking(move || -> contextual::Result<Vec<Face>> {
-            let faces = face_engine_clone.run(&img).context_err(
+            let faces = face_engine_clone.run(&img).context_error(
                 "face-engine_run_error",
                 "人脸检测模型运行失败",
                 AppError::InternalServerError,
@@ -391,7 +391,7 @@ impl FaceService {
                 visual_id,
                 source: FaceJobSource::Uploaded(event),
             })
-            .context_err(
+            .context_error(
                 "face_queue_closed",
                 "人脸检测队列已关闭",
                 AppError::InternalServerError,

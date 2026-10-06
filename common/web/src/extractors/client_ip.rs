@@ -6,7 +6,7 @@ use std::net::{IpAddr, SocketAddr};
 
 use common_core::{
     ContextualResult, Result,
-    error::{AppError, contextual::ext::ResultContextualExt},
+    error::{AppError, contextual::ext::ResultExt},
     ext::ToOk,
 };
 
@@ -69,7 +69,7 @@ where
     ConnectInfo::<SocketAddr>::from_request_parts(parts, state)
         .await
         .map(|ConnectInfo(addr)| ClientIp(addr.ip()))
-        .context_err(
+        .context_error(
             "no_client_ip",
             "无法提取客户端 IP，无代理头且未配置 ConnectInfo",
             AppError::InternalServerError,
