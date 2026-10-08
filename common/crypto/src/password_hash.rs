@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use bcrypt;
-use common_core::error::contextual::ext::ResultExt;
+use common_core::error::contextual::ext::{ContextualResultExt, ResultExt};
 use common_core::error::{AppError, ContextualError, contextual::Result};
 use password_hash::SaltString;
 use password_hash::rand_core::OsRng;
@@ -187,12 +187,13 @@ impl HashAlgorithm {
         // 对假密码做一次实际哈希, 使耗时与“验证真实存在用户密码”一致。
         // 注意: 不能改用更慢/更快的算法(如 bcrypt cost 12),
         // 否则时序差异反而暴露账号是否存在。
-        let _ = Self::Argon2id(Argon2idConfig {
+        Self::Argon2id(Argon2idConfig {
             m_cost: 16 * 1024,
             t_cost: 2,
             p_cost: 1,
         })
-        .hash("dummy");
+        .hash("dummy")
+        .emit_if_err();
     }
 }
 
