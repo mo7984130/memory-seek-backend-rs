@@ -131,7 +131,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
 
     let user = db_transaction!(&state.db, |txn| {
         let user = AuthMapper::update_refresh_token(
-            &state.db,
+            txn,
             user.id,
             new_refresh_token.clone(),
             new_refresh_token_expires_at,
@@ -249,7 +249,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
 /// 发送邮箱验证码
 ///
 /// 生成 6 位大写字母+数字验证码，存入 Redis（有效期 10 分钟），
-/// 然后通过邮件客户端发送至目标邮箱。使用信号量限制并发邮件发送数量。
+/// 然后通过邮件客户端发送至目标邮箱。
 ///
 /// # 参数
 /// - `state`: 认证服务状态，包含 Redis 连接池和邮件客户端
