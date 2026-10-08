@@ -45,6 +45,7 @@ pub struct VisualService;
 
 // 查询
 impl VisualService {
+    /// 获取单张影像的视图信息
     #[instrument(skip_all)]
     #[common_macros::metered]
     pub async fn get_visual_info(
@@ -64,7 +65,7 @@ impl VisualService {
             .to_ok()
     }
 
-    /// 查询影像, 并生成包含访问令牌和点赞状态的视图.
+    /// 查询影像, 并生成包含访问令牌和点赞状态的视图
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, count = %visual_ids.len())
@@ -90,7 +91,7 @@ impl VisualService {
         Ok(views)
     }
 
-    /// 游标获取影像列表.
+    /// 游标获取影像列表
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_visual_cursor_page(
@@ -122,7 +123,7 @@ impl VisualService {
 }
 
 impl VisualService {
-    /// 批量查询影像哈希值是否已存在.
+    /// 批量查询影像哈希值是否已存在
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(count = %req.hashes.len()))]
     pub async fn exists_by_hash_batch(
@@ -132,7 +133,7 @@ impl VisualService {
         Ok(VisualRepo::exists_by_hash_batch(state, &req.hashes).await?)
     }
 
-    /// 删除影像.
+    /// 删除影像
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
@@ -185,7 +186,7 @@ impl VisualService {
     is_final = true,
 )]
 impl VisualService {
-    /// 执行影像删除管道的最后一步, 删除影像主表记录.
+    /// 执行影像删除管道的最后一步, 删除影像主表记录
     async fn on_visual_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
@@ -213,7 +214,7 @@ impl VisualService {
     name = "visual_delete_cache_invalidation",
 )]
 impl VisualService {
-    /// 删除影像后。
+    /// 删除影像后
     #[instrument(name = "delete_visuals", skip_all)]
     async fn on_after_visual_delete(
         &self,
@@ -245,7 +246,7 @@ impl VisualService {
     name = "visual_cursor_cache_invalidation",
 )]
 impl VisualService {
-    /// 发布影像上传后的缓存失效事件.
+    /// 发布影像上传后的缓存失效事件
     #[instrument(name = "upload_visual", skip_all)]
     async fn on_after_visual_upload(
         &self,
@@ -280,11 +281,7 @@ pub enum ImageDownloadData {
 
 // 影像下载
 impl VisualService {
-    /// 根据 VisualToken 下载影像,返回处理后的数据或原始流
-    ///
-    /// - 图片:缩略图/预览/人脸裁剪走 OSS 图片处理,原图走流式下载
-    /// - 视频:缩略图/预览为异步生成的衍生片(转码中返回 [`ImageDownloadData::NotReady`]),
-    ///   原视频走流式下载
+    /// 依 VisualToken 下载影像，返回处理后的数据或原始流；视频衍生片转码中返回 `NotReady`
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
@@ -420,7 +417,7 @@ impl VisualService {
         }
     }
 
-    /// 流式下载原始影像(原图 / 原视频)。
+    /// 流式下载原始影像(原图 / 原视频)
     async fn stream_original(
         state: &VisualState,
         token: &VisualToken,
@@ -447,6 +444,7 @@ impl VisualService {
         })
     }
 
+    /// 生成影像在对象存储中的 key（按日期分目录）
     #[inline]
     pub fn get_visual_s3_key(uuid: &str, metadata: &FileMetaData) -> String {
         let date_path = common_core::time::now().format("%Y/%m/%d");

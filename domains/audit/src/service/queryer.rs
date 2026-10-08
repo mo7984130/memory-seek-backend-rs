@@ -10,6 +10,7 @@ use crate::mapper::AuditMapper;
 pub struct AuditQueryer;
 
 impl AuditQueryer {
+    /// 查询审计事件统计数据
     #[common_macros::metered]
     #[tracing::instrument(skip_all)]
     pub async fn query_stats(
@@ -31,6 +32,7 @@ impl AuditQueryer {
         .collect())
     }
 
+    /// 查询事件数量最多的目标排行
     #[common_macros::metered]
     #[tracing::instrument(skip_all)]
     pub async fn query_top(db: &impl DbConn, req: &AuditTopQuery) -> Result<Vec<AuditTopItem>> {
@@ -44,6 +46,7 @@ impl AuditQueryer {
         )
     }
 
+    /// 游标分页查询审计事件列表
     #[common_macros::metered]
     #[tracing::instrument(skip_all)]
     pub async fn query_events(

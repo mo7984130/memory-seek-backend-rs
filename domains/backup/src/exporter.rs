@@ -11,7 +11,7 @@ use tokio::io::AsyncWriteExt;
 pub struct BinaryCopyExporter;
 
 impl BinaryCopyExporter {
-    /// 将指定表流式导出为经 Zstd 压缩的 PostgreSQL 二进制 COPY 文件。
+    /// 将指定表流式导出为经 Zstd 压缩的 PostgreSQL 二进制 COPY 文件；导出失败时删除已生成的部分文件
     pub async fn export_to_dir(
         db: &DatabaseConnection,
         table_name: &str,
@@ -53,6 +53,7 @@ impl BinaryCopyExporter {
         result.map(|()| output_path)
     }
 
+    /// 用双引号包裹标识符并转义内部双引号
     fn quote_identifier(identifier: &str) -> String {
         format!("\"{}\"", identifier.replace('"', "\"\""))
     }

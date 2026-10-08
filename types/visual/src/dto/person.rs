@@ -15,6 +15,7 @@ crate::in_dto!(PersonCursorParam, "visual/", serde_default, docs = "人物列表
 });
 
 impl Default for PersonCursorParam {
+    /// 默认分页参数:无游标,每页 32 条
     fn default() -> Self {
         Self {
             cursor: None,
@@ -33,6 +34,7 @@ crate::in_dto!(PersonSearchParam, "visual/", serde_default, docs = "人物搜索
 });
 
 impl Default for PersonSearchParam {
+    /// 默认搜索参数:空关键词,每页 32 条
     fn default() -> Self {
         Self {
             keyword: String::new(),
@@ -51,6 +53,7 @@ crate::out_dto!(PersonView, "visual/", rename = "Person"; {
     pub face_count: u64
 });
 impl PersonView {
+    /// 由人物记录、查看者与图片尺寸构造人物视图,并生成封面裁剪令牌
     pub fn from_record(value: PersonRecord, viewer: UserId, dimension: ImageDimensions) -> Self {
         Self {
             id: value.id,
@@ -69,7 +72,7 @@ impl PersonView {
 
 pub const PERSON_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 
-/// 返回人物照片分页的默认页大小.
+/// 返回人物照片分页的默认页大小
 fn person_visual_cursor_page_default_size() -> u64 {
     PERSON_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }
@@ -89,7 +92,7 @@ crate::in_dto!(RenamePersonParam, "visual/", docs = "重命名人物参数"; {
     pub new_name: PersonName,
 });
 
-/// 返回二次人物聚类的默认相似度阈值.
+/// 返回二次人物聚类的默认相似度阈值
 fn secondary_cluster_default_threshold() -> f32 {
     0.55
 }
@@ -115,6 +118,7 @@ pub struct MergePersonParam {
 }
 
 impl validator::Validate for MergePersonParam {
+    /// 校验源与目标人物不是同一人
     fn validate(&self) -> Result<(), validator::ValidationErrors> {
         if self.source_person_id == self.target_person_id {
             let mut err = validator::ValidationError::new("self_merge");

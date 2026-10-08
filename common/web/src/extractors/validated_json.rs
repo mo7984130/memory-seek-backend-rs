@@ -17,6 +17,7 @@ where
 {
     type Rejection = AppError;
 
+    /// 读取并反序列化请求体，空体按 `{}` 处理，再执行校验
     async fn from_request(req: Request, state: &S) -> Result<Self, AppError> {
         let mut bytes = Bytes::from_request(req, state).await.context_warn(
             "validated_json_read_error",
@@ -45,12 +46,14 @@ where
 impl<T> Deref for ValidatedJson<T> {
     type Target = T;
 
+    /// 解引用到底层值
     fn deref(&self) -> &T {
         &self.0
     }
 }
 
 impl<T> AsRef<T> for ValidatedJson<T> {
+    /// 以引用返回底层值
     fn as_ref(&self) -> &T {
         &self.0
     }

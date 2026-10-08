@@ -72,6 +72,7 @@ mod entity {
     }
 
     impl From<Model> for CollectionRecord {
+        /// 将收藏夹实体转换为收藏夹记录
         fn from(model: Model) -> Self {
             Self {
                 id: model.id,

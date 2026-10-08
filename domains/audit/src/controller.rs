@@ -17,6 +17,7 @@ pub struct AuditController;
 impl ControllerRouter for AuditController {
     type State = AuditState;
 
+    /// 审计模块的受保护路由，仅管理员可访问
     fn protected_routes() -> Router<Arc<Self::State>> {
         Router::<Arc<Self::State>>::new()
             .route("/stats", get(Self::stats))
@@ -24,12 +25,14 @@ impl ControllerRouter for AuditController {
             .route("/audit", get(Self::audit))
     }
 
+    /// 审计模块无公开路由
     fn public_routes() -> Router<Arc<Self::State>> {
         Router::<Arc<Self::State>>::new()
     }
 }
 
 impl AuditController {
+    /// 查询审计事件统计（按时间分桶）
     async fn stats(
         State(state): State<Arc<AuditState>>,
         Extension(user_id): Extension<UserId>,
@@ -39,6 +42,7 @@ impl AuditController {
         AuditQueryer::query_stats(&state.db, &req).await.to_r_ok()
     }
 
+    /// 查询事件数量最多的目标排行
     async fn top(
         State(state): State<Arc<AuditState>>,
         Extension(user_id): Extension<UserId>,
@@ -48,6 +52,7 @@ impl AuditController {
         AuditQueryer::query_top(&state.db, &req).await.to_r_ok()
     }
 
+    /// 游标分页查询审计事件列表
     async fn audit(
         State(state): State<Arc<AuditState>>,
         Extension(user_id): Extension<UserId>,

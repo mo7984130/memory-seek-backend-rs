@@ -12,7 +12,7 @@ pub const COMMENT_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 #[allow(dead_code)]
 pub const COMMENT_CURSOR_PAGE_MAX_SIZE: u64 = 128;
 
-/// 返回评论分页的默认页大小.
+/// 返回评论分页的默认页大小
 fn comment_cursor_page_default_size() -> u64 {
     COMMENT_CURSOR_PAGE_DEFAULT_SIZE
 }
@@ -32,6 +32,7 @@ crate::out_dto!(CommentView, "visual/", rename = "Comment"; {
 
 #[cfg(feature = "orm")]
 impl From<CommentRecord> for CommentView {
+    /// 将评论记录转换为评论视图
     fn from(record: CommentRecord) -> Self {
         Self {
             id: record.id,
@@ -45,7 +46,7 @@ impl From<CommentRecord> for CommentView {
 }
 
 impl CommentView {
-    /// 写入当前用户对评论的点赞状态.
+    /// 写入当前用户对评论的点赞状态
     pub fn with_liked(mut self, is_like: bool) -> Self {
         self.is_liked = is_like;
         self

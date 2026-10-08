@@ -75,7 +75,7 @@ crate::in_dto!(DeleteVisualsParam, "visual/", serialize; {
     pub visual_ids: VisualIds,
 });
 
-/// 返回点赞影像分页的默认页大小.
+/// 返回点赞影像分页的默认页大小
 fn liked_visuals_default_size() -> u64 {
     32
 }

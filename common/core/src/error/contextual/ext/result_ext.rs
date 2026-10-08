@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use crate::error::{AppError, ContextualError, ContextualResult};
 
 pub trait ResultExt<T> {
+    /// 为 `Ok` 返回值，`Err` 时包装为 error 级上下文错误
     fn context_error(
         self,
         reason: &'static str,
@@ -11,6 +12,7 @@ pub trait ResultExt<T> {
         app_error: AppError,
     ) -> ContextualResult<T>;
 
+    /// 为 `Ok` 返回值，`Err` 时包装为 warn 级上下文错误
     fn context_warn(
         self,
         reason: &'static str,
@@ -23,6 +25,7 @@ impl<T, E> ResultExt<T> for std::result::Result<T, E>
 where
     E: Debug + Send + Sync + 'static,
 {
+    /// 为 `Ok` 返回值，`Err` 时包装为 error 级上下文错误
     fn context_error(
         self,
         reason: &'static str,
@@ -35,6 +38,7 @@ where
         }
     }
 
+    /// 为 `Ok` 返回值，`Err` 时包装为 warn 级上下文错误
     fn context_warn(
         self,
         reason: &'static str,

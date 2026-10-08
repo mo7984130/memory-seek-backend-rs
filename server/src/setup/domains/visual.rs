@@ -80,9 +80,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     Ok(())
 }
 
-/// 校验视频转码配置并探测 ffmpeg 可用性。
-///
-/// `transcode.enabled` 时若配置非法或 ffmpeg 不可执行, 直接启动失败(fail-fast)。
+/// 校验视频转码配置并探测 ffmpeg 可用性；启用时非法配置会启动失败
 async fn validate_transcode(config: &AppConfig) -> Result<()> {
     let transcode = &config.visual.transcode;
 

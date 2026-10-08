@@ -3,11 +3,12 @@ use common_core::error::{AppError, contextual::Result};
 
 /// 用户领域中必须存在用户的查询结果扩展。
 pub(crate) trait UserOptionExt<T> {
-    /// 将空查询结果转换为用户域的用户不存在错误.
+    /// 将空查询结果转换为用户域的用户不存在错误
     fn user_not_found(self) -> Result<T>;
 }
 
 impl<T> UserOptionExt<T> for Option<T> {
+    /// 将空查询结果转换为用户域的用户不存在错误
     fn user_not_found(self) -> Result<T> {
         self.ok_or_warn(
             "user_not_found",

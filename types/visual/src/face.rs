@@ -75,6 +75,7 @@ mod entity {
     }
 
     impl From<Model> for FaceRecord {
+        /// 将人脸实体转换为人脸记录
         fn from(value: Model) -> Self {
             Self {
                 id: value.id,
@@ -100,7 +101,7 @@ mod entity {
     }
 
     impl NewFaceRecord {
-        /// 将人脸检测结果转换为待持久化的人脸记录.
+        /// 将人脸检测结果转换为待持久化的人脸记录
         pub fn from_detected(visual_id: VisualId, face: Face) -> Self {
             Self {
                 visual_id,
@@ -114,6 +115,7 @@ mod entity {
     }
 
     impl From<NewFaceRecord> for ActiveModel {
+        /// 将待持久化人脸记录转换为 ActiveModel
         fn from(record: NewFaceRecord) -> Self {
             use sea_orm::ActiveValue::{NotSet, Set};
             Self {

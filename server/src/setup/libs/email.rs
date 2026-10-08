@@ -16,11 +16,12 @@ pub struct Config {
     #[serde(default)]
     pub plain: bool,
 }
-/// 返回 SMTP 默认端口.
+/// 返回 SMTP 默认端口
 fn default_port() -> u16 {
     465
 }
 
+/// 初始化 Email 客户端并注册到 `AppSetup`
 #[common_macros::register_async(
     slice = crate::setup::libs::APP_LIBS,
     ty = crate::setup::InitFn,

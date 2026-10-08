@@ -23,12 +23,14 @@ pub struct CollectionController;
 impl ControllerRouter for CollectionController {
     type State = VisualState;
 
+    /// 收藏夹模块的受保护路由
     fn protected_routes() -> Router<Arc<Self::State>> {
         Router::new()
             .route("/", get(Self::get_list).post(Self::create))
             .route("/{id}", patch(Self::update_info).delete(Self::delete))
     }
 
+    /// 收藏夹模块无公开路由
     fn public_routes() -> Router<Arc<Self::State>> {
         Router::new()
     }
@@ -50,7 +52,7 @@ impl CollectionController {
 
 // 查询
 impl CollectionController {
-    /// 获取收藏夹列表.
+    /// 获取收藏夹列表
     async fn get_list(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -63,7 +65,7 @@ impl CollectionController {
 
 // 修改
 impl CollectionController {
-    /// 更新收藏夹信息.
+    /// 更新收藏夹信息
     async fn update_info(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -78,7 +80,7 @@ impl CollectionController {
 
 // 删除
 impl CollectionController {
-    /// 删除收藏夹.
+    /// 删除收藏夹
     async fn delete(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,

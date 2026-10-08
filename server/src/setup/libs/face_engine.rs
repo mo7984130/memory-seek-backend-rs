@@ -12,6 +12,7 @@ pub struct Config {
     pub recognize_model_path: String,
 }
 
+/// 初始化人脸引擎并注册到 `AppSetup`
 #[common_macros::register_async(
     slice = crate::setup::libs::APP_LIBS,
     ty = crate::setup::InitFn,

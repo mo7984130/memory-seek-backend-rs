@@ -24,6 +24,7 @@ pub struct CommentController;
 impl ControllerRouter for CommentController {
     type State = VisualState;
 
+    /// 评论模块的受保护路由
     fn protected_routes() -> Router<Arc<Self::State>> {
         Router::new()
             .route(
@@ -33,6 +34,7 @@ impl ControllerRouter for CommentController {
             .route("/{visual_id}/{comment_id}", delete(Self::delete))
     }
 
+    /// 评论模块无公开路由
     fn public_routes() -> Router<Arc<Self::State>> {
         Router::new()
     }
@@ -40,7 +42,7 @@ impl ControllerRouter for CommentController {
 
 // 创建
 impl CommentController {
-    /// 发布评论.
+    /// 发布评论
     async fn publish(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -58,7 +60,7 @@ impl CommentController {}
 
 // 查询
 impl CommentController {
-    /// 游标查询评论列表.
+    /// 游标查询评论列表
     async fn get_cursor_page(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -73,7 +75,7 @@ impl CommentController {
 
 // 删除
 impl CommentController {
-    ///删除评论.
+    /// 删除评论
     async fn delete(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,

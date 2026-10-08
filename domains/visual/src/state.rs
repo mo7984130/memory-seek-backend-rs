@@ -54,9 +54,7 @@ pub struct VisualState {
 }
 
 impl VisualState {
-    /// 组装影像域所需的仓储, 对象存储和备份组件.
-    ///
-    /// 参数较多(依赖组装), 不适合拆成结构体; 关闭该条 lint。
+    /// 组装影像域所需的仓储, 对象存储与备份组件；参数较多故关闭 `too_many_arguments` lint
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         db: DatabaseConnection,

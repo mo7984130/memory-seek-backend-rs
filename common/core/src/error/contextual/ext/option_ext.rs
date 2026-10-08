@@ -6,6 +6,7 @@ use crate::{
 };
 
 pub trait OptionExt<T> {
+    /// 为 `Some` 返回值，`None` 时返回 warn 级上下文错误
     fn ok_or_warn(
         self,
         reason: &'static str,
@@ -13,6 +14,7 @@ pub trait OptionExt<T> {
         app_error: AppError,
     ) -> ContextualResult<T>;
 
+    /// 为 `Some` 返回值，`None` 时返回 error 级上下文错误
     fn ok_or_error(
         self,
         reason: &'static str,
@@ -22,6 +24,7 @@ pub trait OptionExt<T> {
 }
 
 impl<T> OptionExt<T> for Option<T> {
+    /// 为 `Some` 返回值，`None` 时返回 warn 级上下文错误
     #[inline]
     fn ok_or_warn(
         self,
@@ -35,6 +38,7 @@ impl<T> OptionExt<T> for Option<T> {
         }
     }
 
+    /// 为 `Some` 返回值，`None` 时返回 error 级上下文错误
     #[inline]
     fn ok_or_error(
         self,

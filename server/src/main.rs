@@ -34,6 +34,7 @@ struct Cli {
     config: Option<String>,
 }
 
+/// 服务入口：初始化日志、配置、应用状态并启动 HTTP 服务
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -117,11 +118,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// 优雅关闭信号触发器。
-///
-/// 仅负责等待 SIGINT / SIGTERM。真正的收尾(停止后台任务、清理临时目录、
-/// 关闭数据库与 Redis)统一放在 [`axum::serve`] 返回之后执行, 确保在途请求
-/// 已全部排空后再释放其依赖的资源。
+/// 等待 SIGINT/SIGTERM 的优雅关闭信号触发器
 async fn shutdown_trigger() {
     let sigint = async {
         tokio::signal::ctrl_c()

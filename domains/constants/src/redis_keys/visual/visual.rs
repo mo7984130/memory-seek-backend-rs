@@ -1,52 +1,27 @@
 use types_core::{PageDirection, UserId, VisualId};
 
-/// 生成影像信息的 Redis 缓存键
-///
-/// 缓存内容为 `VisualRecord`，不含按浏览者签发的 token（token 在读取时按浏览者
-/// 动态生成），因此键只按影像拆分，同一影像所有浏览者共享一份缓存。
-///
-/// # 参数
-/// - `visual_id`: 影像 ID
-///
-/// # 返回
-/// 格式为 `p:p:i:{visual_id}` 的缓存键
+/// 生成影像信息的 Redis 缓存键；缓存不含按浏览者签发的 token，同一影像共享一份缓存
 #[inline]
 pub fn visual_info(visual_id: VisualId) -> String {
     //visual:visual:info
     format!("v:v:i:{}", visual_id)
 }
 
-/// 生成影像尺寸缓存的 Redis 缓存键
-///
-/// 缓存内容为 `(width, height)` 元组，按 file_id 拆分（尺寸是影像的静态元数据）。
-///
-/// # 参数
-/// - `file_id`: 影像文件 ID
-///
-/// # 返回
-/// 格式为 `p:p:d:{file_id}` 的缓存键
+/// 生成影像尺寸缓存的 Redis 缓存键；按 file_id 拆分
 #[inline]
 pub fn visual_dimensions(file_id: &str) -> String {
     //visual:visual:dimensions
     format!("v:v:d:{}", file_id)
 }
 
-/// 生成用户对影像点赞状态的 Redis 缓存键。
-///
-/// 点赞状态取决于浏览者，因此键同时包含用户和影像 ID。
-///
-/// # 返回
-/// 格式为 `p:p:l:{user_id}:{visual_id}` 的缓存键
+/// 生成用户对影像点赞状态的 Redis 缓存键；键同时包含用户与影像 ID
 #[inline]
 pub fn visual_is_liked(user_id: UserId, visual_id: VisualId) -> String {
     //visual:visual:is_liked
     format!("v:v:l:{}:{}", user_id, visual_id)
 }
 
-/// 生成影像首屏 ID 列表的 Redis 缓存键。
-///
-/// 缓存存储每个方向允许的最大首屏，调用方再按实际页大小截断，因此键无需包含
-/// `size` 且能被上传、删除操作准确失效。
+/// 生成影像首屏 ID 列表的 Redis 缓存键；缓存每个方向的最大首屏，调用方按实际页大小截断
 #[inline]
 pub fn visual_cursor_page_ids(direction: PageDirection) -> &'static str {
     //visual:visual:cursor_page_ids
@@ -56,16 +31,7 @@ pub fn visual_cursor_page_ids(direction: PageDirection) -> &'static str {
     }
 }
 
-/// 生成影像处理产物（缩略/预览/裁剪 WebP 等）的 Redis 缓存键。
-///
-/// 产物同时取决于原图与处理方式(含后端与参数), 故键包含 file_id 与 `op_key`。
-///
-/// # 参数
-/// - `file_id`: 影像文件 ID
-/// - `op_key`: 处理方式标识(如 `local:thumb`、`oss:preview`、`local:crop:0_0_200_200`)
-///
-/// # 返回
-/// 格式为 `v:v:p:{op_key}:{file_id}` 的缓存键
+/// 生成影像处理产物的 Redis 缓存键；键包含原图 file_id 与处理方式 `op_key`
 #[inline]
 pub fn visual_processed(file_id: &str, op_key: &str) -> String {
     //visual:visual:processed

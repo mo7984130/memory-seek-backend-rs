@@ -25,8 +25,7 @@ pub trait Step<Ctx>: Send + Sync {
     /// 步骤名(日志 / 追踪 / 度量用)
     fn name(&self) -> &'static str;
 
-    /// 是否必须在最后执行。默认 `false`;置 `true` 的步骤(如受外键约束的"删除主表")
-    /// 由管道收集后移到末尾。
+    /// 是否必须最后执行；默认 `false`，置 `true` 的步骤由管道移到末尾
     fn is_final(&self) -> bool {
         false
     }
@@ -45,18 +44,14 @@ pub struct StepPipeline<Ctx: 'static> {
 }
 
 impl<Ctx: Send + 'static> StepPipeline<Ctx> {
-    /// 从步骤引用列表构建管道,按 [`Step::is_final`] **稳定排序**(非 final 保持原顺序、
-    /// final 步骤置末),并以 `&'static` 数组持有。
-    ///
-    /// 配合 `linkme` 分布式切片等"定义即注册"机制使用:调用方传入收集到的步骤列表,
-    /// 本方法负责排序与生命周期提升,消除重复样板。
+    /// 从步骤引用列表构建管道，按 `is_final` 稳定排序后经 `Box::leak` 提升为 `'static`
     pub fn from_slice_stable(mut steps: Vec<&'static dyn Step<Ctx>>) -> Self {
         steps.sort_by_key(|step| step.is_final());
         let steps: &'static [&'static dyn Step<Ctx>] = Box::leak(steps.into_boxed_slice());
         Self::new(steps)
     }
 
-    /// 创建管道。数组元素的顺序即执行顺序。
+    /// 创建管道；数组元素的顺序即执行顺序
     pub fn new(steps: &'static [&'static dyn Step<Ctx>]) -> Self {
         Self { steps }
     }

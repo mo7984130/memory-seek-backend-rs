@@ -45,9 +45,7 @@ const DETECT_IMAGE_MAX_EDGE: u32 = 1920;
 
 // 创建
 impl FaceService {
-    /// 人脸计算.
-    /// 全量时, 备份并且清空表, 从头开始
-    /// 增量时, 备份表, 靠是否有visual无face来判断
+    /// 触发人脸计算；全量先备份并清空表重算，增量按有无 face 判断
     pub async fn compute(state: Arc<VisualState>, admin: AdminId, full: bool) -> Result<()> {
         let user_id = admin.into_inner();
         let admin = AdminId::new(user_id)?;
@@ -66,7 +64,7 @@ impl FaceService {
         Ok(())
     }
 
-    /// 人脸计算.
+    /// 人脸计算
     #[common_macros::metered(name = "face_compute")]
     #[tracing::instrument(
         name = "face_compute",
@@ -164,7 +162,7 @@ impl FaceService {
         Ok(())
     }
 
-    /// 从对象存储取图并解码为图像缓冲区(按 `image_processor` 选择处理后端).
+    /// 从对象存储取图并解码为图像缓冲区(按 `image_processor` 选择处理后端)
     async fn download_visual(state: &VisualState, file_id: &String) -> Result<Img> {
         debug!("下载照片{}", file_id);
         let image = crate::media::fetch_for_detection(
@@ -186,9 +184,7 @@ impl FaceService {
         Ok(img)
     }
 
-    /// 在阻塞线程中直接对落盘图片文件执行人脸检测, 避免占用异步执行器.
-    ///
-    /// 引擎内部(`run_from_file`)负责解码, 调用方无需持有解码缓冲。
+    /// 在阻塞线程中直接对落盘图片文件执行人脸检测，避免占用异步执行器
     async fn detect_visual_from_file(state: &VisualState, path: &Path) -> Result<Vec<Face>> {
         let face_engine_clone = Arc::clone(&state.face_engine);
         let path = path.to_owned();
@@ -219,7 +215,7 @@ impl FaceService {
         Ok(detect_result?)
     }
 
-    /// 在阻塞线程中执行人脸检测并返回检测结果.
+    /// 在阻塞线程中执行人脸检测并返回检测结果
     async fn detect_visual(state: &VisualState, img: Img) -> Result<Vec<Face>> {
         debug!("检测照片中");
         let face_engine_clone = Arc::clone(&state.face_engine);
@@ -237,7 +233,7 @@ impl FaceService {
         Ok(detect_result?)
     }
 
-    /// 批量写入检测到的人脸记录.
+    /// 批量写入检测到的人脸记录
     async fn insert_faces(state: &VisualState, faces: Vec<face::NewFaceRecord>) -> Result<()> {
         debug!("插入人脸到数据库中");
         if faces.is_empty() {
@@ -254,12 +250,12 @@ impl FaceService {
 
 // 修改
 impl FaceService {
+    /// 修改人脸归属
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(face_id = %face_id, person_id = ?person_id)
     )]
-    /// 修改人脸归属
     pub async fn change_face_belonging(
         state: &VisualState,
         face_id: FaceId,
@@ -275,7 +271,7 @@ impl FaceService {
 
 // 查询
 impl FaceService {
-    /// 查询指定照片的人脸.
+    /// 查询指定照片的人脸
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(visual_id = %visual_id))]
     pub async fn get_faces_by_visual_id(
@@ -298,10 +294,9 @@ impl FaceService {
         views.to_ok()
     }
 
-    /// 游标获取"包含未分配人脸"的照片列表
+    /// 游标分页查询包含未分配人脸的照片
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
-    /// 分页查询包含未分配人脸的照片.
     pub async fn get_unassigned_face_visuals(
         state: &VisualState,
         user_id: UserId,
@@ -329,8 +324,7 @@ impl FaceService {
 
 // 删除
 impl FaceService {
-    /// 删除单张人脸
-    /// 仅可以删除无归属的人脸
+    /// 删除单张人脸；仅可删除无归属的人脸
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(face_id = %face_id))]
     pub async fn delete_face(state: &VisualState, face_id: FaceId, user_id: UserId) -> Result<()> {
@@ -339,8 +333,7 @@ impl FaceService {
         Ok(())
     }
 
-    /// 批量删除人脸
-    /// 仅可以删除无归属的人脸
+    /// 批量删除人脸；仅可删除无归属的人脸
     #[common_macros::metered(name = "delete_faces_batch")]
     #[tracing::instrument(name = "delete_faces_batch", skip_all, fields(count = %face_ids.len()))]
     pub async fn delete_faces(
@@ -364,8 +357,7 @@ impl FaceService {
     name = "face_recognition",
 )]
 impl FaceService {
-    /// 消费者仅将事件投入队列, 由单 worker 串行处理;
-    /// 检测延迟从上传响应转移到队列积压。
+    /// 影像上传后仅将事件投入人脸检测队列，由单 worker 串行处理
     #[tracing::instrument(name = "face_enqueue", skip_all)]
     async fn on_after_visual_upload(
         &self,
@@ -428,15 +420,14 @@ enum FaceJobSource {
 /// 队列仅作进程内唤醒; 持久化状态见 `visual_face_task`, 崩溃后由启动恢复重新入队。
 static FACE_QUEUE: OnceLock<mpsc::UnboundedSender<FaceJob>> = OnceLock::new();
 
-/// 是否应重试: 已尝试次数(含本次)未达上限。
+/// 是否应重试: 已尝试次数(含本次)未达上限
 fn should_retry(attempts: i32, max_attempts: u32) -> bool {
     attempts > 0 && (attempts as u32) < max_attempts
 }
 
 // 常驻 worker: 消费任务队列, 串行执行人脸检测
 impl FaceService {
-    /// 启动单线程人脸检测 worker, 由 [`crate::VisualState::new`] 调用;
-    /// 重复调用直接 panic。
+    /// 启动单线程人脸检测 worker，由 [`crate::VisualState::new`] 调用；重复调用会 panic
     pub(crate) fn start_face_consumer(state: Arc<VisualState>) {
         let recover_state = state.clone();
         let handler_state = state.clone();
@@ -461,8 +452,7 @@ impl FaceService {
         );
     }
 
-    /// 启动恢复: 将未完成的任务重新入队(卡在 running 的先重置为 pending),
-    /// 恢复路径改从对象存储下载原图。任务随影像删除已连带清理, 不会出现孤儿。
+    /// 启动恢复：将未完成任务重新入队，卡在 running 的先重置为 pending 并改从对象存储取图
     async fn recover_pending(state: &Arc<VisualState>) {
         let records = match FaceTaskMapper::query_recoverable(&state.db).await {
             Ok(records) => records,
@@ -506,10 +496,7 @@ impl FaceService {
         }
     }
 
-    /// 处理单个任务: 标记进行中 -> 检测 -> 原子落库(人脸 + 完成任务)。
-    ///
-    /// 检测期间影像被删时任务记录会连带删除, `mark_running` / `mark_done` 均不命中,
-    /// 因此不会留下孤儿人脸; 已完成任务被重复入队也会直接跳过。
+    /// 处理单个任务：标记进行中、检测并原子落库；影像已删或任务已完成时跳过
     #[tracing::instrument(name = "face_compute", skip_all)]
     async fn process_job(state: &Arc<VisualState>, job: FaceJob) -> common_core::Result<()> {
         let visual_id = job.visual_id;
@@ -559,7 +546,7 @@ impl FaceService {
         }
     }
 
-    /// 依任务来源取图并检测: 热路径直接读临时文件, 恢复路径从对象存储下载后检测。
+    /// 依任务来源取图并检测: 热路径直接读临时文件, 恢复路径从对象存储下载后检测
     async fn detect_for_job(
         state: &Arc<VisualState>,
         job: &FaceJob,
@@ -579,7 +566,7 @@ impl FaceService {
         }
     }
 
-    /// 原子落库: 命中检测中任务则插入人脸并置为完成, 二者同事务。
+    /// 原子落库: 命中检测中任务则插入人脸并置为完成, 二者同事务
     async fn save_detection(
         state: &Arc<VisualState>,
         visual_id: VisualId,
@@ -599,7 +586,7 @@ impl FaceService {
         Ok(())
     }
 
-    /// 退避后重新入队(不阻塞当前 worker)。
+    /// 退避后重新入队(不阻塞当前 worker)
     fn schedule_retry(state: &Arc<VisualState>, job: FaceJob, backoff_secs: u64) {
         let task_manager = state.task_manager.clone();
         task_manager.spawn("face_retry", move |token| async move {
@@ -624,6 +611,7 @@ impl FaceService {
     name = "face_cleanup",
 )]
 impl FaceService {
+    /// 影像删除时连带清理其人脸、检测任务与人物统计
     async fn on_visual_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,

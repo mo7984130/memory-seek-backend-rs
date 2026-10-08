@@ -29,10 +29,7 @@ impl UsernameValidConfig {
 static USERNAME_REGEX: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(UsernameValidConfig::PATTERN).unwrap());
 
-/// 验证用户名格式
-///
-/// 检查用户名长度是否在 4-20 个字符之间，且仅包含字母、数字、下划线和短横线。
-/// 校验用户名格式和长度.
+/// 校验用户名格式和长度
 pub fn validate_username(username: &str) -> Result<(), ValidationError> {
     let len = username.chars().count();
     if !(UsernameValidConfig::MIN_LENGTH..=UsernameValidConfig::MAX_LENGTH).contains(&len) {
@@ -53,10 +50,7 @@ pub static EMAIL_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.[a-zA-Z0-9-]+$").unwrap()
 });
 
-/// 验证邮箱地址格式
-///
-/// 检查邮箱是否为空、是否包含连续的点号，并通过正则表达式验证整体格式。
-/// 校验邮箱格式.
+/// 校验邮箱格式
 pub fn validate_email(email: &str) -> Result<(), ValidationError> {
     if email.is_empty() {
         return Err(ValidationError::new("invalid_email").with_message("邮箱格式不正确".into()));
@@ -79,6 +73,7 @@ pub struct PasswordValidConfig;
 impl PasswordValidConfig {
     pub const MIN: usize = 8;
     pub const MAX: usize = 64;
+    /// 判断密码是否非空且同时包含字母与数字
     pub fn is_valid_password(password: &str) -> bool {
         if password.is_empty() {
             return false;
@@ -102,10 +97,7 @@ impl PasswordValidConfig {
     pub const PATTERN_MSG: &'static str = "需包含字母和数字 (包含特殊字符)";
 }
 
-/// 验证密码强度
-///
-/// 依次执行非空检查、长度检查（8-64 位）和复杂性检查（必须同时包含字母和数字）。
-/// 校验密码长度和字符要求.
+/// 校验密码长度和字符要求
 pub fn validate_password(password: &str) -> Result<(), ValidationError> {
     // 1. 非空检查 (NotBlank)
     if password.trim().is_empty() {
@@ -141,10 +133,7 @@ static NORMAL_CHAR_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(CommonValidConfig::NORMAL_CHAR_PATTERN).expect("Invalid Normal Char Regex")
 });
 
-/// 验证字符串是否仅包含常规字符（不允许 `< > / \ " ' & @` 等特殊符号）
-///
-/// 空字符串或仅包含空白字符的字符串也会被拒绝。
-/// 校验字符串仅包含允许的普通字符.
+/// 校验字符串仅包含允许的普通字符
 pub fn validate_normal_char(value: &str) -> Result<(), ValidationError> {
     // 空字符串或只包含空格的字符串直接拒绝
     if value.is_empty() || value.trim().is_empty() {
@@ -161,11 +150,7 @@ pub fn validate_normal_char(value: &str) -> Result<(), ValidationError> {
 
 // ==================== 账号 ====================
 
-/// 验证账号格式，支持用户名或邮箱两种形式
-///
-/// 根据输入中是否包含 `@` 自动判断验证策略：包含 `@` 时按邮箱格式验证，
-/// 否则按用户名格式验证（字符规则 + 长度约束）。
-/// 校验登录账号符合用户名或邮箱格式.
+/// 校验登录账号符合用户名或邮箱格式
 pub fn validate_account(value: &str) -> Result<(), ValidationError> {
     if value.contains('@') {
         if !EMAIL_REGEX.is_match(value) {

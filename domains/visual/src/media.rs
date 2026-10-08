@@ -45,7 +45,7 @@ pub enum ProcessOp {
 }
 
 impl ProcessOp {
-    /// 转成阿里云 OSS 图片处理参数。
+    /// 转成阿里云 OSS 图片处理参数
     fn oss_param(&self) -> String {
         match self {
             Self::Thumbnail => format!("image/resize,w_{THUMBNAIL_WIDTH}/format,webp"),
@@ -57,7 +57,7 @@ impl ProcessOp {
         }
     }
 
-    /// 缓存桶标识(含后端与参数), 与 file_id 共同构成缓存键。
+    /// 缓存桶标识(含后端与参数), 与 `file_id` 共同构成缓存键
     fn cache_key(&self, backend: ResolvedImageProcessor) -> String {
         let backend = match backend {
             ResolvedImageProcessor::Oss => "oss",
@@ -74,7 +74,7 @@ impl ProcessOp {
     }
 }
 
-/// 依后端处理图片, 返回处理产物字节(WebP); 命中服务端缓存则直接返回。
+/// 依后端处理图片并返回 WebP 产物字节；命中服务端缓存则直接返回
 pub async fn process_image(
     s3: &S3Client,
     backend: ResolvedImageProcessor,
@@ -101,7 +101,7 @@ pub async fn process_image(
     Ok(Bytes::from(bytes))
 }
 
-/// 真实执行图片处理(不走缓存)。
+/// 真实执行图片处理, 不走缓存
 async fn render(
     s3: &S3Client,
     backend: ResolvedImageProcessor,
@@ -124,7 +124,7 @@ async fn render(
     }
 }
 
-/// 本地处理: 解码 -> 缩放/裁剪 -> 编码 WebP。
+/// 本地处理图片: 解码后缩放或裁剪并编码为 WebP
 fn local_process(bytes: &[u8], op: &ProcessOp) -> Result<Bytes> {
     let image = image::load_from_memory(bytes).context_error(
         "local_image_decode_err",
@@ -157,7 +157,7 @@ fn local_process(bytes: &[u8], op: &ProcessOp) -> Result<Bytes> {
     Ok(Bytes::from(buffer))
 }
 
-/// 按目标宽度等比缩放(仅缩小, 不放大)。
+/// 按目标宽度等比缩放图片, 仅缩小不放大
 fn fit_width(image: DynamicImage, max_width: u32) -> DynamicImage {
     if image.width() <= max_width || image.width() == 0 {
         return image;
@@ -167,7 +167,7 @@ fn fit_width(image: DynamicImage, max_width: u32) -> DynamicImage {
     image.resize(max_width, target_height, FilterType::Lanczos3)
 }
 
-/// 等比缩放到 `max_width×max_height` 框内(仅缩小, 不放大)。
+/// 等比缩放图片到 `max_width×max_height` 框内, 仅缩小不放大
 fn fit_within(image: DynamicImage, max_width: u32, max_height: u32) -> DynamicImage {
     if image.width() <= max_width && image.height() <= max_height {
         return image;
@@ -175,10 +175,7 @@ fn fit_within(image: DynamicImage, max_width: u32, max_height: u32) -> DynamicIm
     image.resize(max_width, max_height, FilterType::Lanczos3)
 }
 
-/// 供人脸检测取图: 按后端处理为「限制在 `max_width×max_height` 内」的位图(仅缩不放)。
-///
-/// - `Oss`: 复用服务端处理 `image/resize,m_lfit`;
-/// - `Local`: 下载原图后本地缩放。
+/// 供人脸检测取图: 按后端处理为限制在 `max_width×max_height` 内的位图(仅缩不放)
 pub async fn fetch_for_detection(
     s3: &S3Client,
     backend: ResolvedImageProcessor,
@@ -205,7 +202,7 @@ pub async fn fetch_for_detection(
     }
 }
 
-/// 在阻塞线程中解码图片字节。
+/// 在阻塞线程中解码图片字节
 async fn decode(bytes: Bytes) -> Result<DynamicImage> {
     tokio::task::spawn_blocking(move || {
         image::load_from_memory(&bytes).context_error(

@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use std::panic::Location;
 use tracing::Level;
 
+/// 记录错误日志并返回传入的 `AppError`；标注调用位置
 #[track_caller]
 pub(crate) fn log(
     level: Level,

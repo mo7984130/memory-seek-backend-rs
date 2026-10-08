@@ -28,9 +28,7 @@ pub enum ImageProcessor {
 }
 
 impl ImageProcessor {
-    /// 依对象存储端点解析最终生效的后端.
-    ///
-    /// `auto` 时: 端点为阿里云 OSS(`aliyuncs.com`)则用 `oss`, 否则用 `local`。
+    /// 依对象存储端点解析最终生效的图片处理后端；`auto` 时端点为阿里云 OSS(`aliyuncs.com`)则用 `oss`, 否则用 `local`
     pub fn resolve(self, endpoint: &str) -> ResolvedImageProcessor {
         match self {
             Self::Oss => ResolvedImageProcessor::Oss,
@@ -89,7 +87,7 @@ pub struct TranscodeConfig {
 }
 
 impl TranscodeConfig {
-    /// 校验配置; `Err(原因)` 表示非法(仅在 `enabled` 时校验有意义的字段)。
+    /// 校验转码配置, 非法时返回原因字符串；仅在 `enabled` 时校验有意义的字段
     pub fn validate(&self) -> std::result::Result<(), String> {
         if !self.enabled {
             return Ok(());
@@ -122,7 +120,7 @@ impl TranscodeConfig {
     }
 }
 
-/// 校验码率字符串: 正数, 可带 k/K/m/M/g/G 后缀。
+/// 校验码率字符串是否为正数且后缀合法(k/K/m/M/g/G)
 fn is_valid_bitrate(value: &str) -> bool {
     let value = value.trim();
     let bytes = value.as_bytes();
@@ -136,6 +134,7 @@ fn is_valid_bitrate(value: &str) -> bool {
 }
 
 impl Default for TranscodeConfig {
+    /// 返回转码配置的默认值
     fn default() -> Self {
         Self {
             enabled: default_enabled(),
@@ -151,39 +150,39 @@ impl Default for TranscodeConfig {
     }
 }
 
-/// 默认启用视频转码.
+/// 默认启用视频转码
 fn default_enabled() -> bool {
     true
 }
-/// 默认 ffmpeg 命令.
+/// 默认 ffmpeg 命令
 fn default_ffmpeg_path() -> PathBuf {
     PathBuf::from("ffmpeg")
 }
-/// 默认缩略片时长 4 秒.
+/// 默认缩略片时长 4 秒
 fn default_thumb_duration_secs() -> u32 {
     4
 }
-/// 默认缩略片宽度 640.
+/// 默认缩略片宽度 640
 fn default_thumb_max_width() -> u32 {
     640
 }
-/// 默认缩略片码率.
+/// 默认缩略片码率
 fn default_thumb_bitrate() -> String {
     "600k".to_string()
 }
-/// 默认预览片高度 1080.
+/// 默认预览片高度 1080
 fn default_preview_max_height() -> u32 {
     1080
 }
-/// 默认预览片码率.
+/// 默认预览片码率
 fn default_preview_bitrate() -> String {
     "4M".to_string()
 }
-/// 默认最大尝试次数.
+/// 默认最大尝试次数
 fn default_max_attempts() -> u32 {
     3
 }
-/// 默认重试退避秒数.
+/// 默认重试退避秒数
 fn default_retry_backoff_secs() -> u64 {
     30
 }

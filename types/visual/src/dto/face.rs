@@ -17,6 +17,7 @@ crate::out_dto!(FaceView, "visual/", rename = "Face"; {
 });
 
 impl From<FaceRecord> for FaceView {
+    /// 将人脸记录转换为人脸视图
     fn from(value: FaceRecord) -> Self {
         Self {
             id: value.id,
@@ -27,7 +28,7 @@ impl From<FaceRecord> for FaceView {
     }
 }
 
-/// 返回未分配人脸照片分页的默认页大小.
+/// 返回未分配人脸照片分页的默认页大小
 fn unassigned_face_visual_cursor_page_default_size() -> u64 {
     32
 }

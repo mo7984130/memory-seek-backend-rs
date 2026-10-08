@@ -4,6 +4,7 @@ use crate::error::{AppError, ContextualError, contextual::ContextualResult};
 
 /// 为 `bool` 提供条件校验便捷方法
 pub trait BoolExt {
+    /// 为真返回 `Ok`，否则返回 warn 级上下文错误
     fn true_or_warn(
         self,
         reason: &'static str,
@@ -11,6 +12,7 @@ pub trait BoolExt {
         app_error: AppError,
     ) -> ContextualResult<()>;
 
+    /// 为假返回 `Ok`，否则返回 warn 级上下文错误
     fn false_or_warn(
         self,
         reason: &'static str,
@@ -20,6 +22,7 @@ pub trait BoolExt {
 }
 
 impl BoolExt for bool {
+    /// 为真返回 `Ok`，否则返回 warn 级上下文错误
     fn true_or_warn(
         self,
         reason: &'static str,
@@ -35,6 +38,7 @@ impl BoolExt for bool {
         }
     }
 
+    /// 为假返回 `Ok`，否则返回 warn 级上下文错误
     fn false_or_warn(
         self,
         reason: &'static str,

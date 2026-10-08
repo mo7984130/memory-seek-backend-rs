@@ -31,6 +31,7 @@ impl PersonMapper {
 
 // 修改
 impl PersonMapper {
+    /// 将人脸加入人物，更新质心、权重与必要时封面
     pub async fn add_faces(
         db: &impl ConnectionTrait,
         person: PersonRecord,
@@ -71,6 +72,7 @@ impl PersonMapper {
         Ok(())
     }
 
+    /// 从人物移除人脸，更新质心、权重与必要时封面
     pub async fn remove_faces(
         db: &impl ConnectionTrait,
         person: PersonRecord,
@@ -113,6 +115,7 @@ impl PersonMapper {
         Ok(())
     }
 
+    /// 按变更字段更新人物记录并返回受影响行数
     pub async fn update(db: &impl ConnectionTrait, person: UpdatePersonRecord) -> Result<u64> {
         let mut update = Entity::update_many().filter(Column::Id.eq(person.id));
 
@@ -150,6 +153,7 @@ impl PersonMapper {
 
 // 查询
 impl PersonMapper {
+    /// 查询所有人物
     pub async fn query_all(db: &impl ConnectionTrait) -> Result<Vec<PersonRecord>> {
         Entity::find()
             .all(db)
@@ -194,6 +198,7 @@ impl PersonMapper {
                 AppError::not_found("人物不存在"),
             )
     }
+    /// 按 ID 批量加行锁查询人物
     pub async fn lock_by_ids(
         db: &impl ConnectionTrait,
         person_ids: impl IntoIterator<Item = &PersonId>,
@@ -225,6 +230,7 @@ impl PersonMapper {
             .to_ok()
     }
 
+    /// 游标分页查询人物，按人脸数降序
     pub async fn query_page(
         db: &impl ConnectionTrait,
         cursor: Option<CountIdCursor<PersonId>>,
@@ -247,10 +253,7 @@ impl PersonMapper {
         Ok(CursorPage::from_oversize(records, size))
     }
 
-    /// 按关键词前缀搜索人物
-    ///
-    /// 匹配 `name` 或 `name_initials` 的前缀(ILIKE 忽略大小写);
-    /// `name_initials` 为 NULL 的存量数据仅能按 `name` 命中。
+    /// 按关键词前缀搜索人物，匹配 `name` 或 `name_initials`（忽略大小写）
     pub async fn query_search(
         db: &impl ConnectionTrait,
         keyword: &str,
@@ -285,6 +288,7 @@ impl PersonMapper {
 
 // 删除
 impl PersonMapper {
+    /// 按 ID 删除人物，未命中时报错
     pub async fn delete(db: &impl ConnectionTrait, person_id: PersonId) -> Result<()> {
         Entity::delete_many()
             .filter(Column::Id.eq(person_id))

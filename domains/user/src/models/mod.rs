@@ -1,9 +1,8 @@
-use common_core::Result;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use types_identity::auth::user::UserId;
 use types_identity::user::UserBriefView;
-use types_visual_token::VisualToken;
+use types_visual_token::{VisualToken, VisualTokenStr};
 
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,17 +13,18 @@ pub struct UserBriefRow {
 }
 
 impl UserBriefRow {
-    /// 转换为 API 响应类型，对头像文件 ID 进行加密（内嵌浏览者身份）
-    pub fn into_brief_view(self, viewer: UserId) -> Result<UserBriefView> {
-        let avatar_token = self
-            .avatar_file_id
-            .map(|file_id| VisualToken::image_thumbnail(viewer, file_id).into());
+    /// 转换为用户摘要视图，头像 token 按浏览者签发
+    pub fn into_brief_view(self, viewer: UserId) -> UserBriefView {
+        let avatar_token: Option<VisualTokenStr> = match self.avatar_file_id {
+            Some(file_id) => Some(VisualToken::image_thumbnail(viewer, file_id).into()),
+            None => None,
+        };
 
-        Ok(UserBriefView {
+        UserBriefView {
             user_id: self.user_id,
             nickname: self.nickname,
             avatar_token,
-        })
+        }
     }
 }
 
@@ -48,7 +48,7 @@ mod tests {
             nickname: "Alice".to_string(),
             avatar_file_id: Some("file123".to_string()),
         };
-        let vo = dto.into_brief_view(UserId(1)).unwrap();
+        let vo = dto.into_brief_view(UserId(1));
         assert_eq!(vo.user_id, UserId(42));
         assert_eq!(vo.nickname, "Alice");
         assert!(vo.avatar_token.is_some());
@@ -62,7 +62,7 @@ mod tests {
             nickname: "Bob".to_string(),
             avatar_file_id: None,
         };
-        let vo = dto.into_brief_view(UserId(2)).unwrap();
+        let vo = dto.into_brief_view(UserId(2));
         assert_eq!(vo.user_id, UserId(1));
         assert_eq!(vo.nickname, "Bob");
         assert!(vo.avatar_token.is_none());

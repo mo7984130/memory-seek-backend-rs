@@ -64,6 +64,7 @@ impl CollectionRepo {
         .await
     }
 
+    /// 确保收藏夹属于指定用户，否则返回禁止访问
     pub async fn ensure_belong(
         state: &VisualState,
         user_id: UserId,
@@ -74,6 +75,7 @@ impl CollectionRepo {
             .await
     }
 
+    /// 确保收藏夹属于指定用户并返回收藏夹记录
     pub async fn ensure_belong_with_return(
         state: &VisualState,
         user_id: UserId,
@@ -121,7 +123,7 @@ impl CollectionRepo {
         .timed(metrics_name!("db_transaction"))
         .await
     }
-    /// 移除收藏夹影像.
+    /// 移除收藏夹影像
     pub(crate) async fn remove_collection_visuals(
         state: &VisualState,
         user_id: UserId,
@@ -180,7 +182,7 @@ impl CollectionRepo {
         .await
     }
 
-    /// 查询收藏夹列表.
+    /// 查询收藏夹列表
     pub(crate) async fn query_collections(
         state: &VisualState,
         user_id: UserId,
@@ -190,7 +192,7 @@ impl CollectionRepo {
             .await
     }
 
-    /// 创建收藏夹.
+    /// 创建收藏夹
     pub(crate) async fn create_collection(
         state: &VisualState,
         user_id: UserId,
@@ -214,7 +216,7 @@ impl CollectionRepo {
         .await
     }
 
-    /// 更新收藏夹信息.
+    /// 更新收藏夹信息
     pub(crate) async fn update_collection(
         state: &VisualState,
         user_id: UserId,
@@ -248,8 +250,7 @@ impl CollectionRepo {
         Ok(())
     }
 
-    /// 删除收藏夹.
-    /// 无需健全, 在删除的时候保证user_id相等
+    /// 在事务内删除收藏夹及其影像关联，按 user_id 保证归属
     pub(crate) async fn delete_collection(
         state: &VisualState,
         user_id: UserId,

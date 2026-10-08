@@ -52,6 +52,7 @@ pub struct FaceBBox {
 }
 #[cfg(feature = "face-engine")]
 impl From<insight_face_rs::BoundingBox> for FaceBBox {
+    /// 将 insight-face-rs 的边界框转换为归一化 `FaceBBox`
     fn from(v: insight_face_rs::BoundingBox) -> Self {
         Self {
             x1: v.x1,
@@ -63,6 +64,7 @@ impl From<insight_face_rs::BoundingBox> for FaceBBox {
 }
 #[cfg(feature = "face-engine")]
 impl From<FaceBBox> for insight_face_rs::BoundingBox {
+    /// 将归一化 `FaceBBox` 转换为 insight-face-rs 的边界框
     fn from(v: FaceBBox) -> Self {
         Self {
             x1: v.x1,
@@ -87,13 +89,6 @@ pub struct ImageDimensions {
 }
 impl FaceBBox {
     /// 将归一化边界框转换为指定图片尺寸下的绝对像素裁剪矩形 `(x, y, w, h)`
-    ///
-    /// # 参数
-    /// - `width`: 原图宽度(像素)
-    /// - `height`: 原图高度(像素)
-    ///
-    /// # 返回
-    /// 返回 `(x, y, w, h)`,其中 `(x, y)` 为左上角坐标,`w`/`h` 为裁剪宽高
     pub fn to_pixel_rect(self, width: u32, height: u32) -> (i32, i32, i32, i32) {
         let w = width as f32;
         let h = height as f32;
@@ -120,10 +115,12 @@ pub struct VisualToken {
 }
 
 impl VisualToken {
+    /// 从加密字符串解密出视觉令牌
     pub fn decrypt(token: &str) -> ContextualResult<Self> {
         token_cipher().decrypt(token)
     }
 
+    /// 将视觉令牌加密为字符串；nonce seed 纳入 `viewer_id`,避免 nonce 复用
     pub fn encrypt(&self) -> ContextualResult<String> {
         // nonce seed 纳入 viewer_id:同一文件的 token 按浏览者区分,
         // 避免"相同 nonce 加密不同明文"导致的 AES-GCM nonce 复用
@@ -132,10 +129,6 @@ impl VisualToken {
     }
 
     /// 创建图片缩略图 token
-    ///
-    /// # 参数
-    /// - `viewer_id`: 浏览者用户 ID
-    /// - `file_id`: 文件 ID
     pub fn image_thumbnail(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
@@ -146,10 +139,6 @@ impl VisualToken {
     }
 
     /// 创建图片预览 token
-    ///
-    /// # 参数
-    /// - `viewer_id`: 浏览者用户 ID
-    /// - `file_id`: 文件 ID
     pub fn image_preview(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
@@ -160,14 +149,6 @@ impl VisualToken {
     }
 
     /// 创建视频缩略图 token(封面截帧)
-    ///
-    /// # 参数
-    /// - `viewer_id`: 浏览者用户 ID
-    /// - `file_id`: 文件 ID
-    ///
-    /// # 返回
-    /// 返回类型为 `Thumbnail`、`kind = Video` 的 `VisualToken`。
-    /// 下载时由服务端按视频时长中点截帧。
     pub fn video_thumbnail(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
@@ -178,14 +159,6 @@ impl VisualToken {
     }
 
     /// 创建视频预览 token(封面截帧)
-    ///
-    /// # 参数
-    /// - `viewer_id`: 浏览者用户 ID
-    /// - `file_id`: 文件 ID
-    ///
-    /// # 返回
-    /// 返回类型为 `Preview`、`kind = Video` 的 `VisualToken`。
-    /// 下载时由服务端按视频时长中点截帧。
     pub fn video_preview(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
@@ -196,14 +169,6 @@ impl VisualToken {
     }
 
     /// 创建原图/原视频 token
-    ///
-    /// # 参数
-    /// - `kind`: 视觉类型(图片原图或视频原流)
-    /// - `viewer_id`: 浏览者用户 ID
-    /// - `file_id`: 文件 ID
-    ///
-    /// # 返回
-    /// 返回类型为 `Original` 的 `VisualToken`
     pub fn original(kind: VisualKind, viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
@@ -214,14 +179,6 @@ impl VisualToken {
     }
 
     /// 创建裁剪图 token(人脸封面,仅图片)
-    ///
-    /// # 参数
-    /// - `file_id`: 文件 ID
-    /// - `bbox`: 人脸边界框(归一化坐标),用于定位裁剪区域
-    /// - `viewer_id`: 浏览者用户 ID
-    ///
-    /// # 返回
-    /// 返回类型为 `Crop` 且携带裁剪信息的 `VisualToken`
     pub fn crop(
         viewer: UserId,
         file_id: impl Into<String>,
@@ -257,6 +214,7 @@ impl VisualTokenStr {
 }
 
 impl Serialize for VisualTokenStr {
+    /// 序列化为加密字符串
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -268,6 +226,7 @@ impl Serialize for VisualTokenStr {
 }
 
 impl<'de> Deserialize<'de> for VisualTokenStr {
+    /// 从加密字符串反序列化并解密
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -282,12 +241,14 @@ impl<'de> Deserialize<'de> for VisualTokenStr {
 }
 
 impl From<VisualToken> for VisualTokenStr {
+    /// 将视觉令牌包装为自动加密的令牌封装
     fn from(token: VisualToken) -> Self {
         Self(token)
     }
 }
 
 impl From<VisualTokenStr> for VisualToken {
+    /// 取出令牌封装内部的视觉令牌
     fn from(wrapper: VisualTokenStr) -> Self {
         wrapper.0
     }

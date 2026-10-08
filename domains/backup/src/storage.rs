@@ -15,7 +15,7 @@ pub struct BackupStorage {
 }
 
 impl BackupStorage {
-    /// 创建本地与对象存储备份的统一存储入口.
+    /// 创建本地与对象存储备份的统一存储入口
     pub fn new(local_path: PathBuf, s3_client: S3Client, s3_prefix: String) -> Self {
         Self {
             local_path,
@@ -24,7 +24,7 @@ impl BackupStorage {
         }
     }
 
-    /// 保存已导出的归档文件到本地和 S3。
+    /// 保存已导出的归档文件到本地和 S3
     pub async fn save(
         &self,
         table_name: &str,
@@ -46,6 +46,7 @@ impl BackupStorage {
         Ok(())
     }
 
+    /// 将备份清单写入本地并上传到 S3
     pub async fn save_manifest(
         &self,
         tier: BackupTier,
@@ -64,6 +65,7 @@ impl BackupStorage {
         Ok(())
     }
 
+    /// 从本地读取并解析指定 run 的备份清单
     pub async fn load_local_manifest(
         &self,
         tier: BackupTier,
@@ -77,6 +79,7 @@ impl BackupStorage {
         Ok(serde_json::from_slice(&bytes)?)
     }
 
+    /// 从本地或 S3 读取并解析指定 run 的备份清单
     pub async fn load_manifest(
         &self,
         source: BackupSource,
@@ -95,6 +98,7 @@ impl BackupStorage {
         Ok(serde_json::from_slice(&bytes)?)
     }
 
+    /// 返回 S3 上指定表归档的下载字节流
     pub async fn s3_archive_stream(
         &self,
         tier: BackupTier,
@@ -112,15 +116,13 @@ impl BackupStorage {
             .map_err(BackupError::from)
     }
 
+    /// 返回本地指定表归档文件的路径
     pub fn local_archive_path(&self, tier: BackupTier, run_id: &str, table: &str) -> PathBuf {
         self.local_path
             .join(Self::relative_file_path(tier, run_id, table))
     }
 
-    /// GFS 分层清理：本地与 S3 各自按保留数清理 daily / weekly / monthly 目录。
-    ///
-    /// 本地与 S3 独立枚举、独立截断：即使本地目录丢失（迁移/清理）或存在仅
-    /// S3 上可见的历史 run（如多实例部署、备份收尾失败），S3 端也能收敛到保留数内。
+    /// 按保留数分别清理本地与 S3 的 daily/weekly/monthly 备份目录，返回清理的 run 数
     pub async fn cleanup_gfs(&self, config: &BackupScheduleConfig) -> Result<u32, BackupError> {
         let mut removed = 0;
         removed += self
@@ -146,10 +148,7 @@ impl BackupStorage {
         Ok(removed)
     }
 
-    /// 清理本地指定子目录下超出保留数的历史备份 run。
-    ///
-    /// 每个子目录是一个备份运行（按 run_id 命名），删除整个目录 = 删除该次所有表。
-    /// 按 run_id 倒序保留最新，删除失败仅记录日志，不中断其余 run 的清理。
+    /// 清理本地子目录中超出保留数的历史备份 run，单个 run 删除失败仅记录日志并跳过
     async fn cleanup_subdir(&self, rel_dir: &str, keep_count: u32) -> Result<u32, BackupError> {
         let dir = self.local_path.join(rel_dir);
         if !dir.exists() {
@@ -183,10 +182,7 @@ impl BackupStorage {
         Ok(removed)
     }
 
-    /// 清理 S3 指定前缀下超出保留数的历史备份 run。
-    ///
-    /// 直接从对象存储枚举 run，不依赖本地目录状态，避免本地丢失或多实例部署时
-    /// S3 对象永久堆积。错误向上返回：清理是定时任务的一部分，失败即任务失败。
+    /// 清理 S3 前缀下超出保留数的历史备份 run，直接从对象存储枚举而非依赖本地目录
     async fn cleanup_s3_subdir(&self, rel_dir: &str, keep_count: u32) -> Result<u32, BackupError> {
         let prefix = Self::object_prefix(&self.s3_prefix, rel_dir);
         let keys = self.s3_client.list(&prefix).await?;
@@ -205,7 +201,7 @@ impl BackupStorage {
         Ok(removed)
     }
 
-    /// 构造 S3 上某相对目录的对象前缀（以 "/" 结尾，可直接用作 list 前缀）。
+    /// 构造以 `/` 结尾的 S3 对象前缀，可直接用作 list 前缀
     fn object_prefix(s3_prefix: &str, rel_dir: &str) -> String {
         let suffix = format!("{rel_dir}/");
         if s3_prefix.is_empty() {
@@ -215,9 +211,7 @@ impl BackupStorage {
         }
     }
 
-    /// 将 S3 对象 key 按 run_id 分组（对象键形如 {prefix}/{run_id}/{file}）。
-    ///
-    /// 无法解析出 run_id 的 key（孤儿对象）将被忽略，避免误删非备份对象。
+    /// 将 S3 对象 key 按 `run_id` 分组，无法解析出 run_id 的孤儿对象被忽略
     fn group_keys_by_run<'a>(
         prefix: &str,
         keys: &'a [String],
@@ -238,16 +232,19 @@ impl BackupStorage {
         runs
     }
 
+    /// 返回归档文件的相对路径 `{tier}/{run_id}/{table}.copy.zst`
     fn relative_file_path(tier: BackupTier, run_id: &str, table_name: &str) -> PathBuf {
         PathBuf::from(tier.rel_dir())
             .join(run_id)
             .join(format!("{table_name}.copy.zst"))
     }
 
+    /// 返回备份清单的相对路径 `{tier}/{run_id}/manifest.json`
     fn relative_manifest_path(tier: BackupTier, run_id: &str) -> PathBuf {
         PathBuf::from(tier.rel_dir()).join(run_id).join(FILE_NAME)
     }
 
+    /// 将相对路径拼接为带前缀的 S3 对象 key
     fn object_key(&self, relative_path: &std::path::Path) -> String {
         let path = relative_path.to_string_lossy();
         if self.s3_prefix.is_empty() {

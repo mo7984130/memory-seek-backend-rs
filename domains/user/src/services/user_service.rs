@@ -25,16 +25,6 @@ use types_visual_token::{VisualToken, VisualTokenStr};
 use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL};
 
 /// 获取用户个人信息
-///
-/// # 参数
-/// - `state`: 用户模块共享状态
-/// - `user_id`: 用户 ID
-///
-/// # 返回
-/// 返回用户 DTO，包含 id、用户名、昵称、邮箱、头像 token 和注册时间
-///
-/// # 错误
-/// - `AppError`: 用户不存在或数据库查询失败时返回错误
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -46,17 +36,7 @@ pub async fn get_user_info(state: &UserState, user_id: UserId) -> Result<UserInf
     info.to_ok()
 }
 
-/// 为用户生成唯一邀请码
-///
-/// # 参数
-/// - `state`: 用户模块共享状态
-/// - `user_id`: 用户 ID
-///
-/// # 返回
-/// 返回邀请码 DTO，包含随机生成的邀请码字符串和过期时间
-///
-/// # 错误
-/// - `AppError`: 邀请码生成重试耗尽（冲突）或 Redis 操作失败时返回内部服务器错误
+/// 为用户生成唯一邀请码；循环重试避免冲突，达到上限返回内部错误
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -98,14 +78,6 @@ pub async fn generate_inviter_code(state: &UserState, user_id: UserId) -> Result
 }
 
 /// 修改用户昵称
-///
-/// # 参数
-/// - `state`: 用户模块共享状态
-/// - `user_id`: 用户 ID
-/// - `param`: 包含新昵称的请求体
-///
-/// # 返回
-/// 返回更新后的昵称字符串
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -124,7 +96,7 @@ pub async fn change_nickname(
     Ok(new_nickname)
 }
 
-/// 上传并更新用户头像
+/// 上传并更新用户头像；图片按文件头魔数校验，入库失败时回滚删除刚上传的文件
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -195,18 +167,7 @@ pub async fn update_avatar(
     Ok(avatar_token)
 }
 
-/// 修改用户登录密码
-///
-/// # 参数
-/// - `state`: 用户模块共享状态
-/// - `user_id`: 用户 ID
-/// - `req`: 包含旧密码和新密码的请求体
-///
-/// # 返回
-/// 无返回值
-///
-/// # 错误
-/// - `AppError`: 用户不存在、旧密码校验失败、新旧密码相同或数据库更新失败时返回错误
+/// 修改用户登录密码；校验旧密码后更新并清除所有令牌
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -261,16 +222,6 @@ pub async fn change_password(
 }
 
 /// 用户登出，清除所有令牌和缓存
-///
-/// # 参数
-/// - `state`: 用户模块共享状态
-/// - `user_id`: 用户 ID
-///
-/// # 返回
-/// 无返回值
-///
-/// # 错误
-/// - `AppError`: 数据库更新或 Redis 删除失败时返回错误
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -280,24 +231,14 @@ pub async fn logout(state: &UserState, user_id: UserId) -> Result<()> {
     do_logout(state, user_id).await
 }
 
-/// 登出清理逻辑。
-///
-/// 不携带操作级指标，供 `logout` 与 `change_password` 复用，避免内部调用重复计入
-/// `user:logout:*`。
+/// 登出清理逻辑
 async fn do_logout(state: &UserState, user_id: UserId) -> Result<()> {
     state.repo.logout(user_id).await?;
 
     Ok(())
 }
 
-/// 批量获取多个用户的基本信息（带 Redis 缓存）
-///
-/// # 参数
-/// - `state`: 用户模块共享状态
-/// - `param`: 包含用户 ID 列表的请求体
-///
-/// # 返回
-/// 返回用户信息列表，未找到的用户对应位置为 `None`
+/// 批量获取多个用户的基本信息，返回列表与入参顺序一致，未找到的用户为 `None`
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -315,6 +256,7 @@ pub async fn get_user_info_batch(
 
     result
         .into_iter()
-        .map(|opt| opt.map(|dto| dto.into_brief_view(user_id)).transpose())
-        .collect::<Result<Vec<_>>>()
+        .map(|opt| opt.map(|dto| dto.into_brief_view(user_id)))
+        .collect::<Vec<_>>()
+        .to_ok()
 }

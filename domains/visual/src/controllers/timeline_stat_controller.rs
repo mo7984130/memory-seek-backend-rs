@@ -10,15 +10,17 @@ use crate::{services::timeline_stat_service::TimelineStatService, state::VisualS
 pub struct TimelineStatController;
 
 impl TimelineStatController {
+    /// 时间线统计模块的受保护路由
     pub fn protected_routes() -> Router<Arc<VisualState>> {
         Router::new().route("/stats", get(Self::get_monthly_stats))
     }
 
+    /// 时间线统计模块无公开路由
     pub fn public_routes() -> Router<Arc<VisualState>> {
         Router::new()
     }
 
-    /// 返回按月份聚合的影像时间线统计.
+    /// 返回按月份聚合的影像时间线统计
     async fn get_monthly_stats(State(state): State<Arc<VisualState>>) -> Result<R<Vec<MonthStat>>> {
         TimelineStatService::get_monthly_stats(&state)
             .await

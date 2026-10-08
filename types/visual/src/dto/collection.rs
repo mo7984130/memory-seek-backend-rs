@@ -40,7 +40,7 @@ crate::in_dto!(CollectionUpdateParam, "visual/"; {
 
 pub const COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 
-/// 返回相册影像分页的默认页大小.
+/// 返回相册影像分页的默认页大小
 fn collection_visual_cursor_page_default_size() -> u64 {
     COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }
@@ -84,6 +84,7 @@ mod orm {
     use types_core::UserId;
 
     impl From<CollectionRecord> for CollectionBriefView {
+        /// 将收藏夹记录转换为收藏夹简要视图
         fn from(record: CollectionRecord) -> Self {
             CollectionBriefView {
                 id: record.id,
@@ -93,7 +94,7 @@ mod orm {
     }
 
     impl CollectionView {
-        /// 为相册封面生成当前查看者可用的裁剪访问令牌.
+        /// 为相册封面生成当前查看者可用的裁剪访问令牌
         pub fn with_generate_cover_token(
             mut self,
             viewer: UserId,
@@ -108,6 +109,7 @@ mod orm {
     }
 
     impl From<CollectionRecord> for CollectionView {
+        /// 将收藏夹记录转换为收藏夹视图
         fn from(record: CollectionRecord) -> Self {
             CollectionView {
                 id: record.id,

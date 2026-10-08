@@ -25,7 +25,7 @@ use crate::state::VisualState;
 pub(crate) struct CommentRepo;
 
 impl CommentRepo {
-    /// 查询热门评论和游标分页评论, 同时加载当前用户点赞状态.
+    /// 查询热门评论和游标分页评论, 同时加载当前用户点赞状态
     pub(crate) async fn query_comments(
         state: &VisualState,
         user_id: UserId,
@@ -81,7 +81,7 @@ impl CommentRepo {
         Ok((hot_comments, comments, liked))
     }
 
-    /// 发布评论.
+    /// 发布评论
     pub(crate) async fn publish_comment(
         state: &VisualState,
         user_id: UserId,
@@ -108,8 +108,7 @@ impl CommentRepo {
         Ok(comment)
     }
 
-    /// 删除评论.
-    /// 同时修改 评论like 和 影像评论计数
+    /// 在事务内删除评论，同时清理其点赞并递减影像评论计数
     pub(crate) async fn delete_comment(
         state: &VisualState,
         user_id: UserId,
@@ -153,14 +152,14 @@ impl CommentRepo {
         Ok(())
     }
 
+    /// 确保评论存在，否则返回未找到错误
     pub async fn ensure_exist(state: &VisualState, comment_id: CommentId) -> Result<()> {
         CommentMapper::ensure_exist(&state.db, comment_id)
             .timed(metrics_name!("db_query"))
             .await
     }
 
-    /// like评论.
-    /// 同时修改点赞计数
+    /// 在事务内点赞评论并递增点赞计数，重复点赞时报错
     pub(crate) async fn like_comment(
         state: &VisualState,
         user_id: UserId,
@@ -192,8 +191,7 @@ impl CommentRepo {
         .await
     }
 
-    /// 取消点赞.
-    /// 同时修改点赞计数
+    /// 在事务内取消评论点赞并递减点赞计数，未点赞时报错
     pub(crate) async fn unlike_comment(
         state: &VisualState,
         user_id: UserId,

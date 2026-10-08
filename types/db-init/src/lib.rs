@@ -12,9 +12,7 @@ use sea_orm::DatabaseConnection;
 
 use types_db_registry::{INIT_INDEXES, SCHEMA_PREFIXES};
 
-/// 初始化数据库:同步表结构 + 执行幂等索引初始化回调。
-///
-/// 幂等:重复调用不会重建已存在的表(sync 只增不删),索引回调亦为 `if_not_exists`。
+/// 初始化数据库:同步表结构并执行幂等索引回调；重复调用安全,不重建已存在的表
 pub async fn init_db(db: &DatabaseConnection) -> ContextualResult<()> {
     // 初始化表结构
     let mut synced = false;

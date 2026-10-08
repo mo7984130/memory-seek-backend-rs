@@ -18,7 +18,7 @@ const TIMELINE_STAT_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
 pub struct TimelineStatRepo;
 
 impl TimelineStatRepo {
-    /// 记录新上传影像对应月份的时间线统计。
+    /// 记录新上传影像对应月份的时间线统计
     pub async fn record_uploaded_visual(state: &VisualState, created_at: DateTime) -> Result<()> {
         TimelineStatMapper::incr_stat(&state.db, created_at)
             .timed(metrics_name!("db_update"))
@@ -27,7 +27,7 @@ impl TimelineStatRepo {
         Ok(())
     }
 
-    /// 扣减对应月份的统计。
+    /// 扣减对应月份的统计
     pub async fn decrement_by_created_ats(
         txn: &DatabaseTransaction,
         created_ats: &[&DateTime],
@@ -37,7 +37,7 @@ impl TimelineStatRepo {
             .await
     }
 
-    /// 获取统计。
+    /// 获取统计
     pub async fn get_monthly_stats(state: &VisualState) -> Result<Vec<MonthStat>> {
         state
             .cache_timeline_stat
@@ -50,7 +50,7 @@ impl TimelineStatRepo {
             .await
     }
 
-    /// 失效缓存.
+    /// 失效缓存
     pub async fn invalidate_cache(state: &VisualState) {
         state
             .cache_timeline_stat
@@ -70,7 +70,7 @@ impl TimelineStatRepo {
     name = "timeline_stat_cache_invalidation",
 )]
 impl TimelineStatRepo {
-    /// 删除影像后失效月度统计缓存。
+    /// 删除影像后失效月度统计缓存
     #[tracing::instrument(name = "delete_visuals", skip_all)]
     async fn on_after_visual_delete(
         &self,

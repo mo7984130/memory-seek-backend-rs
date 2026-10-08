@@ -19,7 +19,7 @@ use crate::{
 pub(crate) struct VisualLikeRepo;
 
 impl VisualLikeRepo {
-    /// 点赞影像.
+    /// 点赞影像
     pub(crate) async fn like(
         state: &VisualState,
         user_id: UserId,
@@ -88,7 +88,7 @@ impl VisualLikeRepo {
         Ok(())
     }
 
-    /// 查询用户点赞过的影像 ID.
+    /// 查询用户点赞过的影像 ID
     pub(crate) async fn query_liked_visual_ids(
         state: &VisualState,
         user_id: UserId,

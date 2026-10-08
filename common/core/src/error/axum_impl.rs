@@ -5,6 +5,7 @@ use axum::{http::StatusCode, response::IntoResponse};
 use crate::{error::AppError, r::R};
 
 impl AppError {
+    /// 返回该错误对应的 HTTP 状态码；`Ignore` 映射为 200
     pub fn status_code(&self) -> StatusCode {
         match self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
@@ -21,6 +22,7 @@ impl AppError {
 }
 
 impl IntoResponse for AppError {
+    /// 转为统一的 JSON 错误响应
     fn into_response(self) -> axum::response::Response {
         R::err(self.status_code().as_u16(), self.to_string().as_str()).into_response()
     }

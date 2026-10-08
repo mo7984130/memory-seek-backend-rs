@@ -59,6 +59,7 @@ pub struct ServerConfig {
 }
 
 impl Default for ServerConfig {
+    /// 返回服务器配置的默认值
     fn default() -> Self {
         Self {
             host: default_host(),
@@ -68,27 +69,25 @@ impl Default for ServerConfig {
         }
     }
 }
-/// 返回默认监听地址.
+/// 返回默认监听地址
 fn default_host() -> String {
     "127.0.0.1".to_string()
 }
+/// 返回服务默认监听端口
 const fn default_port() -> u16 {
     7984
 }
-/// 默认上传上限: 512MB(与业务视频上限一致).
+/// 默认上传上限: 512MB(与业务视频上限一致)
 const fn default_max_upload_bytes() -> u64 {
     512 * 1024 * 1024
 }
-/// 默认统一临时文件目录.
+/// 默认统一临时文件目录
 fn default_tmp_path() -> PathBuf {
     PathBuf::from("./tmp")
 }
 
 impl AppConfig {
-    /// 加载配置，按优先级确定配置文件路径：
-    /// 1. CLI 参数 `--config` / `-c`
-    /// 2. 环境变量 `MEMORY_SEEK_CONFIG_PATH`
-    /// 3. 默认值 `config.yml or etc/memory-seek/config.yml`
+    /// 加载配置：依次尝试 CLI `--config`、环境变量 `MEMORY_SEEK_CONFIG_PATH`、默认路径
     pub fn load(cli_config_path: Option<String>) -> Self {
         info!("加载配置文件");
 
@@ -123,7 +122,7 @@ impl AppConfig {
         cfg.try_deserialize().expect("反序列化配置失败")
     }
 
-    /// 返回服务器绑定地址和端口.
+    /// 返回服务器绑定地址和端口
     pub fn server_addr(&self) -> String {
         format!("{}:{}", self.server.host, self.server.port)
     }

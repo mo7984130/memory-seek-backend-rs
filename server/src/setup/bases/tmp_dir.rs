@@ -15,7 +15,7 @@ use crate::{config::AppConfig, setup::AppSetup};
 #[derive(Debug, Clone)]
 pub struct TmpDir(pub PathBuf);
 
-/// 创建临时文件目录并登记为 [`TmpDir`]。
+/// 创建临时文件目录并登记为 [`TmpDir`]
 #[common_macros::register_async(
     slice = crate::setup::bases::APP_BASES,
     ty = crate::setup::InitFn,

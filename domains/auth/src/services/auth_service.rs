@@ -24,22 +24,7 @@ use types_identity::auth::{
 };
 use types_identity::user::UserInfo;
 
-/// 用户登录
-///
-/// 通过用户名或邮箱查找用户，验证密码后签发 access_token 和 refresh_token。
-/// 密码验证使用信号量限制并发数，避免 CPU 密集型操作抢占 runtime 资源。
-/// 若用户密码哈希算法过时，登录成功后会异步迁移至最新算法。
-///
-/// # 参数
-/// - `state`: 认证服务状态，包含数据库连接、Redis 连接池和 token 加密器
-/// - `req`: 登录请求，包含账号（用户名或邮箱）和密码
-///
-/// # 返回
-/// 返回登录成功的用户信息，包含 access_token、refresh_token 及其过期时间
-///
-/// # 错误
-/// - `AppError::bad_request`: 账号不存在或密码错误
-/// - `AppError::InternalServerError`: 数据库查询/更新失败或 Redis 操作失败
+/// 用户登录，校验账号密码后签发 access_token 和 refresh_token；密码校验经信号量限流，哈希算法过时会异步迁移
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -165,21 +150,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     })
 }
 
-/// 用户注册
-///
-/// 校验邮箱验证码和邀请码后创建新用户。密码通过 `spawn_blocking` 在独立线程中哈希，
-/// 避免阻塞 async runtime。注册成功后删除已使用的邮箱验证码防止重放。
-///
-/// # 参数
-/// - `state`: 认证服务状态，包含数据库连接和 Redis 连接池
-/// - `req`: 注册请求，包含用户名、邮箱、密码、昵称、邀请码和邮箱验证码
-///
-/// # 返回
-/// 返回注册成功的用户信息（不含 token，需单独登录获取）
-///
-/// # 错误
-/// - `AppError::bad_request`: 邮箱验证码错误、邀请码无效、用户名或邮箱已被占用
-/// - `AppError::InternalServerError`: 数据库插入失败或其他内部错误
+/// 用户注册，校验邮箱验证码与邀请码后创建用户；成功后删除已用验证码防止重放
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -246,20 +217,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     Ok(UserInfo::from(user_model))
 }
 
-/// 发送邮箱验证码
-///
-/// 生成 6 位大写字母+数字验证码，存入 Redis（有效期 10 分钟），
-/// 然后通过邮件客户端发送至目标邮箱。
-///
-/// # 参数
-/// - `state`: 认证服务状态，包含 Redis 连接池和邮件客户端
-/// - `req`: 请求，包含目标邮箱地址
-///
-/// # 返回
-/// 返回 `()` 表示发送成功
-///
-/// # 错误
-/// - `AppError::InternalServerError`: Redis 操作失败或邮件发送失败
+/// 生成 6 位验证码写入 Redis 并发送到目标邮箱
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -299,21 +257,7 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
     Ok(())
 }
 
-/// 刷新 access_token
-///
-/// 验证用户的 refresh_token 有效性后，生成新的 access_token 并存入 Redis。
-///
-/// # 参数
-/// - `state`: 认证服务状态，包含数据库连接和 Redis 连接池
-/// - `user_id`: 用户 ID
-/// - `refresh_token`: 当前的 refresh_token 字符串
-///
-/// # 返回
-/// 返回新的 access_token 及其过期时间
-///
-/// # 错误
-/// - `AppError::Unauthorized`: refresh_token 不存在、不匹配或已过期
-/// - `AppError::InternalServerError`: 数据库查询或 Redis 操作失败
+/// 校验 refresh_token 后签发新的 access_token 并写入 Redis
 #[common_macros::metered]
 #[tracing::instrument(skip_all, fields(user_id = %user_id))]
 pub async fn refresh_access_token(
@@ -346,6 +290,7 @@ pub async fn refresh_access_token(
 }
 
 // 校验邮箱验证码（大小写不敏感），从 Redis 中比对存储的验证码
+/// 校验邮箱验证码是否匹配，大小写不敏感
 async fn verify_email_verify_code(state: &AuthState, email: &str, code: &str) -> Result<()> {
     let stored_code = state
         .redis
@@ -369,6 +314,7 @@ async fn verify_email_verify_code(state: &AuthState, email: &str, code: &str) ->
 }
 
 // 校验邀请码（大小写不敏感），从 Redis 中查找邀请码对应的用户 ID
+/// 校验邀请码（大小写不敏感）并返回其绑定的用户 ID
 async fn verify_inviter_code(state: &AuthState, inviter_code: &str) -> Result<UserId> {
     // 统一转大写后查找 Redis key
     let code_upper = inviter_code.to_uppercase();
@@ -390,6 +336,7 @@ async fn verify_inviter_code(state: &AuthState, inviter_code: &str) -> Result<Us
 }
 
 // 校验用户的 refresh_token：查询数据库验证匹配性和有效期，不匹配或过期返回 Unauthorized
+/// 校验 refresh_token 与数据库记录一致且未过期
 async fn verify_refresh_token(
     state: &AuthState,
     user_id: UserId,

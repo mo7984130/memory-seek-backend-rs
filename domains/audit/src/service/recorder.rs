@@ -5,17 +5,14 @@ use types_audit::AuditEvent;
 pub struct AuditRecorder;
 
 impl AuditRecorder {
-    /// 在调用方当前事务中追加审计事实。
+    /// 在调用方当前事务中追加审计事实
     #[common_macros::metered]
     #[tracing::instrument(skip_all)]
     pub async fn append(txn: &DatabaseTransaction, event: AuditEvent) -> Result<()> {
         Self::insert_many(txn, [event]).await
     }
 
-    /// 在调用方当前事务中批量追加审计事实。
-    ///
-    /// 多条事件通过一次批量 INSERT 写入，调用方事务仍负责保证业务数据
-    /// 与审计数据的一致性。
+    /// 在调用方当前事务中批量追加审计事实，多条事件通过一次批量 INSERT 写入
     #[common_macros::metered]
     #[tracing::instrument(skip_all)]
     pub async fn append_many<I>(txn: &DatabaseTransaction, events: I) -> Result<()>
@@ -26,10 +23,7 @@ impl AuditRecorder {
         Self::insert_many(txn, events).await
     }
 
-    /// 实际写入实现。
-    ///
-    /// 不带操作级指标，供 `append` / `append_many` 复用，避免内部委托造成重复计数
-    /// （`append` 的指标为 `audit:append:*`，`append_many` 为 `audit:append_many:*`）。
+    /// 审计写入的空实现（未开启 `recording` feature），供 `append`/`append_many` 复用
     #[cfg(not(feature = "recording"))]
     async fn insert_many<I>(txn: &DatabaseTransaction, events: I) -> Result<()>
     where
@@ -40,7 +34,7 @@ impl AuditRecorder {
         Ok(())
     }
 
-    /// 实际写入实现（`recording` 打开时真正落库）。
+    /// 实际写入实现（`recording` 打开时真正落库）
     #[cfg(feature = "recording")]
     async fn insert_many<I>(txn: &DatabaseTransaction, events: I) -> Result<()>
     where

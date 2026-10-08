@@ -34,9 +34,7 @@ use crate::state::VisualState;
 /// 失败时保留的 ffmpeg stderr 末尾行数(避免整段版本 banner / 进度刷屏日志)
 const STDERR_TAIL_LINES: usize = 8;
 
-/// 取 ffmpeg stderr 末尾若干有效行, 供日志展示。
-///
-/// ffmpeg 的进度行以 `\r` 反复覆盖, 仅最后一次覆盖有意义, 故每行只保留 `\r` 之后的内容。
+/// 取 ffmpeg stderr 末尾若干有效行供日志展示，每行仅保留 `\r` 之后的内容
 fn stderr_tail(stderr: &[u8], max_lines: usize) -> String {
     let text = String::from_utf8_lossy(stderr);
     let lines: Vec<&str> = text
@@ -48,7 +46,7 @@ fn stderr_tail(stderr: &[u8], max_lines: usize) -> String {
     lines[start..].join("\n")
 }
 
-/// 是否应重试: 已尝试次数(含本次)未达上限。
+/// 是否应重试: 已尝试次数(含本次)未达上限
 fn should_retry(attempts: i32, max_attempts: u32) -> bool {
     attempts > 0 && (attempts as u32) < max_attempts
 }
@@ -75,7 +73,7 @@ pub struct TranscodeService;
     name = "video_transcode_enqueue",
 )]
 impl TranscodeService {
-    /// 仅处理视频; 登记缩略/预览两条衍生记录并入队。
+    /// 仅处理视频; 登记缩略/预览两条衍生记录并入队
     #[tracing::instrument(name = "transcode_enqueue", skip_all)]
     async fn on_after_visual_upload(
         &self,
@@ -87,7 +85,7 @@ impl TranscodeService {
 }
 
 impl TranscodeService {
-    /// 登记待生成的衍生片并入队(非视频 / 未启用时跳过)。
+    /// 登记待生成的衍生片并入队(非视频 / 未启用时跳过)
     async fn enqueue(state: &VisualState, visual: &VisualRecord) -> common_core::Result<()> {
         if visual.kind != VisualKind::Video || !state.config.transcode.enabled {
             return Ok(());
@@ -120,7 +118,7 @@ impl TranscodeService {
         Ok(())
     }
 
-    /// 启动常驻转码 worker, 由 [`crate::VisualState::new`] 调用; 重复调用直接 panic。
+    /// 启动常驻转码 worker, 由 [`crate::VisualState::new`] 调用; 重复调用直接 panic
     pub(crate) fn start_worker(state: Arc<VisualState>) {
         let recover_state = state.clone();
         let handler_state = state.clone();
@@ -145,7 +143,7 @@ impl TranscodeService {
         );
     }
 
-    /// 启动恢复: 将未完成的记录重新入队(卡在 running 的先重置为 pending)。
+    /// 启动恢复: 将未完成的记录重新入队(卡在 running 的先重置为 pending)
     async fn recover_pending(state: &VisualState) {
         let records = match DerivativeMapper::query_recoverable(&state.db).await {
             Ok(records) => records,
@@ -196,7 +194,7 @@ impl TranscodeService {
         }
     }
 
-    /// 生成单个衍生片: 下载原片 -> ffmpeg -> 上传 -> 更新状态。
+    /// 生成单个衍生片: 下载原片 -> ffmpeg -> 上传 -> 更新状态
     async fn process_job(state: &Arc<VisualState>, job: TranscodeJob) -> Result<()> {
         // 记录已不存在(影像已被删除)时无需处理
         if !DerivativeMapper::mark_running(&state.db, job.id).await? {
@@ -260,7 +258,7 @@ impl TranscodeService {
         }
     }
 
-    /// 退避后重新入队(不阻塞当前 worker)。
+    /// 退避后重新入队(不阻塞当前 worker)
     fn schedule_retry(state: &Arc<VisualState>, job: TranscodeJob, backoff_secs: u64) {
         let task_manager = state.task_manager.clone();
         task_manager.spawn("transcode_retry", move |token| async move {
@@ -276,7 +274,7 @@ impl TranscodeService {
         });
     }
 
-    /// 下载原片、调用 ffmpeg 生成衍生片并上传, 返回衍生对象 key 与 ffmpeg 转码耗时。
+    /// 下载原片、调用 ffmpeg 生成衍生片并上传, 返回衍生对象 key 与 ffmpeg 转码耗时
     async fn generate(state: &VisualState, job: &TranscodeJob) -> Result<(String, Duration)> {
         let input = Self::download_to_temp(state, &job.file_id).await?;
 
@@ -311,7 +309,7 @@ impl TranscodeService {
         Ok((object_key, transcode_elapsed))
     }
 
-    /// 将原片从对象存储流式下载到临时文件(按原扩展名命名, 便于 ffmpeg 探测)。
+    /// 将原片从对象存储流式下载到临时文件(按原扩展名命名, 便于 ffmpeg 探测)
     async fn download_to_temp(state: &VisualState, file_id: &str) -> Result<TempFile> {
         let mut stream = state
             .s3_client
@@ -349,7 +347,7 @@ impl TranscodeService {
         Ok(temp)
     }
 
-    /// 调用 ffmpeg 执行转码, 失败返回错误(不设超时, 由 ffmpeg 自然跑完)。
+    /// 调用 ffmpeg 执行转码, 失败返回错误(不设超时, 由 ffmpeg 自然跑完)
     async fn run_ffmpeg(
         cfg: &TranscodeConfig,
         kind: DerivativeKind,
@@ -390,11 +388,7 @@ impl TranscodeService {
         Ok(())
     }
 
-    /// 构造 ffmpeg 参数(纯函数, 便于单测)。
-    ///
-    /// 统一: H.264 high / yuv420p / faststart; 仅缩不放。
-    /// 缩略片: 前 N 秒、无音轨、宽 `min(w, iw)`。
-    /// 预览片: 整片、AAC 立体声、高 `min(h, ih)`。
+    /// 构造 ffmpeg 转码参数（纯函数便于单测）；统一 H.264 high/yuv420p/faststart 且仅缩不放
     fn build_args(
         cfg: &TranscodeConfig,
         kind: DerivativeKind,
@@ -473,7 +467,7 @@ impl TranscodeService {
     name = "derivative_cleanup",
 )]
 impl TranscodeService {
-    /// 删除影像事务中, 清理其衍生片 DB 记录。
+    /// 删除影像事务中, 清理其衍生片 DB 记录
     async fn on_visual_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
@@ -491,7 +485,7 @@ impl TranscodeService {
     name = "derivative_delete_cleanup",
 )]
 impl TranscodeService {
-    /// 删除影像后, 清理其视频衍生片对象(键由 file_id 推导, 删除幂等)。
+    /// 删除影像后, 清理其视频衍生片对象(键由 file_id 推导, 删除幂等)
     async fn on_after_visual_delete(
         &self,
         state: Arc<VisualState>,

@@ -73,6 +73,7 @@ mod entity {
     }
 
     impl From<Model> for FaceTaskRecord {
+        /// 将人脸检测任务实体转换为任务记录
         fn from(model: Model) -> Self {
             Self {
                 visual_id: model.visual_id,
@@ -89,6 +90,7 @@ mod entity {
     }
 
     impl From<NewFaceTaskRecord> for ActiveModel {
+        /// 将待持久化任务转换为 ActiveModel,状态默认 `Pending`
         fn from(record: NewFaceTaskRecord) -> Self {
             use sea_orm::ActiveValue::Set;
             Self {

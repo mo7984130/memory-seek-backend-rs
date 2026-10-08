@@ -9,7 +9,7 @@ use types_visual::dto::timeline_stat::MonthStat;
 pub(crate) struct TimelineStatService;
 
 impl TimelineStatService {
-    /// 获取时间线统计.
+    /// 获取时间线统计
     #[common_macros::metered]
     #[tracing::instrument(skip_all)]
     pub async fn get_monthly_stats(state: &VisualState) -> Result<Vec<MonthStat>> {
@@ -24,7 +24,7 @@ impl TimelineStatService {
     name = "timeline_stat_cleanup",
 )]
 impl TimelineStatService {
-    /// 删除影像后扣减对应月份的时间线统计.
+    /// 删除影像后扣减对应月份的时间线统计
     async fn on_visual_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,
@@ -49,6 +49,7 @@ impl TimelineStatService {
     name = "timeline_stat_create",
 )]
 impl TimelineStatService {
+    /// 影像上传后记录对应月份的时间线统计
     #[tracing::instrument(name = "upload_visual", skip_all)]
     async fn on_after_visual_upload(
         &self,

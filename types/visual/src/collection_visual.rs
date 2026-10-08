@@ -47,8 +47,7 @@ mod entity {
         pub created_at: DateTime,
     }
 
-    /// 创建索引
-    /// CollectionId 和 CreatedAt 复合索引, 用于 按照收藏时间获取收藏夹里面影像时
+    /// 创建收藏夹影像按收藏时间查询的复合索引
     #[common_macros::register_async(
         send,
         slice = types_db_registry::INIT_INDEXES,
@@ -79,6 +78,7 @@ mod entity {
     }
 
     impl From<Model> for CollectionVisualRecord {
+        /// 将收藏夹影像实体转换为记录
         fn from(model: Model) -> Self {
             Self {
                 id: model.id,

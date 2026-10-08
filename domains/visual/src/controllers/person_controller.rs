@@ -26,6 +26,7 @@ pub struct PersonController;
 impl ControllerRouter for PersonController {
     type State = VisualState;
 
+    /// 人物模块的受保护路由
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
             .route("/admin/full_scan", get(Self::full_scan))
@@ -38,6 +39,7 @@ impl ControllerRouter for PersonController {
             .route("/{person_id}", delete(Self::delete))
     }
 
+    /// 人物模块无公开路由
     fn public_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
     }
@@ -45,7 +47,7 @@ impl ControllerRouter for PersonController {
 
 // 创建
 impl PersonController {
-    /// 启动全量人物扫描任务.
+    /// 启动全量人物扫描任务
     pub async fn full_scan(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -56,8 +58,7 @@ impl PersonController {
         Ok(()).to_r_ok()
     }
 
-    /// 二次聚类: 将未分配人脸按 centroid 余弦相似度指派到已有人物
-    /// 启动未分配人脸的二次聚类任务.
+    /// 将未分配人脸按 centroid 余弦相似度二次聚类指派到已有人物；仅管理员
     pub async fn secondary_cluster(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -73,7 +74,6 @@ impl PersonController {
 // 修改
 impl PersonController {
     /// 重命名人物
-    /// 修改人物名称.
     async fn rename(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -85,8 +85,7 @@ impl PersonController {
         Ok(()).to_r_ok()
     }
 
-    /// 合并人物（高危操作，仅管理员）
-    /// 合并两个​​人物, 将源人物的人脸转移到目标人物.
+    /// 合并两个人物，将源人物的人脸转移到目标人物；高危操作，仅管理员
     async fn merge(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -115,7 +114,7 @@ impl PersonController {
 
 // 查询
 impl PersonController {
-    /// 查询人物列表.
+    /// 查询人物列表
     pub async fn get_persons(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -126,8 +125,7 @@ impl PersonController {
             .to_r_ok()
     }
 
-    /// 按关键词前缀搜索人物(完整名字或姓名首字母)
-    /// 按名称或姓名首字母搜索人物.
+    /// 按完整名字或姓名首字母前缀搜索人物
     pub async fn search_persons(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -138,8 +136,7 @@ impl PersonController {
             .to_r_ok()
     }
 
-    /// 获取人物的照片列表(游标分页)
-    /// 查询人物关联的照片.
+    /// 游标分页查询人物关联的照片
     pub async fn get_person_visuals(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -154,8 +151,7 @@ impl PersonController {
 
 // 删除
 impl PersonController {
-    /// 删除人物（高危操作，仅管理员）
-    /// 删除人物及其关联数据.
+    /// 删除人物及其关联数据；高危操作，仅管理员
     async fn delete(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,

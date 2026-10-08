@@ -21,10 +21,12 @@ pub struct AuthController;
 impl ControllerRouter for AuthController {
     type State = AuthState;
 
+    /// 返回空的路由集合，本控制器不提供受保护路由
     fn protected_routes() -> Router<Arc<Self::State>> {
         Router::new()
     }
 
+    /// 返回认证相关的公开路由
     fn public_routes() -> Router<Arc<Self::State>> {
         Router::new()
             .route("/login", post(Self::login))
@@ -36,17 +38,6 @@ impl ControllerRouter for AuthController {
 
 impl AuthController {
     /// 用户登录
-    ///
-    /// # 参数
-    /// - `state`: 认证服务共享状态
-    /// - `req`: 登录请求，包含账号和密码
-    ///
-    /// # 返回
-    /// 返回登录成功的用户信息（含 access_token 和 refresh_token）
-    ///
-    /// # 错误
-    /// - `AppError::bad_request`: 账号不存在或密码错误
-    /// - `AppError::InternalServerError`: 数据库或 Redis 操作失败
     async fn login(
         State(state): State<Arc<AuthState>>,
         ValidatedJson(req): ValidatedJson<LoginRequest>,
@@ -55,17 +46,6 @@ impl AuthController {
     }
 
     /// 用户注册
-    ///
-    /// # 参数
-    /// - `state`: 认证服务共享状态
-    /// - `req`: 注册请求，包含用户名、邮箱、密码、昵称、邀请码和邮箱验证码
-    ///
-    /// # 返回
-    /// 返回注册成功的用户信息（不含 token，需单独登录获取）
-    ///
-    /// # 错误
-    /// - `AppError::bad_request`: 邮箱验证码错误、邀请码无效、用户名或邮箱已存在
-    /// - `AppError::InternalServerError`: 数据库操作失败
     async fn register(
         State(state): State<Arc<AuthState>>,
         ValidatedJson(req): ValidatedJson<RegisterRequest>,
@@ -74,16 +54,6 @@ impl AuthController {
     }
 
     /// 发送邮箱验证码
-    ///
-    /// # 参数
-    /// - `state`: 认证服务共享状态
-    /// - `req`: 包含目标邮箱地址的请求
-    ///
-    /// # 返回
-    /// 返回空成功响应
-    ///
-    /// # 错误
-    /// - `AppError::InternalServerError`: Redis 操作或邮件发送失败
     async fn send_email_code(
         State(state): State<Arc<AuthState>>,
         ValidatedJson(req): ValidatedJson<SendEmailCodeRequest>,
@@ -91,20 +61,7 @@ impl AuthController {
         auth_service::send_email_code(&state, req).await.to_r_ok()
     }
 
-    /// 刷新 access_token
-    ///
-    /// 从请求头 `x-user-id` 和 `x-refresh-token` 中提取凭据，验证后签发新的 access_token。
-    ///
-    /// # 参数
-    /// - `state`: 认证服务共享状态
-    /// - `headers`: HTTP 请求头，需包含 `x-user-id` 和 `x-refresh-token`
-    ///
-    /// # 返回
-    /// 返回新的 access_token 及其过期时间
-    ///
-    /// # 错误
-    /// - `AppError::bad_request`: 请求头缺失或格式非法
-    /// - `AppError::Unauthorized`: refresh_token 不存在、不匹配或已过期
+    /// 从请求头 `x-user-id` 与 `x-refresh-token` 提取凭据并签发新的 access_token
     async fn refresh_access_token(
         State(state): State<Arc<AuthState>>,
         headers: HeaderMap,

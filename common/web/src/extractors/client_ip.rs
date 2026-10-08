@@ -19,6 +19,7 @@ where
 {
     type Rejection = AppError;
 
+    /// 从代理头或连接信息提取客户端 IP
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self> {
         // 1. 检查 X-Forwarded-For（代理链，取第一个非代理 IP）
         if let Some(ip) = extract_forwarded_ip(parts) {

@@ -25,10 +25,7 @@ use crate::{
 };
 
 impl VisualService {
-    /// 接收原始字节流影像: 并发限流、流式落盘并计算 BLAKE3、校验、上传对象存储并落库。
-    ///
-    /// 请求体即文件字节(不再使用 multipart); 临时文件由守卫保证任何路径下清理:
-    /// 成功且启用 `face` 时移交给上传事件供人脸识别消费, 否则在函数结束时删除。
+    /// 接收请求体原始字节作为影像：限流、流式落盘并计算 BLAKE3、校验、上传并落库；临时文件由守卫保证清理
     #[common_macros::metered]
     #[instrument(skip_all, fields(user_id = %user_id))]
     pub async fn upload_from_body(
@@ -143,10 +140,7 @@ impl VisualService {
         Self::upload_visual(state, user_id, temp_file, file_uuid, hash, req).await
     }
 
-    /// 校验影像, 上传文件并写入影像主记录.
-    ///
-    /// `temp_file` 为上传流式落盘的临时文件, 由守卫保证任何路径下清理:
-    /// 成功且启用 `face` 时移交给上传事件供人脸识别消费, 否则在函数结束时删除。
+    /// 校验影像并上传文件、写入影像主记录；入库失败时回滚删除已上传文件
     #[common_macros::metered]
     #[instrument(
         skip_all,

@@ -18,6 +18,7 @@ const WORKER_ID_MASK: i64 = (1 << 10) - 1;
 
 static GENERATOR: OnceLock<Generator> = OnceLock::new();
 
+/// 从环境变量读取并校验 Snowflake 实例号，缺失或越界时回退为 0
 fn worker_id() -> u16 {
     std::env::var("MEMORY_SEEK_AUDIT_WORKER_ID")
         .ok()
@@ -26,6 +27,7 @@ fn worker_id() -> u16 {
         .unwrap_or(0) as u16
 }
 
+/// 返回进程内初始化的全局 Snowflake 生成器
 fn generator() -> &'static Generator {
     GENERATOR.get_or_init(|| {
         Generator::builder()
@@ -35,7 +37,7 @@ fn generator() -> &'static Generator {
     })
 }
 
-/// 生成 64 位 Snowflake ID。
+/// 生成 64 位 Snowflake ID
 pub fn next_id() -> i64 {
     generator().generate()
 }

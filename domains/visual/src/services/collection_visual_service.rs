@@ -43,7 +43,7 @@ impl CollectionVisualService {
         Ok(collections)
     }
 
-    /// 按游标查询相册中的影像, 并补充影像视图信息.
+    /// 按游标查询相册中的影像, 并补充影像视图信息
     #[common_macros::metered(name = "get_collection_visuals")]
     #[tracing::instrument(
         name = "get_collection_visuals",
@@ -74,7 +74,7 @@ impl CollectionVisualService {
 
 // 添加
 impl CollectionVisualService {
-    /// 批量将影像加入相册, 并返回实际新增数量.
+    /// 批量将影像加入相册, 并返回实际新增数量
     #[common_macros::metered(name = "add_collection_visuals")]
     #[tracing::instrument(
         name = "add_collection_visuals",
@@ -103,7 +103,7 @@ impl CollectionVisualService {
 
 // 删除
 impl CollectionVisualService {
-    /// 移除收藏夹影像.
+    /// 移除收藏夹影像
     #[common_macros::metered(name = "remove_collection_visuals")]
     #[tracing::instrument(
         name = "remove_collection_visuals",

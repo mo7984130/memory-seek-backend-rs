@@ -7,6 +7,7 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{debug, info};
 
+/// 初始化审计域并挂载管理员审计路由
 #[common_macros::register_async(
     slice = crate::setup::domains::APP_DOMAINS,
     ty = crate::setup::InitFn,

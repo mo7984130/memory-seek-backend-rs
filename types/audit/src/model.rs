@@ -19,6 +19,7 @@ pub enum AuditGranularity {
 }
 
 impl AuditGranularity {
+    /// 返回粒度对应的时间截断单位
     pub const fn as_trunc(self) -> &'static str {
         match self {
             Self::Day => "day",
@@ -37,6 +38,7 @@ crate::in_dto!(AuditStatsQuery, "audit/", serde_default, docs = "审计统计查
 });
 
 impl Default for AuditStatsQuery {
+    /// 默认查询参数:无过滤,粒度按天
     fn default() -> Self {
         Self {
             event_type: None,
@@ -71,6 +73,7 @@ crate::in_dto!(AuditTopQuery, "audit/", serde_default, docs = "审计热门目�
 });
 
 impl Default for AuditTopQuery {
+    /// 默认查询参数:查看量与媒体目标,取前 3
     fn default() -> Self {
         Self {
             event_type: "view".to_owned(),
@@ -95,6 +98,7 @@ crate::in_dto!(AuditQuery, "audit/", serde_default, docs = "审计流水查询�
 });
 
 impl Default for AuditQuery {
+    /// 默认查询参数:无过滤,每页 32 条
     fn default() -> Self {
         Self {
             event_type: None,
@@ -119,6 +123,7 @@ crate::out_dto!(AuditItem, "audit/", docs = "审计流水响应项"; {
     pub created_at: DateTime,
 });
 impl From<AuditRecord> for AuditItem {
+    /// 将审计记录转换为审计流水响应项
     fn from(record: AuditRecord) -> Self {
         Self {
             id: record.id,

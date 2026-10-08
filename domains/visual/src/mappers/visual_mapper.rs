@@ -25,7 +25,7 @@ impl VisualMapper {}
 
 // 修改
 impl VisualMapper {
-    /// 增量更新影像的评论数量.
+    /// 增量更新影像的评论数量
     pub async fn update_comment_count_delta(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -43,7 +43,7 @@ impl VisualMapper {
         Ok(())
     }
 
-    /// 增量更新影像的点赞数量.
+    /// 增量更新影像的点赞数量
     pub async fn update_like_count_delta(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -61,7 +61,7 @@ impl VisualMapper {
 
 // 查询
 impl VisualMapper {
-    /// 检查影像是否存在.
+    /// 检查影像是否存在
     pub async fn exists(db: &impl ConnectionTrait, visual_id: VisualId) -> Result<bool> {
         let count = Entity::find()
             .filter(Column::Id.eq(visual_id))
@@ -82,7 +82,7 @@ impl VisualMapper {
         Ok(())
     }
 
-    /// 批量检查哈希值是否存在.
+    /// 批量检查哈希值是否存在
     pub async fn exists_by_hash_batch(
         db: &impl ConnectionTrait,
         hashes: &[impl AsRef<str>],
@@ -99,7 +99,7 @@ impl VisualMapper {
             .to_ok()
     }
 
-    /// 检查哈希值是否存在.
+    /// 检查哈希值是否存在
     pub async fn exists_by_hash(
         db: &impl ConnectionTrait,
         hash: impl AsRef<str>,
@@ -114,7 +114,7 @@ impl VisualMapper {
             .to_ok()
     }
 
-    /// 构建影像游标查询, 并统一处理时间与 ID 的排序边界.
+    /// 构建影像游标查询, 并统一处理时间与 ID 的排序边界
     fn build_cursor_query(
         cursor: Option<&TimeIdCursor<VisualId>>,
         size: u64,
@@ -162,7 +162,7 @@ impl VisualMapper {
         query
     }
 
-    /// 游标查询影像id.
+    /// 游标查询影像id
     pub async fn query_cursor_page_ids(
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<VisualId>>,
@@ -180,7 +180,7 @@ impl VisualMapper {
         Ok(CursorPage::from_oversize(records, size))
     }
 
-    /// 按影像id查询记录.
+    /// 按影像id查询记录
     pub async fn query_by_ids(
         db: &impl ConnectionTrait,
         ids: &[VisualId],
@@ -195,8 +195,8 @@ impl VisualMapper {
             .to_ok()
     }
 
+    /// 批量查询影像 ID 和 file_id
     #[cfg(feature = "face")]
-    /// 批量查询影像 ID 和 file_id.
     pub async fn query_id_and_file_id_by_ids(
         db: &impl ConnectionTrait,
         ids: impl IntoIterator<Item = &VisualId>,
@@ -231,7 +231,7 @@ impl VisualMapper {
             .to_ok()
     }
 
-    /// 根据 file_id 查询影像尺寸.
+    /// 根据 file_id 查询影像尺寸
     pub async fn query_dimensions_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,
@@ -247,7 +247,7 @@ impl VisualMapper {
             .to_ok()
     }
 
-    /// 根据影像 id 查询 file_id.
+    /// 根据影像 id 查询 file_id
     pub async fn query_file_id_by_id(db: &impl ConnectionTrait, id: VisualId) -> Result<String> {
         Entity::find()
             .select_only()
@@ -263,7 +263,7 @@ impl VisualMapper {
             )
     }
 
-    /// 根据 file_id 查询 id.
+    /// 根据 file_id 查询 id
     pub async fn query_visual_id_by_file_id(
         db: &impl ConnectionTrait,
         file_id: &str,

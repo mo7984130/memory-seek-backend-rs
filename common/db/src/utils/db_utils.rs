@@ -4,6 +4,7 @@ use common_core::Result;
 pub struct DbUtils;
 
 impl DbUtils {
+    /// 对两个 id 升序调用 `f` 加锁并返回结果，返回值顺序与传入的 id 对应
     pub async fn lock_two_ordered<'a, DB, Id, T, F, Fut>(
         db: &'a DB,
         id1: Id,
@@ -32,6 +33,7 @@ impl DbUtils {
         })
     }
 
+    /// 对两个 id 升序调用 `f` 加锁并返回两值，返回值顺序与传入的 id 对应
     pub async fn ensure_lock_two_ordered<'a, DB, Id, T, F, Fut>(
         db: &'a DB,
         id1: Id,
@@ -60,6 +62,7 @@ impl DbUtils {
         })
     }
 
+    /// 对两个 id 升序调用 `f` 加锁，第二个 id 可选；未命中时用 `miss_f` 处理
     pub async fn lock_two_optional_ordered<'a, DB, Id, T, F, MF, Fut>(
         db: &'a DB,
         id1: Id,
@@ -93,11 +96,7 @@ impl DbUtils {
         }
     }
 
-    /// 按 id 升序加锁两个实体, 其中第二个可选
-    ///
-    /// 与 `ensure_lock_two_ordered` 语义一致, 但 `id2` 可为 `None`:
-    /// 为 `Some` 时对两个 id 升序加锁并返回 `(T, T)`, 为 `None` 时仅加锁
-    /// `id1` 并返回 `(T, None)`。返回值的顺序始终与传入的 `id1`/`id2` 对应。
+    /// 对两个 id 升序调用 `f` 加锁并返回两值，第二个 id 可选；返回值顺序与传入的 id 对应
     pub async fn ensure_lock_two_optional_ordered<'a, DB, Id, T, F, Fut>(
         db: &'a DB,
         id1: Id,

@@ -15,10 +15,12 @@ pub struct CommentLikeController;
 impl ControllerRouter for CommentLikeController {
     type State = VisualState;
 
+    /// 评论点赞模块的受保护路由
     fn protected_routes() -> Router<Arc<Self::State>> {
         Router::new().route("/{comment_id}/like", post(Self::like).delete(Self::unlike))
     }
 
+    /// 评论点赞模块无公开路由
     fn public_routes() -> Router<Arc<Self::State>> {
         Router::new()
     }
@@ -26,7 +28,7 @@ impl ControllerRouter for CommentLikeController {
 
 // 创建
 impl CommentLikeController {
-    /// 为评论点赞.
+    /// 为评论点赞
     async fn like(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -46,7 +48,7 @@ impl CommentLikeController {}
 
 // 删除
 impl CommentLikeController {
-    /// 取消评论点赞.
+    /// 取消评论点赞
     async fn unlike(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,

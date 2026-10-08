@@ -16,7 +16,7 @@ pub struct CommentMapper;
 
 // 创建
 impl CommentMapper {
-    /// 插入评论记录.
+    /// 插入评论记录
     pub async fn insert(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -38,7 +38,7 @@ impl CommentMapper {
 
 // 修改
 impl CommentMapper {
-    /// 检查评论记录是否存在.
+    /// 检查评论记录是否存在
     pub async fn exists(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<bool> {
         let count = Entity::find()
             .filter(Column::Id.eq(comment_id))
@@ -47,7 +47,7 @@ impl CommentMapper {
         Ok(count > 0)
     }
 
-    /// 确保评论存在.
+    /// 确保评论存在
     pub async fn ensure_exist(db: &impl ConnectionTrait, comment_id: CommentId) -> Result<()> {
         if !Self::exists(db, comment_id).await? {
             return Err(ContextualError::warn_without_source(
@@ -59,7 +59,7 @@ impl CommentMapper {
         Ok(())
     }
 
-    /// 增量更新评论点赞计数.
+    /// 增量更新评论点赞计数
     pub async fn update_like_count_delta(
         db: &impl ConnectionTrait,
         comment_id: CommentId,
@@ -77,7 +77,7 @@ impl CommentMapper {
 
 // 查询
 impl CommentMapper {
-    /// 查询影像的热门评论.
+    /// 查询影像的热门评论
     pub async fn query_hot_comments(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -97,7 +97,7 @@ impl CommentMapper {
             .to_ok()
     }
 
-    /// 分页查询影像评论.
+    /// 分页查询影像评论
     pub async fn query_by_visual_id(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -132,9 +132,7 @@ impl CommentMapper {
 
 // 删除
 impl CommentMapper {
-    /// 删除单条评论.
-    /// 删除成功: 返回评论记录
-    /// 删除失败: 返回None
+    /// 删除当前用户拥有的单条评论，未命中时返回 `None`
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -148,7 +146,7 @@ impl CommentMapper {
             .to_ok()
     }
 
-    /// 删除指定影像的全部评论并返回评论 ID.
+    /// 删除指定影像的全部评论并返回评论 ID
     pub async fn delete_by_visual_ids(
         db: &impl ConnectionTrait,
         visual_ids: &[VisualId],

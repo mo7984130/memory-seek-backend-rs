@@ -11,7 +11,7 @@ pub struct CommentLikeMapper;
 
 // 创建
 impl CommentLikeMapper {
-    /// 插入评论点赞记录.
+    /// 插入评论点赞记录
     pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -44,7 +44,7 @@ impl CommentLikeMapper {}
 
 // 查询
 impl CommentLikeMapper {
-    /// 查询用户对一批评论的点赞状态.
+    /// 查询用户对一批评论的点赞状态
     pub async fn query_is_like_by_comment_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -66,7 +66,7 @@ impl CommentLikeMapper {
 
 // 删除
 impl CommentLikeMapper {
-    /// 删除用评论点赞.
+    /// 删除用评论点赞
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -81,7 +81,7 @@ impl CommentLikeMapper {
         Ok(res.rows_affected > 0)
     }
 
-    /// 删除指定评论的全部点赞.
+    /// 删除指定评论的全部点赞
     pub async fn delete_all_by_comment_id(
         db: &impl ConnectionTrait,
         comment_id: CommentId,
@@ -94,7 +94,7 @@ impl CommentLikeMapper {
             .to_ok()
     }
 
-    /// 删除一批评论的全部点赞.
+    /// 删除一批评论的全部点赞
     pub async fn delete_by_comment_ids(
         db: &impl ConnectionTrait,
         comment_ids: &[CommentId],

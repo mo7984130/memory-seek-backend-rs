@@ -12,6 +12,7 @@ pub struct BackupManifest {
 }
 
 impl BackupManifest {
+    /// 按给定的 `run_id`、表列表与 PostgreSQL 主版本构造备份清单
     pub fn new(run_id: String, tables: Vec<String>, postgres_major: u32) -> Self {
         Self {
             format_version: FORMAT_VERSION.to_string(),

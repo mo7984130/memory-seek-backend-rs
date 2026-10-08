@@ -9,9 +9,7 @@ pub struct MetricsTimer {
 }
 
 impl MetricsTimer {
-    /// 创建计时器并记录当前时间作为起始点
-    ///
-    /// 未启用 metrics feature 时返回零尺寸空实例。
+    /// 创建计时器并记录起始时间；未启用 metrics 时为空操作
     pub fn start(name: impl Into<String>) -> Self {
         let name = name.into();
         #[cfg(not(feature = "metrics"))]

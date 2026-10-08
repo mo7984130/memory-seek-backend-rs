@@ -32,6 +32,7 @@ pub struct AuditEvent {
 }
 
 impl AuditEvent {
+    /// 创建审计事件,`event_id` 暂为 0,发生时间取当前
     pub fn new(event_type: impl Into<String>) -> Self {
         Self {
             event_id: AuditId(0),
@@ -43,10 +44,12 @@ impl AuditEvent {
             occurred_at: now(),
         }
     }
+    /// 以链式方式设置事件的发起者
     pub fn with_actor(mut self, actor_id: impl Into<i64>) -> Self {
         self.actor_id = Some(actor_id.into());
         self
     }
+    /// 以链式方式设置事件的目标类型与 ID
     pub fn with_target(
         mut self,
         target_type: impl Into<String>,
@@ -56,6 +59,7 @@ impl AuditEvent {
         self.target_id = Some(target_id.into());
         self
     }
+    /// 以链式方式设置事件详情
     pub fn with_detail(mut self, detail: Value) -> Self {
         self.detail = Some(detail);
         self
@@ -74,6 +78,7 @@ pub struct AuditRecord {
 }
 
 impl AuditRecord {
+    /// 构造以创建时间和 ID 为键的时间游标
     pub fn cursor(&self) -> TimeIdCursor<AuditId> {
         TimeIdCursor {
             time_at: self.created_at,
@@ -133,6 +138,7 @@ pub use entity::*;
 
 #[cfg(feature = "orm")]
 impl From<Model> for AuditRecord {
+    /// 将 `audit_event` 实体转换为审计记录
     fn from(model: Model) -> Self {
         Self {
             id: model.event_id,

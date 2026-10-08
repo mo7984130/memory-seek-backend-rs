@@ -71,6 +71,7 @@ mod entity {
         pub created_at: DateTime,
     }
 
+    /// 创建影像按创建时间与 ID 查询的索引
     #[common_macros::register_async(
         send,
         slice = types_db_registry::INIT_INDEXES,
@@ -125,6 +126,7 @@ mod entity {
     }
 
     impl From<Model> for VisualRecord {
+        /// 将影像实体转换为影像记录
         fn from(model: Model) -> Self {
             Self {
                 id: model.id,
@@ -146,6 +148,7 @@ mod entity {
     }
 
     impl From<NewVisualRecord> for ActiveModel {
+        /// 将待持久化影像记录转换为 ActiveModel
         fn from(record: NewVisualRecord) -> Self {
             Self {
                 user_id: Set(record.user_id),

@@ -17,7 +17,7 @@ pub struct AdminId(UserId);
 impl AdminId {
     pub const ADMIN_ID: AdminId = AdminId(UserId(1));
 
-    /// 判断该身份是否为系统管理员.
+    /// 判断该身份是否为系统管理员
     pub fn is_admin(&self) -> bool {
         *self == Self::ADMIN_ID
     }

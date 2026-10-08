@@ -18,6 +18,7 @@ pub(crate) struct AsyncBoxedArgs {
 }
 
 impl Parse for AsyncBoxedArgs {
+    /// 解析 `#[async_boxed(...)]` 的属性参数,仅接受可选的 `send`
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let mut send = false;
         while !input.is_empty() {
@@ -38,11 +39,7 @@ impl Parse for AsyncBoxedArgs {
     }
 }
 
-/// 异步函数转 boxed future 的核心展开逻辑,`register_async` 内部复用。
-///
-/// 转换后的函数保留原名与可见性,仅改写签名;泛型函数、方法、带显式
-/// 生命周期的引用参数、嵌套引用及 `impl Trait`/引用/trait object 返回值
-/// 均不支持并返回编译错误。
+/// 将异步函数展开为返回 boxed future 的普通函数,供 `register_async` 复用；泛型、方法、显式生命周期、嵌套引用及非裸返回类型均报错
 pub(crate) fn expand_async_boxed(
     args: AsyncBoxedArgs,
     mut function: ItemFn,

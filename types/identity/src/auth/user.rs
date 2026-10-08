@@ -83,6 +83,7 @@ mod entity {
     }
 
     impl From<Model> for UserRecord {
+        /// 将用户实体转换为用户记录
         fn from(model: Model) -> Self {
             Self {
                 id: model.id,
@@ -106,6 +107,7 @@ mod entity {
     impl ActiveModelBehavior for ActiveModel {}
 
     impl From<UserRecord> for UserInfo {
+        /// 将用户记录转换为用户信息
         fn from(user: UserRecord) -> Self {
             UserInfo {
                 id: user.id,
@@ -119,12 +121,12 @@ mod entity {
     }
 
     impl UserInfo {
-        /// 为头像文件 ID 生成加密访问令牌.
+        /// 为头像文件 ID 生成加密访问令牌
         pub fn with_avatar_token(&mut self, file_id: String) {
             self.avatar_token = Some(VisualToken::image_thumbnail(self.id, file_id).into());
         }
 
-        /// 将用户记录转换为包含头像访问令牌的用户信息.
+        /// 将用户记录转换为包含头像访问令牌的用户信息
         pub fn from_with_token(user: UserRecord) -> Self {
             let file_id = user.avatar_file_id.clone();
             let mut this = UserInfo::from(user);

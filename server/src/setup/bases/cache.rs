@@ -13,6 +13,7 @@ pub struct Config {
     pub local_ttl_secs: u64,
 }
 impl Config {
+    /// 转换为多级缓存配置
     pub fn to(&self) -> CacheConfig {
         CacheConfig {
             enabled: self.enabled,
@@ -23,6 +24,7 @@ impl Config {
 }
 
 impl Default for Config {
+    /// 返回缓存配置的默认值
     fn default() -> Self {
         Self {
             enabled: default_enabled(),
@@ -42,7 +44,7 @@ const fn default_local_capacity() -> u64 {
     10_000
 }
 
-/// L1 本地缓存 TTL（秒）。短 TTL 保证多实例下最终一致。
+/// L1 本地缓存 TTL（秒）。短 TTL 保证多实例下最终一致
 const fn default_local_ttl_secs() -> u64 {
     60
 }

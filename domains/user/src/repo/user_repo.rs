@@ -25,11 +25,6 @@ pub struct UserRepo {
 
 impl UserRepo {
     /// 创建用户数据访问仓储
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis 连接池（缓存 L2 存储与登出时删除 access_token）
-    /// - `cache_config`: 缓存配置（启用开关、L1 容量、L1 TTL）
     pub fn new(db: DatabaseConnection, redis: Pool, cache_config: CacheConfig) -> Self {
         let cache_user_info =
             MultiLevelCache::new_with_name("user_info", redis.clone(), cache_config);

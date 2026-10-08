@@ -22,6 +22,7 @@ pub struct TaskManager {
 }
 
 impl Default for TaskManager {
+    /// 创建空的 `TaskManager`
     fn default() -> Self {
         Self::new()
     }
@@ -36,14 +37,12 @@ struct TaskManagerInner {
 }
 
 impl TaskManager {
+    /// 创建使用独立取消令牌的 `TaskManager`
     pub fn new() -> Self {
         Self::with_token(CancellationToken::new())
     }
 
-    /// 传入根取消令牌构造。
-    ///
-    /// 应用启动时通常传入 `AppSetup.cancel_token`，使所有任务与应用共享
-    /// 同一个取消源，关闭时一次取消即可全部通知。
+    /// 传入根取消令牌构造
     pub fn with_token(cancel_token: CancellationToken) -> Self {
         Self {
             inner: Arc::new(TaskManagerInner {
@@ -54,14 +53,7 @@ impl TaskManager {
         }
     }
 
-    /// 注册并启动一个后台任务，返回该任务的子取消令牌。
-    ///
-    /// 同名任务允许共存：每次注册都会追加到同名任务列表，互不覆盖。
-    ///
-    /// 取消语义为**协作式**：取消只会通过传入的 [`CancellationToken`] 通知任务，
-    /// 不会强中断它；任务应在合适的边界（如完成当前一轮后）自行返回。
-    /// 因此 [`Self::shutdown`] 会等待任务自然结束，而不会丢弃它。
-    /// 若任务不监听令牌，则取消对其无影响，关闭时将一直等待其结束。
+    /// 注册并启动一个后台任务，返回其子取消令牌；同名任务可共存，取消为协作式
     pub fn spawn<F, Fut>(&self, name: impl Into<String>, task: F) -> CancellationToken
     where
         F: FnOnce(CancellationToken) -> Fut + Send + 'static,
@@ -84,11 +76,7 @@ impl TaskManager {
         child_token
     }
 
-    /// 注册一个按调度触发的常驻任务，返回该任务的子取消令牌。
-    ///
-    /// 取消语义：**等待阶段**响应取消立即退出；**执行阶段**（`task()`）不参与
-    /// 取消竞速，不会被中断，会跑完当前这一轮，随后由下一次循环感知取消退出。
-    /// 因此适合备份这类“单轮执行较久、需要收尾完整性”的任务。
+    /// 注册按调度触发的常驻任务并返回子取消令牌；等待阶段可取消，执行阶段会跑完当前轮
     pub fn spawn_schedule<F, Fut>(
         &self,
         name: impl Into<String>,
@@ -130,9 +118,7 @@ impl TaskManager {
         child_token
     }
 
-    /// 注册一个按固定间隔触发的常驻任务，返回该任务的子取消令牌。
-    ///
-    /// 取消语义同 [`Self::spawn_schedule`]：等待阶段可取消，执行阶段跑完当前轮。
+    /// 注册按固定间隔触发的常驻任务并返回子取消令牌；等待阶段可取消，执行阶段会跑完当前轮
     pub fn spawn_interval<F, Fut>(
         &self,
         name: impl Into<String>,
@@ -172,14 +158,7 @@ impl TaskManager {
         child_token
     }
 
-    /// 启动常驻单消费者 worker: 创建队列并登记到 `queue`, 执行一次 `recover`,
-    /// 再串行消费 `handler`。
-    ///
-    /// - 取消优先: 收到关闭信号后不再领取新任务; 已领取的任务一定跑完再退出;
-    /// - 通道关闭(发送端全部 drop)时退出。
-    ///
-    /// `queue` 在 spawn 之前同步登记, 保证发送端先就绪, `recover` 入队的任务不会丢。
-    /// 返回该 worker 的子取消令牌。
+    /// 启动常驻单消费者 worker 并返回子取消令牌；取消优先，已领取的任务会跑完再退出
     pub fn spawn_consumer<T, R, RFut, H, HFut>(
         &self,
         name: impl Into<String>,
@@ -217,21 +196,18 @@ impl TaskManager {
         })
     }
 
+    /// 取消所有任务
     pub fn cancel_all(&self) {
         self.inner.cancel_token.cancel();
     }
 
-    /// 取消所有任务并等待其完成。
-    ///
-    /// `timeout` 为 `None` 时无限等待; 为 `Some(d)` 时最多等待 `d` 后放弃等待。
+    /// 取消所有任务并等待完成；`timeout` 为 `None` 时无限等待
     pub async fn shutdown(&self, timeout: Option<Duration>) -> bool {
         self.cancel_all();
         self.wait_for_all(timeout).await
     }
 
-    /// 等待所有后台任务完成。
-    ///
-    /// `timeout` 为 `None` 时无限等待; 为 `Some(d)` 时最多等待 `d`, 超时返回 `false`。
+    /// 等待所有后台任务完成；超时返回 `false`
     pub async fn wait_for_all(&self, timeout: Option<Duration>) -> bool {
         if self.inner.tasks.is_empty() {
             return true;
@@ -262,11 +238,12 @@ impl TaskManager {
         }
     }
 
-    /// 根取消令牌。
+    /// 返回根取消令牌
     pub fn cancel_token(&self) -> CancellationToken {
         self.inner.cancel_token.clone()
     }
 
+    /// 逐个取出任务组并等待其全部完成
     async fn wait_all(&self) {
         loop {
             // 取一个待处理的任务组名
@@ -295,7 +272,7 @@ impl TaskManager {
         }
     }
 
-    /// 收集仍在运行的任务名（未处理的任务组 + 当前正在等待的任务组）。
+    /// 收集仍在运行的任务名
     pub fn running_names(&self) -> Vec<String> {
         let mut names: Vec<String> = self.inner.tasks.iter().map(|e| e.key().clone()).collect();
         if let Some(waiting) = self.inner.waiting.lock().unwrap().as_ref()
@@ -306,13 +283,13 @@ impl TaskManager {
         names
     }
 
-    /// 将任务句柄追加到同名任务列表。
+    /// 将任务句柄追加到同名任务列表
     fn push_handle(&self, name: String, handle: JoinHandle<()>) {
         self.inner.tasks.entry(name).or_default().push(handle);
     }
 }
 
-/// 计算距离下一个调度触发点的秒数（本地时间）。
+/// 计算距离下一个调度触发点的秒数（本地时间）；无效调度时刻会 panic
 fn delay_until_next(schedule: TaskSchedule) -> Duration {
     let now = Local::now();
     let next = match schedule {

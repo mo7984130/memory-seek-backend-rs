@@ -34,6 +34,7 @@ impl<T> R<T>
 where
     T: Serialize,
 {
+    /// 构造成功响应；`code` 固定为 200
     pub fn ok(data: T) -> Self {
         Self {
             code: 200,
@@ -44,6 +45,7 @@ where
 }
 
 impl R<()> {
+    /// 构造错误响应；`code` 为 HTTP 状态码
     pub fn err(code: u16, msg: &str) -> Self {
         Self {
             code,
@@ -57,6 +59,7 @@ impl<T> IntoResponse for R<T>
 where
     T: Serialize,
 {
+    /// 按 `code` 转为 HTTP 状态码，非法值回退为 500
     fn into_response(self) -> axum::response::Response {
         let status = StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         (status, Json(self)).into_response()

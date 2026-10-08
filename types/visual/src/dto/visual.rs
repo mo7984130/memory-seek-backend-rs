@@ -33,12 +33,14 @@ crate::out_dto!(VisualView, "visual/", rename = "Visual"; {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_token: Option<String>,
 });
+/// 判断数值是否为零(用于序列化时省略 0 值)
 fn is_zero(num: &u64) -> bool {
     *num == 0
 }
 
 #[cfg(feature = "orm")]
 impl From<VisualRecord> for VisualView {
+    /// 将影像记录转换为影像视图
     fn from(record: VisualRecord) -> Self {
         Self {
             id: record.id,
@@ -59,12 +61,13 @@ impl From<VisualRecord> for VisualView {
 }
 
 impl VisualView {
-    /// 写入当前用户对影像的点赞状态.
+    /// 写入当前用户对影像的点赞状态
     pub fn with_liked(mut self, is_liked: bool) -> Self {
         self.is_liked = Some(is_liked);
         self
     }
 
+    /// 由影像记录与查看者构造视图,并生成各类访问令牌
     #[cfg(feature = "orm")]
     pub fn from_record_with_tokens(
         record: VisualRecord,
@@ -75,6 +78,7 @@ impl VisualView {
         Self::from(record).with_tokens(kind, &file_id, viewer)
     }
 
+    /// 按影像类型为视图填充原图/预览/缩略图令牌
     #[cfg(feature = "orm")]
     pub fn with_tokens(
         mut self,
@@ -232,6 +236,7 @@ mod orm_tests {
 }
 
 impl Default for VisualCursorParam {
+    /// 默认游标参数:无游标,每页 32 条,方向为 Next
     fn default() -> Self {
         Self {
             cursor: None,

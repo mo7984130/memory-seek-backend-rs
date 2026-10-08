@@ -13,7 +13,7 @@ use axum::middleware::Next;
 use axum::response::Response;
 use common_metrics::GaugeGuard;
 
-/// 记录请求耗时, 状态码和路由指标.
+/// 记录请求耗时, 状态码和路由指标
 pub async fn metrics_middleware(request: Request, next: Next) -> Response {
     let method = request.method().to_string();
     let route = request
@@ -39,8 +39,7 @@ pub async fn metrics_middleware(request: Request, next: Next) -> Response {
     response
 }
 
-/// 按路由前缀归类模块（低基数：模块数量固定）。
-/// 未知前缀（`/health`、`/hello`、未匹配等）归 `other`。
+/// 按路由前缀归类模块；未知前缀统一归 `other`
 fn classify_module(route: &str) -> &'static str {
     let mut segments = route.split('/');
     let _ = segments.next(); // 前导空串
@@ -57,7 +56,7 @@ fn classify_module(route: &str) -> &'static str {
     }
 }
 
-/// 写入单次请求的聚合指标.
+/// 写入单次请求的聚合指标
 fn record(method: &str, route: &str, module: &str, status_class: &str, elapsed: Duration) {
     metrics::counter!(
         "server.http.requests_total",

@@ -56,6 +56,7 @@ impl PersonRepo {
 
     // 合并人物
     // 返回合并后的人物记录
+    /// 在事务内将源人物的人脸转移到目标人物并删除源人物，仅管理员
     pub async fn merge_person(
         state: &VisualState,
         admin: AdminId,
@@ -107,7 +108,7 @@ impl PersonRepo {
         .to_ok()
     }
 
-    /// 为人物添加人脸.
+    /// 为人物添加人脸
     pub async fn add_faces(
         state: &VisualState,
         person: PersonRecord,
@@ -122,12 +123,14 @@ impl PersonRepo {
 
 // 查询
 impl PersonRepo {
+    /// 查询所有人物
     pub async fn query_all(state: &VisualState) -> Result<Vec<PersonRecord>> {
         PersonMapper::query_all(&state.db)
             .timed(metrics_name!("query_all"))
             .await
     }
 
+    /// 游标分页查询人物
     pub async fn query_page(
         state: &VisualState,
         cursor: Option<CountIdCursor<PersonId>>,
@@ -138,7 +141,7 @@ impl PersonRepo {
             .await
     }
 
-    /// 按关键词查询人物分页.
+    /// 按关键词查询人物分页
     pub async fn search_person_page(
         state: &VisualState,
         keyword: &str,
@@ -150,6 +153,7 @@ impl PersonRepo {
             .await
     }
 
+    /// 加载全部人脸及其对应影像文件的 file_id
     pub async fn load_faces_with_visual_files(
         state: &VisualState,
     ) -> Result<(Vec<FaceRecord>, HashMap<VisualId, String>)> {
@@ -173,6 +177,7 @@ impl PersonRepo {
     // 删除人物
     // 同时重置对应人脸的人物id
     // 仅可以管理员执行
+    /// 在事务内清空人脸归属后删除人物，仅管理员
     pub async fn delete_person(
         state: &VisualState,
         person_id: PersonId,

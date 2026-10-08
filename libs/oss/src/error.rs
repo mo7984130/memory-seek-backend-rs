@@ -34,11 +34,7 @@ pub enum OssError {
 }
 
 impl OssError {
-    /// 判断错误是否为 OSS 限流（HTTP 429 Too Many Requests）
-    ///
-    /// 命中后可按 [`crate::retry::RETRY_DELAYS`] 指数退避重试。
-    /// 覆盖两类来源：reqwest 直连（[`OssError::Http`]）与
-    /// `rust-s3`（开启 `fail-on-err` 后的 [`OssError::Inner`]）。
+    /// 判断错误是否为 OSS 限流(HTTP 429 Too Many Requests)；命中后可按 `RETRY_DELAYS` 退避重试
     pub fn is_rate_limited(&self) -> bool {
         match self {
             OssError::Http { status, .. } => status.as_u16() == 429,
@@ -57,6 +53,7 @@ impl OssError {
 }
 
 impl From<OssError> for ContextualError {
+    /// 将 OSS 错误转换为上下文错误
     fn from(value: OssError) -> Self {
         ContextualError::error("oss_error", "Oss错误", value, AppError::InternalServerError)
     }

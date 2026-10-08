@@ -105,6 +105,7 @@ impl FileMetaData {
 }
 
 impl From<ImageMetaData> for FileMetaData {
+    /// 将图片元数据转换为统一文件元数据
     fn from(meta: ImageMetaData) -> Self {
         Self {
             format: meta.format,
@@ -118,6 +119,7 @@ impl From<ImageMetaData> for FileMetaData {
 }
 
 impl From<VideoMetaData> for FileMetaData {
+    /// 将视频元数据转换为统一文件元数据
     fn from(meta: VideoMetaData) -> Self {
         Self {
             format: meta.format,
@@ -164,10 +166,7 @@ impl FileValidator {
         FileValidator::ALLOW_VIDEO_MAX_SIZE / 1024 / 1024
     );
 
-    /// 按文件头魔数嗅探媒体大类, 不依赖文件名。
-    ///
-    /// 头部不足魔数长度时返回 `None`。JPEG/PNG → [`MediaKind::Image`],
-    /// ISOBMFF(`ftyp`)/EBML → [`MediaKind::Video`]。
+    /// 按文件头魔数嗅探媒体大类,不依赖文件名；头部不足魔数长度时返回 `None`
     pub fn sniff_media(head: &[u8]) -> Option<MediaKind> {
         if head.len() >= JPEG_MAGIC.len() && head[..JPEG_MAGIC.len()] == JPEG_MAGIC {
             return Some(MediaKind::Image);
@@ -184,16 +183,14 @@ impl FileValidator {
         None
     }
 
-    /// 按文件头魔数嗅探内存字节对应的规范 MIME 类型(仅用于下载响应推断)。
-    ///
-    /// 覆盖图片(JPEG/PNG/WebP)与视频(MP4/MOV/WebM/MKV);无法识别时返回 `None`。
+    /// 按文件头魔数嗅探内存字节对应的规范 MIME 类型(仅用于下载响应推断)；无法识别时返回 `None`
     pub fn sniff_content_type(head: &[u8]) -> Option<&'static str> {
         Self::detect_image_format(head)
             .or_else(|| Self::detect_video_format(head))
             .map(|format| format.mime_type)
     }
 
-    /// 校验媒体文件, 按魔数嗅探分发到图片/视频校验, 不依赖文件名。
+    /// 校验媒体文件,按魔数嗅探分发到图片/视频校验,不依赖文件名
     pub fn validate_visual(file_path: &Path) -> Result<FileMetaData, FileValidationError> {
         match Self::sniff_file(file_path)? {
             MediaKind::Image => Self::validate_image(file_path).map(Into::into),
@@ -201,7 +198,7 @@ impl FileValidator {
         }
     }
 
-    /// 校验图片文件(JPEG/PNG), 校验内容包括: 非空、20MB 上限、魔数匹配、尺寸解析。
+    /// 校验图片文件(JPEG/PNG),校验非空、20MB 上限、魔数与尺寸
     pub fn validate_image(file_path: &Path) -> Result<ImageMetaData, FileValidationError> {
         let mut file = Self::open_file(file_path)?;
         let size = file
@@ -229,7 +226,7 @@ impl FileValidator {
         })
     }
 
-    /// 校验内存字节形式的图片(供小文件场景复用, 如头像上传), 语义与 [`Self::validate_image`] 一致。
+    /// 校验内存字节形式的图片(供小文件场景复用,如头像上传),语义与 `validate_image` 一致
     pub fn validate_image_mem(file_data: &[u8]) -> Result<ImageMetaData, FileValidationError> {
         if file_data.is_empty() {
             return Err(FileValidationError::EmptyFile);
@@ -260,7 +257,7 @@ impl FileValidator {
         })
     }
 
-    /// 校验视频文件(MP4/MOV/WebM/MKV), 校验内容包括: 非空、512MB 上限、魔数匹配、轨道元数据解析。
+    /// 校验视频文件(MP4/MOV/WebM/MKV),校验非空、512MB 上限、魔数与轨道元数据
     pub fn validate_video(file_path: &Path) -> Result<VideoMetaData, FileValidationError> {
         let mut file = Self::open_file(file_path)?;
         let size = file
@@ -307,7 +304,7 @@ impl FileValidator {
         })
     }
 
-    /// 根据文件名扩展名返回受支持图片的规范 MIME 类型(仅用于下载响应推断)。
+    /// 根据文件名扩展名返回受支持图片的规范 MIME 类型(仅用于下载响应推断)
     pub fn image_content_type(file_name: &str) -> Option<&'static str> {
         let ext = Self::file_ext(file_name);
         match ext.as_str() {
@@ -317,7 +314,7 @@ impl FileValidator {
         }
     }
 
-    /// 根据文件名扩展名返回受支持视频的规范 MIME 类型(仅用于下载响应推断)。
+    /// 根据文件名扩展名返回受支持视频的规范 MIME 类型(仅用于下载响应推断)
     pub fn video_content_type(file_name: &str) -> Option<&'static str> {
         let ext = Self::file_ext(file_name);
         match ext.as_str() {
@@ -329,14 +326,14 @@ impl FileValidator {
         }
     }
 
-    // 读文件头并嗅探媒体大类
+    /// 读文件头并嗅探媒体大类
     fn sniff_file(file_path: &Path) -> Result<MediaKind, FileValidationError> {
         let mut file = Self::open_file(file_path)?;
         let head = Self::read_head(&mut file, 8)?;
         Self::sniff_media(&head).ok_or(FileValidationError::UnsupportedFileType)
     }
 
-    // 按魔数识别图片格式(JPEG/PNG)
+    /// 按魔数识别图片格式(JPEG/PNG)
     fn detect_image_format(head: &[u8]) -> Option<ContentFormat> {
         if head.len() >= JPEG_MAGIC.len() && head[..JPEG_MAGIC.len()] == JPEG_MAGIC {
             return Some(ContentFormat::JPEG);
@@ -351,7 +348,7 @@ impl FileValidator {
         None
     }
 
-    // 按魔数识别视频格式: ISOBMFF 读 major_brand 区分 MP4/MOV; EBML 读 DocType 区分 WebM/MKV
+    /// 按魔数识别视频格式:ISOBMFF 读 major_brand 区分 MP4/MOV,EBML 读 DocType 区分 WebM/MKV
     fn detect_video_format(head: &[u8]) -> Option<ContentFormat> {
         if head.len() >= 12 && head[4..8] == ISOBMFF_TAG {
             // major_brand 位于 ftyp box 偏移 8
@@ -373,7 +370,7 @@ impl FileValidator {
         None
     }
 
-    // 从文件名提取小写扩展名(忽略 ".gitignore" 等纯点文件), 空串表示无扩展名
+    /// 从文件名提取小写扩展名(忽略 ".gitignore" 等纯点文件),空串表示无扩展名
     fn file_ext(file_name: &str) -> String {
         file_name
             .rsplit_once('.')
@@ -382,19 +379,19 @@ impl FileValidator {
             .unwrap_or_default()
     }
 
-    // 在切片中查找 ASCII 子串
+    /// 在切片中查找 ASCII 子串
     fn contains_ascii(haystack: &[u8], needle: &[u8]) -> bool {
         haystack
             .windows(needle.len())
             .any(|window| window == needle)
     }
 
-    // 打开待校验文件, 打开失败统一映射为 ReadError
+    /// 打开待校验文件,打开失败统一映射为 ReadError
     fn open_file(file_path: &Path) -> Result<File, FileValidationError> {
         File::open(file_path).map_err(|e| FileValidationError::ReadError(e.to_string()))
     }
 
-    // 读取文件头部指定字节数(不足则返回实际字节数)
+    /// 读取文件头部指定字节数(不足则返回实际字节数)
     fn read_head(file: &mut File, n: usize) -> Result<Vec<u8>, FileValidationError> {
         let mut buf = vec![0u8; n];
         let mut read = 0;
@@ -411,7 +408,7 @@ impl FileValidator {
         Ok(buf)
     }
 
-    // 使用 nom-exif 解析视频轨道元数据，提取宽高、时长等信息
+    /// 使用 nom-exif 解析视频轨道元数据,提取宽高、时长等信息
     fn extract_video_metadata(file_path: &Path) -> Result<TrackInfo, FileValidationError> {
         let mut parser = MediaParser::new();
         let source = MediaSource::open(file_path)
@@ -421,7 +418,7 @@ impl FileValidator {
             .map_err(|e| FileValidationError::VideoParseError(e.to_string()))
     }
 
-    // 使用 image 库解析图片文件，提取宽高尺寸
+    /// 使用 image 库解析图片文件,提取宽高尺寸
     fn extract_image_metadata(file_path: &Path) -> Result<(u32, u32), FileValidationError> {
         let reader = image::ImageReader::open(file_path)
             .map_err(|e| FileValidationError::ParseError(e.to_string()))?

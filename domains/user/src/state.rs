@@ -15,15 +15,6 @@ pub struct UserState {
 
 impl UserState {
     /// 创建新的用户模块共享状态
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `redis`: Redis 连接池
-    /// - `s3_client`: S3 对象存储客户端
-    /// - `cache_config`: 缓存配置（启用开关、L1 容量、L1 TTL）
-    ///
-    /// # 返回
-    /// 返回初始化后的 `UserState` 实例
     pub fn new(
         db: DatabaseConnection,
         redis: Pool,

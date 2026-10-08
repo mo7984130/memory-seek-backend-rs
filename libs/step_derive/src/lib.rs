@@ -49,9 +49,7 @@ pub fn declare_transaction_step(attr: TokenStream, item: TokenStream) -> TokenSt
     }
 }
 
-/// `declare_async_event!(<状态类型>, <事件类型>, <切片名>, <发布函数名>, <事件名>)` — 声明提交后的异步事件。
-///
-/// 展开为一个 `linkme` 分布式切片和调用 `common_runtime::event::dispatch_async_event` 的发布函数。
+/// 声明提交后的异步事件；展开为一个 linkme 分布式切片与调用 `dispatch_async_event` 的发布函数
 #[proc_macro]
 pub fn declare_async_event(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as EventArgs);
@@ -76,9 +74,7 @@ pub fn declare_async_event(input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// `#[declare_event_consumer(...)]` — 声明并注册一个提交后异步事件消费者。
-///
-/// 标记的 impl 必须且只能包含一个异步回调方法；宏将其作为事件消费者。
+/// 声明并注册一个提交后异步事件消费者；impl 必须且只能包含一个异步回调方法
 #[proc_macro_attribute]
 pub fn declare_event_consumer(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as EventConsumerArgs);
@@ -89,21 +85,7 @@ pub fn declare_event_consumer(attr: TokenStream, item: TokenStream) -> TokenStre
     }
 }
 
-/// `declare_pipeline!(<ctx 类型>, <切片名>, <管道名>)` — 声明一个步骤管道
-///
-/// 展开为「一个 `linkme` 分布式切片 + 一个惰性 `StepPipeline`」,供 `#[declare_transaction_step]`
-/// 注册步骤(定义即注册)与直接执行(`<管道名>.run(...)`)使用:
-///
-/// ```ignore
-/// step_derive::declare_pipeline!(VisualDeleteContext, MEDIA_DELETE_STEPS, PIPELINE);
-/// // 展开:
-/// #[linkme::distributed_slice]
-/// pub(crate) static MEDIA_DELETE_STEPS: [&'static dyn Step<VisualDeleteContext>] = [..];
-/// static PIPELINE: LazyLock<StepPipeline<VisualDeleteContext>> =
-///     LazyLock::new(|| StepPipeline::from_slice_stable(MEDIA_DELETE_STEPS.to_vec()));
-/// ```
-///
-/// 要求调用 crate 依赖 `common-db` 与 `linkme`。
+/// 声明一个步骤管道；展开为一个 linkme 分布式切片与一个惰性 `StepPipeline`
 #[proc_macro]
 pub fn declare_pipeline(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as PipelineArgs);
@@ -139,6 +121,7 @@ struct EventArgs {
 }
 
 impl Parse for EventArgs {
+    /// 解析 `declare_async_event!` 的位置参数
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let state = input.parse()?;
         input.parse::<Token![,]>()?;
@@ -163,6 +146,7 @@ impl Parse for EventArgs {
 }
 
 impl Parse for PipelineArgs {
+    /// 解析 `declare_pipeline!` 的位置参数
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let ctx: Type = input.parse()?;
         input.parse::<Token![,]>()?;
@@ -193,6 +177,7 @@ struct EventConsumerArgs {
 }
 
 impl Parse for EventConsumerArgs {
+    /// 解析 `#[declare_event_consumer(...)]` 的属性参数
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut name = None;
         let mut state = None;
@@ -235,6 +220,7 @@ impl Parse for EventConsumerArgs {
 }
 
 impl Parse for Args {
+    /// 解析 `#[declare_transaction_step(...)]` 的属性参数
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut name: Option<LitStr> = None;
         let mut is_final: Option<bool> = None;
@@ -283,7 +269,7 @@ impl Parse for Args {
     }
 }
 
-/// 将步骤 impl 展开为 Step 实现和分布式注册项.
+/// 将步骤 impl 展开为 Step 实现和分布式注册项
 fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
     let Args {
         name,
@@ -390,7 +376,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
     })
 }
 
-/// 将事件消费者 impl 展开为 EventConsumer 实现和注册项.
+/// 将事件消费者 impl 展开为 EventConsumer 实现和注册项
 fn expand_event_consumer(
     args: EventConsumerArgs,
     item_impl: ItemImpl,
@@ -459,7 +445,7 @@ fn expand_event_consumer(
     })
 }
 
-/// 从路径类型中提取最后一个标识符.
+/// 从路径类型中提取最后一个标识符
 fn type_last_ident(ty: &Type, error_message: &str) -> syn::Result<Ident> {
     match ty {
         Type::Path(type_path) => type_path

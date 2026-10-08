@@ -19,6 +19,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// 从 `AppSetup` 注册表中提取应用运行状态
     pub fn from_setup(setup: &AppSetup, max_upload_bytes: u64) -> common_core::Result<Self> {
         Ok(Self {
             db: setup

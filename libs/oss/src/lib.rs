@@ -45,13 +45,7 @@ pub struct S3Config {
 }
 
 impl S3Client {
-    /// 根据配置创建 S3 客户端
-    ///
-    /// # 参数
-    /// - `s3_config`: S3 连接配置，包含端点、凭证、区域、桶名等
-    ///
-    /// # 返回
-    /// 初始化完成的 `S3Client` 实例
+    /// 根据配置创建 S3 客户端；凭证或桶初始化失败时 panic
     pub fn new(s3_config: &S3Config) -> Self {
         let region = Region::Custom {
             region: s3_config.region.clone(),
@@ -94,17 +88,6 @@ impl S3Client {
     }
 
     /// 上传文件到 OSS
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    /// - `data`: 文件内容（实现 `AsRef<[u8]>` 的类型）
-    /// - `content_type`: MIME 类型，如 "image/jpeg"
-    ///
-    /// # 返回
-    /// 上传成功返回 `()`
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 存储操作失败
     pub async fn upload(
         &self,
         key: &str,
@@ -121,10 +104,7 @@ impl S3Client {
         .await
     }
 
-    /// 以流式方式上传本地文件到 OSS。
-    ///
-    /// 小文件由底层实现直接上传，大文件自动使用 multipart 上传，避免将整个文件读入内存。
-    /// 429 限流重试时会重新打开文件，从文件开头重新上传。
+    /// 以流式方式上传本地文件到 OSS；大文件自动走 multipart,429 重试时重新打开文件从头上传
     pub async fn upload_file(
         &self,
         key: &str,
@@ -148,15 +128,6 @@ impl S3Client {
     }
 
     /// 删除单个文件
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    ///
-    /// # 返回
-    /// 删除成功返回 `()`
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 删除操作失败
     pub async fn delete(&self, key: &str) -> Result<ResponseData, OssError> {
         retry_429("delete", key, || async {
             self.inner
@@ -168,16 +139,7 @@ impl S3Client {
         .await
     }
 
-    /// 批量删除文件，分片并发执行，遇错即停
-    ///
-    /// # 参数
-    /// - `keys`: 待删除的文件路径/键名列表
-    ///
-    /// # 返回
-    /// 全部删除成功返回 `()`
-    ///
-    /// # 错误
-    /// - `OssError`: 删除文件失败
+    /// 批量删除文件；分片并发执行,遇错即停
     pub async fn delete_batch(&self, keys: Vec<impl AsRef<str>>) -> Result<(), OssError> {
         async {
             for concurrent_chunks in keys.chunks(CHUNK_SIZE * CONCURRENCY) {
@@ -206,49 +168,22 @@ impl S3Client {
         .await
     }
 
-    /// 获取对象存储端点(创建时的 `endpoint` 配置值).
+    /// 获取对象存储端点(创建时的 `endpoint` 配置值)
     pub fn endpoint(&self) -> &str {
         &self.inner.endpoint
     }
 
     /// 获取文件的公开访问 URL
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    ///
-    /// # 返回
-    /// 拼接公开域名后的完整 URL
     pub fn get_url(&self, key: &str) -> String {
         format!("{}/{}", self.inner.public_url, key.trim_start_matches('/'))
     }
 
-    /// 获取文件的签名 URL（无图片处理参数）
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    /// - `expires`: 签名有效期
-    ///
-    /// # 返回
-    /// 带签名的临时访问 URL
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 签名生成失败
+    /// 获取文件的签名 URL(无图片处理参数)
     pub async fn get_signed_url(&self, key: &str, expires: Duration) -> Result<String, OssError> {
         self.get_signed_url_with_params(key, expires, None).await
     }
 
     /// 获取带图片处理参数的签名 URL
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    /// - `expires`: 签名有效期
-    /// - `process`: OSS 图片处理参数，如 "image/resize,w_300"，为 `None` 时不附加处理参数
-    ///
-    /// # 返回
-    /// 带签名和图片处理参数的临时访问 URL
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 签名生成失败
     pub async fn get_signed_url_with_params(
         &self,
         key: &str,
@@ -284,15 +219,6 @@ impl S3Client {
     }
 
     /// 下载文件
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    ///
-    /// # 返回
-    /// 文件内容的 `Bytes`，可直接用于 HTTP 响应
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 下载操作失败
     pub async fn download(&self, key: &str) -> Result<Bytes, OssError> {
         async {
             let response_data = retry_429("get", key, || async {
@@ -309,19 +235,7 @@ impl S3Client {
         .await
     }
 
-    /// 判断对象是否存在。
-    ///
-    /// 通过 list(前缀 = key) 判定, 而非 GET / HEAD: 对象不存在时 list 仍返回
-    /// 成功(空结果), 不会触发底层 rust-s3 对 404 的重试与告警。
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    ///
-    /// # 返回
-    /// 对象存在返回 `true`, 不存在返回 `false`
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 列举操作失败
+    /// 判断对象是否存在；以 list(前缀 = key) 判定,不触发底层对 404 的重试与告警
     pub async fn exists(&self, key: &str) -> Result<bool, OssError> {
         #[cfg(feature = "metrics")]
         let _timer = common_metrics::MetricsTimer::start(metric_name("exists", "duration_seconds"));
@@ -350,16 +264,7 @@ impl S3Client {
             .any(|object| object.key.as_str() == key))
     }
 
-    /// 列出指定前缀下的全部对象 key（底层自动处理分页）。
-    ///
-    /// # 参数
-    /// - `prefix`: 对象键前缀，如 `backup/scheduled/daily/`
-    ///
-    /// # 返回
-    /// 匹配前缀的全部对象 key 列表
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 列举操作失败
+    /// 列出指定前缀下的全部对象 key(底层自动处理分页)
     pub async fn list(&self, prefix: &str) -> Result<Vec<String>, OssError> {
         retry_429("list", prefix, || async {
             self.inner
@@ -378,7 +283,7 @@ impl S3Client {
         })
     }
 
-    /// 获取对象存储的流式下载响应.
+    /// 获取对象存储的流式下载响应
     pub async fn get_download_stream_response(
         &self,
         key: &str,
@@ -397,7 +302,7 @@ impl S3Client {
         .await
     }
 
-    /// 下载对象并应用指定的图片处理参数.
+    /// 下载对象并应用指定的图片处理参数
     pub async fn download_with_process(&self, key: &str, process: &str) -> Result<Bytes, OssError> {
         let url = self
             .get_signed_url_with_params(key, Duration::from_secs(3600), Some(process.to_string()))
@@ -413,7 +318,7 @@ impl S3Client {
         .await
     }
 
-    /// 获取应用图片处理参数后的流式下载响应.
+    /// 获取应用图片处理参数后的流式下载响应
     pub async fn download_stream_with_process(
         &self,
         key: &str,
