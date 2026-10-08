@@ -1,8 +1,4 @@
 //! `AppError` 的 axum 响应适配。
-//!
-//! ⚠️ 受**孤儿规则**约束(`IntoResponse` 是外部 trait、`AppError` 是本地类型),
-//! 这些实现必须与 `AppError` 同 crate,因此随错误类型一起放在 `common-core`,
-//! 并由 `axum` feature 门控。
 
 use axum::{http::StatusCode, response::IntoResponse};
 

@@ -5,7 +5,6 @@ mod app_error;
 pub use app_error::AppError;
 pub type Result<T> = std::result::Result<T, AppError>;
 
-/// axum 响应适配(受孤儿规则约束, 必须与本类型同 crate)。
 #[cfg(feature = "axum")]
 mod axum_impl;
 
