@@ -2,7 +2,6 @@ use std::pin::Pin;
 
 use common_core::DbConn;
 use common_core::Result;
-use common_core::error::ContextualResult;
 use common_core::error::{AppError, ContextualError, contextual};
 use sea_orm::{DatabaseConnection, DatabaseTransaction, TransactionError, TransactionTrait};
 
@@ -27,43 +26,6 @@ impl DbUtils {
                 ),
                 TransactionError::Transaction(error) => error,
             })
-    }
-
-    /// 在数据库事务中执行写操作
-    ///
-    /// 将闭包内的所有数据库操作包装在单个事务中，确保原子性。
-    /// 连接错误统一转换为 `InternalServerError`。
-    ///
-    /// # 参数
-    /// - `db`: 数据库连接
-    /// - `block`: 接收事务引用的异步闭包，返回操作结果
-    ///
-    /// # 返回
-    /// 返回闭包的执行结果
-    ///
-    /// # 错误
-    /// - `AppError::InternalServerError`: 数据库连接错误
-    /// - `AppError`: 闭包返回的业务错误（事务自动回滚）
-    #[inline]
-    pub async fn write<F, T>(db: &DatabaseConnection, block: F) -> ContextualResult<T>
-    where
-        F: for<'a> FnOnce(&'a DatabaseTransaction) -> BoxFuture<'a, Result<T>> + Send,
-        T: Send,
-    {
-        db.transaction(|txn| block(txn)).await.map_err(|e| match e {
-            TransactionError::Connection(e) => ContextualError::error(
-                "db_conn_err",
-                "获取数据库连接错误",
-                e,
-                AppError::InternalServerError,
-            ),
-            TransactionError::Transaction(e) => ContextualError::error(
-                "db_transaction_err",
-                "数据库事务错误",
-                e,
-                AppError::InternalServerError,
-            ),
-        })
     }
 
     pub async fn lock_two_ordered<'a, DB, Id, T, F, Fut>(

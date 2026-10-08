@@ -41,7 +41,7 @@ impl FaceRepo {
         person_id: Option<PersonId>,
         user_id: UserId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 锁定人脸
             let face = FaceMapper::lock_by_id(txn, face_id).await?;
             // 归属未变化, 直接返回
@@ -183,7 +183,7 @@ impl FaceRepo {
         face_ids: Vec<FaceId>,
         user_id: UserId,
     ) -> Result<u64> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 行锁读取人脸
             let faces = FaceMapper::lock_by_ids(txn, &face_ids).await?;
 
@@ -220,7 +220,7 @@ impl FaceRepo {
     pub async fn backup_and_truncate(state: &VisualState) -> Result<()> {
         Self::backup_face_tables(state).await?;
 
-        common_db::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(&state.db, |txn| {
             txn.execute_raw(Statement::from_string(
                 DbBackend::Postgres,
                 format!(

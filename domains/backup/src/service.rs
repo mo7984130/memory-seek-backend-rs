@@ -293,7 +293,7 @@ impl BackupService {
         }));
         let event = actor_id.map_or(event.clone(), |actor_id| event.with_actor(actor_id.0));
 
-        common_db::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(&state.db, |txn| {
             AuditRecorder::append(txn, event).await?;
             Ok(())
         })
@@ -302,7 +302,7 @@ impl BackupService {
     }
 
     async fn record_restore_audit(state: &BackupState, event: AuditEvent) -> Result<()> {
-        common_db::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(&state.db, |txn| {
             AuditRecorder::append(txn, event).await?;
             Ok(())
         })

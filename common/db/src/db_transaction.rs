@@ -1,36 +1,36 @@
-/// 在数据库事务中执行异步代码，隐藏事务回调所需的 Future 装箱样板。
+/// 在数据库事务中执行异步代码，统一 begin / commit / rollback 与错误映射，隐藏样板。
 ///
-/// 事务成功时自动提交，返回错误时自动回滚。
+/// 事务成功时自动提交，返回错误时自动回滚。事务体返回 [`ContextualError`]，并可直接借用
+/// 调用方的局部变量。
 ///
 /// # 示例
 /// ```no_run
 /// use common::{ContextualResult, db_transaction};
 /// use sea_orm::DatabaseConnection;
 ///
-/// async fn update(db: &DatabaseConnection) -> ContextualResult<()> {
+/// async fn update(db: &DatabaseConnection, value: &mut u64) -> ContextualResult<()> {
 ///     db_transaction!(db, |txn| {
 ///         let _ = txn;
+///         *value += 1;
 ///         Ok(())
 ///     })
 ///     .await
 /// }
 /// ```
 ///
-/// 当事务体需要借用调用方的局部变量时，使用 `scoped` 形式：
+/// `contextual` 形式用于事务体已携带 `ContextualError`（延迟到 service 边界记录）的场景：
+/// 事务体错误原样透传，不再包装为 `db_transaction_err`。
 ///
 /// ```no_run
-/// use common::{Result, db_transaction};
+/// use common::{ContextualResult, db_transaction};
 /// use sea_orm::DatabaseConnection;
 ///
-/// async fn update(db: &DatabaseConnection, value: &mut u64) -> Result<()> {
-///     db_transaction!(scoped db, |txn| {
+/// async fn update(db: &DatabaseConnection) -> ContextualResult<()> {
+///     db_transaction!(contextual db, |txn| {
 ///         let _ = txn;
-///         *value += 1;
 ///         Ok(())
 ///     })
-///     .await?;
-///
-///     Ok(())
+///     .await
 /// }
 /// ```
 #[macro_export]
@@ -40,7 +40,7 @@ macro_rules! db_transaction {
             ::std::boxed::Box::pin(async move $body)
         })
     };
-    (scoped $db:expr, |$txn:ident| $body:block) => {
+    ($db:expr, |$txn:ident| $body:block) => {
         async {
             let transaction = ::sea_orm::TransactionTrait::begin($db)
                 .await
@@ -89,10 +89,5 @@ macro_rules! db_transaction {
                 }
             }
         }
-    };
-    ($db:expr, |$txn:ident| $body:block) => {
-        $crate::utils::DbUtils::write($db, move |$txn| {
-            ::std::boxed::Box::pin(async move $body)
-        })
     };
 }

@@ -64,7 +64,7 @@ impl<Ctx: Send + 'static> StepPipeline<Ctx> {
     // todo mutlirun
     /// 在单个事务内串行执行全部步骤,任一步失败则整体回滚
     pub async fn run(&self, db: &DatabaseConnection, ctx: &mut Ctx) -> Result<()> {
-        db_transaction!(scoped db, |txn| {
+        db_transaction!(db, |txn| {
             for step in self.steps {
                 step.execute(txn, ctx).await?;
             }

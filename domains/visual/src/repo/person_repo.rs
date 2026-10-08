@@ -66,7 +66,7 @@ impl PersonRepo {
             target_person_id,
         } = req;
 
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 锁定人物
             let (source, target) = DbUtils::ensure_lock_two_ordered(
                 txn,
@@ -178,7 +178,7 @@ impl PersonRepo {
         person_id: PersonId,
         admin: AdminId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 清空该人物所有人脸归属
             FaceMapper::clean_person_id_by_person_id(txn, person_id).await?;
 

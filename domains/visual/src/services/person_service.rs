@@ -86,7 +86,7 @@ impl PersonService {
         info!("开始保存 person/face 表");
         FaceRepo::backup_and_truncate(&state).await?;
         info!("保存表完成");
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             FaceMapper::clean_person_id(txn).await?;
             info!("清除完成");
 
@@ -172,7 +172,7 @@ impl PersonService {
     ) -> Result<()> {
         let SecondaryClusterParam { threshold } = req;
         info!(admin_id = %admin, threshold, "管理员触发二次聚类");
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             AuditRecorder::append(
                 txn,
                 AuditEvent::new("assign_unassigned_faces_start").with_actor(admin.into_inner()),
@@ -231,7 +231,7 @@ impl PersonService {
             }
         }
 
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             AuditRecorder::append(
                 txn,
                 AuditEvent::new("assign_unassigned_faces_finish").with_actor(admin.into_inner()),

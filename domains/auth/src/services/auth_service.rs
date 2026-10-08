@@ -212,7 +212,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     };
 
     // 写入用户
-    let user_model = common_db::db_transaction!(scoped & state.db, |txn| {
+    let user_model = common_db::db_transaction!(&state.db, |txn| {
         let user_model = AuthMapper::insert(txn, insert_param)
             .timed(metrics_name!("db_insert"))
             .await?;

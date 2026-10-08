@@ -88,7 +88,7 @@ impl CommentRepo {
         visual_id: VisualId,
         req: CommentPublishParam,
     ) -> Result<types_visual::comment::CommentRecord> {
-        let comment = db_transaction!(scoped & state.db, |txn| {
+        let comment = db_transaction!(&state.db, |txn| {
             let comment =
                 CommentMapper::insert(txn, visual_id, user_id, req.content.into_inner()).await?;
             VisualMapper::update_comment_count_delta(txn, visual_id, 1).await?;
@@ -115,7 +115,7 @@ impl CommentRepo {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<()> {
-        let visual_id = db_transaction!(scoped & state.db, |txn| {
+        let visual_id = db_transaction!(&state.db, |txn| {
             // 删除评论
             let comment = CommentMapper::delete(txn, user_id, comment_id)
                 .await?
@@ -166,7 +166,7 @@ impl CommentRepo {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 插入记录
             if !CommentLikeMapper::insert(txn, user_id, comment_id).await? {
                 return Err(ContextualError::error_without_source(
@@ -199,7 +199,7 @@ impl CommentRepo {
         user_id: UserId,
         comment_id: CommentId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 删除点赞记录
             if !CommentLikeMapper::delete(txn, user_id, comment_id).await? {
                 return Err(ContextualError::error_without_source(

@@ -91,7 +91,7 @@ impl CollectionRepo {
         collection_id: CollectionId,
         visual_ids: &VisualIds,
     ) -> Result<u64> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 添加影像
             let count = CollectionMapper::add_visuals_batch(
                 txn,
@@ -128,7 +128,7 @@ impl CollectionRepo {
         collection: CollectionRecord,
         visual_ids: &VisualIds,
     ) -> Result<u64> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 如果封面会被移除的话, 提前保存下来
             let cover_removed = collection
                 .cover_visual_id
@@ -196,7 +196,7 @@ impl CollectionRepo {
         user_id: UserId,
         req: CollectionCreateParam,
     ) -> Result<CollectionRecord> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 插入
             let collection =
                 CollectionMapper::insert(txn, user_id, req.name, req.description).await?;
@@ -221,7 +221,7 @@ impl CollectionRepo {
         id: CollectionId,
         req: CollectionUpdateParam,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             let affected =
                 CollectionMapper::update_info(txn, id, user_id, req.name, req.description).await?;
             if affected > 0 {
@@ -255,7 +255,7 @@ impl CollectionRepo {
         user_id: UserId,
         id: CollectionId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 删除收藏夹
             CollectionMapper::delete_by_id(txn, id, user_id)
                 .await?

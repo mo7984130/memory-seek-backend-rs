@@ -25,7 +25,7 @@ impl VisualLikeRepo {
         user_id: UserId,
         visual_id: VisualId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 确认存在
             VisualMapper::ensure_exist(txn, visual_id).await?;
             // 插入
@@ -63,7 +63,7 @@ impl VisualLikeRepo {
         user_id: UserId,
         visual_id: VisualId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             if !VisualLikeMapper::delete(txn, user_id, visual_id).await? {
                 return Err(ContextualError::error_without_source(
                     "visual_not_liked",
