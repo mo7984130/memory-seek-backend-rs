@@ -9,7 +9,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::{Arc, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use common_core::error::contextual::Result;
 use common_core::error::contextual::ext::{
@@ -19,7 +19,6 @@ use common_core::{AppError, ContextualError, TempFile};
 use futures::StreamExt;
 use tokio::process::Command;
 use tokio::sync::mpsc;
-use tokio::time::timeout;
 use tracing::{info, warn};
 use types_visual::derivative::{
     DerivativeKind, DerivativeStatus, VisualDerivativeId, derivative_key,
@@ -31,9 +30,6 @@ use crate::config::TranscodeConfig;
 use crate::mappers::{derivative_mapper::DerivativeMapper, visual_mapper::VisualMapper};
 use crate::services::visual_service::{AfterVisualDelete, AfterVisualUpload};
 use crate::state::VisualState;
-
-/// 单次 ffmpeg 执行超时
-const FFMPEG_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// 失败时保留的 ffmpeg stderr 末尾行数(避免整段版本 banner / 进度刷屏日志)
 const STDERR_TAIL_LINES: usize = 8;
@@ -207,7 +203,7 @@ impl TranscodeService {
             return Ok(());
         }
         match Self::generate(state, &job).await {
-            Ok(object_key) => {
+            Ok((object_key, transcode_elapsed)) => {
                 if !DerivativeMapper::mark_ready(&state.db, job.id, &object_key).await? {
                     // 生成期间影像被删: 补偿删除刚上传的衍生对象, 避免 S3 残留
                     warn!(
@@ -223,7 +219,12 @@ impl TranscodeService {
                         .emit_if_err();
                     return Ok(());
                 }
-                info!(visual_id = %job.visual_id, kind = ?job.kind, "视频衍生片生成完成");
+                info!(
+                    visual_id = %job.visual_id,
+                    kind = ?job.kind,
+                    duration = ?transcode_elapsed,
+                    "视频衍生片生成完成"
+                );
                 Ok(())
             }
             Err(error) => {
@@ -275,8 +276,8 @@ impl TranscodeService {
         });
     }
 
-    /// 下载原片、调用 ffmpeg 生成衍生片并上传, 返回衍生对象 key。
-    async fn generate(state: &VisualState, job: &TranscodeJob) -> Result<String> {
+    /// 下载原片、调用 ffmpeg 生成衍生片并上传, 返回衍生对象 key 与 ffmpeg 转码耗时。
+    async fn generate(state: &VisualState, job: &TranscodeJob) -> Result<(String, Duration)> {
         let input = Self::download_to_temp(state, &job.file_id).await?;
 
         let mut output = TempFile::create_in(&state.tmp_dir, &Uuid::new_v4().to_string())
@@ -291,6 +292,7 @@ impl TranscodeService {
             AppError::InternalServerError,
         )?;
 
+        let started = Instant::now();
         Self::run_ffmpeg(
             &state.config.transcode,
             job.kind,
@@ -298,6 +300,7 @@ impl TranscodeService {
             output.path(),
         )
         .await?;
+        let transcode_elapsed = started.elapsed();
 
         let object_key = derivative_key(&job.file_id, job.kind);
         state
@@ -305,7 +308,7 @@ impl TranscodeService {
             .upload_file(&object_key, output.path(), job.kind.mime_type())
             .await
             .into_contextual()?;
-        Ok(object_key)
+        Ok((object_key, transcode_elapsed))
     }
 
     /// 将原片从对象存储流式下载到临时文件(按原扩展名命名, 便于 ffmpeg 探测)。
@@ -346,7 +349,7 @@ impl TranscodeService {
         Ok(temp)
     }
 
-    /// 调用 ffmpeg 执行转码, 失败/超时返回错误。
+    /// 调用 ffmpeg 执行转码, 失败返回错误(不设超时, 由 ffmpeg 自然跑完)。
     async fn run_ffmpeg(
         cfg: &TranscodeConfig,
         kind: DerivativeKind,
@@ -355,7 +358,7 @@ impl TranscodeService {
     ) -> Result<()> {
         let mut cmd = Command::new(&cfg.ffmpeg_path);
         cmd.args(Self::build_args(cfg, kind, input, output));
-        // 超时 / 任务被 drop / 进程退出时, 连同 ffmpeg 子进程一起终止, 避免留下孤儿进程
+        // 任务被 drop / 进程退出时, 连同 ffmpeg 子进程一起终止, 避免留下孤儿进程
         cmd.kill_on_drop(true);
         // 独立进程组: 终端的 Ctrl+C(发给前台进程组)不再波及 ffmpeg, 关闭时
         // 当前任务得以自然跑完(见 start_worker "完成当前任务后退出")。
@@ -363,23 +366,14 @@ impl TranscodeService {
         cmd.process_group(0);
         // ffmpeg 默认会读 stdin(支持按 q 退出等交互)。若 stdin 仍是终端, 而 ffmpeg 又处于
         // 独立(后台)进程组, 读终端会触发作业控制信号(SIGTTIN/SIGTTOU)使其被停止
-        // (CPU 空闲、表现为挂起直到超时)。置空 stdin: ffmpeg 不接触终端, 也不会抢读按键。
+        // (CPU 空闲、表现为永久挂起)。置空 stdin: ffmpeg 不接触终端, 也不会抢读按键。
         cmd.stdin(Stdio::null());
 
-        let output = match timeout(FFMPEG_TIMEOUT, cmd.output()).await {
-            Err(_elapsed) => {
-                return Err(ContextualError::warn_without_source(
-                    "ffmpeg_timeout",
-                    "视频转码超时",
-                    AppError::InternalServerError,
-                ));
-            }
-            Ok(result) => result.context_error(
-                "ffmpeg_spawn_err",
-                "启动 ffmpeg 失败",
-                AppError::InternalServerError,
-            )?,
-        };
+        let output = cmd.output().await.context_error(
+            "ffmpeg_spawn_err",
+            "启动 ffmpeg 失败",
+            AppError::InternalServerError,
+        )?;
 
         if !output.status.success() {
             let stderr = stderr_tail(&output.stderr, STDERR_TAIL_LINES);
