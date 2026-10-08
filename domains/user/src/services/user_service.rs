@@ -228,19 +228,15 @@ pub async fn change_password(
         .into_contextual()?;
 
     // 校验旧密码
-    let is_valid = {
-        let verify_result =
-            spawn_blocking(move || PasswordHasher.verify(&req.old_password, &old_password))
-                .timed(metrics_name!("verify_password"))
-                .await
-                .into_contextual()?;
-        verify_result?
-    };
-    is_valid.true_or_warn(
-        "old_password_invalid",
-        "修改密码时，原密码错误",
-        AppError::bad_request("原密码错误"),
-    )?;
+    spawn_blocking(move || PasswordHasher.verify(&req.old_password, &old_password))
+        .timed(metrics_name!("verify_password"))
+        .await
+        .into_contextual()??
+        .true_or_warn(
+            "old_password_invalid",
+            "修改密码时，原密码错误",
+            AppError::bad_request("原密码错误"),
+        )?;
 
     // 加密新密码
     let new_password_hash = {
