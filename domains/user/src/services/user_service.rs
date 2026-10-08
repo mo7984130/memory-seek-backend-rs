@@ -138,10 +138,11 @@ pub async fn update_avatar(
     // 校验图片（MIME 类型由文件头魔数嗅探确定，不信任客户端声明）
     let img_metadata = timed!("validate_image", {
         FileValidator::validate_image_mem(&file_data).map_err(|error| {
+            let msg = error.to_string();
             ContextualError::warn_without_source(
                 "file_validation_error",
-                "文件校验失败",
-                AppError::bad_request(error.to_string()),
+                format!("用户新头像校验失败: {}", msg),
+                AppError::bad_request(msg),
             )
         })?
     });
@@ -160,7 +161,7 @@ pub async fn update_avatar(
         .await
         .into_contextual()?;
 
-    // 更新数据库（事务内查旧头像并更新），失败时删除刚上传的文件
+    // 更新数据库，失败时删除刚上传的文件
     let old_key = state
         .repo
         .update_avatar(user_id, new_key.clone())
