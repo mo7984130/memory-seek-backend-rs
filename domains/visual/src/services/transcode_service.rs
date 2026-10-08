@@ -477,8 +477,6 @@ impl TranscodeService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "derivative_cleanup",
-    owns = ["DerivativeMapper"],
-    method = on_visual_delete,
 )]
 impl TranscodeService {
     /// 删除影像事务中, 清理其衍生片 DB 记录。

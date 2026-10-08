@@ -182,9 +182,7 @@ impl VisualService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "visual_record_delete",
-    owns = ["VisualMapper"],
     is_final = true,
-    method = on_visual_delete,
 )]
 impl VisualService {
     /// 执行影像删除管道的最后一步, 删除影像主表记录.

@@ -78,8 +78,6 @@ impl VisualLikeService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "visual_like_cleanup",
-    owns = ["VisualLikeMapper"],
-    method = on_visual_delete,
 )]
 impl VisualLikeService {
     /// 清理影像删除后失效的点赞记录.

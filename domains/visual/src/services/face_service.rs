@@ -622,8 +622,6 @@ impl FaceService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "face_cleanup",
-    owns = ["FaceMapper", "PersonMapper", "FaceTaskMapper"],
-    method = on_visual_delete,
 )]
 impl FaceService {
     async fn on_visual_delete(

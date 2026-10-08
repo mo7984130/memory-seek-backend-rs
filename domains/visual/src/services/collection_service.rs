@@ -94,8 +94,6 @@ impl CollectionService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "collection_cleanup",
-    owns = ["CollectionVisualMapper", "CollectionMapper"],
-    method = on_visual_delete,
 )]
 impl CollectionService {
     /// 清理收藏夹影像 和 更新收藏夹计数.

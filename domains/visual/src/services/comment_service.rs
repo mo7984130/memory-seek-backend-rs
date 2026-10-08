@@ -102,8 +102,6 @@ impl CommentService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "comment_cleanup",
-    owns = ["CommentMapper", "CommentLikeMapper"],
-    method = on_visual_delete,
 )]
 impl CommentService {
     async fn on_visual_delete(
