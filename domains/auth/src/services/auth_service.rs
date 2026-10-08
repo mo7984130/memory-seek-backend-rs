@@ -16,26 +16,12 @@ use common_metrics::metrics_name;
 use common_redis::RedisExt;
 use constants::RedisKeys;
 use constants::redis_keys;
-use std::sync::LazyLock;
-use tokio::sync::Semaphore;
 use tokio::task::{self, spawn_blocking};
 use types_identity::auth::user::UserId;
 use types_identity::auth::{
     LoginRequest, LoginResponse, RefreshAccessTokenResponse, RegisterRequest, SendEmailCodeRequest,
 };
 use types_identity::user::UserInfo;
-
-/// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
-static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
-    Semaphore::new(
-        std::thread::available_parallelism()
-            .expect("获取可用并行数错误")
-            .into(),
-    )
-});
-
-/// 邮件发送并发信号量，限制同时发送的邮件数量，防止 SMTP 连接耗尽
-static EMAIL_SEND_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(16));
 
 /// 用户登录
 ///
@@ -87,7 +73,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     // 校验密码
     // 使用信号量限制同时校验的数量
     let old_alg = {
-        let _permit = PASSWORD_VERIFY_SEM
+        let _permit = common_crypto::password_verify_semaphore()
             .acquire()
             .timed(metrics_name!("acquire_permit"))
             .await
@@ -257,7 +243,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
 /// 发送邮箱验证码
 ///
 /// 生成 6 位大写字母+数字验证码，存入 Redis（有效期 10 分钟），
-/// 然后通过邮件客户端发送至目标邮箱。使用信号量限制并发邮件发送数量。
+/// 然后通过邮件客户端发送至目标邮箱。
 ///
 /// # 参数
 /// - `state`: 认证服务状态，包含 Redis 连接池和邮件客户端
@@ -292,25 +278,17 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
         .into_contextual()?;
 
     // 发送邮件
-    {
-        let _permit = EMAIL_SEND_SEM
-            .acquire()
-            .timed(metrics_name!("acquire_permit"))
-            .await
-            .into_contextual()?;
+    let html_body = format!(
+        "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 {} 分钟。</p>",
+        code,
+        EMAIL_CODE_EXPIRE.as_secs() / 60
+    );
 
-        let html_body = format!(
-            "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 {} 分钟。</p>",
-            code,
-            EMAIL_CODE_EXPIRE.as_secs() / 60
-        );
-
-        state
-            .email_client
-            .send_message(&req.email, "寻忆邮箱验证码", html_body)
-            .timed(metrics_name!("send_message"))
-            .await?;
-    }
+    state
+        .email_client
+        .send_message(&req.email, "寻忆邮箱验证码", html_body)
+        .timed(metrics_name!("send_message"))
+        .await?;
 
     Ok(())
 }

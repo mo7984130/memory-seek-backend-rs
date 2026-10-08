@@ -12,8 +12,6 @@ use common_redis::RedisExt;
 use constants::{PasswordHasher, RedisKeys};
 use file_validator::FileValidator;
 use sea_orm::sqlx::types::uuid;
-use std::sync::LazyLock;
-use tokio::sync::Semaphore;
 use tokio::task::spawn_blocking;
 
 use crate::UserState;
@@ -25,15 +23,6 @@ use types_identity::user::{
 use types_visual_token::{VisualToken, VisualTokenStr};
 
 use crate::config::{GENERATE_INVITER_CODE_MAX_RETRY, INVITER_CODE_LEN, INVITER_CODE_TTL};
-
-/// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
-static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
-    Semaphore::new(
-        std::thread::available_parallelism()
-            .expect("获取可用并行数错误")
-            .into(),
-    )
-});
 
 /// 获取用户个人信息
 ///
@@ -231,7 +220,7 @@ pub async fn change_password(
     let old_password = state.repo.query_password_hash(user_id).await?;
 
     // 获取信号量许可，限制并发密码验证
-    let _permit = PASSWORD_VERIFY_SEM
+    let _permit = common_crypto::password_verify_semaphore()
         .acquire()
         .timed(metrics_name!("acquire_permit"))
         .await

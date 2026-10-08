@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use bcrypt;
@@ -6,6 +7,25 @@ use common_core::error::contextual::ext::ResultExt;
 use common_core::error::{AppError, ContextualError, contextual::Result};
 use password_hash::SaltString;
 use password_hash::rand_core::OsRng;
+use tokio::sync::Semaphore;
+
+/// 全进程共享的密码验证并发信号量:上限为可用并行数,防止 CPU 密集的哈希抢占 runtime。
+///
+/// auth / user 等模块共享它,确保跨模块的密码哈希总并发受同一上限约束。
+static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
+    Semaphore::new(
+        std::thread::available_parallelism()
+            .expect("获取可用并行数错误")
+            .into(),
+    )
+});
+
+/// 获取全局密码验证并发信号量。
+///
+/// 调用方在 CPU 密集的密码哈希前 `acquire()` 一个许可,drop 时释放。
+pub fn password_verify_semaphore() -> &'static Semaphore {
+    &PASSWORD_VERIFY_SEM
+}
 
 /// 哈希算法类型枚举
 #[derive(Debug, Clone, PartialEq)]
