@@ -11,6 +11,7 @@ use common_core::error::{AppError, ContextualError};
 use common_core::time::{after, now};
 use common_core::{ext::ResultInspectErrAsync, ext::ToOk};
 use common_crypto::{HashAlgorithm, rand_utils};
+use common_db::db_transaction;
 use common_metrics::MetricsTimerExt;
 use common_metrics::metrics_name;
 use common_redis::RedisExt;
@@ -86,10 +87,9 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         })
         .timed(metrics_name!("verify_password"))
         .await
-        .into_contextual()?;
-        let verify_result = result?;
+        .into_contextual()??;
 
-        if !verify_result.0 {
+        if !result.0 {
             return Err(ContextualError::warn_without_source(
                 "invalid_password",
                 "用户登录时密码错误",
@@ -98,11 +98,10 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
             .emit());
         }
 
-        verify_result.1
+        result.1
     };
 
-    // 检查是否需要迁移哈希算法（xxx -> argon2id）
-    // 登录成功后异步迁移，不影响登录响应时间
+    // 检查是否需要迁移哈希算法
     if constants::PasswordHasher != old_alg {
         let password_for_migration = req.password.clone();
         let password_result =
@@ -130,26 +129,33 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         .await
         .into_contextual()?;
 
-    let updated_user = AuthMapper::update_refresh_token(
-        &state.db,
-        user.id,
-        new_refresh_token.clone(),
-        new_refresh_token_expires_at,
-    )
-    .timed(metrics_name!("db_update"))
-    .await
-    .inspect_err_async(|_| async {
-        state
-            .redis
-            .del(RedisKeys::auth::user_access_token(user.id))
-            .await
-            .into_contextual()
-            .emit_if_err();
+    let user = db_transaction!(&state.db, |txn| {
+        let user = AuthMapper::update_refresh_token(
+            &state.db,
+            user.id,
+            new_refresh_token.clone(),
+            new_refresh_token_expires_at,
+        )
+        .timed(metrics_name!("db_update"))
+        .await
+        .inspect_err_async(|_| async {
+            state
+                .redis
+                .del(RedisKeys::auth::user_access_token(user.id))
+                .await
+                .into_contextual()
+                .emit_if_err();
+        })
+        .await?;
+
+        AuditRecorder::append(txn, AuditEvent::new("auth.user_login").with_actor(user.id)).await?;
+
+        Ok(user)
     })
     .await?;
 
     // 返回 LoginResult（包含用户信息和令牌）
-    let user_info = UserInfo::from_with_token(updated_user);
+    let user_info = UserInfo::from_with_token(user);
     Ok(LoginResponse {
         user: user_info,
         access_token: new_access_token,
@@ -243,7 +249,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
 /// 发送邮箱验证码
 ///
 /// 生成 6 位大写字母+数字验证码，存入 Redis（有效期 10 分钟），
-/// 然后通过邮件客户端发送至目标邮箱。
+/// 然后通过邮件客户端发送至目标邮箱。使用信号量限制并发邮件发送数量。
 ///
 /// # 参数
 /// - `state`: 认证服务状态，包含 Redis 连接池和邮件客户端
