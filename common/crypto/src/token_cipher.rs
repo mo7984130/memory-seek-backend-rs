@@ -25,10 +25,11 @@ pub fn init_token_cipher(config: &TokenCipherConfig) -> &'static TokenCipher {
 }
 
 /// 获取全局 token 加密器
+#[inline]
 pub fn token_cipher() -> &'static TokenCipher {
     TOKEN_CIPHER
         .get()
-        .expect("token_cipher 未初始化，请先调用 common::utils::init_token_cipher")
+        .expect("token_cipher 未初始化，请先调用 init_token_cipher")
 }
 
 pub struct TokenCipher {
