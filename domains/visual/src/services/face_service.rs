@@ -585,7 +585,7 @@ impl FaceService {
         visual_id: VisualId,
         faces: Vec<face::NewFaceRecord>,
     ) -> common_core::Result<()> {
-        common_db::db_transaction!(contextual & state.db, |txn| {
+        common_db::db_transaction!(&state.db, |txn| {
             // 任务在检测期间被删(影像被删)则不落库
             if !FaceTaskMapper::mark_done(txn, visual_id).await? {
                 return Ok(());

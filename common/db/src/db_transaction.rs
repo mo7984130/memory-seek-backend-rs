@@ -17,29 +17,8 @@
 ///     .await
 /// }
 /// ```
-///
-/// `contextual` 形式用于事务体已携带 `ContextualError`（延迟到 service 边界记录）的场景：
-/// 事务体错误原样透传，不再包装为 `db_transaction_err`。
-///
-/// ```no_run
-/// use common::{ContextualResult, db_transaction};
-/// use sea_orm::DatabaseConnection;
-///
-/// async fn update(db: &DatabaseConnection) -> ContextualResult<()> {
-///     db_transaction!(contextual db, |txn| {
-///         let _ = txn;
-///         Ok(())
-///     })
-///     .await
-/// }
-/// ```
 #[macro_export]
 macro_rules! db_transaction {
-    (contextual $db:expr, |$txn:ident| $body:block) => {
-        $crate::utils::DbUtils::write_contextual($db, move |$txn| {
-            ::std::boxed::Box::pin(async move $body)
-        })
-    };
     ($db:expr, |$txn:ident| $body:block) => {
         async {
             let transaction = ::sea_orm::TransactionTrait::begin($db)
@@ -60,31 +39,25 @@ macro_rules! db_transaction {
 
             match result {
                 Ok(value) => {
-                    transaction
-                        .commit()
-                        .await
-                        .map_err(|error| {
-                            $crate::error::ContextualError::error(
-                                "db_commit_err",
-                                "提交数据库事务失败",
-                                error,
-                                $crate::error::AppError::InternalServerError,
-                            )
-                        })?;
+                    transaction.commit().await.map_err(|error| {
+                        $crate::error::ContextualError::error(
+                            "db_commit_err",
+                            "提交数据库事务失败",
+                            error,
+                            $crate::error::AppError::InternalServerError,
+                        )
+                    })?;
                     Ok(value)
                 }
                 Err(error) => {
-                    transaction
-                        .rollback()
-                        .await
-                        .map_err(|error| {
-                            $crate::error::ContextualError::error(
-                                "db_rollback_err",
-                                "回滚数据库事务失败",
-                                error,
-                                $crate::error::AppError::InternalServerError,
-                            )
-                        })?;
+                    transaction.rollback().await.map_err(|error| {
+                        $crate::error::ContextualError::error(
+                            "db_rollback_err",
+                            "回滚数据库事务失败",
+                            error,
+                            $crate::error::AppError::InternalServerError,
+                        )
+                    })?;
                     Err(error)
                 }
             }

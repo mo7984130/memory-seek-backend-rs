@@ -1,33 +1,9 @@
-use std::pin::Pin;
-
 use common_core::DbConn;
 use common_core::Result;
-use common_core::error::{AppError, ContextualError, contextual};
-use sea_orm::{DatabaseConnection, DatabaseTransaction, TransactionError, TransactionTrait};
 
 pub struct DbUtils;
 
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 impl DbUtils {
-    /// 在下层执行事务，但把连接和事务错误延迟到 service 边界再记录。
-    pub async fn write_contextual<F, T>(db: &DatabaseConnection, block: F) -> contextual::Result<T>
-    where
-        F: for<'a> FnOnce(&'a DatabaseTransaction) -> BoxFuture<'a, contextual::Result<T>> + Send,
-        T: Send,
-    {
-        db.transaction(|txn| block(txn))
-            .await
-            .map_err(|error| match error {
-                TransactionError::Connection(error) => ContextualError::error(
-                    "db_conn_err",
-                    "获取数据库连接错误",
-                    error,
-                    AppError::InternalServerError,
-                ),
-                TransactionError::Transaction(error) => error,
-            })
-    }
-
     pub async fn lock_two_ordered<'a, DB, Id, T, F, Fut>(
         db: &'a DB,
         id1: Id,

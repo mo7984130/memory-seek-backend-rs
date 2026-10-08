@@ -180,7 +180,7 @@ impl VisualRepo {
 
     /// 插入影像.
     pub async fn insert_visual(state: &VisualState, visual: NewVisualRecord) -> Result<Model> {
-        db_transaction!(contextual & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             let visual: ActiveModel = visual.into();
             let visual = visual.insert(txn).await?;
             AuditRecorder::append(

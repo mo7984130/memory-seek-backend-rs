@@ -89,7 +89,7 @@ impl UserRepo {
     /// 修改用户昵称，并失效用户信息缓存（L1 + L2）
     pub async fn change_nickname(&self, user_id: UserId, new_nickname: String) -> Result<String> {
         let nickname_for_update = new_nickname.clone();
-        db_transaction!(contextual & self.db, |txn| {
+        db_transaction!(&self.db, |txn| {
             UserMapper::update_nickname(txn, user_id, &nickname_for_update)
                 .timed(metrics_name!("db_update"))
                 .await?;
@@ -111,7 +111,7 @@ impl UserRepo {
 
     /// 在事务内更新头像，返回旧头像 key（由调用方决定是否删除旧文件）
     pub async fn update_avatar(&self, user_id: UserId, new_key: String) -> Result<Option<String>> {
-        let old_key = db_transaction!(contextual & self.db, |txn| {
+        let old_key = db_transaction!(&self.db, |txn| {
             let old_key = UserMapper::update_avatar(txn, user_id, new_key).await?;
             AuditRecorder::append(
                 txn,
@@ -139,7 +139,7 @@ impl UserRepo {
 
     /// 更新用户密码哈希
     pub async fn update_password(&self, user_id: UserId, new_password_hash: String) -> Result<()> {
-        db_transaction!(contextual & self.db, |txn| {
+        db_transaction!(&self.db, |txn| {
             UserMapper::update_password(txn, user_id, new_password_hash).await?;
             AuditRecorder::append(
                 txn,
@@ -155,7 +155,7 @@ impl UserRepo {
 
     /// 清除 refresh_token，并在同一事务中追加登出审计事件
     pub async fn clear_refresh_token(&self, user_id: UserId) -> Result<()> {
-        db_transaction!(contextual & self.db, |txn| {
+        db_transaction!(&self.db, |txn| {
             UserMapper::clear_refresh_token(txn, user_id).await?;
             AuditRecorder::append(
                 txn,

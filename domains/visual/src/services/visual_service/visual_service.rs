@@ -302,7 +302,7 @@ impl VisualService {
             let db = state.db.clone();
             let token = token.clone();
             tokio::spawn(async move {
-                common_db::db_transaction!(contextual & db, |txn| {
+                common_db::db_transaction!(&db, |txn| {
                     let Some(visual_id) =
                         VisualMapper::query_visual_id_by_file_id(txn, &token.file_id).await?
                     else {

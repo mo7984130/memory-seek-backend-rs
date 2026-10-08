@@ -33,7 +33,7 @@ impl PersonRepo {
         initials: Option<String>,
         user_id: UserId,
     ) -> Result<()> {
-        db_transaction!(contextual & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             let mut update_person = UpdatePersonRecord::new(id);
             update_person.name = Changed(name.clone());
             update_person.name_initials = Changed(initials.clone());
