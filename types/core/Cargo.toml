@@ -7,7 +7,7 @@ description = "跨上下文共享的领域通用语言: 强类型 ID 与解析�
 [features]
 default = []
 ts = ["dep:ts-rs"]
-orm = ["dep:sea-orm"]
+orm = ["dep:sea-orm", "common-core/sea-orm"]
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }

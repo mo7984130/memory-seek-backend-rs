@@ -5,5 +5,7 @@ edition = "2024"
 description = "Redis 访问层: 连接池与常用命令扩展"
 
 [dependencies]
+common-core = { path = "../core", features = ["redis"] }
+
 redis.workspace = true
 deadpool-redis.workspace = true

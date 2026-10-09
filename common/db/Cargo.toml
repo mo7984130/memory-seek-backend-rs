@@ -5,7 +5,7 @@ edition = "2024"
 description = "关系型持久化能力: 连接工具、表元数据、事务管道与事务宏"
 
 [dependencies]
-common-core.path = "../core"
+common-core = { path = "../core", features = ["sea-orm"] }
 
 async-trait.workspace = true
 sea-orm.workspace = true

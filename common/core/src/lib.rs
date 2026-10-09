@@ -3,7 +3,8 @@
 //! 这是所有其它能力 crate 与域契约 crate 的共同底座, 因此保持最稳定、最少的直接依赖:
 //! - [`error`]：`AppError` / `ContextualError` 与各外部错误类型的 `From` 实现
 //!   (孤儿规则决定它们必须与错误类型同 crate, 故 sea-orm / redis / axum / tokio
-//!   的转换 impl 也在这里; axum 响应 impl 在需要时由上层 crate 提供)
+//!   的转换 impl 也在这里; axum 响应 impl 在需要时由上层 crate 提供;
+//!   sea-orm / redis 转换分别受 `sea-orm` / `redis` feature 门控)
 //! - [`time`]：`DateTime` / `now` / `after`
 //! - [`ext`]：`Result` / `Option` 组合辅助 trait
 //! - [`types`]：`HasChanged`、`CursorPage` 等通用值类型
@@ -26,7 +27,8 @@ pub mod r;
 
 pub use error::{AppError, ContextualError, ContextualResult, Result};
 
-/// sea-orm 连接抽象的重导出(实体与仓储代码常用别名)。
+/// sea-orm 连接抽象的重导出(实体与仓储代码常用别名,`sea-orm` feature)。
+#[cfg(feature = "sea-orm")]
 pub use sea_orm::ConnectionTrait as DbConn;
 
 mod temp_file;
