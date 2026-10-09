@@ -21,8 +21,10 @@ pub mod types;
 #[cfg(any(test, feature = "id-gen"))]
 pub mod snowflake;
 
-/// 统一 API 响应格式 `R`(axum 适配层共用)。
-#[cfg(feature = "axum")]
+/// 统一 API 响应格式 `R`。
+///
+/// 结构体本身与 `axum` 无关,仅 `IntoResponse` 实现受 `axum` feature 门控,
+/// 便于客户端(如 `memory-seek-api-rs`)在无 `axum` 依赖下复用其反序列化能力。
 pub mod r;
 
 pub use error::{AppError, ContextualError, ContextualResult, Result};

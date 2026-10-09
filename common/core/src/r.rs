@@ -1,3 +1,4 @@
+#[cfg(feature = "axum")]
 use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 
@@ -5,7 +6,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// 所有接口使用此结构体作为响应载体，JSON 序列化后字段名为驼峰命名。
 /// 成功时包含 `code` 和 `data`，失败时包含 `code` 和 `msg`。
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "ts", ts(export, export_to = "common/"))]
@@ -55,6 +56,7 @@ impl R<()> {
     }
 }
 
+#[cfg(feature = "axum")]
 impl<T> IntoResponse for R<T>
 where
     T: Serialize,
