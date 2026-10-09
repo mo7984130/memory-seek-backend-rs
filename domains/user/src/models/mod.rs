@@ -15,10 +15,10 @@ pub struct UserBriefRow {
 impl UserBriefRow {
     /// 转换为用户摘要视图，头像 token 按浏览者签发
     pub fn into_brief_view(self, viewer: UserId) -> UserBriefView {
-        let avatar_token: Option<VisualTokenStr> = match self.avatar_file_id {
-            Some(file_id) => Some(VisualToken::image_thumbnail(viewer, file_id).into()),
-            None => None,
-        };
+        let avatar_token: Option<VisualTokenStr> = self
+            .avatar_file_id
+            .map(|file_id| VisualToken::image_thumbnail(viewer, file_id))
+            .map(VisualTokenStr::from);
 
         UserBriefView {
             user_id: self.user_id,
