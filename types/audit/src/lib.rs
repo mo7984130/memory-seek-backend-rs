@@ -10,8 +10,8 @@ pub use model::*;
 
 pub use types_core::AuditId;
 /// DTO 声明宏(定义在共享内核 `types-core`,此处重导出以便本 crate 的 DTO 使用
-/// `crate::in_dto!` / `crate::out_dto!` 路径)。
-pub use types_core::{in_dto, out_dto};
+/// `crate::dto!` 路径)。
+pub use types_core::dto;
 
 /// schema 前缀自我登记: `init_db` 按前缀逐个同步表结构。
 #[cfg(feature = "orm")]

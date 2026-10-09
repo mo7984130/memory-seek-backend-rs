@@ -3,7 +3,7 @@
 use super::validators::*;
 use common_core::time::DateTime;
 
-crate::in_dto!(LoginRequest, "auth/", serialize; {
+crate::dto!(LoginRequest, "auth/"; {
     #[validate(custom(function = "validate_account"))]
     pub account: String,
 
@@ -11,7 +11,7 @@ crate::in_dto!(LoginRequest, "auth/", serialize; {
     pub password: String,
 });
 
-crate::out_dto!(LoginResponse, "auth/"; {
+crate::dto!(LoginResponse, "auth/"; {
     pub user: crate::user::models::UserInfo,
     pub access_token: String,
     pub access_token_expire_at: DateTime,
@@ -19,14 +19,14 @@ crate::out_dto!(LoginResponse, "auth/"; {
     pub refresh_token_expire_at: DateTime,
 });
 
-crate::out_dto!(RefreshAccessTokenResponse, "auth/"; {
+crate::dto!(RefreshAccessTokenResponse, "auth/"; {
     /// 访问令牌
     pub access_token: String,
     /// 访问令牌过期时间
     pub access_token_expire_at: DateTime,
 });
 
-crate::in_dto!(RegisterRequest, "auth/", serialize; {
+crate::dto!(RegisterRequest, "auth/"; {
     /// 用户名
     #[validate(custom(function = "validate_username"))]
     pub username: String,
@@ -58,7 +58,7 @@ crate::in_dto!(RegisterRequest, "auth/", serialize; {
     pub email_verify_code: String,
 });
 
-crate::in_dto!(SendEmailCodeRequest, "auth/", serialize; {
+crate::dto!(SendEmailCodeRequest, "auth/"; {
     /// 邮箱
     #[validate(custom(function = "validate_email"))]
     pub email: String,

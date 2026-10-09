@@ -9,10 +9,10 @@ pub mod auth;
 pub mod user;
 pub mod validators;
 
-/// DTO 声明宏(定义在共享内核 `types-core`):本 crate 的 DTO 以 `crate::in_dto!`
+/// DTO 声明宏(定义在共享内核 `types-core`):本 crate 的 DTO 以 `crate::dto!`
 /// 等路径展开 —— 展开处的 `ts` feature 与 `serde` / `validator` / `ts-rs` 依赖
 /// 由本 crate 提供。
-pub use types_core::{in_dto, out_dto, validated_newtype};
+pub use types_core::{dto, validated_newtype};
 
 /// schema 前缀自我登记: `auth_user` 表由 `init_db` 同步。
 #[cfg(feature = "orm")]

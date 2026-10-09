@@ -1,13 +1,13 @@
 //! 审计查询接口的请求与响应 DTO。
 
 use common_core::time::DateTime;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use types_core::UserId;
 use types_core::cursor::TimeIdCursor;
 
 use crate::{AuditId, AuditRecord};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "ts", ts(export, export_to = "audit/"))]
@@ -29,7 +29,7 @@ impl AuditGranularity {
     }
 }
 
-crate::in_dto!(AuditStatsQuery, "audit/", serde_default, docs = "审计统计查询参数"; {
+crate::dto!(AuditStatsQuery, "audit/", serde_default, docs = "审计统计查询参数"; {
     pub event_type: Option<String>,
     pub target_type: Option<String>,
     pub start: Option<DateTime>,
@@ -50,20 +50,20 @@ impl Default for AuditStatsQuery {
     }
 }
 
-crate::out_dto!(AuditStatsItem, "audit/", docs = "审计统计结果项"; {
+crate::dto!(AuditStatsItem, "audit/", docs = "审计统计结果项"; {
     pub bucket: DateTime,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub count: i64,
 });
 
-crate::out_dto!(AuditTopItem, "audit/", docs = "审计热门目标结果项"; {
+crate::dto!(AuditTopItem, "audit/", docs = "审计热门目标结果项"; {
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub target_id: i64,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub count: i64,
 });
 
-crate::in_dto!(AuditTopQuery, "audit/", serde_default, docs = "审计热门目标查询参数"; {
+crate::dto!(AuditTopQuery, "audit/", serde_default, docs = "审计热门目标查询参数"; {
     pub event_type: String,
     pub target_type: String,
     #[validate(range(min = 1, max = 100, message = "limit 在 1 到 100 之间"))]
@@ -83,7 +83,7 @@ impl Default for AuditTopQuery {
     }
 }
 
-crate::in_dto!(AuditQuery, "audit/", serde_default, docs = "审计流水查询参数"; {
+crate::dto!(AuditQuery, "audit/", serde_default, docs = "审计流水查询参数"; {
     pub event_type: Option<String>,
     pub target_type: Option<String>,
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
@@ -111,7 +111,7 @@ impl Default for AuditQuery {
     }
 }
 
-crate::out_dto!(AuditItem, "audit/", docs = "审计流水响应项"; {
+crate::dto!(AuditItem, "audit/", docs = "审计流水响应项"; {
     pub id: AuditId,
     pub event_type: String,
     pub actor_id: Option<UserId>,

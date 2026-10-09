@@ -2,8 +2,7 @@
 //!
 //! - [`id_type!`]：强类型主键 ID
 //! - [`validated_newtype!`]：校验型 newtype(非空 + 上限)
-//! - [`out_dto!`]：输出 DTO(读模型 / 结果 / 响应)
-//! - [`in_dto!`]：输入 DTO(参数 / 请求)
+//! - [`dto!`]：DTO(请求 / 响应)统一声明
 //!
 //! ⚠️ 这些宏体内的 `#[cfg_attr(feature = "orm" / "ts", ...)]` 按**展开处所在
 //! crate** 的 feature 解析,展开处还需能解析宏内引用的路径:
@@ -260,106 +259,78 @@ macro_rules! validated_newtype {
     };
 }
 
-/// 输出 DTO（读模型 / 结果 / 响应）统一声明
+/// DTO 声明宏:请求 / 响应统一声明
 ///
-/// 统一生成：`Serialize` + `Deserialize` + `Clone` + `camelCase` + TS 导出
-/// （可带 `rename`、`docs` 与额外 derive）。字段（含字段级属性）原样透传。
-/// 注意：`docs` 必须紧跟 `rename` 之后（或作为第一个选项）。
+/// 统一生成完整能力集:`Debug` + `Clone` + `Serialize` + `Deserialize` +
+/// `Validate`,外加 `camelCase` 与 TS 导出。数据在线上双向流动(服务端反序列化
+/// 请求 / 序列化响应,客户端序列化请求 / 反序列化响应),故不再区分
+/// 「输入 / 输出」方向:一律派生双向能力,杜绝某一方向遗漏。
 ///
-/// 用法：
+/// 字段(含字段级属性)原样透传。
+///
+/// 选项(逗号分隔、顺序任意、均可省略):
+/// - `rename = "X"`:TS 导出重命名(仅 `ts` feature 生效)
+/// - `serde_default`:追加容器级 `#[serde(default)]`
+/// - `docs = "..."`:结构体级文档注释
+/// - 额外 derive 标识符(如 `Default`):追加到 derive 列表末尾
+///
+/// 用法:
 /// ```ignore
-/// out_dto!(VisualView, "visual/", rename = "Visual"; { ... });
-/// out_dto!(CollectionVisualAddBatchResult, "visual/", Default; { ... });
-/// out_dto!(UserInfo, "user/", Debug; { ... });
-/// out_dto!(FaceBBox, "visual/", rename = "FaceBBox", docs = "人脸边界框", Copy; { ... });
+/// dto!(VisualView, "visual/", rename = "Visual"; { pub id: VisualId });
+/// dto!(CollectionVisualAddBatchResult, "visual/", Default; { pub new_visual_count: u64 });
+/// dto!(ChangePasswordParam, "user/", docs = "修改密码参数"; { pub old: String });
+/// dto!(VisualCursorParam, "visual/", serde_default; { pub size: u64 });
 /// ```
 #[macro_export]
-macro_rules! out_dto {
-    // 带 TS rename + docs（读模型 View）
-    ($name:ident, $ts_dir:literal, rename = $rename:literal, docs = $docs:literal $(, $extra:ident)*; { $($fields:tt)* }) => {
-        #[doc = $docs]
-        #[derive(serde::Serialize, serde::Deserialize, Clone $(, $extra)*)]
-        #[serde(rename_all = "camelCase")]
-        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-        #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir, rename = $rename))]
-        pub struct $name { $($fields)* }
+macro_rules! dto {
+    // ===== 入口:含选项 =====
+    ($name:ident, $ts_dir:literal, $($rest:tt)+) => {
+        $crate::dto! { @acc $name, $ts_dir, [rename_all = "camelCase"], [], [], [] ; $($rest)+ }
     };
-    // 带 TS rename（读模型 View）
-    ($name:ident, $ts_dir:literal, rename = $rename:literal $(, $extra:ident)*; { $($fields:tt)* }) => {
-        #[derive(serde::Serialize, serde::Deserialize, Clone $(, $extra)*)]
-        #[serde(rename_all = "camelCase")]
-        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-        #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir, rename = $rename))]
-        pub struct $name { $($fields)* }
+    // ===== 入口:无选项 =====
+    ($name:ident, $ts_dir:literal; { $($fields:tt)* }) => {
+        $crate::dto! { @acc $name, $ts_dir, [rename_all = "camelCase"], [], [], [] ; ; { $($fields)* } }
     };
-    // 不带 rename + docs（Result / Response）
-    ($name:ident, $ts_dir:literal, docs = $docs:literal $(, $extra:ident)*; { $($fields:tt)* }) => {
-        #[doc = $docs]
-        #[derive(serde::Serialize, serde::Deserialize, Clone $(, $extra)*)]
-        #[serde(rename_all = "camelCase")]
-        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-        #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir))]
-        pub struct $name { $($fields)* }
-    };
-    // 不带 rename（Result / Response）
-    ($name:ident, $ts_dir:literal $(, $extra:ident)*; { $($fields:tt)* }) => {
-        #[derive(serde::Serialize, serde::Deserialize, Clone $(, $extra)*)]
-        #[serde(rename_all = "camelCase")]
-        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-        #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir))]
-        pub struct $name { $($fields)* }
-    };
-}
 
-/// 输入 DTO（参数 / 请求）统一声明
-///
-/// 统一生成：`Debug` + `Deserialize` + `Validate` + `camelCase` + TS 导出。
-/// 可选 `serialize`（额外实现 `Serialize`）、`serde_default`（`#[serde(default)]`）、
-/// `docs`（struct 级文档，写在其它选项之后）。字段（含字段级属性）原样透传。
-///
-/// 用法：
-/// ```ignore
-/// in_dto!(CollectionCreateParam, "visual/"; { ... });
-/// in_dto!(VisualCursorParam, "visual/", serde_default; { ... });
-/// in_dto!(ChangePasswordParam, "user/", serialize; { ... });
-/// in_dto!(UploadVisualParam, "visual/", serialize, docs = "上传影像参数"; { ... });
-/// ```
-#[macro_export]
-macro_rules! in_dto {
-    // serialize + serde_default
-    ($name:ident, $ts_dir:literal, serialize, serde_default $(, docs = $docs:literal)?; { $($fields:tt)* }) => {
-        $(#[doc = $docs])?
-        #[derive(Debug, serde::Deserialize, serde::Serialize, validator::Validate)]
-        #[serde(rename_all = "camelCase", default)]
-        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-        #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir))]
-        pub struct $name { $($fields)* }
+    // ===== 累积:rename =====
+    (@acc $name:ident, $dir:literal, [$($s:tt)*], [$($t:tt)*], [$($d:tt)*], [$($e:tt)*] ; rename = $rename:literal, $($rest:tt)*) => {
+        $crate::dto! { @acc $name, $dir, [$($s)*], [$($t)*, rename = $rename], [$($d)*], [$($e)*] ; $($rest)* }
     };
-    // serialize
-    ($name:ident, $ts_dir:literal, serialize $(, docs = $docs:literal)?; { $($fields:tt)* }) => {
-        $(#[doc = $docs])?
-        #[derive(Debug, serde::Deserialize, serde::Serialize, validator::Validate)]
-        #[serde(rename_all = "camelCase")]
-        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-        #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir))]
-        pub struct $name { $($fields)* }
+    (@acc $name:ident, $dir:literal, [$($s:tt)*], [$($t:tt)*], [$($d:tt)*], [$($e:tt)*] ; rename = $rename:literal ; $($rest:tt)*) => {
+        $crate::dto! { @acc $name, $dir, [$($s)*], [$($t)*, rename = $rename], [$($d)*], [$($e)*] ; ; $($rest)* }
     };
-    // serde_default
-    ($name:ident, $ts_dir:literal, serde_default $(, docs = $docs:literal)?; { $($fields:tt)* }) => {
-        $(#[doc = $docs])?
-        #[derive(Debug, serde::Deserialize, validator::Validate)]
-        #[serde(rename_all = "camelCase", default)]
-        #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-        #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir))]
-        pub struct $name { $($fields)* }
+
+    // ===== 累积:serde_default =====
+    (@acc $name:ident, $dir:literal, [$($s:tt)*], [$($t:tt)*], [$($d:tt)*], [$($e:tt)*] ; serde_default, $($rest:tt)*) => {
+        $crate::dto! { @acc $name, $dir, [$($s)*, default], [$($t)*], [$($d)*], [$($e)*] ; $($rest)* }
     };
-    // 基础
-    ($name:ident, $ts_dir:literal $(, docs = $docs:literal)?; { $($fields:tt)* }) => {
-        $(#[doc = $docs])?
-        #[derive(Debug, serde::Deserialize, validator::Validate)]
-        #[serde(rename_all = "camelCase")]
+    (@acc $name:ident, $dir:literal, [$($s:tt)*], [$($t:tt)*], [$($d:tt)*], [$($e:tt)*] ; serde_default ; $($rest:tt)*) => {
+        $crate::dto! { @acc $name, $dir, [$($s)*, default], [$($t)*], [$($d)*], [$($e)*] ; ; $($rest)* }
+    };
+
+    // ===== 累积:docs =====
+    (@acc $name:ident, $dir:literal, [$($s:tt)*], [$($t:tt)*], [$($d:tt)*], [$($e:tt)*] ; docs = $doc:literal, $($rest:tt)*) => {
+        $crate::dto! { @acc $name, $dir, [$($s)*], [$($t)*], [#[doc = $doc]], [$($e)*] ; $($rest)* }
+    };
+    (@acc $name:ident, $dir:literal, [$($s:tt)*], [$($t:tt)*], [$($d:tt)*], [$($e:tt)*] ; docs = $doc:literal ; $($rest:tt)*) => {
+        $crate::dto! { @acc $name, $dir, [$($s)*], [$($t)*], [#[doc = $doc]], [$($e)*] ; ; $($rest)* }
+    };
+
+    // ===== 累积:额外 derive =====
+    (@acc $name:ident, $dir:literal, [$($s:tt)*], [$($t:tt)*], [$($d:tt)*], [$($e:tt)*] ; $extra:ident, $($rest:tt)*) => {
+        $crate::dto! { @acc $name, $dir, [$($s)*], [$($t)*], [$($d)*], [$($e)*, $extra] ; $($rest)* }
+    };
+    (@acc $name:ident, $dir:literal, [$($s:tt)*], [$($t:tt)*], [$($d:tt)*], [$($e:tt)*] ; $extra:ident ; $($rest:tt)*) => {
+        $crate::dto! { @acc $name, $dir, [$($s)*], [$($t)*], [$($d)*], [$($e)*, $extra] ; ; $($rest)* }
+    };
+
+    // ===== 终结:选项耗尽,剩余即结构体 =====
+    (@acc $name:ident, $dir:literal, [$($s:tt)*], [$($t:tt)*], [$($d:tt)*], [$($e:tt)*] ; ; { $($fields:tt)* }) => {
+        $($d)*
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, validator::Validate $($e)*)]
+        #[serde($($s)*)]
         #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-        #[cfg_attr(feature = "ts", ts(export, export_to = $ts_dir))]
+        #[cfg_attr(feature = "ts", ts(export, export_to = $dir $($t)*))]
         pub struct $name { $($fields)* }
     };
 }

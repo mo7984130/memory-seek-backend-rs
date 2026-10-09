@@ -24,10 +24,10 @@ pub use dto::*;
 pub use models::*;
 pub use visual_token::*;
 
-/// DTO 声明宏(定义在共享内核 `types-core`):本 crate 的 DTO 以 `crate::in_dto!`
+/// DTO 声明宏(定义在共享内核 `types-core`):本 crate 的 DTO 以 `crate::dto!`
 /// 等路径展开 —— 展开处的 `ts` feature 与 `serde` / `validator` / `ts-rs` /
 /// `derive_more` 依赖由本 crate 提供。
-pub use types_core::{in_dto, out_dto, validated_newtype};
+pub use types_core::{dto, validated_newtype};
 
 /// schema 前缀自我登记: 本 crate 的全部实体表由 `init_db` 同步。
 #[cfg(feature = "orm")]
