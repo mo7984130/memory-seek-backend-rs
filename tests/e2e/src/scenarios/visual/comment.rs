@@ -1,11 +1,9 @@
 //! 评论:`/visual/comment`。
 
 use common_core::types::CursorPage;
-use common_web::{ErrR, SucR};
+use memory_seek_api::{CommentContent, CommentPublishParam, Method, api};
 use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
+    TaskIndex, register_scenario,
     scenario::{Scenario, SetupMode, TeardownMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
@@ -18,39 +16,49 @@ use types_visual::visual as visual_entity;
 use types_visual::visual::VisualId;
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 use super::{Session, seed_visual, session};
 
 /// 在指定影像下发布评论, 返回视图。
 async fn publish(
-    ctx: &Context,
     session: &Session,
     visual_id: VisualId,
     content: &str,
-) -> Result<SucR<CommentView>, HttpError> {
-    ctx.client
-        .request(
-            reqwest::Method::POST,
-            &format!("/visual/comment/{visual_id}"),
-        )
-        .header("Authorization", &session.auth_header())
-        .json_unwrap(&json!({ "content": content }))
-        .send_checked()
-        .await?
-        .json::<SucR<CommentView>>()
-        .await
-        .map_err(HttpError::from)
+) -> Result<CommentView, E2eError> {
+    let param = CommentPublishParam {
+        content: CommentContent::new(content.to_owned()).expect("e2e 评论内容非空且不超限"),
+    };
+    Ok(api::visual::comment::publish_comment(session.client(), visual_id, &param).await?)
+}
+
+/// 幂等删除评论(收尾复用)。
+async fn delete_comment(
+    session: &Session,
+    visual_id: VisualId,
+    comment_id: CommentId,
+) -> Result<(), E2eError> {
+    crate::cleanup::idempotent(
+        api::visual::comment::delete_comment(session.client(), visual_id, comment_id).await,
+    )
 }
 
 /// 评论前置:登录 + 目标影像(种子影像 u=6)。
-/// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
-#[derive(Default)]
 pub struct CommentSetup {
     pub session: Session,
-    pub visual_id: i64,
+    pub visual_id: VisualId,
 }
 
-async fn comment_setup(ctx: &Context, task: &TaskIndex) -> Result<CommentSetup, HttpError> {
+impl Default for CommentSetup {
+    fn default() -> Self {
+        Self {
+            session: Session::default(),
+            visual_id: VisualId(0),
+        }
+    }
+}
+
+async fn comment_setup(ctx: &Context, task: &TaskIndex) -> Result<CommentSetup, E2eError> {
     comment_setup_on(ctx, task, 6).await
 }
 
@@ -62,14 +70,14 @@ async fn comment_setup_on(
     ctx: &Context,
     task: &TaskIndex,
     ordinal: u64,
-) -> Result<CommentSetup, HttpError> {
+) -> Result<CommentSetup, E2eError> {
     let session = session(ctx, task.index).await?;
     let visual = seed_visual(ctx, ordinal)
         .await
         .ok_or_else(super::seed_missing)?;
     Ok(CommentSetup {
         session,
-        visual_id: visual.id.0,
+        visual_id: visual.id,
     })
 }
 
@@ -80,9 +88,9 @@ pub struct PublishCommentScenario;
 impl Scenario for PublishCommentScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<CommentView>;
+    type Output = CommentView;
 
     type Setup = CommentSetup;
 
@@ -91,17 +99,11 @@ impl Scenario for PublishCommentScenario {
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        publish(
-            ctx,
-            &setup.session,
-            VisualId(setup.visual_id),
-            "e2e comment",
-        )
-        .await
+        publish(&setup.session, setup.visual_id, "e2e comment").await
     }
 
     async fn validate(
@@ -110,7 +112,7 @@ impl Scenario for PublishCommentScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let Some(row) = comment_entity::Entity::find_by_id(output.data.id)
+        let Some(row) = comment_entity::Entity::find_by_id(output.id)
             .one(&ctx.db)
             .await
             .unwrap()
@@ -118,9 +120,9 @@ impl Scenario for PublishCommentScenario {
             return Ok(false);
         };
         let row_ok = row.user_id == setup.session.user_id
-            && row.visual_id == VisualId(setup.visual_id)
+            && row.visual_id == setup.visual_id
             && row.content == "e2e comment";
-        let visual_ok = visual_entity::Entity::find_by_id(VisualId(setup.visual_id))
+        let visual_ok = visual_entity::Entity::find_by_id(setup.visual_id)
             .one(&ctx.db)
             .await
             .unwrap()
@@ -133,7 +135,7 @@ impl Scenario for PublishCommentScenario {
     const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
 
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         result: Option<Result<&Self::Output, &Self::Error>>,
@@ -141,13 +143,7 @@ impl Scenario for PublishCommentScenario {
         let Some(Ok(view)) = result else {
             return Ok(());
         };
-        crate::cleanup::delete(
-            ctx,
-            &format!("/visual/comment/{}/{}", setup.visual_id, view.data.id),
-            Some(&setup.session.auth_header()),
-            None,
-        )
-        .await
+        delete_comment(&setup.session, setup.visual_id, view.id).await
     }
 }
 
@@ -160,9 +156,9 @@ pub struct PublishCommentEmptyScenario;
 impl Scenario for PublishCommentEmptyScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = CommentSetup;
 
@@ -171,22 +167,19 @@ impl Scenario for PublishCommentEmptyScenario {
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(
-                reqwest::Method::POST,
-                &format!("/visual/comment/{}", setup.visual_id),
-            )
-            .header("Authorization", &setup.session.auth_header())
-            .json_unwrap(&json!({ "content": "" }))
+        // 空内容无法构造(类型化 `CommentContent` 在客户端即拒绝), 故走 raw 直接发非法载荷
+        let response = setup
+            .session
+            .client()
+            .raw(Method::POST, format!("/visual/comment/{}", setup.visual_id))
+            .json(&json!({ "content": "" }))
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -195,18 +188,27 @@ impl Scenario for PublishCommentEmptyScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
 register_scenario!(PublishCommentEmptyScenario);
 
 /// 评论列表前置:登录 + 目标影像 + 前置评论。
-#[derive(Default)]
 pub struct CommentListSetup {
     pub session: Session,
-    pub visual_id: i64,
-    pub comment_id: i64,
+    pub visual_id: VisualId,
+    pub comment_id: CommentId,
+}
+
+impl Default for CommentListSetup {
+    fn default() -> Self {
+        Self {
+            session: Session::default(),
+            visual_id: VisualId(0),
+            comment_id: CommentId(0),
+        }
+    }
 }
 
 /// 评论游标列表: 包含前置发表的评论。
@@ -216,9 +218,9 @@ pub struct GetCommentsScenario;
 impl Scenario for GetCommentsScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<CursorPage<CommentView, TimeIdCursor<CommentId>>>;
+    type Output = CursorPage<CommentView, TimeIdCursor<CommentId>>;
 
     type Setup = CommentListSetup;
 
@@ -226,38 +228,26 @@ impl Scenario for GetCommentsScenario {
         // 独占种子影像(ordinal 9): 本场景在 Task 粒度只建一条前置评论,
         // 与每轮都发表评论的 PublishComment 共用影像会让它被挤出首页
         let base = comment_setup_on(ctx, task, 9).await?;
-        let comment = publish(
-            ctx,
-            &base.session,
-            VisualId(base.visual_id),
-            "e2e list comment",
-        )
-        .await?
-        .data;
+        let comment = publish(&base.session, base.visual_id, "e2e list comment").await?;
         Ok(CommentListSetup {
             session: base.session,
             visual_id: base.visual_id,
-            comment_id: comment.id.0,
+            comment_id: comment.id,
         })
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(
-                reqwest::Method::GET,
-                &format!("/visual/comment/{}", setup.visual_id),
-            )
-            .header("Authorization", &setup.session.auth_header())
-            .query("size", "50")
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        Ok(api::visual::comment::get_comment_list(
+            setup.session.client(),
+            setup.visual_id,
+            None,
+            Some(50),
+        )
+        .await?)
     }
 
     async fn validate(
@@ -266,38 +256,37 @@ impl Scenario for GetCommentsScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output
-            .data
-            .records
-            .iter()
-            .any(|c| c.id.0 == setup.comment_id))
+        Ok(output.records.iter().any(|c| c.id == setup.comment_id))
     }
 
     /// 收尾: 删除 setup 阶段制造的前置评论
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         _result: Option<Result<&Self::Output, &Self::Error>>,
     ) -> Result<(), Self::Error> {
-        crate::cleanup::delete(
-            ctx,
-            &format!("/visual/comment/{}/{}", setup.visual_id, setup.comment_id),
-            Some(&setup.session.auth_header()),
-            None,
-        )
-        .await
+        delete_comment(&setup.session, setup.visual_id, setup.comment_id).await
     }
 }
 
 register_scenario!(GetCommentsScenario);
 
 /// 删除评论前置:登录 + 目标影像 + 前置评论。
-#[derive(Default)]
 pub struct CommentDeleteSetup {
     pub session: Session,
-    pub visual_id: i64,
-    pub comment_id: i64,
+    pub visual_id: VisualId,
+    pub comment_id: CommentId,
+}
+
+impl Default for CommentDeleteSetup {
+    fn default() -> Self {
+        Self {
+            session: Session::default(),
+            visual_id: VisualId(0),
+            comment_id: CommentId(0),
+        }
+    }
 }
 
 /// 删除评论: 评论记录消失。
@@ -307,9 +296,9 @@ pub struct DeleteCommentScenario;
 impl Scenario for DeleteCommentScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<()>;
+    type Output = ();
 
     type Setup = CommentDeleteSetup;
 
@@ -317,37 +306,25 @@ impl Scenario for DeleteCommentScenario {
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let base = comment_setup(ctx, task).await?;
-        let comment = publish(
-            ctx,
-            &base.session,
-            VisualId(base.visual_id),
-            "e2e delete comment",
-        )
-        .await?
-        .data;
+        let comment = publish(&base.session, base.visual_id, "e2e delete comment").await?;
         Ok(CommentDeleteSetup {
             session: base.session,
             visual_id: base.visual_id,
-            comment_id: comment.id.0,
+            comment_id: comment.id,
         })
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(
-                reqwest::Method::DELETE,
-                &format!("/visual/comment/{}/{}", setup.visual_id, setup.comment_id),
-            )
-            .header("Authorization", &setup.session.auth_header())
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        Ok(api::visual::comment::delete_comment(
+            setup.session.client(),
+            setup.visual_id,
+            setup.comment_id,
+        )
+        .await?)
     }
 
     async fn validate(
@@ -357,7 +334,7 @@ impl Scenario for DeleteCommentScenario {
         _output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         let gone = comment_entity::Entity::find()
-            .filter(comment_entity::Column::Id.eq(CommentId(setup.comment_id)))
+            .filter(comment_entity::Column::Id.eq(setup.comment_id))
             .one(&ctx.db)
             .await
             .unwrap()

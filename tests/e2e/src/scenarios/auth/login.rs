@@ -1,16 +1,10 @@
-use common_core::ext::ToOk;
-use common_web::{ErrR, SucR};
-use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
-    scenario::Scenario,
-};
+use memory_seek_api::api;
+use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, SelectExt};
-use serde_json::json;
-use types_identity::auth::{self, LoginResponse};
+use types_identity::auth::{self, LoginRequest, LoginResponse};
 
 use crate::context::Context;
+use crate::error::{E2eError, status};
 
 /// 登录成功: 复用种子用户 `loadtest_{index+1}`, 校验响应 token 与库中一致。
 #[derive(Default)]
@@ -18,9 +12,9 @@ pub struct LoginScenario;
 impl Scenario for LoginScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<LoginResponse>;
+    type Output = LoginResponse;
 
     type Setup = ();
 
@@ -29,17 +23,11 @@ impl Scenario for LoginScenario {
         task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/auth/login")
-            .json_unwrap(&json!({
-                "account": format!("loadtest_{}", task.index + 1),
-                "password": "Test123456"
-            }))
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await?
-            .to_ok()
+        let request = LoginRequest {
+            account: format!("loadtest_{}", task.index + 1),
+            password: "Test123456".to_owned(),
+        };
+        Ok(api::auth::login(&ctx.api_client(), &request).await?)
     }
 
     async fn validate(
@@ -48,13 +36,12 @@ impl Scenario for LoginScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        auth::user::Entity::find()
-            .filter(auth::user::Column::Id.eq(output.data.user.id))
-            .filter(auth::user::Column::RefreshToken.eq(&output.data.refresh_token))
+        Ok(auth::user::Entity::find()
+            .filter(auth::user::Column::Id.eq(output.user.id))
+            .filter(auth::user::Column::RefreshToken.eq(&output.refresh_token))
             .exists(&ctx.db)
             .await
-            .unwrap()
-            .to_ok()
+            .unwrap())
     }
 }
 
@@ -66,9 +53,9 @@ pub struct LoginWrongPasswordScenario;
 impl Scenario for LoginWrongPasswordScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -77,14 +64,11 @@ impl Scenario for LoginWrongPasswordScenario {
         _task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/auth/login")
-            .json_unwrap(&json!({ "account": "loadtest_1", "password": "WrongPass1" }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let request = LoginRequest {
+            account: "loadtest_1".to_owned(),
+            password: "WrongPass1".to_owned(),
+        };
+        status(api::auth::login(&ctx.api_client(), &request).await)
     }
 
     async fn validate(
@@ -93,7 +77,7 @@ impl Scenario for LoginWrongPasswordScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
@@ -105,9 +89,9 @@ pub struct LoginUnknownAccountScenario;
 impl Scenario for LoginUnknownAccountScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -116,17 +100,11 @@ impl Scenario for LoginUnknownAccountScenario {
         task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/auth/login")
-            .json_unwrap(&json!({
-                "account": format!("nobody_{}", task.index),
-                "password": "Test123456"
-            }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let request = LoginRequest {
+            account: format!("nobody_{}", task.index),
+            password: "Test123456".to_owned(),
+        };
+        status(api::auth::login(&ctx.api_client(), &request).await)
     }
 
     async fn validate(
@@ -135,7 +113,7 @@ impl Scenario for LoginUnknownAccountScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 

@@ -1687,6 +1687,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 name = "e2e"
 version = "0.8.0"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "blake3",
  "clap",
@@ -1697,11 +1698,13 @@ dependencies = [
  "constants",
  "deadpool-redis",
  "hex",
+ "memory-seek-api-rs",
  "memseek-test",
  "oss",
  "sea-orm",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -3206,6 +3209,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "memory-seek-api-rs"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-core",
+ "futures",
+ "http",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "types-audit",
+ "types-core",
+ "types-identity",
+ "types-visual",
+ "types-visual-token",
 ]
 
 [[package]]

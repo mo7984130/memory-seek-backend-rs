@@ -2,39 +2,38 @@
 //!
 //! crop token 本身携带 bbox 与源尺寸, 无需人脸数据; 直接对已上传影像构造即可。
 
-use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
-    scenario::Scenario,
-};
+use memory_seek_api::{VisualIds, api};
+use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use serde_json::json;
-use types_visual::dto::visual::VisualView;
 use types_visual::visual as visual_entity;
+use types_visual::visual::VisualId;
 use types_visual::{FaceBBox, ImageDimensions, VisualToken};
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 use super::{Session, session, unique_png, unique_tag};
 
 /// setup 阶段内部失败(取记录 / 加密失败)时返回的错误。
-fn setup_error() -> HttpError {
-    HttpError::Status {
-        status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-        method: reqwest::Method::GET,
-        url: "crop://setup".to_string(),
-        request_body: None,
-        response_body: None,
-    }
+fn setup_error() -> E2eError {
+    E2eError::internal("crop://setup")
 }
 
 /// 裁剪下载前置: 登录 + 上传唯一影像 + 构造 crop token。
-#[derive(Default)]
 pub struct CropSetup {
     pub crop_token: String,
-    pub visual_id: i64,
-    pub auth_header: String,
+    pub visual_id: VisualId,
+    pub session: Session,
+}
+
+impl Default for CropSetup {
+    fn default() -> Self {
+        Self {
+            crop_token: String::new(),
+            visual_id: VisualId(0),
+            session: Session::default(),
+        }
+    }
 }
 
 /// 人脸裁剪: 经裁剪处理后端(本地/OSS)产出 WebP。
@@ -44,7 +43,7 @@ pub struct DownloadImageCropScenario;
 impl Scenario for DownloadImageCropScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
     /// (状态码, content-type, 字节)
     type Output = (u16, Option<String>, Vec<u8>);
@@ -54,7 +53,7 @@ impl Scenario for DownloadImageCropScenario {
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session: Session = session(ctx, task.index).await?;
         let bytes = unique_png(&unique_tag(task));
-        let view: VisualView = super::upload(ctx, &session, bytes).await?.data;
+        let view = super::upload(&session, bytes).await?;
 
         // 取回 file_id 与尺寸, 用于构造携带 bbox 的 crop token
         let row = visual_entity::Entity::find()
@@ -83,8 +82,8 @@ impl Scenario for DownloadImageCropScenario {
 
         Ok(CropSetup {
             crop_token,
-            visual_id: view.id.0,
-            auth_header: session.auth_header(),
+            visual_id: view.id,
+            session,
         })
     }
 
@@ -93,22 +92,14 @@ impl Scenario for DownloadImageCropScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let resp = ctx
-            .client
-            .request(
-                reqwest::Method::GET,
-                &format!("/visual/{}", setup.crop_token),
-            )
-            .send()
-            .await?;
-        let status = resp.status().as_u16();
-        let content_type = resp
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
+        let response = api::visual::download(&ctx.api_client(), &setup.crop_token).await?;
+        let status = response.status.as_u16();
+        let content_type = response
+            .headers
+            .get("content-type")
             .and_then(|value| value.to_str().ok())
             .map(str::to_string);
-        let bytes = resp.bytes().await?.to_vec();
-        Ok((status, content_type, bytes))
+        Ok((status, content_type, response.body))
     }
 
     async fn validate(
@@ -128,18 +119,18 @@ impl Scenario for DownloadImageCropScenario {
 
     /// 收尾: 删除 setup 阶段上传的影像。
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         _result: Option<Result<&Self::Output, &Self::Error>>,
     ) -> Result<(), Self::Error> {
-        crate::cleanup::delete(
-            ctx,
-            "/visual",
-            Some(&setup.auth_header),
-            Some(json!({ "visualIds": [setup.visual_id] })),
+        crate::cleanup::idempotent(
+            api::visual::delete_visuals(
+                setup.session.client(),
+                VisualIds::new(vec![setup.visual_id]).expect("单元素影像列表恒合法"),
+            )
+            .await,
         )
-        .await
     }
 }
 

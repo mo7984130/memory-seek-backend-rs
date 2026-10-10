@@ -1,12 +1,12 @@
+use memory_seek_api::api;
 use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
+    TaskIndex, register_scenario,
     scenario::{Scenario, TeardownMode},
 };
-use serde_json::json;
+use types_identity::auth::SendEmailCodeRequest;
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 /// 发送邮箱验证码: 校验 MailHog 确实收到邮件, 且邮件 code 与 server
 /// 实际存储(Redis)的一致(真实链路投递)。
@@ -15,7 +15,7 @@ pub struct SendCodeScenario;
 impl Scenario for SendCodeScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
     type Output = String;
 
@@ -27,11 +27,10 @@ impl Scenario for SendCodeScenario {
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         let email = format!("e2e_{}@test.com", task.index);
-        ctx.client
-            .request(reqwest::Method::POST, "/auth/verification-codes")
-            .json_unwrap(&json!({ "email": email }))
-            .send_checked()
-            .await?;
+        let request = SendEmailCodeRequest {
+            email: email.clone(),
+        };
+        api::auth::send_email_code(&ctx.api_client(), &request).await?;
         Ok(email)
     }
 

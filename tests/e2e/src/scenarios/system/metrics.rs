@@ -5,14 +5,11 @@
 //! exporter 只把非法字符(如 `.`)换成 `_`, 而 `:` 在 Prometheus 中合法会保留
 //! (如 `server_build_info` vs `auth:login:attempts`), counter 另带 `_total` 后缀。
 
-use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
-    scenario::Scenario,
-};
+use memory_seek_api::api;
+use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 use super::super::user::session::{Session, login, user_account};
 
@@ -23,28 +20,22 @@ pub struct MetricsScenario;
 impl Scenario for MetricsScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
     type Output = String;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        Ok(login(ctx, &user_account(task.index)).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
-        _setup: &Self::Setup,
+        setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        Ok(ctx
-            .client
-            .request(reqwest::Method::GET, "/metrics")
-            .send_checked()
-            .await?
-            .text()
-            .await?)
+        Ok(api::system::metrics(setup.client()).await?)
     }
 
     async fn validate(

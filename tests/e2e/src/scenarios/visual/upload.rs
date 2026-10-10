@@ -1,18 +1,17 @@
 //! 影像上传:`POST /visual`。
 
-use common_web::{ErrR, SucR};
+use memory_seek_api::{Method, VisualIds, api};
 use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
+    TaskIndex, register_scenario,
     scenario::{Scenario, SetupMode, TeardownMode},
 };
 use sea_orm::EntityTrait;
-use serde_json::json;
+use types_visual::dto::visual::VisualView;
 use types_visual::visual as visual_entity;
-use types_visual::{dto::visual::VisualView, visual::VisualKind};
+use types_visual::visual::{VisualId, VisualKind};
 
 use crate::context::Context;
+use crate::error::{E2eError, status};
 
 use super::{Session, blake3_hex, session, token_matches, unique_png, unique_tag};
 
@@ -22,10 +21,10 @@ use super::{Session, blake3_hex, session, token_matches, unique_png, unique_tag}
 pub struct UploadSetup {
     pub session: Session,
     pub bytes: Vec<u8>,
-    pub uploaded_id: Option<i64>,
+    pub uploaded_id: Option<VisualId>,
 }
 
-async fn prepare(ctx: &Context, task: &TaskIndex) -> Result<UploadSetup, HttpError> {
+async fn prepare(ctx: &Context, task: &TaskIndex) -> Result<UploadSetup, E2eError> {
     let session = session(ctx, task.index).await?;
     Ok(UploadSetup {
         session,
@@ -41,9 +40,9 @@ pub struct UploadVisualScenario;
 impl Scenario for UploadVisualScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<VisualView>;
+    type Output = VisualView;
 
     type Setup = UploadSetup;
 
@@ -54,11 +53,11 @@ impl Scenario for UploadVisualScenario {
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        super::upload(ctx, &setup.session, setup.bytes.clone()).await
+        super::upload(&setup.session, setup.bytes.clone()).await
     }
 
     async fn validate(
@@ -67,7 +66,7 @@ impl Scenario for UploadVisualScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let view = &output.data;
+        let view = output;
         let Some(row) = visual_entity::Entity::find_by_id(view.id)
             .one(&ctx.db)
             .await
@@ -114,7 +113,7 @@ impl Scenario for UploadVisualScenario {
     const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
 
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         result: Option<Result<&Self::Output, &Self::Error>>,
@@ -123,13 +122,13 @@ impl Scenario for UploadVisualScenario {
             // run 失败 = 服务端未接受上传, 无产物可删
             return Ok(());
         };
-        crate::cleanup::delete(
-            ctx,
-            "/visual",
-            Some(&setup.session.auth_header()),
-            Some(json!({ "visualIds": [view.data.id] })),
+        crate::cleanup::idempotent(
+            api::visual::delete_visuals(
+                setup.session.client(),
+                VisualIds::new(vec![view.id]).expect("单元素影像列表恒合法"),
+            )
+            .await,
         )
-        .await
     }
 }
 
@@ -142,37 +141,34 @@ pub struct UploadDuplicateVisualScenario;
 impl Scenario for UploadDuplicateVisualScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = UploadSetup;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let mut setup = prepare(ctx, task).await?;
         // 先成功上传一次, 为 run 制造哈希命中; id 留给收尾删除
-        let view = super::upload(ctx, &setup.session, setup.bytes.clone())
-            .await?
-            .data;
-        setup.uploaded_id = Some(view.id.0);
+        let view = super::upload(&setup.session, setup.bytes.clone()).await?;
+        setup.uploaded_id = Some(view.id);
         Ok(setup)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/visual")
-            .header("Authorization", &setup.session.auth_header())
-            .header("content-type", "image/png")
-            .body(setup.bytes.clone())
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        status(
+            api::visual::upload_visual(
+                setup.session.client(),
+                setup.bytes.clone(),
+                Some("image/png".to_owned()),
+                None,
+            )
+            .await,
+        )
     }
 
     async fn validate(
@@ -181,12 +177,12 @@ impl Scenario for UploadDuplicateVisualScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 
     /// 收尾: setup 阶段为制造哈希命中上传的那张影像(每任务一张, 默认 Task 粒度)
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         _result: Option<Result<&Self::Output, &Self::Error>>,
@@ -194,13 +190,13 @@ impl Scenario for UploadDuplicateVisualScenario {
         let Some(visual_id) = setup.uploaded_id else {
             return Ok(());
         };
-        crate::cleanup::delete(
-            ctx,
-            "/visual",
-            Some(&setup.session.auth_header()),
-            Some(json!({ "visualIds": [visual_id] })),
+        crate::cleanup::idempotent(
+            api::visual::delete_visuals(
+                setup.session.client(),
+                VisualIds::new(vec![visual_id]).expect("单元素影像列表恒合法"),
+            )
+            .await,
         )
-        .await
     }
 }
 
@@ -213,31 +209,30 @@ pub struct UploadInvalidFileScenario;
 impl Scenario for UploadInvalidFileScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        session(ctx, task.index).await
+        Ok(session(ctx, task.index).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/visual")
-            .header("Authorization", &setup.auth_header())
-            .header("content-type", "text/plain")
-            .body(b"not an image".to_vec())
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        status(
+            api::visual::upload_visual(
+                setup.client(),
+                b"not an image".to_vec(),
+                Some("text/plain".to_owned()),
+                None,
+            )
+            .await,
+        )
     }
 
     async fn validate(
@@ -246,7 +241,7 @@ impl Scenario for UploadInvalidFileScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
@@ -259,9 +254,9 @@ pub struct UploadUnauthorizedScenario;
 impl Scenario for UploadUnauthorizedScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -270,15 +265,14 @@ impl Scenario for UploadUnauthorizedScenario {
         task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/visual")
-            .header("content-type", "image/png")
-            .body(unique_png(&unique_tag(task)))
+        let response = ctx
+            .api_client()
+            .raw(Method::POST, "/visual")
+            .no_auth()
+            .bytes(unique_png(&unique_tag(task)), Some("image/png".to_owned()))
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -287,7 +281,7 @@ impl Scenario for UploadUnauthorizedScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 401)
+        Ok(*output == 401)
     }
 }
 

@@ -1,10 +1,8 @@
 //! 影像删除:`DELETE /visual`。
 
-use common_web::{ErrR, SucR};
+use memory_seek_api::{Method, VisualIds, api};
 use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
+    TaskIndex, register_scenario,
     scenario::{Scenario, SetupMode},
 };
 use sea_orm::EntityTrait;
@@ -13,16 +11,25 @@ use types_visual::visual as visual_entity;
 use types_visual::visual::VisualId;
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 use super::{Session, session, unique_png, unique_tag};
 
 /// 删除前置:登录 + 上传一张唯一影像(得到可删除的目标)。
-/// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
-#[derive(Default)]
 pub struct DeleteSetup {
     pub session: Session,
-    pub visual_id: i64,
+    pub visual_id: VisualId,
     pub file_id: String,
+}
+
+impl Default for DeleteSetup {
+    fn default() -> Self {
+        Self {
+            session: Session::default(),
+            visual_id: VisualId(0),
+            file_id: String::new(),
+        }
+    }
 }
 
 /// 删除他人影像应被忽略, 这里验证"删除自己的影像"闭环: 库记录与 S3 对象同时消失。
@@ -32,9 +39,9 @@ pub struct DeleteVisualScenario;
 impl Scenario for DeleteVisualScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<()>;
+    type Output = ();
 
     type Setup = DeleteSetup;
 
@@ -42,9 +49,7 @@ impl Scenario for DeleteVisualScenario {
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
-        let view = super::upload(ctx, &session, unique_png(&unique_tag(task)))
-            .await?
-            .data;
+        let view = super::upload(&session, unique_png(&unique_tag(task))).await?;
         let row = visual_entity::Entity::find_by_id(view.id)
             .one(&ctx.db)
             .await
@@ -52,25 +57,21 @@ impl Scenario for DeleteVisualScenario {
             .ok_or_else(super::seed_missing)?;
         Ok(DeleteSetup {
             session,
-            visual_id: row.id.0,
+            visual_id: row.id,
             file_id: row.file_id,
         })
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::DELETE, "/visual")
-            .header("Authorization", &setup.session.auth_header())
-            .json_unwrap(&json!({ "visualIds": [setup.visual_id] }))
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        Ok(api::visual::delete_visuals(
+            setup.session.client(),
+            VisualIds::new(vec![setup.visual_id]).expect("单元素影像列表恒合法"),
+        )
+        .await?)
     }
 
     async fn validate(
@@ -79,7 +80,7 @@ impl Scenario for DeleteVisualScenario {
         setup: &Self::Setup,
         _output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let gone = visual_entity::Entity::find_by_id(VisualId(setup.visual_id))
+        let gone = visual_entity::Entity::find_by_id(setup.visual_id)
             .one(&ctx.db)
             .await
             .unwrap()
@@ -107,30 +108,29 @@ pub struct DeleteVisualsEmptyScenario;
 impl Scenario for DeleteVisualsEmptyScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        session(ctx, task.index).await
+        Ok(session(ctx, task.index).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::DELETE, "/visual")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({ "visualIds": [] }))
+        // 空列表无法构造(类型化 `VisualIds` 在客户端即拒绝), 故走 raw 直接发非法载荷
+        let response = setup
+            .client()
+            .raw(Method::DELETE, "/visual")
+            .json(&json!({ "visualIds": [] }))
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -139,7 +139,7 @@ impl Scenario for DeleteVisualsEmptyScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
@@ -152,9 +152,9 @@ pub struct DeleteVisualsUnauthorizedScenario;
 impl Scenario for DeleteVisualsUnauthorizedScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -163,13 +163,13 @@ impl Scenario for DeleteVisualsUnauthorizedScenario {
         _task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::DELETE, "/visual")
+        let response = ctx
+            .api_client()
+            .raw(Method::DELETE, "/visual")
+            .no_auth()
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -178,7 +178,7 @@ impl Scenario for DeleteVisualsUnauthorizedScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 401)
+        Ok(*output == 401)
     }
 }
 

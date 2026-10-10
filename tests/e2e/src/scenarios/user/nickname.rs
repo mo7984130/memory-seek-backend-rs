@@ -1,16 +1,11 @@
-use common_web::{ErrR, SucR};
-use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
-    scenario::Scenario,
-};
+use memory_seek_api::{Method, api};
+use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use serde_json::json;
 use types_identity::auth;
-use types_identity::user::UserInfo;
+use types_identity::user::ChangeNicknameParam;
 
 use crate::context::Context;
+use crate::error::{E2eError, status};
 
 use super::session::{Session, login, user_account};
 
@@ -21,31 +16,25 @@ pub struct ChangeNicknameScenario;
 impl Scenario for ChangeNicknameScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<String>;
+    type Output = String;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        Ok(login(ctx, &user_account(task.index)).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        let new_nickname = format!("uit_nick_{}", task.index);
-        ctx.client
-            .request(reqwest::Method::PATCH, "/user/nickname")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({ "newNickname": new_nickname }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let param = ChangeNicknameParam {
+            new_nickname: format!("uit_nick_{}", task.index),
+        };
+        Ok(api::user::change_nickname(setup.client(), &param).await?)
     }
 
     async fn validate(
@@ -59,19 +48,12 @@ impl Scenario for ChangeNicknameScenario {
             .one(&ctx.db)
             .await
             .unwrap()
-            .is_some_and(|u| u.nickname == output.data);
+            .is_some_and(|u| u.nickname == *output);
 
         // 缓存已失效: 紧接着读取个人信息应返回新昵称
-        let me: SucR<UserInfo> = ctx
-            .client
-            .request(reqwest::Method::GET, "/user/me")
-            .header("Authorization", &setup.auth_header())
-            .send()
-            .await?
-            .json()
-            .await?;
+        let me = api::user::get_me(setup.client()).await?;
 
-        Ok(db_ok && me.data.nickname == output.data)
+        Ok(db_ok && me.nickname == *output)
     }
 }
 
@@ -84,30 +66,25 @@ pub struct ChangeNicknameInvalidScenario;
 impl Scenario for ChangeNicknameInvalidScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        Ok(login(ctx, &user_account(task.index)).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::PATCH, "/user/nickname")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({ "newNickname": "test<script>" }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let param = ChangeNicknameParam {
+            new_nickname: "test<script>".to_owned(),
+        };
+        status(api::user::change_nickname(setup.client(), &param).await)
     }
 
     async fn validate(
@@ -116,7 +93,7 @@ impl Scenario for ChangeNicknameInvalidScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
@@ -129,9 +106,9 @@ pub struct ChangeNicknameUnauthorizedScenario;
 impl Scenario for ChangeNicknameUnauthorizedScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -140,14 +117,14 @@ impl Scenario for ChangeNicknameUnauthorizedScenario {
         _task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::PATCH, "/user/nickname")
-            .json_unwrap(&json!({ "newNickname": "whatever" }))
+        let client = ctx.api_client();
+        let response = client
+            .raw(Method::PATCH, "/user/nickname")
+            .no_auth()
+            .json(&serde_json::json!({ "newNickname": "whatever" }))
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -156,7 +133,7 @@ impl Scenario for ChangeNicknameUnauthorizedScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 401)
+        Ok(*output == 401)
     }
 }
 

@@ -1,15 +1,11 @@
-use common_web::{ErrR, SucR};
-use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
-    scenario::Scenario,
-};
+use memory_seek_api::{Method, api};
+use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use types_identity::auth;
 use types_identity::user::UserInfo;
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 use super::session::{Session, login, me_account};
 
@@ -20,29 +16,22 @@ pub struct MeScenario;
 impl Scenario for MeScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<UserInfo>;
+    type Output = UserInfo;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &me_account(task.index)).await
+        Ok(login(ctx, &me_account(task.index)).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::GET, "/user/me")
-            .header("Authorization", &setup.auth_header())
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        Ok(api::user::get_me(setup.client()).await?)
     }
 
     async fn validate(
@@ -61,19 +50,22 @@ impl Scenario for MeScenario {
             return Ok(false);
         };
 
-        let fields_ok = user.username == output.data.username
-            && user.email == output.data.email
-            && user.nickname == output.data.nickname;
+        let fields_ok = user.username == output.username
+            && user.email == output.email
+            && user.nickname == output.nickname;
         // 头像 token 须与库中头像一致(含 viewer 绑定); 无头像时响应也应为 None
-        let avatar_ok = match &output.data.avatar_token {
-            Some(token) => {
-                token.0.viewer_id == setup.user_id
-                    && user.avatar_file_id.as_deref() == Some(token.0.file_id.as_str())
-            }
+        let avatar_ok = match &output.avatar_token {
+            Some(token) => match token.decrypt() {
+                Ok(decrypted) => {
+                    decrypted.viewer_id == setup.user_id
+                        && user.avatar_file_id.as_deref() == Some(decrypted.file_id.as_str())
+                }
+                Err(_) => false,
+            },
             None => user.avatar_file_id.is_none(),
         };
 
-        Ok(output.data.id == setup.user_id && fields_ok && avatar_ok)
+        Ok(output.id == setup.user_id && fields_ok && avatar_ok)
     }
 }
 
@@ -86,9 +78,9 @@ pub struct MeUnauthorizedScenario;
 impl Scenario for MeUnauthorizedScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -97,13 +89,10 @@ impl Scenario for MeUnauthorizedScenario {
         _task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::GET, "/user/me")
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        // 无鉴权走低层 raw:类型化接口在客户端就拒绝未登录, 观测不到服务端的 401
+        let client = ctx.api_client();
+        let response = client.raw(Method::GET, "/user/me").no_auth().send().await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -112,7 +101,7 @@ impl Scenario for MeUnauthorizedScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 401)
+        Ok(*output == 401)
     }
 }
 
@@ -125,9 +114,9 @@ pub struct MeForgedTokenScenario;
 impl Scenario for MeForgedTokenScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -136,15 +125,14 @@ impl Scenario for MeForgedTokenScenario {
         task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
+        let client = ctx.api_client();
         let authorization = format!("Bearer {} forged_token", task.index + 1);
-        ctx.client
-            .request(reqwest::Method::GET, "/user/me")
-            .header("Authorization", &authorization)
+        let response = client
+            .raw(Method::GET, "/user/me")
+            .header("Authorization", authorization)
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -153,7 +141,7 @@ impl Scenario for MeForgedTokenScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 401)
+        Ok(*output == 401)
     }
 }
 

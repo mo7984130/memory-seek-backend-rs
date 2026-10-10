@@ -1,15 +1,14 @@
-use common_web::{ErrR, SucR};
+use memory_seek_api::{Method, api};
 use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
+    TaskIndex, register_scenario,
     scenario::{Scenario, SetupMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use serde_json::json;
 use types_identity::auth;
+use types_identity::user::ChangePasswordParam;
 
 use crate::context::Context;
+use crate::error::{E2eError, status};
 
 use super::session::{
     NEW_PASSWORD, PASSWORD, Session, login, login_with, pwd_account, user_account,
@@ -22,9 +21,9 @@ pub struct ChangePasswordScenario;
 impl Scenario for ChangePasswordScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<()>;
+    type Output = ();
 
     type Setup = Session;
 
@@ -33,27 +32,21 @@ impl Scenario for ChangePasswordScenario {
     const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &pwd_account(task.index)).await
+        Ok(login(ctx, &pwd_account(task.index)).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::PATCH, "/user/password")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({
-                "oldPassword": PASSWORD,
-                "newPassword": NEW_PASSWORD,
-                "confirmPassword": NEW_PASSWORD,
-            }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let param = ChangePasswordParam {
+            old_password: PASSWORD.to_owned(),
+            new_password: NEW_PASSWORD.to_owned(),
+            confirm_password: NEW_PASSWORD.to_owned(),
+        };
+        api::user::change_password(setup.client(), &param).await?;
+        Ok(())
     }
 
     async fn validate(
@@ -66,33 +59,21 @@ impl Scenario for ChangePasswordScenario {
         //    保证 Round 模式下下一轮 setup 仍可用旧密码登录.
         let restored = match login_with(ctx, &pwd_account(task.index), NEW_PASSWORD).await {
             Ok(session) => {
-                let resp = ctx
-                    .client
-                    .request(reqwest::Method::PATCH, "/user/password")
-                    .header("Authorization", &session.auth_header())
-                    .json_unwrap(&json!({
-                        "oldPassword": NEW_PASSWORD,
-                        "newPassword": PASSWORD,
-                        "confirmPassword": PASSWORD,
-                    }))
-                    .send_checked()
-                    .await;
-                resp.is_ok()
+                let param = ChangePasswordParam {
+                    old_password: NEW_PASSWORD.to_owned(),
+                    new_password: PASSWORD.to_owned(),
+                    confirm_password: PASSWORD.to_owned(),
+                };
+                api::user::change_password(session.client(), &param)
+                    .await
+                    .is_ok()
             }
             Err(_) => false,
         };
 
         // 1. 旧 access_token 已失效(改密成功后服务端调用了 logout)
-        let after = ctx
-            .client
-            .request(reqwest::Method::GET, "/user/me")
-            .header("Authorization", &setup.auth_header())
-            .send()
-            .await?
-            .json::<ErrR>()
-            .await
-            .map_err(HttpError::from)?;
-        let revoked = after.code == 401;
+        let after = status(api::user::get_me(setup.client()).await)?;
+        let revoked = after == 401;
 
         // 2. refresh_token 已清空
         let refresh_cleared = auth::user::Entity::find()
@@ -115,34 +96,27 @@ pub struct ChangePasswordWrongOldScenario;
 impl Scenario for ChangePasswordWrongOldScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        Ok(login(ctx, &user_account(task.index)).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::PATCH, "/user/password")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({
-                "oldPassword": "WrongPass1",
-                "newPassword": NEW_PASSWORD,
-                "confirmPassword": NEW_PASSWORD,
-            }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let param = ChangePasswordParam {
+            old_password: "WrongPass1".to_owned(),
+            new_password: NEW_PASSWORD.to_owned(),
+            confirm_password: NEW_PASSWORD.to_owned(),
+        };
+        status(api::user::change_password(setup.client(), &param).await)
     }
 
     async fn validate(
@@ -151,7 +125,7 @@ impl Scenario for ChangePasswordWrongOldScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
@@ -164,34 +138,27 @@ pub struct ChangePasswordMismatchScenario;
 impl Scenario for ChangePasswordMismatchScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        Ok(login(ctx, &user_account(task.index)).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::PATCH, "/user/password")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({
-                "oldPassword": PASSWORD,
-                "newPassword": NEW_PASSWORD,
-                "confirmPassword": "Different123",
-            }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let param = ChangePasswordParam {
+            old_password: PASSWORD.to_owned(),
+            new_password: NEW_PASSWORD.to_owned(),
+            confirm_password: "Different123".to_owned(),
+        };
+        status(api::user::change_password(setup.client(), &param).await)
     }
 
     async fn validate(
@@ -200,7 +167,7 @@ impl Scenario for ChangePasswordMismatchScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
@@ -213,9 +180,9 @@ pub struct ChangePasswordUnauthorizedScenario;
 impl Scenario for ChangePasswordUnauthorizedScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -224,18 +191,18 @@ impl Scenario for ChangePasswordUnauthorizedScenario {
         _task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::PATCH, "/user/password")
-            .json_unwrap(&json!({
+        let client = ctx.api_client();
+        let response = client
+            .raw(Method::PATCH, "/user/password")
+            .no_auth()
+            .json(&serde_json::json!({
                 "oldPassword": PASSWORD,
                 "newPassword": NEW_PASSWORD,
                 "confirmPassword": NEW_PASSWORD,
             }))
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -244,7 +211,7 @@ impl Scenario for ChangePasswordUnauthorizedScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 401)
+        Ok(*output == 401)
     }
 }
 
