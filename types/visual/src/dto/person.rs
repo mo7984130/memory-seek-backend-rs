@@ -54,19 +54,22 @@ crate::dto!(PersonView, "visual/", rename = "Person"; {
 });
 impl PersonView {
     /// 由人物记录、查看者与图片尺寸构造人物视图,并生成封面裁剪令牌
-    pub fn from_record(value: PersonRecord, viewer: UserId, dimension: ImageDimensions) -> Self {
-        Self {
+    pub fn from_record(
+        value: PersonRecord,
+        viewer: UserId,
+        dimension: ImageDimensions,
+    ) -> common_core::ContextualResult<Self> {
+        Ok(Self {
             id: value.id,
             name: value.name,
-            cover_token: VisualToken::crop(
+            cover_token: VisualTokenStr::encrypt(&VisualToken::crop(
                 viewer,
                 value.cover.file_id,
                 value.cover.bbox,
                 dimension,
-            )
-            .into(),
+            ))?,
             face_count: value.face_count,
-        }
+        })
     }
 }
 

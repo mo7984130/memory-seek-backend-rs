@@ -162,7 +162,7 @@ pub async fn update_avatar(
     }
 
     // 生成头像Token
-    let avatar_token = VisualToken::image_thumbnail(user_id, new_key).into();
+    let avatar_token = VisualTokenStr::encrypt(&VisualToken::image_thumbnail(user_id, new_key))?;
 
     Ok(avatar_token)
 }
@@ -254,9 +254,9 @@ pub async fn get_user_info_batch(
     // 带三级缓存的获取用户信息
     let result = state.repo.get_user_info_batch(&user_ids).await?;
 
-    result
+    let views = result
         .into_iter()
-        .map(|opt| opt.map(|dto| dto.into_brief_view(user_id)))
-        .collect::<Vec<_>>()
-        .to_ok()
+        .map(|opt| opt.map(|dto| dto.into_brief_view(user_id)).transpose())
+        .collect::<common_core::error::contextual::Result<Vec<_>>>()?;
+    Ok(views)
 }

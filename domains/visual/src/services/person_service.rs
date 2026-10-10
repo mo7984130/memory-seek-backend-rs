@@ -294,13 +294,13 @@ impl PersonService {
     ) -> Result<PersonView> {
         let person = PersonRepo::merge_person(state, admin, req).await?;
 
-        let file_id = &person.cover.file_id.clone();
-        PersonView::from_record(
+        let file_id = person.cover.file_id.clone();
+        let view = PersonView::from_record(
             person,
             admin.into_inner(),
-            VisualRepo::get_visual_dimensions(state, file_id).await?,
-        )
-        .to_ok()
+            VisualRepo::get_visual_dimensions(state, &file_id).await?,
+        )?;
+        Ok(view)
     }
 }
 
@@ -325,7 +325,7 @@ impl PersonService {
                 person,
                 user_id,
                 VisualRepo::get_visual_dimensions(state, &file_id).await?,
-            ));
+            )?);
         }
         CursorPage::from_has_more(views, has_more)
             .with_next_cursor(|view| CountIdCursor {
@@ -359,7 +359,7 @@ impl PersonService {
                 person,
                 user_id,
                 VisualRepo::get_visual_dimensions(state, &file_id).await?,
-            ));
+            )?);
         }
         CursorPage::from_has_more(views, has_more)
             .with_next_cursor(|view| view.id)

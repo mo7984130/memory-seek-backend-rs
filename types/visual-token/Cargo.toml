@@ -7,12 +7,14 @@ description = "视觉访问令牌契约(跨上下文协议)"
 [features]
 default = []
 ts = ["dep:ts-rs"]
+# 令牌加解密(encrypt/decrypt);纯客户端无需开启,以避免链接加密依赖
+crypto = ["dep:common-crypto"]
 face-engine = ["dep:insight-face-rs"]
 
 [dependencies]
 types-core.workspace = true
 common-core.path = "../../common/core"
-common-crypto.path = "../../common/crypto"
+common-crypto = { path = "../../common/crypto", optional = true }
 
 serde = { workspace = true, features = ["derive"] }
 

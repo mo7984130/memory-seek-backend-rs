@@ -14,17 +14,17 @@ pub struct UserBriefRow {
 
 impl UserBriefRow {
     /// 转换为用户摘要视图，头像 token 按浏览者签发
-    pub fn into_brief_view(self, viewer: UserId) -> UserBriefView {
-        let avatar_token: Option<VisualTokenStr> = self
+    pub fn into_brief_view(self, viewer: UserId) -> common_core::ContextualResult<UserBriefView> {
+        let avatar_token = self
             .avatar_file_id
-            .map(|file_id| VisualToken::image_thumbnail(viewer, file_id))
-            .map(VisualTokenStr::from);
+            .map(|file_id| VisualTokenStr::encrypt(&VisualToken::image_thumbnail(viewer, file_id)))
+            .transpose()?;
 
-        UserBriefView {
+        Ok(UserBriefView {
             user_id: self.user_id,
             nickname: self.nickname,
             avatar_token,
-        }
+        })
     }
 }
 
@@ -48,7 +48,7 @@ mod tests {
             nickname: "Alice".to_string(),
             avatar_file_id: Some("file123".to_string()),
         };
-        let vo = dto.into_brief_view(UserId(1));
+        let vo = dto.into_brief_view(UserId(1)).unwrap();
         assert_eq!(vo.user_id, UserId(42));
         assert_eq!(vo.nickname, "Alice");
         assert!(vo.avatar_token.is_some());
@@ -62,7 +62,7 @@ mod tests {
             nickname: "Bob".to_string(),
             avatar_file_id: None,
         };
-        let vo = dto.into_brief_view(UserId(2));
+        let vo = dto.into_brief_view(UserId(2)).unwrap();
         assert_eq!(vo.user_id, UserId(1));
         assert_eq!(vo.nickname, "Bob");
         assert!(vo.avatar_token.is_none());

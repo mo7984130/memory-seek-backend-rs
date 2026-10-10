@@ -8,17 +8,22 @@
 //! `visual_token` 的 `kind` 字段引用 `VisualKind`,所以该枚举必须留在内核,
 //! 而本 crate 不能反过来依赖 visual 域契约。
 //!
-//! 明文序列化由 serde 派生(加密见 [`VisualTokenStr`]):unit 类型为字符串,
-//! `Crop` 作为携带数据的变体嵌套输出,形如:
+//! 明文序列化由 serde 派生；对外契约是[`VisualTokenStr`](不透明字符串)。
+//! unit 类型为字符串, `Crop` 作为携带数据的变体嵌套输出,形如:
 //! ```json
 //! { "fileId": "...", "kind": "Image", "tokenType": "thumbnail", "viewerId": 1 }
 //! { "fileId": "...", "kind": "Image", "tokenType": { "crop": { "bbox": ..., "sourceDimensions": ... } }, "viewerId": 1 }
 //! ```
-//! 明文形态并非对外契约(对外为加密字符串),由服务端自产自销。
+//! 明文形态并非对外契约(对外为不透明字符串),由服务端自产自销。
+//! 加解密(`VisualToken::encrypt`/`decrypt` 与 [`VisualTokenStr`] 的同名方法)
+//! 仅在 `crypto` feature 下可用。
 
-use common_core::ContextualResult;
-use common_crypto::token_cipher;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+#[cfg(feature = "crypto")]
+use common_core::ContextualResult;
+#[cfg(feature = "crypto")]
+use common_crypto::token_cipher;
 
 use types_core::{UserId, VisualKind};
 
@@ -115,12 +120,14 @@ pub struct VisualToken {
 }
 
 impl VisualToken {
-    /// 从加密字符串解密出视觉令牌
+    /// 从加密字符串解密出视觉令牌(需启用 `crypto` feature)
+    #[cfg(feature = "crypto")]
     pub fn decrypt(token: &str) -> ContextualResult<Self> {
         token_cipher().decrypt(token)
     }
 
-    /// 将视觉令牌加密为字符串；nonce seed 纳入 `viewer_id`,避免 nonce 复用
+    /// 将视觉令牌加密为字符串；nonce seed 纳入 `viewer_id`,避免 nonce 复用(需启用 `crypto` feature)
+    #[cfg(feature = "crypto")]
     pub fn encrypt(&self) -> ContextualResult<String> {
         // nonce seed 纳入 viewer_id:同一文件的 token 按浏览者区分,
         // 避免"相同 nonce 加密不同明文"导致的 AES-GCM nonce 复用
@@ -197,70 +204,77 @@ impl VisualToken {
     }
 }
 
-/// 自动加密的视觉 token 封装
+/// 视觉 token 的“字符串封装”。
 ///
-/// 序列化时自动输出加密字符串,反序列化只接受加密字符串并解密还原。
-/// 内部持有 [`VisualToken`] 纯数据,适合作为 DTO 字段类型(如 `avatar_token`)。
-#[derive(Clone, Debug, PartialEq)]
+/// 在 JSON 上就是一个**不透明字符串**:无论序列化还是反序列化都**不会**触发
+/// 加解密,因此不持有密钥的消费方(如外部客户端)也能安全解析。
+///
+/// 加解密是持有密钥方(服务端)的显式操作,需启用 `crypto` feature:
+/// - [`VisualTokenStr::encrypt`]：由明文令牌生成
+/// - [`VisualTokenStr::decrypt`]：还原明文令牌
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "ts", ts(type = "string"))]
-pub struct VisualTokenStr(pub VisualToken);
+pub struct VisualTokenStr(String);
 
 impl VisualTokenStr {
-    /// 取出内部 token(解密后的原始数据)
-    pub fn into_inner(self) -> VisualToken {
-        self.0
+    /// 以已加密字符串构造(不对内容做任何校验/解密)。
+    pub fn new(encrypted: impl Into<String>) -> Self {
+        Self(encrypted.into())
+    }
+
+    /// 取得加密字符串。
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// 将明文令牌加密为字符串封装(持密钥方,需 `crypto` feature)。
+    #[cfg(feature = "crypto")]
+    pub fn encrypt(token: &VisualToken) -> ContextualResult<Self> {
+        token.encrypt().map(Self)
+    }
+
+    /// 解密还原明文令牌(持密钥方,需 `crypto` feature)。
+    #[cfg(feature = "crypto")]
+    pub fn decrypt(&self) -> ContextualResult<VisualToken> {
+        VisualToken::decrypt(&self.0)
     }
 }
 
 impl Serialize for VisualTokenStr {
-    /// 序列化为加密字符串
+    /// 原样输出字符串(不加密)
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let token = self.0.encrypt().map_err(serde::ser::Error::custom)?;
-
-        serializer.serialize_str(&token)
+        serializer.serialize_str(&self.0)
     }
 }
 
 impl<'de> Deserialize<'de> for VisualTokenStr {
-    /// 从加密字符串反序列化并解密
+    /// 原样读入字符串(不解密),外部客户端无需密钥
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        // 只接受加密字符串(不接受明文对象),反序列化即解密
-        let token = String::deserialize(deserializer)?;
-
-        VisualToken::decrypt(&token)
-            .map(VisualTokenStr)
-            .map_err(serde::de::Error::custom)
+        String::deserialize(deserializer).map(Self)
     }
 }
 
-impl From<VisualToken> for VisualTokenStr {
-    /// 将视觉令牌包装为自动加密的令牌封装
-    fn from(token: VisualToken) -> Self {
-        Self(token)
-    }
-}
-
-impl From<VisualTokenStr> for VisualToken {
-    /// 取出令牌封装内部的视觉令牌
-    fn from(wrapper: VisualTokenStr) -> Self {
-        wrapper.0
+impl From<String> for VisualTokenStr {
+    /// 从已加密字符串构造
+    fn from(value: String) -> Self {
+        Self(value)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common_crypto::{TokenCipherConfig, init_token_cipher};
 
+    #[cfg(feature = "crypto")]
     fn init_test_cipher() {
-        init_token_cipher(&TokenCipherConfig {
+        common_crypto::init_token_cipher(&common_crypto::TokenCipherConfig {
             key: "test-key-for-unit-tests".to_owned(),
             salt: "test-salt".to_owned(),
         });
@@ -348,7 +362,6 @@ mod tests {
 
     #[test]
     fn test_visual_token_serialize_roundtrip() {
-        init_test_cipher();
         let token = VisualToken::image_thumbnail(UserId(11), "file-abc");
         let json = serde_json::to_string(&token).unwrap();
         let deserialized: VisualToken = serde_json::from_str(&json).unwrap();
@@ -382,7 +395,6 @@ mod tests {
 
     #[test]
     fn test_crop_serialize_roundtrip() {
-        init_test_cipher();
         let bbox = FaceBBox {
             x1: 0.05,
             y1: 0.1,
@@ -444,20 +456,35 @@ mod tests {
     }
 
     #[test]
-    fn test_visual_token_str_serializes_to_encrypted_string() {
-        init_test_cipher();
-        let token = VisualToken::image_preview(UserId(5), "img-1");
-        let json = serde_json::to_value(VisualTokenStr::from(token)).unwrap();
-        assert!(
-            json.is_string(),
-            "VisualTokenStr 应序列化为加密字符串, 实际为 {json}"
+    fn test_visual_token_str_is_opaque_string_without_cipher() {
+        // 无须初始化 cipher:反序列化不触发解密
+        let token: VisualTokenStr = serde_json::from_value(serde_json::json!("opaque")).unwrap();
+        assert_eq!(token.as_str(), "opaque");
+        // 序列化原样输出
+        assert_eq!(
+            serde_json::to_value(&token).unwrap(),
+            serde_json::json!("opaque")
         );
-        // 加密字符串可解密还原全部字段
-        let decrypted: VisualTokenStr = serde_json::from_value(json).unwrap();
-        assert_eq!(decrypted.0.file_id, "img-1");
-        assert_eq!(decrypted.0.kind, VisualKind::Image);
-        assert_eq!(decrypted.0.token_type, VisualTokenType::Preview);
-        assert_eq!(decrypted.0.viewer_id, UserId(5));
+    }
+
+    #[cfg(feature = "crypto")]
+    #[test]
+    fn test_visual_token_str_encrypt_decrypt_roundtrip() {
+        init_test_cipher();
+        let plain = VisualToken::image_preview(UserId(5), "img-1");
+        let wrapped = VisualTokenStr::encrypt(&plain).unwrap();
+        // 对外是不透明字符串
+        let json = serde_json::to_value(&wrapped).unwrap();
+        assert!(json.is_string(), "应序列化为字符串, 实际为 {json}");
+        // 反序列化(不解密)
+        let parsed: VisualTokenStr = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.as_str(), wrapped.as_str());
+        // 持密钥方可显式解密还原
+        let decrypted = parsed.decrypt().unwrap();
+        assert_eq!(decrypted.file_id, "img-1");
+        assert_eq!(decrypted.kind, VisualKind::Image);
+        assert_eq!(decrypted.token_type, VisualTokenType::Preview);
+        assert_eq!(decrypted.viewer_id, UserId(5));
     }
 
     #[test]
@@ -496,7 +523,7 @@ mod tests {
 ///
 /// 原先挂在 `types` 的 `orm` feature 下, 但这些测试并不依赖 sea-orm,
 /// 拆分为独立 crate 后改为无条件运行。
-#[cfg(test)]
+#[cfg(all(test, feature = "crypto"))]
 mod cipher_roundtrip_tests {
     use super::*;
     use common_crypto::{TokenCipherConfig, init_token_cipher};
