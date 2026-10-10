@@ -8,6 +8,8 @@
 # 由 systemd journald 捕获管理（参考仓库根目录 memory-seek-server.service）
 server:
   host: "0.0.0.0"
+  # IPv6: 设为 "[::]"(Linux 默认双栈, 同时收 IPv4/IPv6; 不带方括号的 "::" 亦可);
+  #       默认 "127.0.0.1" 与 "0.0.0.0" 均为仅 IPv4
   port: 3000
   # 上传请求体上限(字节), 默认 536870912(512MB), 与业务视频上限一致
   # 超限请求将返回 413(可环境变量覆盖: MEMORY_SEEK_SERVER__MAX_UPLOAD_BYTES)

@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::path::PathBuf;
 
 use config::{Config, Environment, File};
@@ -124,6 +125,54 @@ impl AppConfig {
 
     /// 返回服务器绑定地址和端口
     pub fn server_addr(&self) -> String {
-        format!("{}:{}", self.server.host, self.server.port)
+        format_addr(&self.server.host, self.server.port)
+    }
+}
+
+/// 拼接绑定地址。
+///
+/// IPv6 主机无论是否带方括号(如 `::` / `[::]`)都规范化为 `[host]:port`,
+/// 避免裸 `::` 被拼成非法地址 `:::port` 而在 `TcpListener::bind` 时失败;
+/// 主机名(如 `localhost`)原样保留,交由 `ToSocketAddrs` 解析。
+fn format_addr(host: &str, port: u16) -> String {
+    let host = host.trim_matches(|c: char| c == '[' || c == ']');
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V6(ip)) => format!("[{ip}]:{port}"),
+        Ok(IpAddr::V4(ip)) => format!("{ip}:{port}"),
+        Err(_) => format!("{host}:{port}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::SocketAddr;
+
+    #[test]
+    fn formats_ipv4_host() {
+        assert_eq!(format_addr("0.0.0.0", 3000), "0.0.0.0:3000");
+        assert_eq!(format_addr("127.0.0.1", 7984), "127.0.0.1:7984");
+    }
+
+    #[test]
+    fn normalizes_ipv6_host_with_or_without_brackets() {
+        assert_eq!(format_addr("::", 7984), "[::]:7984");
+        assert_eq!(format_addr("[::]", 7984), "[::]:7984");
+        assert_eq!(format_addr("::1", 7984), "[::1]:7984");
+        assert_eq!(format_addr("2001:db8::1", 80), "[2001:db8::1]:80");
+    }
+
+    #[test]
+    fn ipv6_result_parses_as_socket_addr() {
+        for host in ["::", "[::]", "::1", "2001:db8::1"] {
+            let addr = format_addr(host, 7984);
+            addr.parse::<SocketAddr>()
+                .unwrap_or_else(|e| panic!("{addr} 应可解析为 SocketAddr: {e}"));
+        }
+    }
+
+    #[test]
+    fn keeps_hostname_as_is() {
+        assert_eq!(format_addr("localhost", 7984), "localhost:7984");
     }
 }
