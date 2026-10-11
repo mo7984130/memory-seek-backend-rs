@@ -85,7 +85,7 @@ let client = Client::new(
 ### 内置文件存储
 
 启用 `file-storage` feature 后可用跨平台的 `FileStorage`(全部键值存于单个
-`credentials.json`,写入采用「临时文件 + 原子替换」,Unix 下权限 `0600`):
+`credentials.json`,写入采用「临时文件 + 原子替换」):
 
 ```toml
 memory-seek-api-rs = { path = "...", features = ["file-storage"] }
