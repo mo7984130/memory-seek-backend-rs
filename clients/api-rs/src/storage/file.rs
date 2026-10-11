@@ -33,14 +33,21 @@ impl FileStorage {
         })
     }
 
-    /// 以应用名构造,文件落在各平台的用户数据目录下:
+    /// 以应用名构造,凭据文件名用默认的 [`FILE_NAME`];文件落在各平台的用户数据目录下:
     /// - Linux: `$XDG_DATA_HOME/<app>`(缺省 `~/.local/share/<app>`)
     /// - macOS: `~/Library/Application Support/<app>`
     /// - Windows: `%APPDATA%\<app>\data`
     pub fn for_app(app: &str) -> Result<Self, StorageError> {
+        Self::for_app_with_file_name(app, FILE_NAME)
+    }
+
+    /// 以应用名构造,并自定义凭据文件名(便于同一应用区分多份凭据)。
+    ///
+    /// 落盘目录与 [`for_app`](Self::for_app) 相同,仅文件名不同。
+    pub fn for_app_with_file_name(app: &str, file_name: &str) -> Result<Self, StorageError> {
         let dirs = directories::ProjectDirs::from("", "", app)
             .ok_or_else(|| StorageError::Path(format!("无法定位应用数据目录: {app}")))?;
-        Self::new(dirs.data_dir().join(FILE_NAME))
+        Self::new(dirs.data_dir().join(file_name))
     }
 
     /// 存储文件路径。

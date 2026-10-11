@@ -94,9 +94,11 @@ memory-seek-api-rs = { path = "...", features = ["file-storage"] }
 ```rust
 use memory_seek_api::{ApiConfig, Client, FileStorage};
 
-// 方式一:落到各平台用户数据目录的 <app> 下
+// 方式一:落到各平台用户数据目录的 <app> 下,文件名固定 credentials.json
 let storage = FileStorage::for_app("MemorySeek")?;
-// 方式二:显式指定路径(便于测试或自定义位置),构造时即读入磁盘内容
+// 方式二:同上,但自定义凭据文件名(同一应用区分多份凭据)
+// let storage = FileStorage::for_app_with_file_name("MemorySeek", "other.json")?;
+// 方式三:显式指定完整路径(便于测试或自定义位置),构造时即读入磁盘内容
 // let storage = FileStorage::new("/tmp/memoryseek/credentials.json")?;
 
 let client = Client::new(ApiConfig::new("http://127.0.0.1:8080/api"), transport, storage);
