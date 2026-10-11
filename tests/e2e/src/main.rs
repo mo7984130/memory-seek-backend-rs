@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         redis,
         s3: oss::S3Client::new(&cfg.s3.to_oss()),
         api_config: memory_seek_api::ApiConfig::new(cfg.base_url()),
-        transport: std::sync::Arc::new(e2e::api::ReqwestTransport::new(http)),
+        transport: std::sync::Arc::new(memory_seek_api::ReqwestTransport::with_client(http)),
     };
     // 前置准备: 灌入种子数据(先清空再灌入)。
     // 外部被测目标、或连续压测复用同一份种子时用 `run.prepare=false` 跳过

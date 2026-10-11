@@ -48,6 +48,36 @@ pub trait Storage: Send + Sync {
     fn remove(&self, key: &str) -> Result<(), StorageError>;
 }
 
+/// 让共享句柄也能作为 [`Storage`] 注入(如 `Arc<MyStorage>` / `Arc<dyn Storage>`)。
+impl<T: Storage + ?Sized> Storage for Arc<T> {
+    fn get(&self, key: &str) -> Result<Option<String>, StorageError> {
+        (**self).get(key)
+    }
+
+    fn set(&self, key: &str, value: String) -> Result<(), StorageError> {
+        (**self).set(key, value)
+    }
+
+    fn remove(&self, key: &str) -> Result<(), StorageError> {
+        (**self).remove(key)
+    }
+}
+
+/// 让装箱实现也能作为 [`Storage`] 注入(如 `Box<dyn Storage>`)。
+impl<T: Storage + ?Sized> Storage for Box<T> {
+    fn get(&self, key: &str) -> Result<Option<String>, StorageError> {
+        (**self).get(key)
+    }
+
+    fn set(&self, key: &str, value: String) -> Result<(), StorageError> {
+        (**self).set(key, value)
+    }
+
+    fn remove(&self, key: &str) -> Result<(), StorageError> {
+        (**self).remove(key)
+    }
+}
+
 /// 存储键名(与 TS 客户端保持一致)。
 mod keys {
     pub const ACCESS_TOKEN: &str = "MemorySeek.accessToken";

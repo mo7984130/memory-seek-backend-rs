@@ -19,8 +19,7 @@ tokio = { workspace = true, features = ["macros"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 sea-orm.workspace = true
-memory-seek-api-rs = { workspace = true }
-async-trait.workspace = true
+memory-seek-api-rs = { workspace = true, features = ["reqwest-transport"] }
 thiserror.workspace = true
 common-core = { workspace = true }
 common-crypto = { workspace = true }

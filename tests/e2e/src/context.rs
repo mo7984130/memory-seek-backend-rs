@@ -86,7 +86,7 @@ impl Context {
         ApiClient::new(
             self.api_config.clone(),
             Arc::clone(&self.transport),
-            Arc::new(MemoryStorage::new()),
+            MemoryStorage::new(),
         )
     }
 

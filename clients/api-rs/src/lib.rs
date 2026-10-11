@@ -4,21 +4,21 @@
 //!
 //! 设计要点:
 //! - **运行时无关**:不绑定 tokio 等运行时,异步由调用方提供的执行器驱动。
-//! - **HTTP 库无关**:通过 [`Transport`] trait 由调用方注入真实实现(如 reqwest)。
+//! - **HTTP 库无关**:通过 [`Transport`] trait 由调用方注入真实实现;并提供可选
+//!   feature `reqwest-transport` 下的开箱即用 `ReqwestTransport`。
 //! - **存储可注入**:通过 [`Storage`] trait 由调用方注入 token 存储。
 //! - **类型复用**:响应 DTO 直接复用后端 `types-*` 契约 crate,避免定义漂移。
 //!
 //! # 示例
 //!
 //! ```ignore
-//! use std::sync::Arc;
 //! use memory_seek_api::{ApiConfig, AuthStorage, Client};
 //!
-//! // 由调用方提供 Transport / Storage 的具体实现
+//! // 由调用方提供 Transport / Storage 的具体实现(按值传入,内部自行共享)
 //! let client = Client::new(
 //!     ApiConfig::new("http://127.0.0.1:8080/api"),
-//!     Arc::new(my_transport),
-//!     Arc::new(my_storage),
+//!     my_transport,
+//!     my_storage,
 //! );
 //!
 //! let login = memory_seek_api::api::auth::login(&client, &req).await?;
@@ -44,6 +44,9 @@ pub use transport::{
     HeaderMap, HeaderName, HeaderValue, HttpRequest, HttpResponse, Method, StatusCode, Transport,
     TransportError,
 };
+
+#[cfg(feature = "reqwest-transport")]
+pub use transport::ReqwestTransport;
 
 // ============================================================
 // 复用后端契约类型的再导出

@@ -21,9 +21,16 @@ const JSON_CONTENT_TYPE: &str = "application/json;charset=utf-8";
 
 /// Memory Seek 后端客户端。
 ///
-/// 通过构造函数注入 [`ApiConfig`]、[`Transport`] 与 [`Storage`],自身不绑定
-/// 任何运行时或 HTTP 库。
+/// 轻量句柄:内部持有 [`Arc<Inner>`](Inner),`Clone` 仅复制一次引用计数,
+/// 便于跨任务 / 线程共享。通过构造函数注入 [`ApiConfig`]、[`Transport`] 与
+/// [`Storage`],自身不绑定任何运行时或 HTTP 库。
+#[derive(Clone)]
 pub struct Client {
+    inner: Arc<Inner>,
+}
+
+/// [`Client`] 的共享内部状态。
+struct Inner {
     config: ApiConfig,
     transport: Arc<dyn Transport>,
     storage: Arc<dyn Storage>,
@@ -31,31 +38,37 @@ pub struct Client {
 
 impl Client {
     /// 构造客户端。
+    ///
+    /// `transport` / `storage` 按值传入具体实现,内部自行用 `Arc` 共享。
+    /// 如需让多个 `Client` 复用同一实现,可直接传入 `Arc<T>` / `Box<dyn ...>`
+    /// (见 [`Transport`] / [`Storage`] 的 blanket impl)。
     pub fn new(
         config: ApiConfig,
-        transport: Arc<dyn Transport>,
-        storage: Arc<dyn Storage>,
+        transport: impl Transport + 'static,
+        storage: impl Storage + 'static,
     ) -> Self {
         Self {
-            config,
-            transport,
-            storage,
+            inner: Arc::new(Inner {
+                config,
+                transport: Arc::new(transport),
+                storage: Arc::new(storage),
+            }),
         }
     }
 
     /// 当前配置。
     pub fn config(&self) -> &ApiConfig {
-        &self.config
+        &self.inner.config
     }
 
     /// 登录态存储操作器。
     pub fn auth_storage(&self) -> AuthStorage {
-        AuthStorage::new(Arc::clone(&self.storage))
+        AuthStorage::new(Arc::clone(&self.inner.storage))
     }
 
     /// 凭 token 生成影像访问 URL(图片 / 视频封面 / 原视频流)。
     pub fn visual_url(&self, token: &str) -> String {
-        format!("{}/visual/{token}", base(&self.config))
+        format!("{}/visual/{token}", base(&self.inner.config))
     }
 
     /// 发送请求并返回响应壳中的 `data`(JSON 值)。
@@ -70,6 +83,7 @@ impl Client {
     /// 异步递归,故用此终端路径打断循环。
     async fn send_unauth(&self, request: Request) -> Result<Value> {
         let response = self
+            .inner
             .transport
             .send(self.build_http_request(&request, None))
             .await?;
@@ -111,6 +125,7 @@ impl Client {
         };
 
         let response = self
+            .inner
             .transport
             .send(self.build_http_request(&request, auth.as_deref()))
             .await?;
@@ -119,6 +134,7 @@ impl Client {
             self.refresh_and_store().await?;
             let auth = Some(self.auth_header().await?);
             return Ok(self
+                .inner
                 .transport
                 .send(self.build_http_request(&request, auth.as_deref()))
                 .await?);
@@ -186,7 +202,7 @@ impl Client {
 
         HttpRequest {
             method: request.method.clone(),
-            url: url_with_query(base(&self.config), &request.path, &request.query),
+            url: url_with_query(base(&self.inner.config), &request.path, &request.query),
             headers,
             body: request.body.clone(),
         }
@@ -266,6 +282,7 @@ impl RawRequest<'_> {
             None
         };
         self.client
+            .inner
             .transport
             .send(
                 self.client
@@ -543,7 +560,7 @@ mod tests {
         let client = Client::new(
             ApiConfig::new("/api"),
             transport.clone(),
-            Arc::new(MemoryStorage::new()),
+            MemoryStorage::new(),
         );
         let result =
             futures::executor::block_on(client.send_value(Request::post("/auth/login").no_auth()));
@@ -560,7 +577,7 @@ mod tests {
         let client = Client::new(
             ApiConfig::new("/api"),
             transport.clone(),
-            Arc::new(MemoryStorage::new()),
+            MemoryStorage::new(),
         );
         let result = futures::executor::block_on(client.send_value(Request::get("/user/me")));
         assert!(matches!(result, Err(ApiError::NotLoggedIn)));
@@ -578,7 +595,7 @@ mod tests {
         let client = Client::new(
             ApiConfig::new("/api"),
             transport.clone(),
-            Arc::new(MemoryStorage::new()),
+            MemoryStorage::new(),
         );
         let result = futures::executor::block_on(client.send_value(Request::get("/x").no_auth()));
         match result {
@@ -602,7 +619,7 @@ mod tests {
         let client = Client::new(
             ApiConfig::new("/api"),
             transport.clone(),
-            Arc::new(MemoryStorage::new()),
+            MemoryStorage::new(),
         );
         let result = futures::executor::block_on(client.send_value(Request::get("/x").no_auth()));
         match result {
@@ -630,7 +647,7 @@ mod tests {
         let client = Client::new(
             ApiConfig::new("/api"),
             transport.clone(),
-            Arc::new(MemoryStorage::new()),
+            MemoryStorage::new(),
         );
         let response =
             futures::executor::block_on(client.raw(Method::GET, "/user/me").no_auth().send())

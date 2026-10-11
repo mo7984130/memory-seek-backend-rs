@@ -7,6 +7,14 @@
 
 pub use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 
+use std::sync::Arc;
+
+#[cfg(feature = "reqwest-transport")]
+mod reqwest;
+
+#[cfg(feature = "reqwest-transport")]
+pub use self::reqwest::ReqwestTransport;
+
 /// 与 HTTP 库无关的请求描述。
 ///
 /// `url` 为**完整** URL(已包含 `base_url`、路径与查询串);请求体为原始字节,
@@ -52,4 +60,20 @@ pub type TransportError = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub trait Transport: Send + Sync {
     /// 发送一个请求并返回响应。
     async fn send(&self, request: HttpRequest) -> Result<HttpResponse, TransportError>;
+}
+
+/// 让共享句柄也能作为 [`Transport`] 注入(如 `Arc<MyTransport>` / `Arc<dyn Transport>`)。
+#[async_trait::async_trait]
+impl<T: Transport + ?Sized> Transport for Arc<T> {
+    async fn send(&self, request: HttpRequest) -> Result<HttpResponse, TransportError> {
+        (**self).send(request).await
+    }
+}
+
+/// 让装箱实现也能作为 [`Transport`] 注入(如 `Box<dyn Transport>`)。
+#[async_trait::async_trait]
+impl<T: Transport + ?Sized> Transport for Box<T> {
+    async fn send(&self, request: HttpRequest) -> Result<HttpResponse, TransportError> {
+        (**self).send(request).await
+    }
 }
