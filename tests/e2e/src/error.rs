@@ -57,6 +57,7 @@ fn api_kind(error: &ApiError) -> Cow<'static, str> {
         ApiError::NotLoggedIn => "not_logged_in".into(),
         ApiError::TokenExpired => "token_expired".into(),
         ApiError::Transport(error) => transport_kind(error),
+        ApiError::Storage(_) => "storage".into(),
     }
 }
 
@@ -112,6 +113,9 @@ pub fn api_to_http(error: ApiError) -> HttpError {
             Ok(error) => HttpError::Reqwest(*error),
             Err(error) => status_error(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
         },
+        ApiError::Storage(error) => {
+            status_error(StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
+        }
         ApiError::NotLoggedIn => status_error(StatusCode::UNAUTHORIZED, "未登录".to_owned()),
         ApiError::TokenExpired => status_error(StatusCode::UNAUTHORIZED, "登录已失效".to_owned()),
     }

@@ -1,6 +1,6 @@
 [package]
 name = "memory-seek-api-rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Memory Seek API 客户端(Rust)，运行时与 HTTP 库无关"
 license = "MIT"
@@ -9,6 +9,11 @@ publish = false
 [lib]
 name = "memory_seek_api"
 path = "src/lib.rs"
+
+[features]
+default = []
+# 跨平台本地文件存储(FileStorage);启用后引入平台目录依赖 directories。
+file-storage = ["dep:directories"]
 
 [dependencies]
 common-core = { workspace = true }
@@ -24,5 +29,9 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 http = { workspace = true }
 
+# 可选:FileStorage 的平台数据目录解析
+directories = { workspace = true, optional = true }
+
 [dev-dependencies]
 futures = { workspace = true }
+tempfile = { workspace = true }

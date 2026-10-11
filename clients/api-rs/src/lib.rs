@@ -22,7 +22,7 @@
 //! );
 //!
 //! let login = memory_seek_api::api::auth::login(&client, &req).await?;
-//! client.auth_storage().set_login_result(&login);
+//! client.auth_storage().set_login_result(&login)?;
 //! ```
 
 mod client;
@@ -36,7 +36,10 @@ pub mod api;
 pub use client::{Client, RawRequest};
 pub use config::ApiConfig;
 pub use error::{ApiError, Result};
-pub use storage::{AuthStorage, MemoryStorage, Storage};
+pub use storage::{AuthStorage, MemoryStorage, Storage, StorageError};
+
+#[cfg(feature = "file-storage")]
+pub use storage::FileStorage;
 pub use transport::{
     HeaderMap, HeaderName, HeaderValue, HttpRequest, HttpResponse, Method, StatusCode, Transport,
     TransportError,

@@ -130,8 +130,8 @@ impl Client {
     /// 生成 `Authorization: Bearer {userId} {accessToken}`;token 缺失/过期时自动刷新。
     async fn auth_header(&self) -> Result<String> {
         let auth = self.auth_storage();
-        let user_id = auth.user_id().ok_or(ApiError::NotLoggedIn)?;
-        let access_token = match auth.access_token() {
+        let user_id = auth.user_id()?.ok_or(ApiError::NotLoggedIn)?;
+        let access_token = match auth.access_token()? {
             Some(token) => token,
             None => self.refresh_and_store().await?.access_token,
         };
@@ -141,22 +141,22 @@ impl Client {
     /// 使用存储中的 refresh token 刷新 access token,并写回存储。
     async fn refresh_and_store(&self) -> Result<RefreshAccessTokenResponse> {
         let auth = self.auth_storage();
-        let user_id = auth.user_id().ok_or(ApiError::NotLoggedIn)?;
-        let refresh_token = match auth.refresh_token() {
+        let user_id = auth.user_id()?.ok_or(ApiError::NotLoggedIn)?;
+        let refresh_token = match auth.refresh_token()? {
             Some(token) => token,
             None => {
-                auth.clear_login_result();
+                auth.clear_login_result()?;
                 return Err(ApiError::TokenExpired);
             }
         };
 
         match self.fetch_refresh(user_id, &refresh_token).await {
             Ok(response) => {
-                auth.set_access_token(&response.access_token, response.access_token_expire_at);
+                auth.set_access_token(&response.access_token, response.access_token_expire_at)?;
                 Ok(response)
             }
             Err(error) => {
-                auth.clear_login_result();
+                auth.clear_login_result()?;
                 Err(error)
             }
         }
@@ -656,7 +656,9 @@ mod tests {
             body: Vec::new(),
         }]);
         let storage = Arc::new(MemoryStorage::new());
-        AuthStorage::new(storage.clone()).set_login_result(&login_response());
+        AuthStorage::new(storage.clone())
+            .set_login_result(&login_response())
+            .unwrap();
         let client = Client::new(ApiConfig::new("/api"), transport.clone(), storage);
         let response = futures::executor::block_on(
             client
@@ -694,7 +696,9 @@ mod tests {
             ok_response(r#"{"ok":true}"#),
         ]);
         let storage = Arc::new(MemoryStorage::new());
-        AuthStorage::new(storage.clone()).set_login_result(&login_response());
+        AuthStorage::new(storage.clone())
+            .set_login_result(&login_response())
+            .unwrap();
 
         let client = Client::new(ApiConfig::new("/api"), transport.clone(), storage);
         let result = futures::executor::block_on(

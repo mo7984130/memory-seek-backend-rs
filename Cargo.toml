@@ -131,6 +131,10 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 # CLI
 clap = { version = "4.5", features = ["derive"] }
 
+# api-rs 跨平台本地文件存储
+directories = "6"
+tempfile = "3"
+
 # 中文转拼音(人物姓名首字母)
 pinyin = "0.11.0"
 

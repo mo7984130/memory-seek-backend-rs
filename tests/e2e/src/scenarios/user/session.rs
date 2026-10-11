@@ -87,7 +87,10 @@ pub async fn login_with(
     let response = api::auth::login(&client, &request)
         .await
         .map_err(api_to_http)?;
-    client.auth_storage().set_login_result(&response);
+    client
+        .auth_storage()
+        .set_login_result(&response)
+        .expect("内存存储写入不应失败");
     Ok(Session {
         user_id: response.user.id,
         access_token: response.access_token,

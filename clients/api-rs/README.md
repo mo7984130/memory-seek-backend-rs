@@ -11,7 +11,8 @@ TS 客户端 `memory-seek-api-ts` 仍留在 `memory-seek-api` 仓库,与本 crat
 - **HTTP 库无关**:通过 `Transport` trait 由调用方注入真实实现(如 reqwest)。
 - **标准 HTTP 类型**:请求/响应描述复用 [`http`](https://docs.rs/http) crate 的
   `Method` / `HeaderMap` / `StatusCode`(仅类型, 不含客户端或运行时), 与 reqwest / hyper 等零成本互转。
-- **存储可注入**:通过 `Storage` trait 由调用方注入 token 存储(文件、钥匙串、内存等)。
+- **存储可注入**:通过 `Storage` trait 由调用方注入 token 存储。内置 `MemoryStorage`
+  (临时/测试),并提供可选 feature `file-storage` 下的跨平台 `FileStorage`;钥匙串等可由调用方自行实现。
 - **类型复用**:请求/响应 DTO 直接复用后端契约 crate(`types-core` / `types-identity` /
   `types-visual` / `types-visual-token` / `types-audit`),不重复定义,杜绝前后端漂移。
 
@@ -45,12 +46,45 @@ let client = Client::new(
 
 // 3) 登录并保存登录态(之后请求会自动注入 Authorization、401 自动刷新)
 let login = memory_seek_api::api::auth::login(&client, &request).await?;
-client.auth_storage().set_login_result(&login);
+client.auth_storage().set_login_result(&login)?;
 
 // 4) 调用业务接口
 let me = memory_seek_api::api::user::get_me(&client).await?;
 let visuals = memory_seek_api::api::visual::get_visuals(&client, None, Some(20), None, None).await?;
 ```
+
+### 内置文件存储
+
+启用 `file-storage` feature 后可用跨平台的 `FileStorage`(全部键值存于单个
+`credentials.json`,写入采用「临时文件 + 原子替换」,Unix 下权限 `0600`):
+
+```toml
+memory-seek-api-rs = { path = "...", features = ["file-storage"] }
+```
+
+```rust
+use std::sync::Arc;
+use memory_seek_api::{ApiConfig, Client, FileStorage};
+
+// 方式一:落到各平台用户数据目录的 <app> 下
+let storage = Arc::new(FileStorage::for_app("MemorySeek")?);
+// 方式二:显式指定路径(便于测试或自定义位置)
+// let storage = Arc::new(FileStorage::new("/tmp/memoryseek/credentials.json"));
+
+let client = Client::new(ApiConfig::new("http://127.0.0.1:8080/api"), transport, storage);
+```
+
+`for_app("<app>")` 的落盘位置:
+
+| 平台 | 路径 |
+| --- | --- |
+| Linux | `$XDG_DATA_HOME/<app>`(缺省 `~/.local/share/<app>`) |
+| macOS | `~/Library/Application Support/<app>` |
+| Windows | `%APPDATA%\<app>\data` |
+
+> 说明:token 明文落盘,属已知取舍;如需系统钥匙串,可实现 `Storage` 自行接入。
+> `Storage` 各方法返回 `Result<_, StorageError>`;`AuthStorage` 把底层存储错误透传,
+> 而 `loginResult` 无法解析时按「未登录」处理。
 
 接口分组与 TS 客户端一一对应:
 
@@ -74,4 +108,7 @@ let visuals = memory_seek_api::api::visual::get_visuals(&client, None, Some(20),
 cargo fmt --all -- --check
 cargo clippy --release -p memory-seek-api-rs --all-targets -- -D warnings
 cargo test --release -p memory-seek-api-rs
+# 含可选文件存储
+cargo clippy --release -p memory-seek-api-rs --all-targets --features file-storage -- -D warnings
+cargo test --release -p memory-seek-api-rs --features file-storage
 ```
