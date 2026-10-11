@@ -2,21 +2,20 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+
+use local_store::JsonFile;
 
 use super::{Storage, StorageError};
 
-/// 凭据文件名(与目录内其它文件区分)。
+/// 默认凭据文件名。
 const FILE_NAME: &str = "credentials.json";
 
 /// 基于磁盘文件的 [`Storage`] 实现。
 ///
 /// 全部键值以单个 JSON 对象存于一个文件;构造时一次性读入内存,写入采用
-/// 「临时文件 + 原子替换」。进程内通过 [`Mutex`] 串行化访问(跨进程文件锁
-/// 不在支持范围内)。
+/// 「临时文件 + 原子替换」。底层复用 [`local_store::JsonFile`]。
 pub struct FileStorage {
-    path: PathBuf,
-    map: Mutex<HashMap<String, String>>,
+    inner: JsonFile<HashMap<String, String>>,
 }
 
 impl FileStorage {
@@ -25,11 +24,8 @@ impl FileStorage {
     ///
     /// 便于测试或需要自定义存放位置的调用方。
     pub fn new(path: impl Into<PathBuf>) -> Result<Self, StorageError> {
-        let path = path.into();
-        let map = Self::load(&path)?;
         Ok(Self {
-            path,
-            map: Mutex::new(map),
+            inner: JsonFile::new(path)?,
         })
     }
 
@@ -45,55 +41,45 @@ impl FileStorage {
     ///
     /// 落盘目录与 [`for_app`](Self::for_app) 相同,仅文件名不同。
     pub fn for_app_with_file_name(app: &str, file_name: &str) -> Result<Self, StorageError> {
-        let dirs = directories::ProjectDirs::from("", "", app)
-            .ok_or_else(|| StorageError::Path(format!("无法定位应用数据目录: {app}")))?;
-        Self::new(dirs.data_dir().join(file_name))
+        Ok(Self {
+            inner: JsonFile::for_app(app, file_name)?,
+        })
     }
 
     /// 存储文件路径。
     pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    /// 从磁盘读取全部键值;文件不存在时返回空映射。
-    fn load(path: &Path) -> Result<HashMap<String, String>, StorageError> {
-        match std::fs::read(path) {
-            Ok(bytes) => Ok(serde_json::from_slice(&bytes)?),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(HashMap::new()),
-            Err(error) => Err(error.into()),
-        }
-    }
-
-    /// 把内存缓存原子写回磁盘:先写同目录临时文件,再重命名替换。
-    fn flush(map: &HashMap<String, String>, path: &Path) -> Result<(), StorageError> {
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            std::fs::create_dir_all(parent)?;
-        }
-        let bytes = serde_json::to_vec_pretty(map)?;
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, &bytes)?;
-        std::fs::rename(&tmp, path)?;
-        Ok(())
+        self.inner.path()
     }
 }
 
 impl Storage for FileStorage {
     fn get(&self, key: &str) -> Result<Option<String>, StorageError> {
-        Ok(self.map.lock().unwrap().get(key).cloned())
+        Ok(self.inner.with(|map| map.get(key).cloned()))
     }
 
     fn set(&self, key: &str, value: String) -> Result<(), StorageError> {
-        let mut map = self.map.lock().unwrap();
-        map.insert(key.to_owned(), value);
-        Self::flush(&map, &self.path)
+        self.inner.update(|map| {
+            map.insert(key.to_owned(), value);
+        })?;
+        Ok(())
     }
 
     fn remove(&self, key: &str) -> Result<(), StorageError> {
-        let mut map = self.map.lock().unwrap();
-        map.remove(key);
-        Self::flush(&map, &self.path)
+        self.inner.update(|map| {
+            map.remove(key);
+        })?;
+        Ok(())
+    }
+}
+
+/// 把底层通用存储错误按其同类变体透传为 [`StorageError`]。
+impl From<local_store::StoreError> for StorageError {
+    fn from(error: local_store::StoreError) -> Self {
+        match error {
+            local_store::StoreError::Io(error) => StorageError::Io(error),
+            local_store::StoreError::Serde(error) => StorageError::Serde(error),
+            local_store::StoreError::Path(message) => StorageError::Path(message),
+        }
     }
 }
 
