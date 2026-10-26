@@ -16,6 +16,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::Arc;
 
 static CHUNK_SIZE: usize = 256;
@@ -42,6 +43,20 @@ pub struct S3Config {
     pub bucket: String,
     pub public_url: Option<String>,
     pub force_path_style: bool,
+}
+
+/// 流式下载响应: 状态码、范围信息与字节流
+pub struct DownloadStream {
+    /// 对象存储返回的状态码(200 全量 / 206 部分内容 / 416 范围越界)
+    pub status: u16,
+    /// 对象元数据中的 `Content-Type`
+    pub content_type: Option<String>,
+    /// `Content-Range` 响应头(仅 206 / 416 时存在)
+    pub content_range: Option<String>,
+    /// 本次响应体的字节数
+    pub content_length: Option<u64>,
+    /// 响应体字节流
+    pub stream: Pin<Box<dyn Stream<Item = Result<Bytes, OssError>> + Send>>,
 }
 
 impl S3Client {
@@ -300,6 +315,69 @@ impl S3Client {
             Ok::<_, OssError>(response.bytes.map(|item| item.map_err(OssError::from)))
         }
         .await
+    }
+
+    /// 获取对象存储的流式下载响应, 并透传单段 `Range` 头(如 `bytes=0-499`);
+    /// `range` 为 `None` 时读取整个对象。
+    ///
+    /// 通过预签名 URL + reqwest 发起一次请求: 既保持响应体流式, 又能读到
+    /// `Content-Range` / `Content-Length`, 供上层构造 206 / 416 响应。
+    pub async fn get_download_stream_range_response(
+        &self,
+        key: &str,
+        range: Option<&str>,
+    ) -> Result<DownloadStream, OssError> {
+        let url = self.get_signed_url(key, Duration::from_secs(3600)).await?;
+        let range = range.map(str::to_owned);
+
+        let response = retry_429("get_stream_range", key, || {
+            let url = url.clone();
+            let range = range.clone();
+            async move {
+                let mut request = reqwest::Client::new().get(&url);
+                if let Some(range) = range.as_deref() {
+                    request = request.header(reqwest::header::RANGE, range);
+                }
+                let response = request.send().await?;
+                // 仅 429 交给退避重试; 416 是合法的范围不足响应, 需要原样返回
+                if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    return Err(OssError::from_response(response).await);
+                }
+                Ok(response)
+            }
+        })
+        .await?;
+
+        // 非 2xx 除 416 外都视为存储错误, 消费响应体后返回完整错误
+        if !response.status().is_success()
+            && response.status() != reqwest::StatusCode::RANGE_NOT_SATISFIABLE
+        {
+            return Err(OssError::from_response(response).await);
+        }
+
+        let status = response.status().as_u16();
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let content_range = response
+            .headers()
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let content_length = response.content_length();
+        let stream = response
+            .bytes_stream()
+            .map(|item| item.map_err(OssError::from));
+
+        Ok(DownloadStream {
+            status,
+            content_type,
+            content_range,
+            content_length,
+            stream: Box::pin(stream),
+        })
     }
 
     /// 下载对象并应用指定的图片处理参数

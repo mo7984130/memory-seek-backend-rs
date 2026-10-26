@@ -43,6 +43,15 @@ impl OssError {
         }
     }
 
+    /// 判断错误是否为对象不存在(HTTP 404)
+    pub fn is_not_found(&self) -> bool {
+        match self {
+            OssError::Http { status, .. } => *status == StatusCode::NOT_FOUND,
+            OssError::Inner(s3::error::S3Error::HttpFailWithBody(status, _)) => *status == 404,
+            _ => false,
+        }
+    }
+
     /// 消费一个非 2xx 的响应，把 status / headers / body 完整装进 [`OssError::Http`]
     pub async fn from_response(response: reqwest::Response) -> Self {
         let url = response.url().to_string();
