@@ -1,12 +1,6 @@
 use rand::{Rng, RngExt, rng};
 
-/// 生成随机十六进制小写字符串
-///
-/// # 参数
-/// - `len`: 期望的输出字符串长度（实际输出长度为 `len / 2 * 2`，因 hex 编码特性）
-///
-/// # 返回
-/// 由随机字节经 hex 编码生成的小写十六进制字符串
+/// 生成随机十六进制小写字符串；实际输出长度为 `len / 2 * 2`
 #[inline]
 pub fn generate_random_str(len: usize) -> String {
     let mut key = vec![0u8; len / 2];
@@ -14,13 +8,7 @@ pub fn generate_random_str(len: usize) -> String {
     hex::encode(key)
 }
 
-/// 生成随机大写字母+数字字符串（A-Z + 0-9），适用于验证码、邀请码等场景
-///
-/// # 参数
-/// - `len`: 期望的输出字符串长度
-///
-/// # 返回
-/// 由大写字母和数字组成的随机字符串
+/// 生成随机大写字母与数字字符串(A-Z + 0-9)，适用于验证码、邀请码等场景
 pub fn generate_random_uppercase_str(len: usize) -> String {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     (0..len)

@@ -1,6 +1,7 @@
 use crate::error::{AppError, ContextualError};
 
-impl From<multi_level_cache::CacheError> for ContextualError {
+impl From<multi_level_cache::CacheError> for ContextualError<AppError> {
+    /// 将多级缓存错误转换为 warn 级上下文错误
     fn from(error: multi_level_cache::CacheError) -> Self {
         Self::warn(
             "cache_err",

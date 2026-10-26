@@ -1,58 +1,62 @@
 //! 相册:`/visual/collections`。
 
-use common_web::{ErrR, SucR};
+use memory_seek_api::{
+    CollectionCreateParam, CollectionUpdateParam, CollectionVisualAddBatchParam, VisualIds, api,
+};
 use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
+    TaskIndex, register_scenario,
     scenario::{Scenario, SetupMode, TeardownMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use serde_json::json;
 use types_visual::collection as collection_entity;
 use types_visual::collection::CollectionId;
 use types_visual::collection_visual as collection_visual_entity;
+use types_visual::dto::collection::{CollectionView, CollectionVisualAddBatchResult};
 use types_visual::visual::VisualId;
-use types_visual::{
-    dto::collection::CollectionView, dto::collection::CollectionVisualAddBatchResult,
-};
 
 use crate::context::Context;
+use crate::error::{E2eError, status};
 
 use super::{Session, seed_visual, session};
 
 /// 按 API 创建收藏夹, 返回视图。
-async fn create_collection(
-    ctx: &Context,
-    session: &Session,
-    name: String,
-) -> Result<SucR<CollectionView>, HttpError> {
-    ctx.client
-        .request(reqwest::Method::POST, "/visual/collections")
-        .header("Authorization", &session.auth_header())
-        .json_unwrap(&json!({ "name": name, "description": "e2e" }))
-        .send_checked()
-        .await?
-        .json::<SucR<CollectionView>>()
-        .await
-        .map_err(HttpError::from)
+async fn create_collection(session: &Session, name: String) -> Result<CollectionView, E2eError> {
+    let param = CollectionCreateParam {
+        name,
+        description: Some("e2e".to_owned()),
+    };
+    Ok(api::visual::collection::create_collection(session.client(), &param).await?)
+}
+
+/// 幂等删除收藏夹(收尾复用)。
+async fn delete_collection(session: &Session, id: CollectionId) -> Result<(), E2eError> {
+    crate::cleanup::idempotent(
+        api::visual::collection::delete_collection(session.client(), id).await,
+    )
 }
 
 /// 创建收藏夹前置:登录 + 建立前置收藏夹(需要时)。
-/// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
-#[derive(Default)]
 pub struct CollectionSetup {
     pub session: Session,
-    pub collection_id: i64,
+    pub collection_id: CollectionId,
 }
 
-async fn create_setup(ctx: &Context, task: &TaskIndex) -> Result<CollectionSetup, HttpError> {
+impl Default for CollectionSetup {
+    fn default() -> Self {
+        Self {
+            session: Session::default(),
+            collection_id: CollectionId(0),
+        }
+    }
+}
+
+async fn create_setup(ctx: &Context, task: &TaskIndex) -> Result<CollectionSetup, E2eError> {
     let session = session(ctx, task.index).await?;
     let name = format!("e2e_album_{}", task.index);
-    let view = create_collection(ctx, &session, name).await?.data;
+    let view = create_collection(&session, name).await?;
     Ok(CollectionSetup {
         session,
-        collection_id: view.id.0,
+        collection_id: view.id,
     })
 }
 
@@ -63,22 +67,22 @@ pub struct CreateCollectionScenario;
 impl Scenario for CreateCollectionScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<CollectionView>;
+    type Output = CollectionView;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        session(ctx, task.index).await
+        Ok(session(ctx, task.index).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        create_collection(ctx, setup, format!("e2e_album_{}", task.index)).await
+        create_collection(setup, format!("e2e_album_{}", task.index)).await
     }
 
     async fn validate(
@@ -87,21 +91,21 @@ impl Scenario for CreateCollectionScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let Some(row) = collection_entity::Entity::find_by_id(output.data.id)
+        let Some(row) = collection_entity::Entity::find_by_id(output.id)
             .one(&ctx.db)
             .await
             .unwrap()
         else {
             return Ok(false);
         };
-        Ok(row.user_id == setup.user_id && row.name == output.data.name)
+        Ok(row.user_id == setup.user_id && row.name == output.name)
     }
 
     /// 收尾: 删除本轮创建的收藏夹(长跑下每轮新增一个, 不回收会写爆库)
     const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
 
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         result: Option<Result<&Self::Output, &Self::Error>>,
@@ -109,13 +113,7 @@ impl Scenario for CreateCollectionScenario {
         let Some(Ok(view)) = result else {
             return Ok(());
         };
-        crate::cleanup::delete(
-            ctx,
-            &format!("/visual/collections/{}", view.data.id),
-            Some(&setup.auth_header()),
-            None,
-        )
-        .await
+        delete_collection(setup, view.id).await
     }
 }
 
@@ -128,30 +126,26 @@ pub struct CreateCollectionInvalidNameScenario;
 impl Scenario for CreateCollectionInvalidNameScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        session(ctx, task.index).await
+        Ok(session(ctx, task.index).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/visual/collections")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({ "name": "" }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let param = CollectionCreateParam {
+            name: String::new(),
+            description: None,
+        };
+        status(api::visual::collection::create_collection(setup.client(), &param).await)
     }
 
     async fn validate(
@@ -160,7 +154,7 @@ impl Scenario for CreateCollectionInvalidNameScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
@@ -173,9 +167,9 @@ pub struct GetCollectionsScenario;
 impl Scenario for GetCollectionsScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<Vec<CollectionView>>;
+    type Output = Vec<CollectionView>;
 
     type Setup = CollectionSetup;
 
@@ -184,18 +178,11 @@ impl Scenario for GetCollectionsScenario {
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::GET, "/visual/collections")
-            .header("Authorization", &setup.session.auth_header())
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        Ok(api::visual::collection::get_collection_list(setup.session.client()).await?)
     }
 
     async fn validate(
@@ -204,23 +191,17 @@ impl Scenario for GetCollectionsScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.data.iter().any(|c| c.id.0 == setup.collection_id))
+        Ok(output.iter().any(|c| c.id == setup.collection_id))
     }
 
     /// 收尾: 删除 setup 阶段创建的前置收藏夹
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         _result: Option<Result<&Self::Output, &Self::Error>>,
     ) -> Result<(), Self::Error> {
-        crate::cleanup::delete(
-            ctx,
-            &format!("/visual/collections/{}", setup.collection_id),
-            Some(&setup.session.auth_header()),
-            None,
-        )
-        .await
+        delete_collection(&setup.session, setup.collection_id).await
     }
 }
 
@@ -233,9 +214,9 @@ pub struct UpdateCollectionScenario;
 impl Scenario for UpdateCollectionScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<()>;
+    type Output = ();
 
     type Setup = CollectionSetup;
 
@@ -244,22 +225,20 @@ impl Scenario for UpdateCollectionScenario {
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(
-                reqwest::Method::PATCH,
-                &format!("/visual/collections/{}", setup.collection_id),
-            )
-            .header("Authorization", &setup.session.auth_header())
-            .json_unwrap(&json!({ "name": "e2e_renamed" }))
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let param = CollectionUpdateParam {
+            name: Some("e2e_renamed".to_owned()),
+            description: None,
+        };
+        Ok(api::visual::collection::update_collection(
+            setup.session.client(),
+            setup.collection_id,
+            &param,
+        )
+        .await?)
     }
 
     async fn validate(
@@ -268,7 +247,7 @@ impl Scenario for UpdateCollectionScenario {
         setup: &Self::Setup,
         _output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let row = collection_entity::Entity::find_by_id(CollectionId(setup.collection_id))
+        let row = collection_entity::Entity::find_by_id(setup.collection_id)
             .one(&ctx.db)
             .await
             .unwrap();
@@ -277,18 +256,12 @@ impl Scenario for UpdateCollectionScenario {
 
     /// 收尾: 删除 setup 阶段创建的前置收藏夹
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         _result: Option<Result<&Self::Output, &Self::Error>>,
     ) -> Result<(), Self::Error> {
-        crate::cleanup::delete(
-            ctx,
-            &format!("/visual/collections/{}", setup.collection_id),
-            Some(&setup.session.auth_header()),
-            None,
-        )
-        .await
+        delete_collection(&setup.session, setup.collection_id).await
     }
 }
 
@@ -301,9 +274,9 @@ pub struct DeleteCollectionScenario;
 impl Scenario for DeleteCollectionScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<()>;
+    type Output = ();
 
     type Setup = CollectionSetup;
 
@@ -314,21 +287,14 @@ impl Scenario for DeleteCollectionScenario {
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(
-                reqwest::Method::DELETE,
-                &format!("/visual/collections/{}", setup.collection_id),
-            )
-            .header("Authorization", &setup.session.auth_header())
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        Ok(
+            api::visual::collection::delete_collection(setup.session.client(), setup.collection_id)
+                .await?,
+        )
     }
 
     async fn validate(
@@ -337,7 +303,7 @@ impl Scenario for DeleteCollectionScenario {
         setup: &Self::Setup,
         _output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let gone = collection_entity::Entity::find_by_id(CollectionId(setup.collection_id))
+        let gone = collection_entity::Entity::find_by_id(setup.collection_id)
             .one(&ctx.db)
             .await
             .unwrap()
@@ -349,12 +315,20 @@ impl Scenario for DeleteCollectionScenario {
 register_scenario!(DeleteCollectionScenario);
 
 /// 相册添加影像前置:登录 + 种子影像 + 前置收藏夹。
-/// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
-#[derive(Default)]
 pub struct AddVisualsSetup {
     pub session: Session,
-    pub collection_id: i64,
-    pub visual_id: i64,
+    pub collection_id: CollectionId,
+    pub visual_id: VisualId,
+}
+
+impl Default for AddVisualsSetup {
+    fn default() -> Self {
+        Self {
+            session: Session::default(),
+            collection_id: CollectionId(0),
+            visual_id: VisualId(0),
+        }
+    }
 }
 
 /// 相册批量添加影像: 关联记录落库, 计数与新增数正确。
@@ -364,42 +338,37 @@ pub struct AddVisualsToCollectionScenario;
 impl Scenario for AddVisualsToCollectionScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<CollectionVisualAddBatchResult>;
+    type Output = CollectionVisualAddBatchResult;
 
     type Setup = AddVisualsSetup;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session = session(ctx, task.index).await?;
         let visual = seed_visual(ctx, 5).await.ok_or_else(super::seed_missing)?;
-        let view = create_collection(ctx, &session, format!("e2e_album_add_{}", task.index))
-            .await?
-            .data;
+        let view = create_collection(&session, format!("e2e_album_add_{}", task.index)).await?;
         Ok(AddVisualsSetup {
             session,
-            collection_id: view.id.0,
-            visual_id: visual.id.0,
+            collection_id: view.id,
+            visual_id: visual.id,
         })
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(
-                reqwest::Method::POST,
-                &format!("/visual/collections/{}/visuals", setup.collection_id),
-            )
-            .header("Authorization", &setup.session.auth_header())
-            .json_unwrap(&json!({ "visualIds": [setup.visual_id] }))
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let param = CollectionVisualAddBatchParam {
+            visual_ids: VisualIds::new(vec![setup.visual_id]).expect("单元素影像列表恒合法"),
+        };
+        Ok(api::visual::collection::add_visuals_to_collection(
+            setup.session.client(),
+            setup.collection_id,
+            &param,
+        )
+        .await?)
     }
 
     async fn validate(
@@ -409,39 +378,29 @@ impl Scenario for AddVisualsToCollectionScenario {
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         let linked = collection_visual_entity::Entity::find()
-            .filter(
-                collection_visual_entity::Column::CollectionId
-                    .eq(CollectionId(setup.collection_id)),
-            )
-            .filter(collection_visual_entity::Column::VisualId.eq(VisualId(setup.visual_id)))
+            .filter(collection_visual_entity::Column::CollectionId.eq(setup.collection_id))
+            .filter(collection_visual_entity::Column::VisualId.eq(setup.visual_id))
             .one(&ctx.db)
             .await
             .unwrap()
             .is_some();
-        let count_ok = output.data.new_visual_count == 1;
-        let collection_ok =
-            collection_entity::Entity::find_by_id(CollectionId(setup.collection_id))
-                .one(&ctx.db)
-                .await
-                .unwrap()
-                .is_some_and(|c| c.visual_count == 1);
+        let count_ok = output.new_visual_count == 1;
+        let collection_ok = collection_entity::Entity::find_by_id(setup.collection_id)
+            .one(&ctx.db)
+            .await
+            .unwrap()
+            .is_some_and(|c| c.visual_count == 1);
         Ok(linked && count_ok && collection_ok)
     }
 
     /// 收尾: 删除 setup 阶段创建的前置收藏夹(关联记录由服务端一并清理)
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         _result: Option<Result<&Self::Output, &Self::Error>>,
     ) -> Result<(), Self::Error> {
-        crate::cleanup::delete(
-            ctx,
-            &format!("/visual/collections/{}", setup.collection_id),
-            Some(&setup.session.auth_header()),
-            None,
-        )
-        .await
+        delete_collection(&setup.session, setup.collection_id).await
     }
 }
 

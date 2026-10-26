@@ -25,12 +25,30 @@ runs:
         - name: Install Rust
           uses: dtolnay/rust-toolchain@stable
 
-        - name: Install mold / ffmpeg
+        - name: Install mold
           # mold: .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
-          # ffmpeg: server 视频转码(缩略/预览衍生片)在宿主机调用 ffmpeg,
-          #         ubuntu-latest 镜像未预装, 需显式安装
           shell: bash
-          run: sudo apt-get update && sudo apt-get install -y mold ffmpeg
+          run: sudo apt-get update && sudo apt-get install -y mold curl xz-utils
+
+        - name: Install ffmpeg with libsvtav1
+          # server 视频转码在宿主机调用 ffmpeg; 发行版包不一定带 libsvtav1,
+          # 统一使用 BtbN 静态构建(与 build/Dockerfile.runtime 同一版本)。
+          shell: bash
+          run: |
+              if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libsvtav1; then
+                ffmpeg -version
+                exit 0
+              fi
+
+              cd /tmp
+              curl -fL -o ffmpeg.tar.xz \
+                'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-21-13-06/ffmpeg-n9.0.2-31-gc89d6ee1ca-linux64-gpl-9.0.tar.xz'
+              echo '2212009529e7a18809c0a23700e8045364c17853c4390cf8c051e6b65dd97bde  ffmpeg.tar.xz' | sha256sum -c -
+              tar -xJf ffmpeg.tar.xz
+              sudo install -m 755 ffmpeg-n9.0.2-31-gc89d6ee1ca-linux64-gpl-9.0/bin/ffmpeg /usr/local/bin/ffmpeg
+              hash -r
+              which ffmpeg
+              ffmpeg -hide_banner -encoders | grep libsvtav1
 
         - uses: Swatinem/rust-cache@v2
           with:

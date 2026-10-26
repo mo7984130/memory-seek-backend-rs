@@ -21,6 +21,7 @@ members = [
     "libs/email",
     "libs/oss",
     "libs/step_derive",
+    "clients/api-rs",
     "domains/constants",
     "domains/audit",
     "domains/auth",
@@ -52,6 +53,7 @@ common-redis = { path = "common/redis" }
 common-metrics = { path = "common/metrics" }
 common-web = { path = "common/web" }
 common-runtime = { path = "common/runtime" }
+memory-seek-api-rs = { path = "clients/api-rs" }
 types-core = { path = "types/core" }
 types-visual-token = { path = "types/visual-token" }
 types-db-registry = { path = "types/db-registry" }
@@ -96,6 +98,7 @@ image = "0.25.9"
 nom-exif = "3"
 config = { version = "0.15.19", features = ["yaml"] }
 async-trait = "0.1.89"
+http = "1"
 http-body-util = "0.1"
 
 blake3 = "1.8.2"
@@ -127,6 +130,9 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
+
+# 存储相关测试用临时目录
+tempfile = "3"
 
 # 中文转拼音(人物姓名首字母)
 pinyin = "0.11.0"

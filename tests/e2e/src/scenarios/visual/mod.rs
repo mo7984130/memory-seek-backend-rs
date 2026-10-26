@@ -20,7 +20,7 @@ pub mod video;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use common_web::SucR;
+use memory_seek_api::{ApiError, api};
 use memseek_test::TaskIndex;
 use memseek_test::ctxlibs::http_client::{HttpError, reqwest};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
@@ -29,6 +29,7 @@ use types_visual::dto::visual::VisualView;
 use types_visual::visual as visual_entity;
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 pub use crate::scenarios::user::session::{Session, login};
 
@@ -75,21 +76,13 @@ pub fn unique_png(tag: &str) -> Vec<u8> {
 }
 
 /// 上传一个影像(request body 即文件字节), 返回影像视图。
-pub async fn upload(
-    ctx: &Context,
-    session: &Session,
-    data: Vec<u8>,
-) -> Result<SucR<VisualView>, HttpError> {
-    upload_with_content_type(ctx, session, data, "image/png").await
+pub async fn upload(session: &Session, data: Vec<u8>) -> Result<VisualView, E2eError> {
+    upload_with_content_type(session, data, "image/png").await
 }
 
 /// 上传一个视频(request body 即文件字节), 返回影像视图。
-pub async fn upload_video(
-    ctx: &Context,
-    session: &Session,
-    data: Vec<u8>,
-) -> Result<SucR<VisualView>, HttpError> {
-    upload_with_content_type(ctx, session, data, "video/mp4").await
+pub async fn upload_video(session: &Session, data: Vec<u8>) -> Result<VisualView, E2eError> {
+    upload_with_content_type(session, data, "video/mp4").await
 }
 
 /// 以指定 content-type 上传影像字节。
@@ -100,11 +93,10 @@ pub async fn upload_video(
 /// 任何副作用, 属于可重试的过载。并发 setup 下偶发的 503 不应被当作正确性失败,
 /// 这里仅对 503 做有限次退避重试; 其它状态码/传输错误原样上抛。
 pub async fn upload_with_content_type(
-    ctx: &Context,
     session: &Session,
     data: Vec<u8>,
     content_type: &'static str,
-) -> Result<SucR<VisualView>, HttpError> {
+) -> Result<VisualView, E2eError> {
     // 503(过载)时的最大尝试次数与退避上限
     const MAX_ATTEMPTS: u32 = 5;
     const MAX_BACKOFF: Duration = Duration::from_millis(400);
@@ -112,30 +104,22 @@ pub async fn upload_with_content_type(
     let mut attempt = 1;
     let mut backoff = Duration::from_millis(50);
     loop {
-        let result = ctx
-            .client
-            .request(reqwest::Method::POST, "/visual")
-            .header("Authorization", &session.auth_header())
-            .header("content-type", content_type)
-            .body(data.clone())
-            .send_checked()
-            .await;
+        let result = api::visual::upload_visual(
+            session.client(),
+            data.clone(),
+            Some(content_type.to_owned()),
+            None,
+        )
+        .await;
 
         match result {
-            Ok(resp) => {
-                return resp
-                    .json::<SucR<VisualView>>()
-                    .await
-                    .map_err(HttpError::from);
-            }
-            Err(HttpError::Status { status, .. })
-                if status == reqwest::StatusCode::SERVICE_UNAVAILABLE && attempt < MAX_ATTEMPTS =>
-            {
+            Ok(view) => return Ok(view),
+            Err(ApiError::HttpStatus { code: 503, .. }) if attempt < MAX_ATTEMPTS => {
                 tokio::time::sleep(backoff).await;
                 backoff = (backoff * 2).min(MAX_BACKOFF);
                 attempt += 1;
             }
-            Err(err) => return Err(err),
+            Err(error) => return Err(error.into()),
         }
     }
 }
@@ -170,16 +154,16 @@ pub fn seed_missing() -> HttpError {
 }
 
 /// 写真用:断言视觉 token 与库中记录一致。
-pub fn token_matches(token: Option<&String>, file_id: &str, viewer: UserId) -> bool {
-    token
-        .and_then(|t| types_visual::VisualToken::decrypt(t).ok())
+pub fn token_matches(token: &str, file_id: &str, viewer: UserId) -> bool {
+    types_visual::VisualToken::decrypt(token)
+        .ok()
         .is_some_and(|t| t.file_id == file_id && t.viewer_id == viewer)
 }
 
 /// 断言视觉 token 可解密且绑定到指定浏览者。
-pub fn token_viewer(token: Option<&String>, viewer: UserId) -> bool {
-    token
-        .and_then(|t| types_visual::VisualToken::decrypt(t).ok())
+pub fn token_viewer(token: &str, viewer: UserId) -> bool {
+    types_visual::VisualToken::decrypt(token)
+        .ok()
         .is_some_and(|t| t.viewer_id == viewer)
 }
 

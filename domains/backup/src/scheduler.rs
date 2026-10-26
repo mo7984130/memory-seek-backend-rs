@@ -9,10 +9,7 @@ use crate::state::BackupState;
 const BACKUP_HOUR: u32 = 6;
 const BACKUP_MINUTE: u32 = 0;
 
-/// 注册每日凌晨 6 点（本地时间）的定时备份任务，由 TaskManager 托管。
-///
-/// 任务常驻循环：等待到下一个触发点执行一次备份，然后继续等待下一次，
-/// 直到应用关闭时随 TaskManager 一起被取消。
+/// 注册每日 06:00（本地时间）的定时备份任务，由 TaskManager 托管并常驻循环执行
 pub fn register_scheduled(state: Arc<BackupState>) {
     let task_manager = state.task_manager.clone();
     let backup_state = state.clone();

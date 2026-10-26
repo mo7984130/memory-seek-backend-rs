@@ -5,7 +5,7 @@ use sea_orm::{
 };
 use types_identity::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
-use crate::error_ext::ContextualErrorExt;
+use crate::error_ext::UserOptionExt;
 use crate::models::UserBriefRow;
 
 /// 用户表数据访问，向 repo 层提供统一的数据库访问入口
@@ -34,11 +34,6 @@ impl UserMapper {
         user_id: UserId,
         new_key: String,
     ) -> Result<Option<String>> {
-        // 注意: 不能用 `into_values::<Option<String>, Column>()` —— 它按 `Column`
-        // 全量枚举的列名取 `cols[0]`(即 "id"), 而本查询只 select 了
-        // avatar_file_id; 且 `Option` 的 `TryGetable` 对“列不存在”会返回
-        // `Ok(None)`, 导致旧头像 key 恒为 None、旧对象永不删除。
-        // 这里改用按列序号取值的 `into_tuple`。
         let old_key: Option<String> = Entity::find_by_id(user_id)
             .select_only()
             .column(Column::AvatarFileId)

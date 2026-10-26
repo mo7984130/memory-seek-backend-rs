@@ -7,7 +7,7 @@ use crate::collection::CollectionId;
 use crate::models::VisualIds;
 use crate::visual::VisualId;
 
-crate::out_dto!(CollectionView, "visual/", rename = "Collection"; {
+crate::dto!(CollectionView, "visual/", rename = "Collection"; {
     pub id: CollectionId,
     pub name: String,
     pub description: Option<String>,
@@ -19,19 +19,19 @@ crate::out_dto!(CollectionView, "visual/", rename = "Collection"; {
     pub created_at: DateTime,
 });
 
-crate::out_dto!(CollectionBriefView, "visual/", rename = "CollectionBrief"; {
+crate::dto!(CollectionBriefView, "visual/", rename = "CollectionBrief"; {
     pub id: CollectionId,
     pub name: String,
 });
 
-crate::in_dto!(CollectionCreateParam, "visual/"; {
+crate::dto!(CollectionCreateParam, "visual/"; {
     #[validate(length(min = 1, max = 128, message = "相册名长度在 1 到 128 个字符"))]
     pub name: String,
     #[validate(length(max = 512, message = "描述长度不能超过 512 个字符"))]
     pub description: Option<String>,
 });
 
-crate::in_dto!(CollectionUpdateParam, "visual/"; {
+crate::dto!(CollectionUpdateParam, "visual/"; {
     #[validate(length(min = 1, max = 128, message = "相册名长度在 1 到 128 个字符"))]
     pub name: Option<String>,
     #[validate(length(max = 512, message = "描述长度不能超过 512 个字符"))]
@@ -40,12 +40,12 @@ crate::in_dto!(CollectionUpdateParam, "visual/"; {
 
 pub const COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE: u64 = 32;
 
-/// 返回相册影像分页的默认页大小.
+/// 返回相册影像分页的默认页大小
 fn collection_visual_cursor_page_default_size() -> u64 {
     COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }
 
-crate::in_dto!(CollectionVisualCursorPageParam, "visual/", docs = "收藏夹影像游标参数（cursor 为 TimeIdCursor<VisualId> 的 Base64 编码）"; {
+crate::dto!(CollectionVisualCursorPageParam, "visual/", docs = "收藏夹影像游标参数（cursor 为 TimeIdCursor<VisualId> 的 Base64 编码）"; {
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
     pub cursor: Option<TimeIdCursor<VisualId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
@@ -55,22 +55,22 @@ crate::in_dto!(CollectionVisualCursorPageParam, "visual/", docs = "收藏夹影�
     pub size: u64,
 });
 
-crate::in_dto!(CollectionVisualAddBatchParam, "visual/"; {
+crate::dto!(CollectionVisualAddBatchParam, "visual/"; {
     #[validate(nested)]
     pub visual_ids: VisualIds,
 });
 
-crate::out_dto!(CollectionVisualAddBatchResult, "visual/", Default; {
+crate::dto!(CollectionVisualAddBatchResult, "visual/", Default; {
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub new_visual_count: u64,
 });
 
-crate::in_dto!(CollectionVisualRemoveBatchParam, "visual/"; {
+crate::dto!(CollectionVisualRemoveBatchParam, "visual/"; {
     #[validate(nested)]
     pub visual_ids: VisualIds,
 });
 
-crate::out_dto!(CollectionVisualRemoveBatchResult, "visual/", Default; {
+crate::dto!(CollectionVisualRemoveBatchResult, "visual/", Default; {
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub removed_visual_count: u64,
 });
@@ -84,6 +84,7 @@ mod orm {
     use types_core::UserId;
 
     impl From<CollectionRecord> for CollectionBriefView {
+        /// 将收藏夹记录转换为收藏夹简要视图
         fn from(record: CollectionRecord) -> Self {
             CollectionBriefView {
                 id: record.id,
@@ -93,7 +94,7 @@ mod orm {
     }
 
     impl CollectionView {
-        /// 为相册封面生成当前查看者可用的裁剪访问令牌.
+        /// 为相册封面生成当前查看者可用的裁剪访问令牌
         pub fn with_generate_cover_token(
             mut self,
             viewer: UserId,
@@ -108,6 +109,7 @@ mod orm {
     }
 
     impl From<CollectionRecord> for CollectionView {
+        /// 将收藏夹记录转换为收藏夹视图
         fn from(record: CollectionRecord) -> Self {
             CollectionView {
                 id: record.id,

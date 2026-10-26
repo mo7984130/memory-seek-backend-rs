@@ -2,11 +2,12 @@ use common_core::{error::AppError, error::contextual::Result, error::contextual:
 
 /// 认证领域中必须存在用户的查询结果扩展。
 pub(crate) trait AuthOptionExt<T> {
-    /// 将空查询结果转换为认证域的用户不存在错误.
+    /// 将空查询结果转换为认证域的用户不存在错误
     fn user_not_found(self) -> Result<T>;
 }
 
 impl<T> AuthOptionExt<T> for Option<T> {
+    /// 将空查询结果转换为认证域的用户不存在错误
     fn user_not_found(self) -> Result<T> {
         self.ok_or_warn(
             "user_not_found",

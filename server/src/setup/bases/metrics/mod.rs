@@ -32,16 +32,19 @@ pub struct Config {
 }
 
 impl Default for Config {
+    /// 返回指标配置的默认值
     fn default() -> Self {
         Self {
             interval_seconds: default_interval_seconds(),
         }
     }
 }
+/// 返回指标采集的默认间隔秒数
 const fn default_interval_seconds() -> u64 {
     5
 }
 
+/// 初始化 Prometheus 指标采集、upkeep 任务与 `/metrics` 路由
 #[register_async(
     slice = crate::setup::bases::APP_BASES_LAST,
     ty = crate::setup::InitFn

@@ -9,7 +9,7 @@ use std::future::Future;
 
 use crate::error::OssError;
 
-/// 构造 OSS 指标名：`{crate}:{op}:{step}`。
+/// 构造 OSS 指标名:`{crate}:{op}:{step}`
 #[cfg(feature = "metrics")]
 pub(crate) fn metric_name(op: &str, step: &str) -> String {
     format!("{}:{}:{}", env!("CARGO_PKG_NAME"), op, step)
@@ -23,16 +23,7 @@ pub const RETRY_DELAYS: [Duration; 4] = [
     Duration::from_secs(5),
 ];
 
-/// 对可能触发 OSS 限流的操作做指数退避重试
-///
-/// 仅对 `429 Too Many Requests` 重试，最多执行 1 + `delays.len()` 次尝试；
-/// 第 `i` 次失败后等待 `delays[i]`（`i` 从 0 开始）再重试。
-///
-/// # 参数
-/// - `op`: 操作名（`put` / `get` / `delete` / ...），仅用于指标标签
-/// - `key`: 操作的 OSS 键名，仅用于日志定位
-/// - `delays`: 各次失败对应的等待时长；生产代码传 [`RETRY_DELAYS`]，测试可注入更短的延迟
-/// - `f`: 实际请求闭包
+/// 对可能触发 OSS 限流的操作做指数退避重试；仅对 429 重试,最多执行 1 + `delays.len()` 次尝试
 pub async fn retry_with_backoff<F, Fut, T>(
     op: &str,
     key: &str,

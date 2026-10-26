@@ -8,10 +8,12 @@
 # 由 systemd journald 捕获管理（参考仓库根目录 memory-seek-server.service）
 server:
   host: "0.0.0.0"
+  # IPv6: 设为 "[::]"(Linux 默认双栈, 同时收 IPv4/IPv6; 不带方括号的 "::" 亦可);
+  #       默认 "127.0.0.1" 与 "0.0.0.0" 均为仅 IPv4
   port: 3000
-  # 上传请求体上限(字节), 默认 536870912(512MB), 与业务视频上限一致
+  # 上传请求体上限(字节), 默认 1073741824(1GB), 与业务视频上限一致
   # 超限请求将返回 413(可环境变量覆盖: MEMORY_SEEK_SERVER__MAX_UPLOAD_BYTES)
-  # max_upload_bytes: 536870912
+  # max_upload_bytes: 1073741824
 
   # 统一临时文件目录(上传流式落盘等), 默认 ./tmp
   # 服务启动时创建, 优雅关闭时删除(可环境变量覆盖: MEMORY_SEEK_SERVER__TMP_PATH)
@@ -79,22 +81,28 @@ visual:
   #   auto(默认): 对象存储为阿里云 OSS 时走服务端处理, 否则本地处理
   # 环境变量覆盖: MEMORY_SEEK_VISUAL__IMAGE_PROCESSOR=local
   image_processor: auto
+  processed_image:
+    # 处理后的图片是否持久化到对象存储(缩略图/预览; 裁剪不持久化)
+    # false(默认): 每次请求按上面的后端直接处理, 不写 processed/ 对象
+    # 环境变量覆盖: MEMORY_SEEK_VISUAL__PROCESSED_IMAGE__STORE_IN_OSS=true
+    store_in_oss: false
   transcode:
-    # 视频转码(生成缩略/预览衍生片); 关闭后不生成
-    # 环境变量覆盖: MEMORY_SEEK_VISUAL__TRANSCODE__ENABLED=false
-    enabled: true
+    # 视频转码(生成缩略/预览衍生片), 始终开启
     # ffmpeg 可执行文件路径(或 PATH 中的命令名)。
     # 依赖运行环境已提供 ffmpeg, 默认 "ffmpeg"(取自 PATH):
-    #   - 裸机/systemd 部署: 宿主机需安装(如 apt install ffmpeg)
+    #   - 需要带 libsvtav1 编码器(ffmpeg -encoders | grep libsvtav1)
+    #   - 裸机/systemd 部署: 需安装带 libsvtav1 的 ffmpeg
+    #     (BtbN 静态构建, 或发行版中已启用该编码器的包; 只装 libsvtav1 运行库无效)
     #   - 容器部署: 运行镜像已内置(见 build/Dockerfile.runtime)
     # ffmpeg_path: ffmpeg
-    # 缩略片: 片头前 N 秒、目标宽度、视频码率
+    # 缩略片: 片头前 N 秒、目标宽度
     # thumb_duration_secs: 4
     # thumb_max_width: 640
-    # thumb_bitrate: 600k
-    # 预览片: 目标高度、视频码率
+    # 预览片: 目标高度
     # preview_max_height: 1080
-    # preview_bitrate: 4M
+    # AV1(SVT-AV1) 编码质量: CRF 0-63(越大体积越小), preset 0-13(越大越快)
+    # av1_crf: 35
+    # av1_preset: 8
     # 转码失败的有限重试: 最大尝试次数(含首次)与退避秒数
     # max_attempts: 3
     # retry_backoff_secs: 30

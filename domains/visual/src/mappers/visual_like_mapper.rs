@@ -18,7 +18,7 @@ pub struct VisualLikeMapper;
 
 // 创建
 impl VisualLikeMapper {
-    /// 插入影像点赞记录; 重复记录由数据库约束处理.
+    /// 插入影像点赞记录; 重复记录由数据库约束处理
     pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -48,7 +48,6 @@ impl VisualLikeMapper {
 // 查询
 impl VisualLikeMapper {
     /// 批量查询用户对一组影像的点赞状态
-    /// 查询用户对一批影像的点赞状态.
     pub async fn query_is_like_by_visual_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -67,10 +66,7 @@ impl VisualLikeMapper {
             .to_ok()
     }
 
-    /// 查询用户点赞的影像ID和点赞时间列表（带游标分页）
-    ///
-    /// 返回 `(VisualId, DateTime)` 元组，其中 DateTime 为点赞时间。
-    /// 分页查询用户点赞过的影像 ID, 并返回点赞时间游标.
+    /// 游标分页查询用户点赞过的影像 ID 及点赞时间
     pub async fn query_user_liked_visual_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -102,7 +98,7 @@ impl VisualLikeMapper {
 
 // 删除
 impl VisualLikeMapper {
-    /// 删除用户对指定影像的点赞记录.
+    /// 删除用户对指定影像的点赞记录
     pub async fn delete(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -117,7 +113,7 @@ impl VisualLikeMapper {
         Ok(res.rows_affected > 0)
     }
 
-    /// 删除指定影像的全部点赞记录.
+    /// 删除指定影像的全部点赞记录
     pub async fn delete_all_by_visual_ids(
         db: &impl ConnectionTrait,
         visual_ids: &[VisualId],

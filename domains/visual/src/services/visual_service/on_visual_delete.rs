@@ -14,12 +14,13 @@ pub struct VisualDeleteContext {
 }
 
 impl VisualDeleteContext {
-    /// 返回当前删除管道中的影像 ID.
+    /// 返回当前删除管道中的影像 ID
     pub fn visual_ids(&self) -> Vec<VisualId> {
         self.visuals.iter().map(|visual| visual.id).collect()
     }
 }
 
+/// 在单个事务管道内执行影像删除的各步骤
 pub async fn run_visual_delete_pipeline(
     db: &sea_orm::DatabaseConnection,
     ctx: &mut VisualDeleteContext,

@@ -2,6 +2,7 @@ use validator::{ValidationErrors, ValidationErrorsKind};
 
 use common_core::{ContextualError, error::AppError};
 
+/// 将校验错误聚合为携带中文提示的 `ContextualError`
 pub fn handle_validation_error(err: ValidationErrors) -> ContextualError {
     let msg = format_validation_errors(&err);
     ContextualError::warn_without_source(
@@ -11,6 +12,7 @@ pub fn handle_validation_error(err: ValidationErrors) -> ContextualError {
     )
 }
 
+/// 将字段级校验错误拼接为以 `; ` 分隔的提示文本
 fn format_validation_errors(errors: &ValidationErrors) -> String {
     errors
         .errors()

@@ -7,6 +7,7 @@ use tokio::io::BufReader;
 pub struct BinaryCopyImporter;
 
 impl BinaryCopyImporter {
+    /// 在单个事务内清空目标表并导入本地 COPY 文件，返回导入行数；失败时事务回滚
     pub async fn restore_local(
         db: &DatabaseConnection,
         tables: &[String],
@@ -52,6 +53,7 @@ impl BinaryCopyImporter {
         Ok(rows)
     }
 
+    /// 用双引号包裹标识符并转义内部双引号
     fn quote_identifier(value: &str) -> String {
         format!("\"{}\"", value.replace('"', "\"\""))
     }

@@ -18,7 +18,7 @@ pub struct BackupState {
 }
 
 impl BackupState {
-    /// 创建备份领域状态并初始化存储组件.
+    /// 创建备份领域状态并初始化存储组件
     pub fn new(
         db: DatabaseConnection,
         s3_client: S3Client,
@@ -44,7 +44,7 @@ impl BackupState {
         }
     }
 
-    /// 确保临时目录存在
+    /// 确保临时目录与本地备份目录存在
     pub fn ensure_dirs(&self) -> std::io::Result<()> {
         std::fs::create_dir_all(&self.temp_dir)?;
         std::fs::create_dir_all(&self.config.local_path)?;

@@ -24,6 +24,7 @@ impl CollectionMapper {
     // 添加收藏夹影像
     // 会同时修改collection 和 collection_visual 两个表
     // 返回插入后的影像总数
+    /// 批量向收藏夹添加影像并返回影像总数；同时更新 `collection` 与 `collection_visual` 两张表
     pub async fn add_visuals_batch(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -78,7 +79,7 @@ impl CollectionMapper {
         })
     }
 
-    /// 创建收藏夹.
+    /// 创建收藏夹
     pub async fn insert(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -123,7 +124,7 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 批量更新多个收藏夹的影像计数.
+    /// 批量更新多个收藏夹的影像计数
     pub async fn update_visual_count_delta_batch(
         db: &impl ConnectionTrait,
         deltas: &HashMap<CollectionId, i64>,
@@ -153,7 +154,7 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 增量更新影像计数.
+    /// 增量更新影像计数
     pub async fn update_visual_count_delta(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -170,7 +171,7 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 更新收藏夹信息.
+    /// 更新收藏夹信息
     pub async fn update_info(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -216,7 +217,7 @@ impl CollectionMapper {
             .to_ok()
     }
 
-    /// 通过user_id查询全部收藏夹.
+    /// 通过user_id查询全部收藏夹
     pub async fn query_by_user_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -232,7 +233,7 @@ impl CollectionMapper {
             .to_ok()
     }
 
-    /// 检查收藏夹是否属于对应用户.
+    /// 检查收藏夹是否属于对应用户
     pub async fn is_belong(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -263,7 +264,7 @@ impl CollectionMapper {
         Ok(())
     }
 
-    /// 确保收藏夹属于对应用户, 并且返回收藏夹记录.
+    /// 确保收藏夹属于对应用户, 并且返回收藏夹记录
     pub async fn ensure_belong_with_return(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -285,7 +286,7 @@ impl CollectionMapper {
 
 // 删除
 impl CollectionMapper {
-    /// 删除收藏夹.
+    /// 删除收藏夹
     pub async fn delete_by_id(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,

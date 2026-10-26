@@ -25,6 +25,7 @@ enum BackupMode {
 }
 
 impl BackupMode {
+    /// 返回备份模式的指标作用域标签
     fn metric_scope(self) -> &'static str {
         match self {
             Self::Scheduled => "scheduled",
@@ -32,11 +33,7 @@ impl BackupMode {
         }
     }
 
-    /// 本次备份应写入的 tier 列表。
-    ///
-    /// - `Scheduled`: 每天写入 Daily;每周第一天(周一)追加 Weekly;每月 1 号追加 Monthly。
-    ///   保证 weekly / monthly 目录里保留的是对应周期的 run,而非最近若干天。
-    /// - `Manual`: 仅写入 Manual。
+    /// 按模式返回本次备份应写入的 tier 列表；定时模式在周一或每月 1 号追加 weekly/monthly
     fn tiers(self, now: &chrono::DateTime<Local>) -> Vec<BackupTier> {
         match self {
             Self::Manual => vec![BackupTier::Manual],
@@ -44,7 +41,7 @@ impl BackupMode {
         }
     }
 
-    /// GFS 分层选择:周一 = Weekly,每月 1 号 = Monthly(周一且恰逢 1 号时两者都写)。
+    /// 按 GFS 分层策略选择 tier：周一追加 weekly，每月 1 号追加 monthly
     fn scheduled_tiers(weekday: Weekday, day_of_month: u32) -> Vec<BackupTier> {
         let mut tiers = vec![BackupTier::Daily];
         if weekday == Weekday::Mon {
@@ -58,7 +55,7 @@ impl BackupMode {
 }
 
 impl BackupService {
-    /// 从指定备份恢复数据。
+    /// 从指定备份恢复数据；校验确认 ID 与清单格式一致后在操作锁内执行
     #[common_macros::metered(name = "restore")]
     #[tracing::instrument(name = "restore", skip_all, fields(run_id = %run_id))]
     pub async fn restore(
@@ -132,7 +129,7 @@ impl BackupService {
         inc_counter!("restore", "rows", restored);
         Ok(restored)
     }
-    /// 执行定时备份，并在完成后清理过期备份（无论备份成败都会清理）。
+    /// 执行定时备份，并在完成后清理过期备份；备份失败也会执行清理，清理失败视为任务失败
     #[common_macros::metered(name = "scheduled")]
     #[tracing::instrument(name = "scheduled", skip_all)]
     pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult> {
@@ -159,12 +156,12 @@ impl BackupService {
         Ok(result)
     }
 
-    /// 执行 GFS 分层清理，错误向上返回，由调用方决定任务成败。
+    /// 执行 GFS 分层清理，错误向上返回，由调用方决定任务成败
     async fn run_cleanup(state: &BackupState) -> std::result::Result<u32, BackupError> {
         state.storage.cleanup_gfs(&state.config.scheduled).await
     }
 
-    /// 执行管理员触发的全表手动备份。
+    /// 执行管理员触发的全表手动备份
     #[common_macros::metered(name = "manual")]
     #[tracing::instrument(name = "manual", skip_all)]
     pub async fn execute_manual(state: Arc<BackupState>, admin: AdminId) -> Result<BackupResult> {
@@ -182,7 +179,7 @@ impl BackupService {
         Ok(result)
     }
 
-    /// 执行指定表的手动备份，供领域内部流程复用。
+    /// 执行指定表的手动备份，供领域内部流程复用
     pub async fn backup_tables(
         state: Arc<BackupState>,
         tables: &[&str],
@@ -196,6 +193,7 @@ impl BackupService {
         .to_ok()
     }
 
+    /// 返回配置的表列表，未配置时返回数据库中的全部表
     async fn configured_tables(
         state: &BackupState,
     ) -> std::result::Result<Vec<String>, BackupError> {
@@ -207,6 +205,7 @@ impl BackupService {
             .map_err(BackupError::from)
     }
 
+    /// 逐表导出并保存到各 tier，全部成功后写入备份清单，返回本次备份结果
     async fn execute(
         state: Arc<BackupState>,
         tables: Vec<String>,
@@ -278,6 +277,7 @@ impl BackupService {
         Ok(result)
     }
 
+    /// 在事务内记录一次备份运行审计事件
     async fn record_run_audit(
         state: &BackupState,
         event_type: &str,
@@ -293,7 +293,7 @@ impl BackupService {
         }));
         let event = actor_id.map_or(event.clone(), |actor_id| event.with_actor(actor_id.0));
 
-        common_db::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(&state.db, |txn| {
             AuditRecorder::append(txn, event).await?;
             Ok(())
         })
@@ -301,8 +301,9 @@ impl BackupService {
         .to_ok()
     }
 
+    /// 在事务内记录一次恢复审计事件
     async fn record_restore_audit(state: &BackupState, event: AuditEvent) -> Result<()> {
-        common_db::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(&state.db, |txn| {
             AuditRecorder::append(txn, event).await?;
             Ok(())
         })
@@ -310,6 +311,7 @@ impl BackupService {
         .to_ok()
     }
 
+    /// 判断字符串是否仅由 ASCII 字母数字与下划线组成，用于校验路径片段安全
     fn is_safe_segment(value: &str) -> bool {
         !value.is_empty()
             && value
@@ -367,6 +369,7 @@ pub struct BackupResult {
 }
 
 impl BackupResult {
+    /// 创建初始计数为零的备份结果
     fn new(run_id: String) -> Self {
         Self {
             run_id,

@@ -19,9 +19,7 @@ pub struct TempFile {
 }
 
 impl TempFile {
-    /// 在指定目录下以给定文件名创建临时文件(如调用方的 uuid)。
-    ///
-    /// 目录需已存在, 由调用方保证(如服务启动时创建)。
+    /// 在指定目录下以给定文件名创建临时文件；目录需已存在，由调用方保证
     pub fn create_in(dir: &Path, name: &str) -> io::Result<Self> {
         let path = dir.join(name);
         let file = File::create(&path)?;
@@ -31,19 +29,17 @@ impl TempFile {
         })
     }
 
-    /// 临时文件路径。
+    /// 返回临时文件路径；所有权已移交或已释放时 panic
     pub fn path(&self) -> &Path {
         self.path.as_deref().expect("TempFile 已移交或已释放")
     }
 
-    /// 写句柄(需可变)。
+    /// 返回可变写句柄；所有权已移交或已释放时 panic
     pub fn file(&mut self) -> &mut File {
         self.file.as_mut().expect("TempFile 已移交或已释放")
     }
 
-    /// 为临时文件追加扩展名并更新内部路径(如嗅探/校验出真实格式后重命名)。
-    ///
-    /// 重命名前会关闭写句柄; 之后 [`Drop`] 删除的是新路径。
+    /// 为临时文件追加扩展名并更新内部路径；重命名前关闭写句柄，之后 [`Drop`] 删除新路径
     pub fn set_extension(&mut self, ext: &str) -> io::Result<()> {
         self.file.take();
         let Some(path) = self.path.as_ref() else {
@@ -60,7 +56,7 @@ impl TempFile {
         Ok(())
     }
 
-    /// 移交所有权: 返回路径, 之后 [`Drop`] 不再删除文件。
+    /// 移交所有权并返回路径；调用后 [`Drop`] 不再删除文件
     pub fn into_persisted(mut self) -> PathBuf {
         // 先关闭写句柄
         self.file.take();
@@ -69,6 +65,7 @@ impl TempFile {
 }
 
 impl Drop for TempFile {
+    /// 先关闭写句柄再删除临时文件，删除失败仅记录告警
     fn drop(&mut self) {
         // 先关闭句柄再删除, 避免 Windows 上删除被占用的文件失败
         self.file.take();
@@ -81,9 +78,7 @@ impl Drop for TempFile {
     }
 }
 
-/// 删除目录及其全部内容, 用于优雅关闭时清理临时文件。
-///
-/// 目录不存在时视为已清理; 删除失败仅记录告警, 不阻断关闭流程。
+/// 删除目录及其全部内容以清理临时文件；目录不存在视为已清理，删除失败仅告警
 pub fn remove_dir_all(dir: &Path) {
     if let Err(error) = std::fs::remove_dir_all(dir)
         && error.kind() != io::ErrorKind::NotFound

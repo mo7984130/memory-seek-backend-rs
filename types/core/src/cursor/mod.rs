@@ -48,6 +48,7 @@ pub enum CursorDecodeError {
 }
 
 impl std::fmt::Display for CursorDecodeError {
+    /// 格式化为游标解码失败的说明文本
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Base64(_) => write!(f, "游标 Base64 解码失败"),
@@ -58,6 +59,7 @@ impl std::fmt::Display for CursorDecodeError {
 }
 
 impl std::error::Error for CursorDecodeError {
+    /// 返回底层错误来源
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Base64(e) => Some(e),
@@ -69,6 +71,7 @@ impl std::error::Error for CursorDecodeError {
 
 #[cfg(feature = "orm")]
 impl From<CursorDecodeError> for AppError {
+    /// 将游标解码失败转为 400 响应并发出告警
     #[track_caller]
     fn from(e: CursorDecodeError) -> Self {
         ContextualError::warn(

@@ -11,11 +11,12 @@ pub struct Config {
     #[serde(default = "default_max_connections")]
     pub max_connections: u32,
 }
+/// 返回数据库连接池默认最大连接数
 const fn default_max_connections() -> u32 {
     64
 }
 
-/// 根据配置建立数据库连接并执行基础初始化.
+/// 根据配置建立数据库连接并执行基础初始化
 #[common_macros::register_async(
     slice = crate::setup::bases::APP_BASES,
     ty = crate::setup::InitFn,

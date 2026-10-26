@@ -1,15 +1,13 @@
-use common_web::{ErrR, SucR};
+use memory_seek_api::{Method, api};
 use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
+    TaskIndex, register_scenario,
     scenario::{Scenario, SetupMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use serde_json::json;
 use types_identity::auth;
 
 use crate::context::Context;
+use crate::error::{E2eError, status};
 
 use super::session::{Session, login, logout_account};
 
@@ -20,32 +18,25 @@ pub struct LogoutScenario;
 impl Scenario for LogoutScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<()>;
+    type Output = ();
 
     type Setup = Session;
 
     const SETUP_MODE: SetupMode = SetupMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &logout_account(task.index)).await
+        Ok(login(ctx, &logout_account(task.index)).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/user/logout")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({}))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        api::user::logout(setup.client()).await?;
+        Ok(())
     }
 
     async fn validate(
@@ -66,17 +57,9 @@ impl Scenario for LogoutScenario {
             .unwrap()
             .is_some_and(|u| u.refresh_token.is_none());
 
-        // 3. 旧 access_token 复用被拒
-        let after = ctx
-            .client
-            .request(reqwest::Method::GET, "/user/me")
-            .header("Authorization", &setup.auth_header())
-            .send()
-            .await?
-            .json::<ErrR>()
-            .await
-            .map_err(HttpError::from)?;
-        let revoked = after.code == 401;
+        // 3. 旧 access_token 复用被拒: 再读 /user/me 应为 401
+        let after = status(api::user::get_me(setup.client()).await)?;
+        let revoked = after == 401;
 
         Ok(token_gone && refresh_cleared && revoked)
     }
@@ -91,9 +74,9 @@ pub struct LogoutUnauthorizedScenario;
 impl Scenario for LogoutUnauthorizedScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -102,14 +85,14 @@ impl Scenario for LogoutUnauthorizedScenario {
         _task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/user/logout")
-            .json_unwrap(&json!({}))
+        let client = ctx.api_client();
+        let response = client
+            .raw(Method::POST, "/user/logout")
+            .no_auth()
+            .json(&serde_json::json!({}))
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -118,7 +101,7 @@ impl Scenario for LogoutUnauthorizedScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 401)
+        Ok(*output == 401)
     }
 }
 

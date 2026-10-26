@@ -64,6 +64,7 @@ impl CollectionRepo {
         .await
     }
 
+    /// 确保收藏夹属于指定用户，否则返回禁止访问
     pub async fn ensure_belong(
         state: &VisualState,
         user_id: UserId,
@@ -74,6 +75,7 @@ impl CollectionRepo {
             .await
     }
 
+    /// 确保收藏夹属于指定用户并返回收藏夹记录
     pub async fn ensure_belong_with_return(
         state: &VisualState,
         user_id: UserId,
@@ -91,7 +93,7 @@ impl CollectionRepo {
         collection_id: CollectionId,
         visual_ids: &VisualIds,
     ) -> Result<u64> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 添加影像
             let count = CollectionMapper::add_visuals_batch(
                 txn,
@@ -121,14 +123,14 @@ impl CollectionRepo {
         .timed(metrics_name!("db_transaction"))
         .await
     }
-    /// 移除收藏夹影像.
+    /// 移除收藏夹影像
     pub(crate) async fn remove_collection_visuals(
         state: &VisualState,
         user_id: UserId,
         collection: CollectionRecord,
         visual_ids: &VisualIds,
     ) -> Result<u64> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 如果封面会被移除的话, 提前保存下来
             let cover_removed = collection
                 .cover_visual_id
@@ -180,7 +182,7 @@ impl CollectionRepo {
         .await
     }
 
-    /// 查询收藏夹列表.
+    /// 查询收藏夹列表
     pub(crate) async fn query_collections(
         state: &VisualState,
         user_id: UserId,
@@ -190,13 +192,13 @@ impl CollectionRepo {
             .await
     }
 
-    /// 创建收藏夹.
+    /// 创建收藏夹
     pub(crate) async fn create_collection(
         state: &VisualState,
         user_id: UserId,
         req: CollectionCreateParam,
     ) -> Result<CollectionRecord> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 插入
             let collection =
                 CollectionMapper::insert(txn, user_id, req.name, req.description).await?;
@@ -214,14 +216,14 @@ impl CollectionRepo {
         .await
     }
 
-    /// 更新收藏夹信息.
+    /// 更新收藏夹信息
     pub(crate) async fn update_collection(
         state: &VisualState,
         user_id: UserId,
         id: CollectionId,
         req: CollectionUpdateParam,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             let affected =
                 CollectionMapper::update_info(txn, id, user_id, req.name, req.description).await?;
             if affected > 0 {
@@ -248,18 +250,17 @@ impl CollectionRepo {
         Ok(())
     }
 
-    /// 删除收藏夹.
-    /// 无需健全, 在删除的时候保证user_id相等
+    /// 在事务内删除收藏夹及其影像关联，按 user_id 保证归属
     pub(crate) async fn delete_collection(
         state: &VisualState,
         user_id: UserId,
         id: CollectionId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 删除收藏夹
             CollectionMapper::delete_by_id(txn, id, user_id)
                 .await?
-                .no_zero_or_warn(
+                .nonzero_or_warn(
                     "delete_collection_fail",
                     "删除收藏夹失败",
                     AppError::bad_request("删除收藏夹失败"),

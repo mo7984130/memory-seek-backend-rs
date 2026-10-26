@@ -1,12 +1,12 @@
 use types_core::CommentId;
 
-/// 构造评论点赞数量缓存键.
+/// 构造评论点赞数量缓存键
 pub fn likes_count(comment_id: CommentId) -> String {
     // visual:comment_like:likes_count:{comment_id}
     format!("v:cl:lc:{}", comment_id)
 }
 
-/// 返回评论点赞缓存脏标记键.
+/// 返回评论点赞缓存脏标记键
 pub fn dirty_comment() -> &'static str {
     // visual:comment_like:dirty_comment
     "v:cl:dc"

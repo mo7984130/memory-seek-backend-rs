@@ -2,10 +2,7 @@ use metrics::gauge;
 use std::path::PathBuf;
 use sysinfo::{Disks, System};
 
-/// 上报构建版本信息（常量 gauge=1），用于版本追踪。
-///
-/// `commit` 由 `build.rs` 在构建期注入（`MEMORY_SEEK_GIT_COMMIT`），
-/// 无 git 环境时回退为 `unknown`。
+/// 上报构建版本信息（常量 gauge=1），用于版本追踪
 pub fn emit_build_info() {
     gauge!(
         "server.build_info",
@@ -15,7 +12,7 @@ pub fn emit_build_info() {
     .set(1.0);
 }
 
-/// 采集并更新系统资源指标.
+/// 采集并更新系统资源指标
 pub fn collect_system_metrics(sys: &mut System) {
     sys.refresh_all();
 

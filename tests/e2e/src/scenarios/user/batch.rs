@@ -1,16 +1,12 @@
-use common_web::{ErrR, SucR};
-use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
-    scenario::Scenario,
-};
+use memory_seek_api::{Method, api};
+use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use serde_json::json;
 use types_identity::auth;
-use types_identity::user::UserBriefView;
+use types_identity::auth::user::UserId;
+use types_identity::user::{GetUserInfoBatchParam, UserBriefView, UserIds};
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 use super::session::{Session, login, user_account};
 
@@ -21,14 +17,14 @@ pub struct GetUserInfoBatchScenario;
 impl Scenario for GetUserInfoBatchScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<Vec<Option<UserBriefView>>>;
+    type Output = Vec<Option<UserBriefView>>;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        Ok(login(ctx, &user_account(task.index)).await?)
     }
 
     async fn run(
@@ -43,19 +39,14 @@ impl Scenario for GetUserInfoBatchScenario {
             .all(&ctx.db)
             .await
             .unwrap();
-        let mut ids: Vec<i64> = targets.iter().map(|u| u.id.0).collect();
+        let mut ids: Vec<UserId> = targets.iter().map(|u| u.id).collect();
         ids.sort_unstable();
-        ids.push(i64::MAX);
+        ids.push(UserId(i64::MAX));
 
-        ctx.client
-            .request(reqwest::Method::POST, "/user/batch")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({ "userIds": ids }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let param = GetUserInfoBatchParam {
+            user_ids: UserIds::new(ids).expect("batch ids 应合法(非空且不超上限)"),
+        };
+        Ok(api::user::get_user_info_batch(setup.client(), &param).await?)
     }
 
     async fn validate(
@@ -64,7 +55,7 @@ impl Scenario for GetUserInfoBatchScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let items = &output.data;
+        let items = output;
         // 3 个命中 + 1 个未命中
         if items.len() != 4 || items.iter().filter(|item| item.is_none()).count() != 1 {
             return Ok(false);
@@ -85,10 +76,13 @@ impl Scenario for GetUserInfoBatchScenario {
 
             // 头像 token 的 viewer 应为请求者, 且与库中头像一致
             let avatar_ok = match &view.avatar_token {
-                Some(token) => {
-                    token.0.viewer_id == setup.user_id
-                        && user.avatar_file_id.as_deref() == Some(token.0.file_id.as_str())
-                }
+                Some(token) => match token.decrypt() {
+                    Ok(decrypted) => {
+                        decrypted.viewer_id == setup.user_id
+                            && user.avatar_file_id.as_deref() == Some(decrypted.file_id.as_str())
+                    }
+                    Err(_) => false,
+                },
                 None => user.avatar_file_id.is_none(),
             };
             if !avatar_ok {
@@ -109,14 +103,14 @@ pub struct GetUserInfoBatchEmptyScenario;
 impl Scenario for GetUserInfoBatchEmptyScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        Ok(login(ctx, &user_account(task.index)).await?)
     }
 
     async fn run(
@@ -124,15 +118,16 @@ impl Scenario for GetUserInfoBatchEmptyScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/user/batch")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({ "userIds": [] }))
+        // 空列表无法构造(类型化 `UserIds` 在客户端即拒绝), 故走 raw 直接发非法载荷
+        let client = ctx.api_client();
+        let auth = setup.auth_header();
+        let response = client
+            .raw(Method::POST, "/user/batch")
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "userIds": [] }))
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -141,7 +136,7 @@ impl Scenario for GetUserInfoBatchEmptyScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
@@ -154,14 +149,14 @@ pub struct GetUserInfoBatchTooManyScenario;
 impl Scenario for GetUserInfoBatchTooManyScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        login(ctx, &user_account(task.index)).await
+        Ok(login(ctx, &user_account(task.index)).await?)
     }
 
     async fn run(
@@ -170,15 +165,15 @@ impl Scenario for GetUserInfoBatchTooManyScenario {
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
         let ids: Vec<i64> = (0..1025).collect();
-        ctx.client
-            .request(reqwest::Method::POST, "/user/batch")
-            .header("Authorization", &setup.auth_header())
-            .json_unwrap(&json!({ "userIds": ids }))
+        let client = ctx.api_client();
+        let auth = setup.auth_header();
+        let response = client
+            .raw(Method::POST, "/user/batch")
+            .header("Authorization", auth)
+            .json(&serde_json::json!({ "userIds": ids }))
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -187,7 +182,7 @@ impl Scenario for GetUserInfoBatchTooManyScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 
@@ -200,9 +195,9 @@ pub struct GetUserInfoBatchUnauthorizedScenario;
 impl Scenario for GetUserInfoBatchUnauthorizedScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -211,14 +206,14 @@ impl Scenario for GetUserInfoBatchUnauthorizedScenario {
         _task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/user/batch")
-            .json_unwrap(&json!({ "userIds": [1] }))
+        let client = ctx.api_client();
+        let response = client
+            .raw(Method::POST, "/user/batch")
+            .no_auth()
+            .json(&serde_json::json!({ "userIds": [1] }))
             .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+            .await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -227,7 +222,7 @@ impl Scenario for GetUserInfoBatchUnauthorizedScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 401)
+        Ok(*output == 401)
     }
 }
 

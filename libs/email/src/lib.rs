@@ -1,6 +1,6 @@
 use common_core::error::{
     AppError,
-    contextual::{Result, ext::ResultContextualExt},
+    contextual::{Result, ext::ResultExt},
 };
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
@@ -15,20 +15,7 @@ pub struct EmailClient {
 }
 
 impl EmailClient {
-    /// 创建邮件客户端
-    ///
-    /// # 参数
-    /// - `server`: SMTP 服务器地址
-    /// - `port`: SMTP 端口号
-    /// - `user`: SMTP 用户名
-    /// - `pass`: SMTP 密码
-    /// - `from_email`: 发件人邮箱地址
-    /// - `from_name`: 发件人显示名称
-    /// - `plain`: 明文传输(测试环境如 MailHog 不支持 TLS 时使用);
-    ///   否则 465 端口走 SSL, 其它端口走 STARTTLS
-    ///
-    /// # 返回
-    /// 初始化完成的 `EmailClient` 实例
+    /// 创建邮件客户端；`plain` 为真时明文传输,否则 465 端口走 SSL、其余端口走 STARTTLS；服务器地址无法解析时 panic
     pub fn new(
         server: &str,
         port: u16,
@@ -69,17 +56,6 @@ impl EmailClient {
     }
 
     /// 发送 HTML 格式邮件
-    ///
-    /// # 参数
-    /// - `to`: 收件人邮箱地址
-    /// - `subject`: 邮件主题
-    /// - `body`: HTML 格式的邮件正文
-    ///
-    /// # 返回
-    /// 发送成功返回 `()`
-    ///
-    /// # 错误
-    /// - `ContextualError`: 由调用 service 记录并转换为 `AppError`
     pub async fn send_message(&self, to: &str, subject: &str, body: String) -> Result<()> {
         // 操作级指标：email:send:attempts / duration_seconds / success
         common_metrics::metrics_group!("send");
@@ -88,7 +64,7 @@ impl EmailClient {
             .from(
                 format!("{} <{}>", self.from_name, self.from_email)
                     .parse::<Mailbox>()
-                    .context_err(
+                    .context_error(
                         "email_from_email_err",
                         "发件人地址格式错误",
                         AppError::InternalServerError,
@@ -102,13 +78,13 @@ impl EmailClient {
             .subject(subject)
             .header(ContentType::TEXT_HTML)
             .body(body)
-            .context_err(
+            .context_error(
                 "email_body_err",
                 "构建邮件消息失败",
                 AppError::InternalServerError,
             )?;
 
-        let send_result = self.transport.send(email).await.context_err(
+        let send_result = self.transport.send(email).await.context_error(
             "email_send_err",
             "邮件服务商发送失败",
             AppError::InternalServerError,

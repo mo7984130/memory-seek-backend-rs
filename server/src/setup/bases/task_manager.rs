@@ -4,11 +4,7 @@ use tracing::{debug, info};
 
 use crate::{config::AppConfig, setup::AppSetup};
 
-/// 初始化全局后台任务管理器。
-///
-/// 复用 `AppSetup.cancel_token` 作为根取消令牌，使所有注册进 TaskManager
-/// 的任务与应用共享同一个取消源；应用关闭时由 shutdown 流程统一
-/// `cancel_all() + wait_for_all()` 收尾。
+/// 初始化全局后台任务管理器，复用 `AppSetup.cancel_token` 作为统一取消源
 #[common_macros::register_async(
     slice = crate::setup::bases::APP_BASES,
     ty = crate::setup::InitFn,

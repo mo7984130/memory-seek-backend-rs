@@ -1,17 +1,14 @@
-use common_core::ext::ToOk;
-use common_web::{ErrR, SucR};
+use memory_seek_api::api;
 use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
+    TaskIndex, register_scenario,
     scenario::{Scenario, SetupMode, TeardownMode},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, SelectExt};
-use serde_json::json;
-use types_identity::auth::{self};
+use types_identity::auth::{self, RegisterRequest, SendEmailCodeRequest};
 use types_identity::user::UserInfo;
 
 use crate::context::Context;
+use crate::error::{E2eError, status};
 
 /// 注册成功: Round 模式下每轮 run 前 setup 发送验证码并从 MailHog 读回,
 /// 每轮使用全新的账号+验证码(验证码注册后即失效, 不可跨轮复用)。
@@ -27,9 +24,9 @@ pub struct RegisterScenario;
 impl Scenario for RegisterScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<UserInfo>;
+    type Output = UserInfo;
 
     type Setup = RegisterSetup;
 
@@ -40,11 +37,13 @@ impl Scenario for RegisterScenario {
         let username = format!("e2e_reg_{}_{}", task.index, task.round);
         let email = format!("e2e_reg_{}_{}@test.com", task.index, task.round);
 
-        ctx.client
-            .request(reqwest::Method::POST, "/auth/verification-codes")
-            .json_unwrap(&json!({ "email": email }))
-            .send_checked()
-            .await?;
+        api::auth::send_email_code(
+            &ctx.api_client(),
+            &SendEmailCodeRequest {
+                email: email.clone(),
+            },
+        )
+        .await?;
         let code = ctx.wait_mailhog_code(&email).await?;
         Ok(RegisterSetup {
             username,
@@ -58,22 +57,16 @@ impl Scenario for RegisterScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/auth/register")
-            .json_unwrap(&json!({
-                "username": setup.username,
-                "email": setup.email,
-                "password": "Test123456",
-                "confirmPassword": "Test123456",
-                "nickname": "E2E",
-                "inviterCode": "DRIFTC",
-                "emailVerifyCode": setup.code,
-            }))
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await?
-            .to_ok()
+        let request = RegisterRequest {
+            username: setup.username.clone(),
+            email: setup.email.clone(),
+            password: "Test123456".to_owned(),
+            confirm_password: "Test123456".to_owned(),
+            nickname: "E2E".to_owned(),
+            inviter_code: "DRIFTC".to_owned(),
+            email_verify_code: setup.code.clone(),
+        };
+        Ok(api::auth::register(&ctx.api_client(), &request).await?)
     }
 
     async fn validate(
@@ -116,9 +109,7 @@ impl Scenario for RegisterScenario {
             .await
         {
             tracing::warn!(username = %setup.username, %error, "清理注册账号失败");
-            return Err(crate::cleanup::internal(format!(
-                "删除注册账号失败: {error}"
-            )));
+            return Err(E2eError::internal(format!("删除注册账号失败: {error}")));
         }
         Ok(())
     }
@@ -132,9 +123,9 @@ pub struct RegisterInvalidCodeScenario;
 impl Scenario for RegisterInvalidCodeScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -143,22 +134,16 @@ impl Scenario for RegisterInvalidCodeScenario {
         task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/auth/register")
-            .json_unwrap(&json!({
-                "username": format!("e2e_inv_{}", task.index),
-                "email": format!("e2e_inv_{}@test.com", task.index),
-                "password": "Test123456",
-                "confirmPassword": "Test123456",
-                "nickname": "E2E",
-                "inviterCode": "DRIFTC",
-                "emailVerifyCode": "000000",
-            }))
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let request = RegisterRequest {
+            username: format!("e2e_inv_{}", task.index),
+            email: format!("e2e_inv_{}@test.com", task.index),
+            password: "Test123456".to_owned(),
+            confirm_password: "Test123456".to_owned(),
+            nickname: "E2E".to_owned(),
+            inviter_code: "DRIFTC".to_owned(),
+            email_verify_code: "000000".to_owned(),
+        };
+        status(api::auth::register(&ctx.api_client(), &request).await)
     }
 
     async fn validate(
@@ -167,7 +152,7 @@ impl Scenario for RegisterInvalidCodeScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 

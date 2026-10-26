@@ -12,7 +12,7 @@ use types_visual::{collection::CollectionId, visual::VisualId};
 pub(crate) struct CollectionVisualMapper;
 
 impl CollectionVisualMapper {
-    /// 删除指定相册中的指定影像关联, 并返回受影响的影像数量.
+    /// 删除指定相册中的指定影像关联, 并返回受影响的影像数量
     pub async fn delete_by_collection_id_and_visual_ids(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -33,9 +33,7 @@ impl CollectionVisualMapper {
         Ok(result.rows_affected as u64)
     }
 
-    /// 根据visual_ids 删除收藏夹影像
-    /// 返回HashMap<受影响的收藏夹id, 该收藏夹删除的影像个数(为负)>
-    /// 删除影像对应的全部相册关联, 并返回受影响的相册计数.
+    /// 删除影像对应的全部相册关联，返回受影响相册及删除个数（负数）
     pub async fn delete_by_visual_ids(
         db: &impl ConnectionTrait,
         visual_ids: &[VisualId],
@@ -65,7 +63,7 @@ impl CollectionVisualMapper {
         Ok(affected)
     }
 
-    /// 查询相册中的影像 ID.
+    /// 查询相册中的影像 ID
     pub async fn query_visual_id_by_collection_id(
         db: &impl ConnectionTrait,
         user_id: UserId,
@@ -94,7 +92,7 @@ impl CollectionVisualMapper {
         Ok(CursorPage::from_oversize(records, size))
     }
 
-    /// 删除相册下的全部影像关联.
+    /// 删除相册下的全部影像关联
     pub async fn delete_by_collection_id(
         db: &impl ConnectionTrait,
         collection_id: CollectionId,
@@ -109,8 +107,7 @@ impl CollectionVisualMapper {
             .to_ok()
     }
 
-    /// 查询包含指定影像的所有收藏夹 ID
-    /// 查询影像所属的相册 ID, 并按用户权限过滤.
+    /// 查询指定影像所属的收藏夹 ID，并按用户过滤
     pub async fn query_collection_ids_by_visual_id(
         db: &impl ConnectionTrait,
         user_id: UserId,

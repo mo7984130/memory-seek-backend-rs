@@ -5,19 +5,19 @@ use std::io::{Cursor, Read};
 use std::path::Path;
 use thiserror::Error;
 
-/// 图片/视频文件头魔数
-const JPEG_MAGIC: [u8; 3] = [0xFF, 0xD8, 0xFF];
-const PNG_MAGIC: [u8; 4] = [0x89, 0x50, 0x4E, 0x47];
+/// 视频文件头魔数
 /// ISOBMFF(MP4/MOV): 偏移 4 处为 `ftyp` box 标识
 const ISOBMFF_TAG: [u8; 4] = *b"ftyp";
 /// EBML(WebM/MKV) 魔数
 const EBML_MAGIC: [u8; 4] = [0x1A, 0x45, 0xDF, 0xA3];
 /// QuickTime 的 major brand
 const QT_BRAND: [u8; 4] = *b"qt  ";
-/// RIFF 容器魔数(WebP 基于 RIFF)
-const RIFF_MAGIC: [u8; 4] = *b"RIFF";
-/// WebP 格式标识(RIFF 容器偏移 8 处)
-const WEBP_TAG: [u8; 4] = *b"WEBP";
+/// ISOBMFF 图片容器的 major brand(HEIC/HEIF/AVIF)。
+/// 这些容器和 MP4 一样以 `ftyp` 开头, 不能仅凭 `ftyp` 判成视频。
+const ISOBMFF_IMAGE_BRANDS: &[[u8; 4]] = &[
+    *b"heic", *b"heix", *b"hevc", *b"hevx", *b"heim", *b"heis", *b"hevm", *b"hevs", *b"heif",
+    *b"mif1", *b"msf1", *b"avif", *b"avis",
+];
 
 /// 魔数嗅探的媒体大类
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,6 +105,7 @@ impl FileMetaData {
 }
 
 impl From<ImageMetaData> for FileMetaData {
+    /// 将图片元数据转换为统一文件元数据
     fn from(meta: ImageMetaData) -> Self {
         Self {
             format: meta.format,
@@ -118,6 +119,7 @@ impl From<ImageMetaData> for FileMetaData {
 }
 
 impl From<VideoMetaData> for FileMetaData {
+    /// 将视频元数据转换为统一文件元数据
     fn from(meta: VideoMetaData) -> Self {
         Self {
             format: meta.format,
@@ -141,6 +143,8 @@ pub enum FileValidationError {
     VideoTooLarge,
     #[error("不支持的文件类型")]
     UnsupportedFileType,
+    #[error("不支持的图片格式(HEIC/HEIF/AVIF 暂不支持), 仅支持 JPEG、PNG、WebP")]
+    UnsupportedImageType,
     #[error("图片解析失败: {0}")]
     ParseError(String),
     #[error("视频解析失败: {0}")]
@@ -153,8 +157,8 @@ pub enum FileValidationError {
 pub struct FileValidator;
 
 impl FileValidator {
-    pub const ALLOW_IMAGE_MAX_SIZE: u64 = 20 * 1024 * 1024;
-    pub const ALLOW_VIDEO_MAX_SIZE: u64 = 512 * 1024 * 1024;
+    pub const ALLOW_IMAGE_MAX_SIZE: u64 = 32 * 1024 * 1024;
+    pub const ALLOW_VIDEO_MAX_SIZE: u64 = 1024 * 1024 * 1024;
     const SIZE_ERROR_MSG: &'static str = formatcp!(
         "上传文件大小不能超过 {}MB",
         FileValidator::ALLOW_IMAGE_MAX_SIZE / 1024 / 1024
@@ -164,15 +168,9 @@ impl FileValidator {
         FileValidator::ALLOW_VIDEO_MAX_SIZE / 1024 / 1024
     );
 
-    /// 按文件头魔数嗅探媒体大类, 不依赖文件名。
-    ///
-    /// 头部不足魔数长度时返回 `None`。JPEG/PNG → [`MediaKind::Image`],
-    /// ISOBMFF(`ftyp`)/EBML → [`MediaKind::Video`]。
+    /// 按文件头魔数嗅探媒体大类,不依赖文件名；头部不足魔数长度时返回 `None`
     pub fn sniff_media(head: &[u8]) -> Option<MediaKind> {
-        if head.len() >= JPEG_MAGIC.len() && head[..JPEG_MAGIC.len()] == JPEG_MAGIC {
-            return Some(MediaKind::Image);
-        }
-        if head.len() >= PNG_MAGIC.len() && head[..PNG_MAGIC.len()] == PNG_MAGIC {
+        if Self::detect_image_format(head).is_some() || Self::is_isobmff_image(head) {
             return Some(MediaKind::Image);
         }
         if head.len() >= 8 && head[4..8] == ISOBMFF_TAG {
@@ -184,16 +182,7 @@ impl FileValidator {
         None
     }
 
-    /// 按文件头魔数嗅探内存字节对应的规范 MIME 类型(仅用于下载响应推断)。
-    ///
-    /// 覆盖图片(JPEG/PNG/WebP)与视频(MP4/MOV/WebM/MKV);无法识别时返回 `None`。
-    pub fn sniff_content_type(head: &[u8]) -> Option<&'static str> {
-        Self::detect_image_format(head)
-            .or_else(|| Self::detect_video_format(head))
-            .map(|format| format.mime_type)
-    }
-
-    /// 校验媒体文件, 按魔数嗅探分发到图片/视频校验, 不依赖文件名。
+    /// 校验媒体文件,按魔数嗅探分发到图片/视频校验,不依赖文件名
     pub fn validate_visual(file_path: &Path) -> Result<FileMetaData, FileValidationError> {
         match Self::sniff_file(file_path)? {
             MediaKind::Image => Self::validate_image(file_path).map(Into::into),
@@ -201,7 +190,7 @@ impl FileValidator {
         }
     }
 
-    /// 校验图片文件(JPEG/PNG), 校验内容包括: 非空、20MB 上限、魔数匹配、尺寸解析。
+    /// 校验图片文件(JPEG/PNG/WebP),校验非空、32MB 上限、魔数与尺寸
     pub fn validate_image(file_path: &Path) -> Result<ImageMetaData, FileValidationError> {
         let mut file = Self::open_file(file_path)?;
         let size = file
@@ -215,9 +204,15 @@ impl FileValidator {
             return Err(FileValidationError::TooLarge);
         }
 
-        let head = Self::read_head(&mut file, 8)?;
-        let format =
-            Self::detect_image_format(&head).ok_or(FileValidationError::UnsupportedFileType)?;
+        // 读足 16 字节:WebP 的 "WEBP" 标识位于 RIFF 容器偏移 8..12
+        let head = Self::read_head(&mut file, 16)?;
+        let format = match Self::detect_image_format(&head) {
+            Some(format) => format,
+            None if Self::is_isobmff_image(&head) => {
+                return Err(FileValidationError::UnsupportedImageType);
+            }
+            None => return Err(FileValidationError::UnsupportedFileType),
+        };
         let (width, height) = Self::extract_image_metadata(file_path)?;
 
         Ok(ImageMetaData {
@@ -229,7 +224,7 @@ impl FileValidator {
         })
     }
 
-    /// 校验内存字节形式的图片(供小文件场景复用, 如头像上传), 语义与 [`Self::validate_image`] 一致。
+    /// 校验内存字节形式的图片(供小文件场景复用,如头像上传),语义与 `validate_image` 一致
     pub fn validate_image_mem(file_data: &[u8]) -> Result<ImageMetaData, FileValidationError> {
         if file_data.is_empty() {
             return Err(FileValidationError::EmptyFile);
@@ -238,8 +233,13 @@ impl FileValidator {
             return Err(FileValidationError::TooLarge);
         }
 
-        let format =
-            Self::detect_image_format(file_data).ok_or(FileValidationError::UnsupportedFileType)?;
+        let format = match Self::detect_image_format(file_data) {
+            Some(format) => format,
+            None if Self::is_isobmff_image(file_data) => {
+                return Err(FileValidationError::UnsupportedImageType);
+            }
+            None => return Err(FileValidationError::UnsupportedFileType),
+        };
         let (width, height) = {
             let cursor = Cursor::new(file_data);
             let reader = image::ImageReader::new(cursor)
@@ -260,7 +260,7 @@ impl FileValidator {
         })
     }
 
-    /// 校验视频文件(MP4/MOV/WebM/MKV), 校验内容包括: 非空、512MB 上限、魔数匹配、轨道元数据解析。
+    /// 校验视频文件(MP4/MOV/WebM/MKV),校验非空、1GB 上限、魔数与轨道元数据
     pub fn validate_video(file_path: &Path) -> Result<VideoMetaData, FileValidationError> {
         let mut file = Self::open_file(file_path)?;
         let size = file
@@ -276,6 +276,10 @@ impl FileValidator {
 
         // EBML 的 DocType(webm/matroska)在头部, 读足 32 字节以完成细分
         let head = Self::read_head(&mut file, 32)?;
+        // HEIC/HEIF/AVIF 同样是 ISOBMFF, 但它们是图片, 不能按视频报"解析失败"
+        if Self::is_isobmff_image(&head) {
+            return Err(FileValidationError::UnsupportedImageType);
+        }
         let format =
             Self::detect_video_format(&head).ok_or(FileValidationError::UnsupportedFileType)?;
 
@@ -307,17 +311,18 @@ impl FileValidator {
         })
     }
 
-    /// 根据文件名扩展名返回受支持图片的规范 MIME 类型(仅用于下载响应推断)。
+    /// 根据文件名扩展名返回受支持图片的规范 MIME 类型(仅用于下载响应推断)
     pub fn image_content_type(file_name: &str) -> Option<&'static str> {
         let ext = Self::file_ext(file_name);
         match ext.as_str() {
             "jpg" | "jpeg" => Some(ContentFormat::JPEG.mime_type),
             "png" => Some(ContentFormat::PNG.mime_type),
+            "webp" => Some(ContentFormat::WEBP.mime_type),
             _ => None,
         }
     }
 
-    /// 根据文件名扩展名返回受支持视频的规范 MIME 类型(仅用于下载响应推断)。
+    /// 根据文件名扩展名返回受支持视频的规范 MIME 类型(仅用于下载响应推断)
     pub fn video_content_type(file_name: &str) -> Option<&'static str> {
         let ext = Self::file_ext(file_name);
         match ext.as_str() {
@@ -329,30 +334,40 @@ impl FileValidator {
         }
     }
 
-    // 读文件头并嗅探媒体大类
+    /// 读文件头并嗅探媒体大类
     fn sniff_file(file_path: &Path) -> Result<MediaKind, FileValidationError> {
         let mut file = Self::open_file(file_path)?;
-        let head = Self::read_head(&mut file, 8)?;
+        // 读足 16 字节:WebP 的 "WEBP" 标识位于 RIFF 容器偏移 8..12
+        let head = Self::read_head(&mut file, 16)?;
         Self::sniff_media(&head).ok_or(FileValidationError::UnsupportedFileType)
     }
 
-    // 按魔数识别图片格式(JPEG/PNG)
+    /// 按文件头魔数识别图片格式(JPEG/PNG/WebP),复用 image crate 的 `guess_format`
     fn detect_image_format(head: &[u8]) -> Option<ContentFormat> {
-        if head.len() >= JPEG_MAGIC.len() && head[..JPEG_MAGIC.len()] == JPEG_MAGIC {
-            return Some(ContentFormat::JPEG);
+        match image::guess_format(head).ok()? {
+            image::ImageFormat::Jpeg => Some(ContentFormat::JPEG),
+            image::ImageFormat::Png => Some(ContentFormat::PNG),
+            image::ImageFormat::WebP => Some(ContentFormat::WEBP),
+            _ => None,
         }
-        if head.len() >= PNG_MAGIC.len() && head[..PNG_MAGIC.len()] == PNG_MAGIC {
-            return Some(ContentFormat::PNG);
-        }
-        // WebP: RIFF 容器,偏移 8 处为 "WEBP"
-        if head.len() >= 12 && head[..RIFF_MAGIC.len()] == RIFF_MAGIC && head[8..12] == WEBP_TAG {
-            return Some(ContentFormat::WEBP);
-        }
-        None
     }
 
-    // 按魔数识别视频格式: ISOBMFF 读 major_brand 区分 MP4/MOV; EBML 读 DocType 区分 WebM/MKV
+    /// 是否为 ISOBMFF 图片容器(HEIC/HEIF/AVIF), 与 MP4/MOV 同为 `ftyp` 开头
+    fn is_isobmff_image(head: &[u8]) -> bool {
+        if head.len() < 12 || head[4..8] != ISOBMFF_TAG {
+            return false;
+        }
+        let brand = &head[8..12];
+        ISOBMFF_IMAGE_BRANDS
+            .iter()
+            .any(|image_brand| brand == image_brand.as_slice())
+    }
+
+    /// 按魔数识别视频格式:ISOBMFF 读 major_brand 区分 MP4/MOV,EBML 读 DocType 区分 WebM/MKV
     fn detect_video_format(head: &[u8]) -> Option<ContentFormat> {
+        if Self::is_isobmff_image(head) {
+            return None;
+        }
         if head.len() >= 12 && head[4..8] == ISOBMFF_TAG {
             // major_brand 位于 ftyp box 偏移 8
             return if head[8..12] == QT_BRAND {
@@ -373,7 +388,7 @@ impl FileValidator {
         None
     }
 
-    // 从文件名提取小写扩展名(忽略 ".gitignore" 等纯点文件), 空串表示无扩展名
+    /// 从文件名提取小写扩展名(忽略 ".gitignore" 等纯点文件),空串表示无扩展名
     fn file_ext(file_name: &str) -> String {
         file_name
             .rsplit_once('.')
@@ -382,19 +397,19 @@ impl FileValidator {
             .unwrap_or_default()
     }
 
-    // 在切片中查找 ASCII 子串
+    /// 在切片中查找 ASCII 子串
     fn contains_ascii(haystack: &[u8], needle: &[u8]) -> bool {
         haystack
             .windows(needle.len())
             .any(|window| window == needle)
     }
 
-    // 打开待校验文件, 打开失败统一映射为 ReadError
+    /// 打开待校验文件,打开失败统一映射为 ReadError
     fn open_file(file_path: &Path) -> Result<File, FileValidationError> {
         File::open(file_path).map_err(|e| FileValidationError::ReadError(e.to_string()))
     }
 
-    // 读取文件头部指定字节数(不足则返回实际字节数)
+    /// 读取文件头部指定字节数(不足则返回实际字节数)
     fn read_head(file: &mut File, n: usize) -> Result<Vec<u8>, FileValidationError> {
         let mut buf = vec![0u8; n];
         let mut read = 0;
@@ -411,7 +426,7 @@ impl FileValidator {
         Ok(buf)
     }
 
-    // 使用 nom-exif 解析视频轨道元数据，提取宽高、时长等信息
+    /// 使用 nom-exif 解析视频轨道元数据,提取宽高、时长等信息
     fn extract_video_metadata(file_path: &Path) -> Result<TrackInfo, FileValidationError> {
         let mut parser = MediaParser::new();
         let source = MediaSource::open(file_path)
@@ -421,7 +436,7 @@ impl FileValidator {
             .map_err(|e| FileValidationError::VideoParseError(e.to_string()))
     }
 
-    // 使用 image 库解析图片文件，提取宽高尺寸
+    /// 使用 image 库解析图片文件,提取宽高尺寸
     fn extract_image_metadata(file_path: &Path) -> Result<(u32, u32), FileValidationError> {
         let reader = image::ImageReader::open(file_path)
             .map_err(|e| FileValidationError::ParseError(e.to_string()))?
@@ -477,39 +492,6 @@ mod tests {
     }
 
     #[test]
-    fn sniff_content_type_detects_mime_by_magic() {
-        // 图片
-        assert_eq!(
-            FileValidator::sniff_content_type(&[0xFF, 0xD8, 0xFF, 0xE0]),
-            Some("image/jpeg")
-        );
-        assert_eq!(
-            FileValidator::sniff_content_type(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
-            Some("image/png")
-        );
-        // WebP: RIFF 容器 + 偏移 8 处 "WEBP"
-        let mut webp = [0u8; 16];
-        webp[..4].copy_from_slice(b"RIFF");
-        webp[8..12].copy_from_slice(b"WEBP");
-        assert_eq!(FileValidator::sniff_content_type(&webp), Some("image/webp"));
-        // 视频: ISOBMFF major_brand 区分 MP4/MOV
-        assert_eq!(
-            FileValidator::sniff_content_type(b"\x00\x00\x00\x18ftypisom"),
-            Some("video/mp4")
-        );
-        assert_eq!(
-            FileValidator::sniff_content_type(b"\x00\x00\x00\x18ftypqt  "),
-            Some("video/quicktime")
-        );
-        // EBML DocType 区分 WebM/MKV
-        let mut webm = vec![0x1A, 0x45, 0xDF, 0xA3];
-        webm.extend_from_slice(b"...webm...");
-        assert_eq!(FileValidator::sniff_content_type(&webm), Some("video/webm"));
-        // 无法识别
-        assert_eq!(FileValidator::sniff_content_type(b"not-a-media"), None);
-    }
-
-    #[test]
     fn sniff_media_detects_kinds_by_magic() {
         // 图片魔数
         assert_eq!(
@@ -517,7 +499,7 @@ mod tests {
             Some(MediaKind::Image)
         );
         assert_eq!(
-            FileValidator::sniff_media(&[0x89, 0x50, 0x4E, 0x47]),
+            FileValidator::sniff_media(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
             Some(MediaKind::Image)
         );
         // 视频魔数: ftyp 位于偏移 4; EBML
@@ -533,6 +515,67 @@ mod tests {
         assert_eq!(FileValidator::sniff_media(&[0x50, 0x4B, 0x03, 0x04]), None);
         assert_eq!(FileValidator::sniff_media(&[0xFF, 0xD8]), None);
         assert_eq!(FileValidator::sniff_media(&[]), None);
+    }
+
+    /// 构造一个最小 ISOBMFF 头部: size + ftyp + major_brand + 一个兼容 brand
+    fn isobmff_head(brand: &[u8; 4]) -> Vec<u8> {
+        let mut head = b"\x00\x00\x00\x18ftyp".to_vec();
+        head.extend_from_slice(brand);
+        head.extend_from_slice(b"\x00\x00\x00\x00");
+        head
+    }
+
+    #[test]
+    fn sniff_media_treats_heif_and_avif_as_images() {
+        for brand in [
+            b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs", b"heif",
+            b"mif1", b"msf1", b"avif", b"avis",
+        ] {
+            let head = isobmff_head(brand);
+            assert_eq!(
+                FileValidator::sniff_media(&head),
+                Some(MediaKind::Image),
+                "brand {}",
+                String::from_utf8_lossy(brand)
+            );
+        }
+    }
+
+    #[test]
+    fn validate_visual_rejects_heif_and_avif_as_unsupported_image() {
+        for brand in [b"heic", b"avif"] {
+            let path = write_bytes(&isobmff_head(brand));
+            let result = FileValidator::validate_visual(&path);
+            match result {
+                Err(FileValidationError::UnsupportedImageType) => {}
+                other => panic!(
+                    "brand {} 应返回 UnsupportedImageType, 实际为 {:?}",
+                    String::from_utf8_lossy(brand),
+                    other
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn validate_image_mem_rejects_heif_and_avif_as_unsupported_image() {
+        for brand in [b"heic", b"avif"] {
+            let result = FileValidator::validate_image_mem(&isobmff_head(brand));
+            assert!(matches!(
+                result,
+                Err(FileValidationError::UnsupportedImageType)
+            ));
+        }
+    }
+
+    #[test]
+    fn validate_video_rejects_heif_as_unsupported_image() {
+        let path = write_bytes(&isobmff_head(b"heic"));
+        let result = FileValidator::validate_video(&path);
+        assert!(matches!(
+            result,
+            Err(FileValidationError::UnsupportedImageType)
+        ));
     }
 
     #[test]
@@ -641,7 +684,10 @@ mod tests {
             FileValidator::image_content_type("visuals/2026/08/17/visual.png"),
             Some("image/png")
         );
-        assert_eq!(FileValidator::image_content_type("visual.webp"), None);
+        assert_eq!(
+            FileValidator::image_content_type("visual.webp"),
+            Some("image/webp")
+        );
         assert_eq!(FileValidator::image_content_type("visual.gif"), None);
         assert_eq!(FileValidator::image_content_type("visual.bmp"), None);
         assert_eq!(FileValidator::image_content_type("visual."), None);
@@ -662,7 +708,21 @@ mod tests {
 
     #[test]
     fn test_valid_png_header() {
-        let path = create_mock_file("89504E47", 100);
+        let path = create_mock_file("89504E470D0A1A0A", 100);
+
+        let result = FileValidator::validate_image(&path);
+
+        match result {
+            Ok(_) => {}
+            Err(FileValidationError::ParseError(_)) => {}
+            _ => panic!("Unexpected error: {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_valid_webp_header() {
+        // RIFF 容器 + 偏移 8 处 "WEBP";后续无有效数据 → 只要求通过魔数嗅探,不误判为不支持
+        let path = create_mock_file("524946460000000057454250", 100);
 
         let result = FileValidator::validate_image(&path);
 

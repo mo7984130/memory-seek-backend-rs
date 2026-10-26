@@ -16,6 +16,7 @@ pub struct Config {
     pub force_path_style: bool,
 }
 
+/// 初始化对象存储客户端并注册到 `AppSetup`
 #[common_macros::register_async(
     slice = crate::setup::libs::APP_LIBS,
     ty = crate::setup::InitFn,
@@ -30,7 +31,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> common_core::Resu
 }
 
 impl Config {
-    /// 将应用配置转换为对象存储客户端配置.
+    /// 将应用配置转换为对象存储客户端配置
     pub fn to_oss_config(&self) -> oss::S3Config {
         oss::S3Config {
             endpoint: self.endpoint.clone(),

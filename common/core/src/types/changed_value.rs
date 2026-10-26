@@ -8,6 +8,7 @@ pub use HasChanged::Changed;
 pub use HasChanged::Unchanged;
 
 impl<T> HasChanged<T> {
+    /// 返回是否为已变更状态
     #[inline]
     pub fn is_changed(&self) -> bool {
         match self {
@@ -16,6 +17,7 @@ impl<T> HasChanged<T> {
         }
     }
 
+    /// 返回是否为未变更状态
     #[inline]
     pub fn is_unchange(&self) -> bool {
         match self {

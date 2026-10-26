@@ -1,6 +1,6 @@
 use crate::extractors::handle_validation_error;
 use axum::extract::{FromRequestParts, Query};
-use common_core::error::{AppError, contextual::ext::ResultContextualExt};
+use common_core::error::{AppError, contextual::ext::ResultExt};
 use serde::de::DeserializeOwned;
 use std::ops::Deref;
 use validator::Validate;
@@ -14,6 +14,7 @@ where
 {
     type Rejection = AppError;
 
+    /// 解析查询参数为 `T` 并执行校验
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
         state: &S,
@@ -34,12 +35,14 @@ where
 
 impl<T> Deref for ValidatedQuery<T> {
     type Target = T;
+    /// 解引用到底层值
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl<T> AsRef<T> for ValidatedQuery<T> {
+    /// 以引用返回底层值
     fn as_ref(&self) -> &T {
         &self.0
     }

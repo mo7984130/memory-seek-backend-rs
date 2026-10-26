@@ -11,10 +11,7 @@ use common_redis::RedisExt;
 use std::{str::FromStr, sync::Arc};
 use types_core::UserId;
 
-/// 认证中间件
-///
-/// 从 Authorization header 中提取 `Bearer user_id access_token` 格式，
-/// 验证 token 是否是该 user_id 的有效 token，然后将 user_id 注入到请求扩展中
+/// 认证中间件：从 Authorization 头解析凭据校验后将 `UserId` 注入请求扩展
 pub async fn auth_middleware(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     mut request: Request,
@@ -32,9 +29,7 @@ pub async fn auth_middleware(
     Ok(next.run(request).await)
 }
 
-/// 从 Authorization header 中解析 user_id 和 access_token
-///
-/// 格式: `Bearer user_id access_token`
+/// 从 Authorization 头解析 `Bearer user_id access_token` 格式的凭据
 fn extract_bearer(request: &Request) -> Result<(UserId, &str)> {
     let header = request
         .headers()
@@ -71,9 +66,7 @@ fn extract_bearer(request: &Request) -> Result<(UserId, &str)> {
     Ok((user_id, token))
 }
 
-/// 验证 token 是否是该 user_id 的有效 token
-///
-/// 从 Redis 获取 `a:u:at:{user_id}` 对应的 token，与请求中的 token 比对
+/// 校验 token 是否为该 `UserId` 在 Redis 中记录的有效令牌
 async fn verify_token(state: &AppState, user_id: UserId, token: &str) -> Result<()> {
     use constants::RedisKeys;
 

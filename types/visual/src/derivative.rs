@@ -119,6 +119,7 @@ mod entity {
     }
 
     impl From<Model> for DerivativeRecord {
+        /// 将衍生片实体转换为衍生片记录
         fn from(model: Model) -> Self {
             Self {
                 id: model.id,
@@ -139,6 +140,7 @@ mod entity {
     }
 
     impl From<NewDerivativeRecord> for ActiveModel {
+        /// 将待持久化记录转换为 ActiveModel,状态默认 `Pending`
         fn from(record: NewDerivativeRecord) -> Self {
             use sea_orm::ActiveValue::Set;
             Self {
@@ -150,10 +152,7 @@ mod entity {
         }
     }
 
-    /// 依原影像对象 key 推导衍生片对象 key.
-    ///
-    /// 原 key 形如 `visuals/{y}/{m}/{d}/{uuid}.{ext}`, 衍生 key 为
-    /// `visuals/{y}/{m}/{d}/{uuid}/{file_name}`。
+    /// 由原影像对象 key 推导衍生片对象 key
     pub fn derivative_key(file_id: &str, kind: DerivativeKind) -> String {
         let base = file_id
             .rsplit_once('.')

@@ -1,14 +1,10 @@
 //! 影像列表 / 哈希查存在 / 时间线统计。
 
 use common_core::types::CursorPage;
-use common_web::{ErrR, SucR};
-use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
-    scenario::Scenario,
-};
+use memory_seek_api::{Method, api};
+use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+use types_core::PageDirection;
 use types_core::cursor::TimeIdCursor;
 use types_visual::dto::timeline_stat::MonthStat;
 use types_visual::dto::visual::VisualView;
@@ -16,6 +12,7 @@ use types_visual::visual as visual_entity;
 use types_visual::visual::VisualId;
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 use super::{Session, db_current_month, seed_visual, session, token_viewer};
 
@@ -36,9 +33,9 @@ pub struct GetVisualsCursorScenario;
 impl Scenario for GetVisualsCursorScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<CursorPage<VisualView, TimeIdCursor<VisualId>>>;
+    type Output = CursorPage<VisualView, TimeIdCursor<VisualId>>;
 
     type Setup = CursorSetup;
 
@@ -61,21 +58,20 @@ impl Scenario for GetVisualsCursorScenario {
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::GET, "/visual")
-            .header("Authorization", &setup.session.auth_header())
-            .query("size", &PAGE_SIZE.to_string())
-            .query("direction", "prev")
-            .query("cursor", &setup.cursor)
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let cursor =
+            TimeIdCursor::<VisualId>::decode(&setup.cursor).expect("种子里构造的游标应可解码");
+        Ok(api::visual::get_visuals(
+            setup.session.client(),
+            Some(cursor),
+            Some(PAGE_SIZE),
+            Some(PageDirection::Prev),
+            None,
+        )
+        .await?)
     }
 
     async fn validate(
@@ -84,13 +80,13 @@ impl Scenario for GetVisualsCursorScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let page = &output.data;
+        let page = output;
         let size_ok = page.records.len() == PAGE_SIZE as usize && page.has_more;
         // 每一页记录都应带当前浏览者可用的 original token
         let viewer_ok = page
             .records
             .iter()
-            .all(|p| token_viewer(p.original_token.as_ref(), setup.session.user_id));
+            .all(|p| token_viewer(&p.tokens.original, setup.session.user_id));
         Ok(size_ok && viewer_ok)
     }
 }
@@ -104,9 +100,9 @@ pub struct GetVisualsCursorUnauthorizedScenario;
 impl Scenario for GetVisualsCursorUnauthorizedScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = ();
 
@@ -115,13 +111,9 @@ impl Scenario for GetVisualsCursorUnauthorizedScenario {
         _task: &TaskIndex,
         _setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::GET, "/visual")
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        let client = ctx.api_client();
+        let response = client.raw(Method::GET, "/visual").no_auth().send().await?;
+        Ok(response.status.as_u16())
     }
 
     async fn validate(
@@ -130,7 +122,7 @@ impl Scenario for GetVisualsCursorUnauthorizedScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 401)
+        Ok(*output == 401)
     }
 }
 
@@ -153,9 +145,9 @@ pub struct HashesExistScenario;
 impl Scenario for HashesExistScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<Vec<bool>>;
+    type Output = Vec<bool>;
 
     type Setup = HashSetup;
 
@@ -169,19 +161,15 @@ impl Scenario for HashesExistScenario {
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::POST, "/visual/check-existence")
-            .header("Authorization", &setup.session.auth_header())
-            .json_unwrap(&serde_json::json!({ "hashes": [setup.hash, MISSING_HASH] }))
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        Ok(api::visual::check_hashes_exist(
+            setup.session.client(),
+            vec![setup.hash.clone(), MISSING_HASH.to_owned()],
+        )
+        .await?)
     }
 
     async fn validate(
@@ -190,7 +178,7 @@ impl Scenario for HashesExistScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.data == vec![true, false])
+        Ok(*output == vec![true, false])
     }
 }
 
@@ -203,29 +191,22 @@ pub struct TimelineStatsScenario;
 impl Scenario for TimelineStatsScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<Vec<MonthStat>>;
+    type Output = Vec<MonthStat>;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        session(ctx, task.index).await
+        Ok(session(ctx, task.index).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::GET, "/visual/timeline/stats")
-            .header("Authorization", &setup.auth_header())
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        Ok(api::visual::timeline::get_monthly_stats(setup.client()).await?)
     }
 
     async fn validate(
@@ -238,7 +219,6 @@ impl Scenario for TimelineStatsScenario {
             return Ok(false);
         };
         Ok(output
-            .data
             .iter()
             .any(|stat| stat.date_str.0 == month && stat.count > 0))
     }

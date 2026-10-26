@@ -10,31 +10,7 @@ use syn::{Ident, ItemFn, LitStr, Path, ReturnType, Token, Type, parse_macro_inpu
 
 use crate::async_boxed::{AsyncBoxedArgs, expand_async_boxed};
 
-/// 将异步函数转换为返回 `Pin<Box<dyn Future>>` 的普通函数。
-///
-/// 展开规则:
-/// - 移除 `async` 修饰符,注入生命周期参数 `'a`;
-/// - 省略生命周期的引用参数(`&T` / `&mut T`)标注为 `&'a T` / `&'a mut T`,值类型参数原样保留;
-/// - 函数体包裹为 `Box::pin(async move { ... })`,返回类型变为
-///   `Pin<Box<dyn Future<Output = 原返回类型> + 'a>>`。
-///
-/// 转换后的函数可直接装配到高阶函数指针类型,例如:
-///
-/// ```ignore
-/// type InitFn = for<'a> fn(&'a Ctx) -> Pin<Box<dyn Future<Output = ()> + 'a>>;
-///
-/// #[async_boxed]
-/// async fn init(ctx: &Ctx) -> Result<()> { ... }
-///
-/// static INIT: InitFn = init;
-/// ```
-///
-/// 可选参数 `send` 使生成的 future 满足 `Send`,便于 `tokio::spawn` 等场景复用:
-///
-/// ```ignore
-/// #[async_boxed(send)]
-/// async fn foo(ctx: &Ctx) -> Result<()> { ... }
-/// ```
+/// 将异步函数转换为返回 `Pin<Box<dyn Future>>` 的普通函数；可选 `send` 参数使生成的 future 满足 `Send`
 #[proc_macro_attribute]
 pub fn async_boxed(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AsyncBoxedArgs);
@@ -46,22 +22,7 @@ pub fn async_boxed(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-/// 将异步函数注册到 `linkme` 分布式切片。
-///
-/// 宏内部复用 [`async_boxed`] 的展开逻辑,将异步函数转换为返回 boxed future
-/// 的普通函数,并额外生成一个唯一的静态注册项。函数签名需与调用方提供的函数
-/// 指针类型匹配,该类型通常是返回 boxed future 的高阶函数指针,参数数量不限。
-/// 调用此宏的 crate 必须直接依赖 `linkme`。
-///
-/// ```ignore
-/// #[common_macros::register_async(
-///     slice = crate::db_init::AFTER_SCHEMA_TASKS,
-///     ty = crate::db_init::DbInitFn,
-/// )]
-/// async fn create_indexes(db: &DatabaseConnection) -> ContextualResult<()> {
-///     Ok(())
-/// }
-/// ```
+/// 将异步函数转换为 boxed future 并注册进 `linkme` 分布式切片；函数签名需与 `ty` 指定的函数指针类型匹配
 #[proc_macro_attribute]
 pub fn register_async(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as RegisterAsyncArgs);
@@ -80,6 +41,7 @@ struct RegisterAsyncArgs {
 }
 
 impl Parse for RegisterAsyncArgs {
+    /// 解析 `#[register_async(...)]` 的属性参数
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let mut slice = None;
         let mut callback_type = None;
@@ -125,6 +87,7 @@ impl Parse for RegisterAsyncArgs {
     }
 }
 
+/// 复用 `async_boxed` 的展开逻辑并生成 linkme 注册静态项
 fn expand_register_async(
     args: RegisterAsyncArgs,
     function: ItemFn,
@@ -152,9 +115,7 @@ fn expand_register_async(
     })
 }
 
-/// 为返回 `Result` 的异步函数记录调用次数、耗时和成功次数。
-///
-/// 默认使用函数名作为指标操作名，也可以通过 `name = "..."` 显式指定。
+/// 为返回 `Result` 的异步函数记录调用次数、耗时和成功次数；默认以函数名为指标操作名,可用 `name` 参数指定
 #[proc_macro_attribute]
 pub fn metered(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as MeteredArgs);
@@ -172,6 +133,7 @@ struct MeteredArgs {
 }
 
 impl Parse for MeteredArgs {
+    /// 解析 `#[metered(...)]` 的属性参数,仅支持可选的 `name` 字符串
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         if input.is_empty() {
             return Ok(Self::default());
@@ -191,7 +153,7 @@ impl Parse for MeteredArgs {
     }
 }
 
-/// 为异步 Result 函数注入指标计数逻辑.
+/// 为异步 Result 函数注入指标计数逻辑
 fn expand_metered(
     args: MeteredArgs,
     mut function: ItemFn,
@@ -229,7 +191,7 @@ fn expand_metered(
     Ok(quote!(#function))
 }
 
-/// 判断函数返回类型的末段是否为 Result.
+/// 判断函数返回类型的末段是否为 Result
 fn returns_result(output: &ReturnType) -> bool {
     let ReturnType::Type(_, ty) = output else {
         return false;

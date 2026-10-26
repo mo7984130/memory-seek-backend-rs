@@ -1,10 +1,7 @@
 use metrics::gauge;
 use sea_orm::DatabaseConnection;
 
-/// 采集数据库连接池指标
-///
-/// SeaORM 1.x 基于 sqlx，通过获取底层连接池统计
-/// 失败时设置 -1 并记录 warn 日志
+/// 采集数据库连接池指标，获取失败时记 -1 并打 warn 日志
 pub fn collect_db_metrics(db: &DatabaseConnection) {
     // SeaORM 提供 get_postgres_connection_pool() 方法获取底层 sqlx::PgPool
     // sqlx::PgPool 提供 size() 和 num_idle() 方法

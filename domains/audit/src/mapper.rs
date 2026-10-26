@@ -16,6 +16,7 @@ use types_core::cursor::TimeIdCursor;
 pub(super) struct AuditMapper;
 
 impl AuditMapper {
+    /// 按时间桶统计审计事件数量
     pub(super) async fn query_stats(
         db: &impl DbConn,
         event_type: Option<&str>,
@@ -54,6 +55,7 @@ impl AuditMapper {
             .into_contextual()
     }
 
+    /// 统计事件数量最多的目标并限制返回条数
     pub(super) async fn query_top_targets(
         db: &impl DbConn,
         event_type: &str,
@@ -77,6 +79,7 @@ impl AuditMapper {
             .into_contextual()
     }
 
+    /// 游标分页查询审计事件记录
     pub(super) async fn query_audit_page(
         db: &impl DbConn,
         event_type: Option<&str>,

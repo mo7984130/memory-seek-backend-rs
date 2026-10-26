@@ -11,7 +11,7 @@ use common_core::{
     Result,
     error::{
         AppError,
-        contextual::ext::{IntoContextualExt, OptionExt, ResultContextualExt},
+        contextual::ext::{IntoContextualExt, OptionExt, ResultExt},
     },
     ext::ToOk,
     types::CursorPage,
@@ -35,7 +35,7 @@ pub struct PersonService;
 
 // 创建
 impl PersonService {
-    /// 异步启动全量人物扫描任务.
+    /// 异步启动全量人物扫描任务
     #[instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn full_scan(state: Arc<VisualState>, admin: AdminId) -> Result<()> {
         let user_id = admin.into_inner();
@@ -44,9 +44,9 @@ impl PersonService {
         Ok(())
     }
 
+    /// 执行全量扫描，重建人物聚类和人脸归属
     #[common_macros::metered(name = "person_full_scan")]
     #[instrument(name = "person_full_scan", skip_all, fields(admin_user_id = %admin))]
-    /// 执行全量扫描, 重建人物聚类和人脸归属.
     pub async fn inner_full_scan(state: Arc<VisualState>, admin: AdminId) -> Result<()> {
         let user_id = admin.into_inner();
         info!(user_id = %user_id, "管理员触发人物全量聚类");
@@ -62,7 +62,7 @@ impl PersonService {
                 .iter()
                 .flat_map(|f| f.embedding.iter().copied())
                 .collect();
-            Array2::from_shape_vec((faces.len(), DIMS), embeddings).context_err(
+            Array2::from_shape_vec((faces.len(), DIMS), embeddings).context_error(
                 "ndarray_from_shape_error",
                 "人脸聚类时, 转换 NdArray 错误",
                 AppError::InternalServerError,
@@ -86,7 +86,7 @@ impl PersonService {
         info!("开始保存 person/face 表");
         FaceRepo::backup_and_truncate(&state).await?;
         info!("保存表完成");
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             FaceMapper::clean_person_id(txn).await?;
             info!("清除完成");
 
@@ -150,8 +150,7 @@ impl PersonService {
         Ok(())
     }
 
-    /// 二次聚类: 将全部未分配人脸(`person_id IS NULL`)按 centroid 余弦相似度
-    /// 指派到已有人物, 低于阈值的人脸保持未分配。
+    /// 将全部未分配人脸按 centroid 余弦相似度指派到已有人物；低于阈值的保持未分配
     #[instrument(skip_all, fields(admin_id = %admin))]
     pub async fn assign_unassigned_faces(
         state: Arc<VisualState>,
@@ -162,9 +161,9 @@ impl PersonService {
         Ok(())
     }
 
+    /// 执行未分配人脸与人物质心的匹配和归属更新
     #[common_macros::metered(name = "person_secondary_cluster")]
     #[instrument(name = "person_secondary_cluster", skip_all, fields(admin_id = %admin))]
-    /// 执行未分配人脸与人物质心的匹配和归属更新.
     async fn inner_assign_unassigned_faces(
         state: Arc<VisualState>,
         admin: AdminId,
@@ -172,7 +171,7 @@ impl PersonService {
     ) -> Result<()> {
         let SecondaryClusterParam { threshold } = req;
         info!(admin_id = %admin, threshold, "管理员触发二次聚类");
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             AuditRecorder::append(
                 txn,
                 AuditEvent::new("assign_unassigned_faces_start").with_actor(admin.into_inner()),
@@ -231,7 +230,7 @@ impl PersonService {
             }
         }
 
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             AuditRecorder::append(
                 txn,
                 AuditEvent::new("assign_unassigned_faces_finish").with_actor(admin.into_inner()),
@@ -244,9 +243,7 @@ impl PersonService {
         Ok(())
     }
 
-    /// 最近质心分类: 每张未分配人脸取与各人物 centroid(已归一化)余弦相似度最高者,
-    /// 相似度 `>= threshold` 才指派, 否则保持未分配。
-    /// 返回(index, person_id)
+    /// 为每张未分配人脸取余弦相似度最高且达阈值的质心人物，返回 index 到人物 ID 的映射
     fn classify_unassigned(
         face_embeddings: &[&FaceEmbedding],
         persons: &[(PersonId, &FaceEmbedding)],
@@ -287,9 +284,7 @@ impl PersonService {
         Ok(())
     }
 
-    /// 合并人物
-    /// 将 source 的全部人脸归属转移到 target, 并删除 source
-    /// 仅可管理员执行
+    /// 将源人物的全部人脸归属转移到目标人物并删除源人物；仅管理员
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(admin_user_id = %admin))]
     pub async fn merge_person(
@@ -299,21 +294,21 @@ impl PersonService {
     ) -> Result<PersonView> {
         let person = PersonRepo::merge_person(state, admin, req).await?;
 
-        let file_id = &person.cover.file_id.clone();
-        PersonView::from_record(
+        let file_id = person.cover.file_id.clone();
+        let view = PersonView::from_record(
             person,
             admin.into_inner(),
-            VisualRepo::get_visual_dimensions(state, file_id).await?,
-        )
-        .to_ok()
+            VisualRepo::get_visual_dimensions(state, &file_id).await?,
+        )?;
+        Ok(view)
     }
 }
 
 // 查询
 impl PersonService {
+    /// 查询人物列表
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
-    /// 查询人物列表.
     pub async fn get_persons(
         state: &VisualState,
         user_id: UserId,
@@ -330,7 +325,7 @@ impl PersonService {
                 person,
                 user_id,
                 VisualRepo::get_visual_dimensions(state, &file_id).await?,
-            ));
+            )?);
         }
         CursorPage::from_has_more(views, has_more)
             .with_next_cursor(|view| CountIdCursor {
@@ -364,20 +359,19 @@ impl PersonService {
                 person,
                 user_id,
                 VisualRepo::get_visual_dimensions(state, &file_id).await?,
-            ));
+            )?);
         }
         CursorPage::from_has_more(views, has_more)
             .with_next_cursor(|view| view.id)
             .to_ok()
     }
 
-    /// 获取人物的照片列表(游标分页, 参照 `CollectionVisualService::get_visuals`)
+    /// 游标分页查询人物关联的照片并生成视图
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(user_id = %user_id, person_id = %person_id)
     )]
-    /// 查询人物关联的照片并生成照片视图.
     pub async fn get_person_visuals(
         state: &VisualState,
         user_id: UserId,
@@ -406,13 +400,12 @@ impl PersonService {
 
 // 删除
 impl PersonService {
-    /// 删除人物（高危操作，仅管理员）: 清空其所有人脸归属后删除人物
+    /// 删除人物及其人脸归属；高危操作，仅管理员
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
         fields(admin_user_id = %admin, person_id = %person_id)
     )]
-    /// 删除人物并清理其人脸归属及相关缓存.
     pub async fn delete_person(
         state: &VisualState,
         admin: AdminId,

@@ -12,10 +12,7 @@ use types_visual::visual::VisualId;
 pub struct DerivativeMapper;
 
 impl DerivativeMapper {
-    /// 幂等插入待生成的衍生片记录(已存在则跳过).
-    ///
-    /// 不使用 DB 唯一约束: 依赖先查后插保证幂等, 避免裸 SQL 唯一索引与
-    /// sea-orm schema-sync 在重启时冲突。
+    /// 幂等插入待生成的衍生片记录, 已存在则跳过；依赖先查后插而非唯一约束保证幂等
     pub async fn insert_pending(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -46,12 +43,12 @@ impl DerivativeMapper {
         Ok(())
     }
 
-    /// 标记为生成中; 返回是否命中记录(影像被删后记录不存在时为 `false`)。
+    /// 标记为生成中; 返回是否命中记录(影像被删后记录不存在时为 `false`)
     pub async fn mark_running(db: &impl ConnectionTrait, id: VisualDerivativeId) -> Result<bool> {
         Self::update_status(db, id, DerivativeStatus::Running, None, None).await
     }
 
-    /// 标记为已就绪并记录对象 key; 返回是否命中记录。
+    /// 标记为已就绪并记录对象 key; 返回是否命中记录
     pub async fn mark_ready(
         db: &impl ConnectionTrait,
         id: VisualDerivativeId,
@@ -67,7 +64,7 @@ impl DerivativeMapper {
         .await
     }
 
-    /// 标记为生成失败并记录原因; 返回是否命中记录。
+    /// 标记为生成失败并记录原因; 返回是否命中记录
     pub async fn mark_failed(
         db: &impl ConnectionTrait,
         id: VisualDerivativeId,
@@ -83,7 +80,7 @@ impl DerivativeMapper {
         .await
     }
 
-    /// 递增尝试次数并返回新值; 记录不存在时返回 `None`。
+    /// 递增尝试次数并返回新值; 记录不存在时返回 `None`
     pub async fn bump_attempt(
         db: &impl ConnectionTrait,
         id: VisualDerivativeId,
@@ -109,12 +106,12 @@ impl DerivativeMapper {
         Ok((rows > 0).then_some(next))
     }
 
-    /// 重置为待生成(启动恢复将卡住的 running 复位); 返回是否命中记录.
+    /// 重置为待生成(启动恢复将卡住的 running 复位); 返回是否命中记录
     pub async fn mark_pending(db: &impl ConnectionTrait, id: VisualDerivativeId) -> Result<bool> {
         Self::update_status(db, id, DerivativeStatus::Pending, None, None).await
     }
 
-    /// 查询某张影像的全部衍生片记录.
+    /// 查询某张影像的全部衍生片记录
     pub async fn query_by_visual_id(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -126,7 +123,7 @@ impl DerivativeMapper {
         Ok(models.into_iter().map(DerivativeRecord::from).collect())
     }
 
-    /// 查询某张影像指定类型的衍生片记录.
+    /// 查询某张影像指定类型的衍生片记录
     pub async fn query_one(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -140,7 +137,7 @@ impl DerivativeMapper {
         Ok(model.map(DerivativeRecord::from))
     }
 
-    /// 删除若干影像的全部衍生片记录(随影像删除).
+    /// 删除若干影像的全部衍生片记录(随影像删除)
     pub async fn delete_by_visual_ids(
         db: &impl ConnectionTrait,
         visual_ids: &[VisualId],
@@ -152,7 +149,7 @@ impl DerivativeMapper {
         Ok(())
     }
 
-    /// 查询需要重新入队的记录(待生成 / 卡在生成中的, 用于启动恢复).
+    /// 查询需要重新入队的记录(待生成 / 卡在生成中的, 用于启动恢复)
     pub async fn query_recoverable(db: &impl ConnectionTrait) -> Result<Vec<DerivativeRecord>> {
         let models = Entity::find()
             .filter(Column::Status.is_in([DerivativeStatus::Pending, DerivativeStatus::Running]))
@@ -161,10 +158,7 @@ impl DerivativeMapper {
         Ok(models.into_iter().map(DerivativeRecord::from).collect())
     }
 
-    /// 按主键更新状态, 返回是否命中记录.
-    ///
-    /// 用 `update_many` 而非 `ActiveModel::update`: 目标记录可能已被删除
-    /// (影像删除时连带清理), 0 行受影响应视为"记录已不存在"而非错误。
+    /// 按主键更新衍生片状态并返回是否命中；0 行受影响视为记录已不存在而非错误
     async fn update_status(
         db: &impl ConnectionTrait,
         id: VisualDerivativeId,

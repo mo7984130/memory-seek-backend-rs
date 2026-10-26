@@ -5,3 +5,6 @@ pub use apply_ext::*;
 
 mod error_ext;
 pub use error_ext::*;
+
+mod option_ext;
+pub use option_ext::*;

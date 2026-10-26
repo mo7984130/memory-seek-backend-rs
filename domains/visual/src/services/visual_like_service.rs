@@ -15,7 +15,7 @@ pub(crate) struct VisualLikeService;
 
 // 创建
 impl VisualLikeService {
-    /// 为影像点赞.
+    /// 为影像点赞
     #[common_macros::metered(name = "like_visual")]
     #[tracing::instrument(
         name = "like_visual",
@@ -59,7 +59,7 @@ impl VisualLikeService {
 
 // 删除
 impl VisualLikeService {
-    /// 取消点赞.
+    /// 取消点赞
     #[common_macros::metered(name = "unlike_visual")]
     #[tracing::instrument(
         name = "unlike_visual",
@@ -78,11 +78,9 @@ impl VisualLikeService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "visual_like_cleanup",
-    owns = ["VisualLikeMapper"],
-    method = on_visual_delete,
 )]
 impl VisualLikeService {
-    /// 清理影像删除后失效的点赞记录.
+    /// 清理影像删除后失效的点赞记录
     async fn on_visual_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,

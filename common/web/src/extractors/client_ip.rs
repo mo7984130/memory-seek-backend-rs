@@ -6,7 +6,7 @@ use std::net::{IpAddr, SocketAddr};
 
 use common_core::{
     ContextualResult, Result,
-    error::{AppError, contextual::ext::ResultContextualExt},
+    error::{AppError, contextual::ext::ResultExt},
     ext::ToOk,
 };
 
@@ -19,6 +19,7 @@ where
 {
     type Rejection = AppError;
 
+    /// 从代理头或连接信息提取客户端 IP
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self> {
         // 1. 检查 X-Forwarded-For（代理链，取第一个非代理 IP）
         if let Some(ip) = extract_forwarded_ip(parts) {
@@ -69,7 +70,7 @@ where
     ConnectInfo::<SocketAddr>::from_request_parts(parts, state)
         .await
         .map(|ConnectInfo(addr)| ClientIp(addr.ip()))
-        .context_err(
+        .context_error(
             "no_client_ip",
             "无法提取客户端 IP，无代理头且未配置 ConnectInfo",
             AppError::InternalServerError,

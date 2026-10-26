@@ -28,6 +28,7 @@ pub struct CollectionVisualController;
 impl ControllerRouter for CollectionVisualController {
     type State = VisualState;
 
+    /// 相册-影像关联模块的受保护路由
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
             .route(
@@ -43,6 +44,7 @@ impl ControllerRouter for CollectionVisualController {
             .route("/{collection_id}/visuals/{visual_id}", delete(Self::remove))
     }
 
+    /// 相册-影像关联模块无公开路由
     fn public_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
     }
@@ -50,7 +52,7 @@ impl ControllerRouter for CollectionVisualController {
 
 // 查询影像所属收藏夹
 impl CollectionVisualController {
-    /// 查询指定影像所属的相册.
+    /// 查询指定影像所属的相册
     async fn get_collections_by_visual(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -64,7 +66,7 @@ impl CollectionVisualController {
 
 // 创建
 impl CollectionVisualController {
-    /// 批量将影像加入相册.
+    /// 批量将影像加入相册
     async fn add_batch(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -85,7 +87,7 @@ impl CollectionVisualController {
 
 // 查询
 impl CollectionVisualController {
-    /// 按游标返回相册中的影像.
+    /// 按游标返回相册中的影像
     async fn get_cursor_page(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -103,7 +105,7 @@ impl CollectionVisualController {}
 
 // 删除
 impl CollectionVisualController {
-    /// 从相册移除单张影像.
+    /// 从相册移除单张影像
     async fn remove(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -120,7 +122,7 @@ impl CollectionVisualController {
         Ok(()).to_r_ok()
     }
 
-    /// 批量从相册移除影像.
+    /// 批量从相册移除影像
     async fn remove_batch(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,

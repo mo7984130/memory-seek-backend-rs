@@ -13,6 +13,7 @@ pub enum BackupTier {
 }
 
 impl BackupTier {
+    /// 返回该备份层级对应的相对目录
     pub const fn rel_dir(self) -> &'static str {
         match self {
             Self::Daily => "scheduled/daily",

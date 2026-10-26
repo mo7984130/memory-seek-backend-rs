@@ -83,6 +83,7 @@ mod entity {
         pub bbox: FaceBBox,
     }
     impl PersonCover {
+        /// 由人脸记录与文件 ID 构造人物封面
         pub fn from_face(face: &FaceRecord, file_id: String) -> Self {
             PersonCover {
                 face_id: face.id,
@@ -118,6 +119,7 @@ mod entity {
         pub weight: HasChanged<f64>,
     }
     impl UpdatePersonRecord {
+        /// 创建仅含 ID 的更新记录,其余字段均未变更
         pub fn new(id: PersonId) -> Self {
             Self {
                 id,
@@ -130,6 +132,7 @@ mod entity {
             }
         }
 
+        /// 设置封面人脸,返回自身以便链式调用
         pub fn with_cover_face(&mut self, cover_face: &FaceRecord, cover_file_id: String) -> &Self {
             self.cover = HasChanged::Changed(PersonCover::from_face(cover_face, cover_file_id));
             self
@@ -137,6 +140,7 @@ mod entity {
     }
 
     impl From<Model> for PersonRecord {
+        /// 将人物实体转换为人物记录
         fn from(value: Model) -> Self {
             Self {
                 id: value.id,
@@ -168,6 +172,7 @@ mod entity {
     }
 
     impl From<NewPerson> for ActiveModel {
+        /// 将待持久化人物转换为 ActiveModel
         fn from(value: NewPerson) -> Self {
             ActiveModel {
                 name: Set(value.name),

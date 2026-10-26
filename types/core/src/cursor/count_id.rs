@@ -54,18 +54,21 @@ impl<I: DeserializeOwned> CountIdCursor<I> {
 }
 
 impl<I: Serialize> Serialize for CountIdCursor<I> {
+    /// 序列化为 Base64 字符串
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.encode())
     }
 }
 
 impl<'de, I: DeserializeOwned> Deserialize<'de> for CountIdCursor<I> {
+    /// 从 Base64 字符串解码
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         Self::decode(String::deserialize(d)?).map_err(serde::de::Error::custom)
     }
 }
 
 impl<I> validator::Validate for CountIdCursor<I> {
+    /// 空校验,始终通过
     fn validate(&self) -> Result<(), validator::ValidationErrors> {
         Ok(())
     }
@@ -73,10 +76,7 @@ impl<I> validator::Validate for CountIdCursor<I> {
 
 #[cfg(feature = "orm")]
 impl<I: Clone + Into<sea_orm::Value>> CountIdCursor<I> {
-    /// 构造 keyset 分页过滤条件, 需与 `ORDER BY face_count <dir>, id <dir>` 配套使用。
-    ///
-    /// - `Desc`: 返回 `(face_count, id) < (self.face_count, self.id)` 的行
-    /// - `Asc`: 返回 `(face_count, id) > (self.face_count, self.id)` 的行
+    /// 构造 keyset 分页过滤条件,需与 `ORDER BY face_count <dir>, id <dir>` 配套使用；`Desc` 取小于游标的行,`Asc` 取大于游标的行
     pub fn keyset_condition<C: sea_orm::ColumnTrait>(
         &self,
         count_col: C,

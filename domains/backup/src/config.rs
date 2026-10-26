@@ -17,6 +17,7 @@ pub struct BackupScheduleConfig {
 }
 
 impl Default for BackupScheduleConfig {
+    /// 返回备份调度配置的默认保留数量
     fn default() -> Self {
         Self {
             daily_retention: default_daily_retention(),
@@ -26,17 +27,17 @@ impl Default for BackupScheduleConfig {
     }
 }
 
-/// 返回 daily 备份的默认保留数量.
+/// 返回 daily 备份的默认保留数量
 fn default_daily_retention() -> u32 {
     7
 }
 
-/// 返回 weekly 备份的默认保留数量.
+/// 返回 weekly 备份的默认保留数量
 fn default_weekly_retention() -> u32 {
     4
 }
 
-/// 返回 monthly 备份的默认保留数量.
+/// 返回 monthly 备份的默认保留数量
 fn default_monthly_retention() -> u32 {
     6
 }
@@ -62,6 +63,7 @@ pub struct BackupConfig {
 }
 
 impl Default for BackupConfig {
+    /// 返回备份配置的默认值
     fn default() -> Self {
         Self {
             local_path: default_local_path(),
@@ -72,12 +74,12 @@ impl Default for BackupConfig {
     }
 }
 
-/// 返回本地备份目录的默认路径.
+/// 返回本地备份目录的默认路径
 fn default_local_path() -> String {
     "/var/backups/memory-seek".to_string()
 }
 
-/// 返回对象存储备份前缀的默认值.
+/// 返回对象存储备份前缀的默认值
 fn default_s3_prefix() -> String {
     "backup".to_string()
 }

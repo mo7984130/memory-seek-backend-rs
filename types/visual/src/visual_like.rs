@@ -51,6 +51,7 @@ mod entity {
     }
 
     impl From<Model> for VisualLikeRecord {
+        /// 将影像点赞实体转换为点赞记录
         fn from(model: Model) -> Self {
             Self {
                 id: model.id,

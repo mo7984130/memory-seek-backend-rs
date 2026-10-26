@@ -39,7 +39,9 @@ face_engine:
   recognize_model_path: "./target/dist/models/rec.onnx"
 
 visual:
+  # e2e 开启缩略图/预览持久化, 覆盖首次处理上传与二次直接读取两条路径
+  processed_image:
+    store_in_oss: true
   # 视频转码依赖运行 server 的主机上的 ffmpeg; CI 由 e2e-stack action 显式安装
   transcode:
-    enabled: true
     ffmpeg_path: ffmpeg

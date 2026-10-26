@@ -1,41 +1,39 @@
-use crate::error::{AppError, ContextualError, ContextualResult};
+use std::borrow::Cow;
+
+use crate::error::{ContextualError, ContextualResult};
 
 pub trait UintExt: Sized {
-    // 期望为0
-    // 非0的话warn
-    fn zero_or_warn(
+    /// 期望为 0，非 0 则 warn
+    fn zero_or_warn<E>(
         self,
         reason: &'static str,
-        context: &'static str,
-        err: AppError,
-    ) -> ContextualResult<Self>;
+        context: impl Into<Cow<'static, str>>,
+        payload: E,
+    ) -> ContextualResult<Self, E>;
 
-    // 期望为0
-    // 非0的话error
-    fn zero_or_error(
+    /// 期望为 0，非 0 则 error
+    fn zero_or_error<E>(
         self,
         reason: &'static str,
-        context: &'static str,
-        err: AppError,
-    ) -> ContextualResult<Self>;
+        context: impl Into<Cow<'static, str>>,
+        payload: E,
+    ) -> ContextualResult<Self, E>;
 
-    // 期望为非0
-    // 0的话warn
-    fn no_zero_or_warn(
+    /// 期望非 0，为 0 则 warn
+    fn nonzero_or_warn<E>(
         self,
         reason: &'static str,
-        context: &'static str,
-        err: AppError,
-    ) -> ContextualResult<Self>;
+        context: impl Into<Cow<'static, str>>,
+        payload: E,
+    ) -> ContextualResult<Self, E>;
 
-    // 期望为非0
-    // 0的话error
-    fn no_zero_or_error(
+    /// 期望非 0，为 0 则 error
+    fn nonzero_or_error<E>(
         self,
         reason: &'static str,
-        context: &'static str,
-        err: AppError,
-    ) -> ContextualResult<Self>;
+        context: impl Into<Cow<'static, str>>,
+        payload: E,
+    ) -> ContextualResult<Self, E>;
 }
 
 macro_rules! impl_rows_affected_ext {
@@ -43,16 +41,16 @@ macro_rules! impl_rows_affected_ext {
         $(
             impl UintExt for $t {
                 #[inline]
-                fn zero_or_warn(self,
+                fn zero_or_warn<E>(self,
                     reason: &'static str,
-                    context: &'static str,
-                    err: AppError,
-                ) -> ContextualResult<Self> {
+                    context: impl Into<Cow<'static, str>>,
+                    payload: E,
+                ) -> ContextualResult<Self, E> {
                     if self != 0 {
                         Err(ContextualError::warn_without_source(
                             reason,
                             context,
-                            err,
+                            payload,
                         ))
                     } else {
                         Ok(self)
@@ -60,16 +58,16 @@ macro_rules! impl_rows_affected_ext {
                 }
 
                 #[inline]
-                fn zero_or_error(self,
+                fn zero_or_error<E>(self,
                     reason: &'static str,
-                    context: &'static str,
-                    err: AppError,
-                ) -> ContextualResult<Self> {
+                    context: impl Into<Cow<'static, str>>,
+                    payload: E,
+                ) -> ContextualResult<Self, E> {
                     if self != 0 {
                         Err(ContextualError::error_without_source(
                             reason,
                             context,
-                            err,
+                            payload,
                         ))
                     } else {
                         Ok(self)
@@ -77,16 +75,16 @@ macro_rules! impl_rows_affected_ext {
                 }
 
                 #[inline]
-                fn no_zero_or_warn(self,
+                fn nonzero_or_warn<E>(self,
                     reason: &'static str,
-                    context: &'static str,
-                    err: AppError,
-                ) -> ContextualResult<Self> {
+                    context: impl Into<Cow<'static, str>>,
+                    payload: E,
+                ) -> ContextualResult<Self, E> {
                     if self == 0 {
                         Err(ContextualError::warn_without_source(
                             reason,
                             context,
-                            err,
+                            payload,
                         ))
                     } else {
                         Ok(self)
@@ -94,16 +92,16 @@ macro_rules! impl_rows_affected_ext {
                 }
 
                 #[inline]
-                fn no_zero_or_error(self,
+                fn nonzero_or_error<E>(self,
                     reason: &'static str,
-                    context: &'static str,
-                    err: AppError,
-                ) -> ContextualResult<Self> {
+                    context: impl Into<Cow<'static, str>>,
+                    payload: E,
+                ) -> ContextualResult<Self, E> {
                     if self == 0 {
                         Err(ContextualError::error_without_source(
                             reason,
                             context,
-                            err,
+                            payload,
                         ))
                     } else {
                         Ok(self)

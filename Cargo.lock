@@ -1090,7 +1090,7 @@ dependencies = [
 
 [[package]]
 name = "common-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "chrono",
@@ -1101,6 +1101,7 @@ dependencies = [
  "serde",
  "serde_json",
  "snowflaked",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
@@ -1123,6 +1124,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tokio",
 ]
 
 [[package]]
@@ -1148,6 +1150,7 @@ dependencies = [
 name = "common-redis"
 version = "0.1.0"
 dependencies = [
+ "common-core",
  "deadpool-redis",
  "redis",
 ]
@@ -1273,7 +1276,7 @@ checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
 name = "constants"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "common-crypto",
  "types-core",
@@ -1683,7 +1686,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "e2e"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -1695,11 +1698,13 @@ dependencies = [
  "constants",
  "deadpool-redis",
  "hex",
+ "memory-seek-api-rs",
  "memseek-test",
  "oss",
  "sea-orm",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1886,7 +1891,7 @@ dependencies = [
 
 [[package]]
 name = "file-validator"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "const_format",
  "hex",
@@ -2187,6 +2192,12 @@ name = "glam"
 version = "0.33.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21fef0953c54fd3de2f44b743fbf77e044c81a25faee03636dfccc0d35135e23"
+
+[[package]]
+name = "glob"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "h2"
@@ -3025,6 +3036,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libwebp-sys"
+version = "0.9.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54cd30df7c7165ce74a456e4ca9732c603e8dc5e60784558c1c6dc047f876733"
+dependencies = [
+ "cc",
+ "glob",
+]
+
+[[package]]
 name = "linkme"
 version = "0.3.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3043,6 +3064,12 @@ dependencies = [
  "quote",
  "syn 3.0.4",
 ]
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "litemap"
@@ -3204,6 +3231,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "memory-seek-api-rs"
+version = "0.4.0"
+dependencies = [
+ "async-trait",
+ "common-core",
+ "futures",
+ "http",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "types-audit",
+ "types-core",
+ "types-identity",
+ "types-visual",
+ "types-visual-token",
 ]
 
 [[package]]
@@ -3641,9 +3688,9 @@ dependencies = [
 
 [[package]]
 name = "objc2"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a12a8ed07aefc768292f076dc3ac8c48f3781c8f2d5851dd3d98950e8c5a89f"
+checksum = "08849bbd4767dfae9457696856ae1c84fe4e0281bbe4a7abff2d0e06fb7981f8"
 dependencies = [
  "objc2-encode",
 ]
@@ -3775,7 +3822,7 @@ dependencies = [
 
 [[package]]
 name = "oss"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bytes",
  "common-core",
@@ -4851,6 +4898,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustix"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+dependencies = [
+ "bitflags",
+ "errno",
+ "libc",
+ "linux-raw-sys",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "rustls"
 version = "0.23.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5254,7 +5314,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.7.3"
+version = "0.8.0"
 dependencies = [
  "audit",
  "auth",
@@ -5832,6 +5892,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "getrandom 0.4.3",
+ "once_cell",
+ "rustix",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "termcolor"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6318,7 +6391,7 @@ dependencies = [
 
 [[package]]
 name = "types-visual"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "common-core",
  "common-crypto",
@@ -6338,7 +6411,7 @@ dependencies = [
 
 [[package]]
 name = "types-visual-token"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "common-core",
  "common-crypto",
@@ -6575,13 +6648,12 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "visual"
-version = "0.10.3"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "audit",
  "axum",
  "backup",
- "base64 0.22.1",
  "blake3",
  "bytes",
  "common-core",
@@ -6612,6 +6684,7 @@ dependencies = [
  "types-identity",
  "types-visual",
  "uuid",
+ "webp",
 ]
 
 [[package]]
@@ -6735,6 +6808,16 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webp"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c071456adef4aca59bf6a583c46b90ff5eb0b4f758fc347cea81290288f37ce1"
+dependencies = [
+ "image",
+ "libwebp-sys",
 ]
 
 [[package]]

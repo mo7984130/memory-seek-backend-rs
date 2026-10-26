@@ -19,13 +19,13 @@ use crate::{
 pub(crate) struct VisualLikeRepo;
 
 impl VisualLikeRepo {
-    /// 点赞影像.
+    /// 点赞影像
     pub(crate) async fn like(
         state: &VisualState,
         user_id: UserId,
         visual_id: VisualId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 确认存在
             VisualMapper::ensure_exist(txn, visual_id).await?;
             // 插入
@@ -63,7 +63,7 @@ impl VisualLikeRepo {
         user_id: UserId,
         visual_id: VisualId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             if !VisualLikeMapper::delete(txn, user_id, visual_id).await? {
                 return Err(ContextualError::error_without_source(
                     "visual_not_liked",
@@ -88,7 +88,7 @@ impl VisualLikeRepo {
         Ok(())
     }
 
-    /// 查询用户点赞过的影像 ID.
+    /// 查询用户点赞过的影像 ID
     pub(crate) async fn query_liked_visual_ids(
         state: &VisualState,
         user_id: UserId,

@@ -10,6 +10,7 @@ pub struct Config {
     pub salt: String,
 }
 
+/// 初始化视觉令牌加解密器
 #[common_macros::register_async(
     slice = crate::setup::libs::APP_LIBS,
     ty = crate::setup::InitFn,

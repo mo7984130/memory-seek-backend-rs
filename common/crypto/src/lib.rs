@@ -10,5 +10,5 @@ pub mod password_hash;
 pub mod rand_utils;
 pub mod token_cipher;
 
-pub use password_hash::{Argon2idConfig, BcryptConfig, HashAlgorithm};
+pub use password_hash::{Argon2idConfig, BcryptConfig, HashAlgorithm, password_verify_semaphore};
 pub use token_cipher::{TokenCipher, TokenCipherConfig, init_token_cipher, token_cipher};

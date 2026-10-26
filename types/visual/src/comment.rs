@@ -49,9 +49,7 @@ mod entity {
         pub created_at: DateTime,
     }
 
-    /// 创建索引
-    /// VisualId 和 CreatedAt 复合索引, 用于 查询影像的评论
-    /// VisualId 和 LikeCount 复合索引, 用于 查询影像的热门评论
+    /// 创建影像评论按时间与点赞数查询的复合索引
     #[common_macros::register_async(
         send,
         slice = types_db_registry::INIT_INDEXES,
@@ -94,6 +92,7 @@ mod entity {
     }
 
     impl From<Model> for CommentRecord {
+        /// 将评论实体转换为评论记录
         fn from(model: Model) -> Self {
             Self {
                 id: model.id,

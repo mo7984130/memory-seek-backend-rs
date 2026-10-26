@@ -8,9 +8,7 @@
 //!     ctx = crate::services::visual_service::VisualDeleteContext,
 //!     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
 //!     name = "foo_cleanup",
-//!     owns = ["FooMapper", "BarMapper"],
 //!     is_final = true,          // 可选:最后执行的步骤(受外键约束时置位)
-//!     method = on_visual_delete, // 可选:步骤方法名(缺省为 on_photo_delete)
 //! )]
 //! impl FooService {
 //!     async fn on_visual_delete(
@@ -26,9 +24,9 @@
 //!
 //! 宏展开为「原 impl 块 + `impl Step<Ctx> for FooService` + 一个 linkme 分布式切片元素」,
 //! 生成的 `execute` 委托调用块内的步骤方法(txn, ctx):
-//! - 步骤方法名由 `method` 参数指定,缺省为 `on_photo_delete`;
+//! - 步骤方法名可由 `method` 参数指定;省略时取 impl 块内唯一的 `async fn`;
 //! - 生成的步骤结构即为 service 本身(unit struct),无需额外定义 Step 结构体;
-//! - 宏不绑定任何业务类型:`ctx` / `slice` / `name` / `owns` / `is_final` / `method` 全部参数化。
+//! - 宏不绑定任何业务类型:`ctx` / `slice` / `name` / `is_final` / `method` 全部参数化。
 //!
 //! 要求调用 crate 依赖 `common-db`、`common-core`、`sea-orm` 与 `linkme`(宏生成的路径)。
 //! 步骤方法的参数名任意(按位置传递),但参数类型必须与生成签名一致。
@@ -38,7 +36,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::{bracketed, parse_macro_input, Ident, ImplItem, ItemImpl, LitBool, LitStr, Token, Type};
+use syn::{parse_macro_input, Ident, ImplItem, ItemImpl, LitBool, LitStr, Token, Type};
 
 /// `#[declare_transaction_step(...)]` 属性宏入口
 #[proc_macro_attribute]
@@ -51,9 +49,7 @@ pub fn declare_transaction_step(attr: TokenStream, item: TokenStream) -> TokenSt
     }
 }
 
-/// `declare_async_event!(<状态类型>, <事件类型>, <切片名>, <发布函数名>, <事件名>)` — 声明提交后的异步事件。
-///
-/// 展开为一个 `linkme` 分布式切片和调用 `common_runtime::event::dispatch_async_event` 的发布函数。
+/// 声明提交后的异步事件；展开为一个 linkme 分布式切片与调用 `dispatch_async_event` 的发布函数
 #[proc_macro]
 pub fn declare_async_event(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as EventArgs);
@@ -78,9 +74,7 @@ pub fn declare_async_event(input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// `#[declare_event_consumer(...)]` — 声明并注册一个提交后异步事件消费者。
-///
-/// 标记的 impl 必须且只能包含一个异步回调方法；宏将其作为事件消费者。
+/// 声明并注册一个提交后异步事件消费者；impl 必须且只能包含一个异步回调方法
 #[proc_macro_attribute]
 pub fn declare_event_consumer(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as EventConsumerArgs);
@@ -91,21 +85,7 @@ pub fn declare_event_consumer(attr: TokenStream, item: TokenStream) -> TokenStre
     }
 }
 
-/// `declare_pipeline!(<ctx 类型>, <切片名>, <管道名>)` — 声明一个步骤管道
-///
-/// 展开为「一个 `linkme` 分布式切片 + 一个惰性 `StepPipeline`」,供 `#[declare_transaction_step]`
-/// 注册步骤(定义即注册)与直接执行(`<管道名>.run(...)`)使用:
-///
-/// ```ignore
-/// step_derive::declare_pipeline!(VisualDeleteContext, MEDIA_DELETE_STEPS, PIPELINE);
-/// // 展开:
-/// #[linkme::distributed_slice]
-/// pub(crate) static MEDIA_DELETE_STEPS: [&'static dyn Step<VisualDeleteContext>] = [..];
-/// static PIPELINE: LazyLock<StepPipeline<VisualDeleteContext>> =
-///     LazyLock::new(|| StepPipeline::from_slice_stable(MEDIA_DELETE_STEPS.to_vec()));
-/// ```
-///
-/// 要求调用 crate 依赖 `common-db` 与 `linkme`。
+/// 声明一个步骤管道；展开为一个 linkme 分布式切片与一个惰性 `StepPipeline`
 #[proc_macro]
 pub fn declare_pipeline(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as PipelineArgs);
@@ -141,6 +121,7 @@ struct EventArgs {
 }
 
 impl Parse for EventArgs {
+    /// 解析 `declare_async_event!` 的位置参数
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let state = input.parse()?;
         input.parse::<Token![,]>()?;
@@ -165,6 +146,7 @@ impl Parse for EventArgs {
 }
 
 impl Parse for PipelineArgs {
+    /// 解析 `declare_pipeline!` 的位置参数
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let ctx: Type = input.parse()?;
         input.parse::<Token![,]>()?;
@@ -181,7 +163,6 @@ impl Parse for PipelineArgs {
 
 struct Args {
     name: LitStr,
-    owns: Vec<LitStr>,
     is_final: Option<bool>,
     ctx: Option<Type>,
     slice: Option<Type>,
@@ -196,6 +177,7 @@ struct EventConsumerArgs {
 }
 
 impl Parse for EventConsumerArgs {
+    /// 解析 `#[declare_event_consumer(...)]` 的属性参数
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut name = None;
         let mut state = None;
@@ -238,9 +220,9 @@ impl Parse for EventConsumerArgs {
 }
 
 impl Parse for Args {
+    /// 解析 `#[declare_transaction_step(...)]` 的属性参数
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut name: Option<LitStr> = None;
-        let mut owns: Option<Vec<LitStr>> = None;
         let mut is_final: Option<bool> = None;
         let mut ctx: Option<Type> = None;
         let mut slice: Option<Type> = None;
@@ -256,19 +238,6 @@ impl Parse for Args {
             if kw == "name" {
                 name = Some(input.parse()?);
                 input.parse::<Token![,]>()?;
-            } else if kw == "owns" {
-                let content;
-                bracketed!(content in input);
-                let mut list = Vec::new();
-                while !content.is_empty() {
-                    list.push(content.parse()?);
-                    if content.is_empty() {
-                        break;
-                    }
-                    content.parse::<Token![,]>()?;
-                }
-                input.parse::<Token![,]>()?;
-                owns = Some(list);
             } else if kw == "is_final" {
                 let value: LitBool = input.parse()?;
                 input.parse::<Token![,]>()?;
@@ -285,14 +254,13 @@ impl Parse for Args {
             } else {
                 return Err(syn::Error::new(
                     kw.span(),
-                    format!("期望 `name` / `owns` / `is_final` / `ctx` / `slice` / `method`,发现 `{kw}`"),
+                    format!("期望 `name` / `is_final` / `ctx` / `slice` / `method`,发现 `{kw}`"),
                 ));
             }
         }
 
         Ok(Args {
             name: name.ok_or_else(|| input.error("缺少 `name = \"...\"` 参数"))?,
-            owns: owns.ok_or_else(|| input.error("缺少 `owns = [...]` 参数"))?,
             is_final,
             ctx,
             slice,
@@ -301,11 +269,10 @@ impl Parse for Args {
     }
 }
 
-/// 将步骤 impl 展开为 Step 实现和分布式注册项.
+/// 将步骤 impl 展开为 Step 实现和分布式注册项
 fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
     let Args {
         name,
-        owns,
         is_final,
         ctx,
         slice,
@@ -316,18 +283,42 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
     let slice =
         slice.ok_or_else(|| syn::Error::new(item_impl.span(), "缺少 `slice = <path>` 参数"))?;
     let self_ty = item_impl.self_ty.clone();
-    let method = method.unwrap_or_else(|| Ident::new("on_photo_delete", item_impl.span()));
-
-    if !item_impl
-        .items
-        .iter()
-        .any(|item| matches!(item, ImplItem::Fn(m) if m.sig.ident == method))
-    {
-        return Err(syn::Error::new(
-            item_impl.span(),
-            format!("impl 块内缺少 `async fn {method}(...)` 方法"),
-        ));
-    }
+    let method = match method {
+        Some(method) => {
+            if !item_impl
+                .items
+                .iter()
+                .any(|item| matches!(item, ImplItem::Fn(m) if m.sig.ident == method))
+            {
+                return Err(syn::Error::new(
+                    item_impl.span(),
+                    format!("impl 块内缺少 `async fn {method}(...)` 方法"),
+                ));
+            }
+            method
+        }
+        None => {
+            let async_fns = item_impl
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    ImplItem::Fn(method) if method.sig.asyncness.is_some() => {
+                        Some(method.sig.ident.clone())
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            match async_fns.as_slice() {
+                [only] => only.clone(),
+                _ => {
+                    return Err(syn::Error::new(
+                        item_impl.span(),
+                        "省略 `method` 时,impl 块必须恰好包含一个 `async fn`;否则请用 `method = ...` 显式指定",
+                    ));
+                }
+            }
+        }
+    };
 
     let is_final_lit = if is_final == Some(true) {
         quote!(true)
@@ -359,10 +350,6 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
                 #name
             }
 
-            fn owns(&self) -> &'static [&'static str] {
-                &[#(#owns),*]
-            }
-
             fn is_final(&self) -> bool {
                 #is_final_lit
             }
@@ -389,7 +376,7 @@ fn expand(args: Args, item_impl: ItemImpl) -> syn::Result<TokenStream2> {
     })
 }
 
-/// 将事件消费者 impl 展开为 EventConsumer 实现和注册项.
+/// 将事件消费者 impl 展开为 EventConsumer 实现和注册项
 fn expand_event_consumer(
     args: EventConsumerArgs,
     item_impl: ItemImpl,
@@ -458,7 +445,7 @@ fn expand_event_consumer(
     })
 }
 
-/// 从路径类型中提取最后一个标识符.
+/// 从路径类型中提取最后一个标识符
 fn type_last_ident(ty: &Type, error_message: &str) -> syn::Result<Ident> {
     match ty {
         Type::Path(type_path) => type_path

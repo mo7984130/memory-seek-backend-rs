@@ -1,11 +1,13 @@
 //! user 模块场景共享的会话预置: 受保护端点所需的登录凭证.
 
-use common_web::SucR;
-use memseek_test::ctxlibs::http_client::{HttpError, reqwest};
-use serde_json::json;
-use types_identity::auth::{LoginResponse, user::UserId};
+use std::sync::Arc;
+
+use memory_seek_api::{Client as ApiClient, api};
+use memseek_test::ctxlibs::http_client::HttpError;
+use types_identity::auth::{LoginRequest, user::UserId};
 
 use crate::context::Context;
+use crate::error::api_to_http;
 
 /// 测试用户池统一初始密码(与 `preprea.rs` 的 `PASS_HASH` 对应).
 pub const PASSWORD: &str = "Test123456";
@@ -32,11 +34,12 @@ pub fn pwd_account(index: usize) -> String {
     format!("uit_pwd_{}", index + 1)
 }
 
-/// 已登录会话, 供受保护端点的 run/validate 复用.
+/// 已登录会话: 携带已注入登录态的 api-rs 客户端, 供受保护端点复用.
 pub struct Session {
     pub user_id: UserId,
     pub access_token: String,
     pub refresh_token: String,
+    client: Option<Arc<ApiClient>>,
 }
 
 impl Default for Session {
@@ -45,14 +48,23 @@ impl Default for Session {
             user_id: UserId(0),
             access_token: String::new(),
             refresh_token: String::new(),
+            client: None,
         }
     }
 }
 
 impl Session {
     /// 认证中间件要求的头: `Authorization: Bearer {user_id} {access_token}`.
+    ///
+    /// 仅供仍走裸请求的场景(batch 等负向用例)构造请求使用;已迁移场景请用
+    /// [`Session::client`]。
     pub fn auth_header(&self) -> String {
         format!("Bearer {} {}", self.user_id, self.access_token)
+    }
+
+    /// 已登录的 api-rs 客户端.
+    pub fn client(&self) -> &ApiClient {
+        self.client.as_deref().expect("session client 未初始化")
     }
 }
 
@@ -67,17 +79,22 @@ pub async fn login_with(
     account: &str,
     password: &str,
 ) -> Result<Session, HttpError> {
-    let resp: SucR<LoginResponse> = ctx
-        .client
-        .request(reqwest::Method::POST, "/auth/login")
-        .json_unwrap(&json!({ "account": account, "password": password }))
-        .send_checked()
-        .await?
-        .json()
-        .await?;
+    let client = ctx.api_client();
+    let request = LoginRequest {
+        account: account.to_owned(),
+        password: password.to_owned(),
+    };
+    let response = api::auth::login(&client, &request)
+        .await
+        .map_err(api_to_http)?;
+    client
+        .auth_storage()
+        .set_login_result(&response)
+        .expect("内存存储写入不应失败");
     Ok(Session {
-        user_id: resp.data.user.id,
-        access_token: resp.data.access_token,
-        refresh_token: resp.data.refresh_token,
+        user_id: response.user.id,
+        access_token: response.access_token,
+        refresh_token: response.refresh_token,
+        client: Some(Arc::new(client)),
     })
 }

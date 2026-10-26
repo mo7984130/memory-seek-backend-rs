@@ -1,20 +1,16 @@
 //! 视频衍生片：上传后异步生成缩略/预览片，下载轮询至就绪。
 //!
-//! 覆盖：视频上传 → `thumbnail_token` 下载在转码完成前返回 202、
+//! 覆盖：视频上传 → `tokens.thumbnail` 下载在转码完成前返回 202、
 //! 完成后返回 200 且为 `video/mp4` 的衍生片（非原视频）。
 
 use std::time::Duration;
 
-use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
-    scenario::Scenario,
-};
-use serde_json::json;
-use types_visual::dto::visual::VisualView;
+use memory_seek_api::{VisualIds, api};
+use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
+use types_visual::visual::VisualId;
 
 use crate::context::Context;
+use crate::error::E2eError;
 
 use super::{Session, session, unique_tag};
 
@@ -37,12 +33,22 @@ pub fn unique_mp4(tag: &str) -> Vec<u8> {
 }
 
 /// 下载视频缩略片的前置：登录 + 上传唯一视频。
-#[derive(Default)]
 pub struct VideoDerivativeSetup {
     pub thumbnail_token: String,
     pub preview_token: String,
-    pub visual_id: i64,
-    pub auth_header: String,
+    pub visual_id: VisualId,
+    pub session: Session,
+}
+
+impl Default for VideoDerivativeSetup {
+    fn default() -> Self {
+        Self {
+            thumbnail_token: String::new(),
+            preview_token: String::new(),
+            visual_id: VisualId(0),
+            session: Session::default(),
+        }
+    }
 }
 
 /// 视频缩略片：轮询至就绪后为 `video/mp4` 衍生片。
@@ -52,7 +58,7 @@ pub struct VideoDerivativeScenario;
 impl Scenario for VideoDerivativeScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
     /// (状态码, content-type, 字节)
     type Output = (u16, Option<String>, Vec<u8>);
@@ -62,12 +68,12 @@ impl Scenario for VideoDerivativeScenario {
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
         let session: Session = session(ctx, task.index).await?;
         let bytes = unique_mp4(&unique_tag(task));
-        let view: VisualView = super::upload_video(ctx, &session, bytes).await?.data;
+        let view = super::upload_video(&session, bytes).await?;
         Ok(VideoDerivativeSetup {
-            thumbnail_token: view.thumbnail_token.unwrap_or_default(),
-            preview_token: view.preview_token.unwrap_or_default(),
-            visual_id: view.id.0,
-            auth_header: session.auth_header(),
+            thumbnail_token: view.tokens.thumbnail,
+            preview_token: view.tokens.preview,
+            visual_id: view.id,
+            session,
         })
     }
 
@@ -79,15 +85,8 @@ impl Scenario for VideoDerivativeScenario {
         // 转码异步: 短暂轮询。202 = 仍在转码(合法契约), 200 = 就绪;
         // 其它状态(500/404 等)视为失败。轮询有界, 避免压测/CI 下拖长单轮耗时。
         for _ in 0..20 {
-            let resp = ctx
-                .client
-                .request(
-                    reqwest::Method::GET,
-                    &format!("/visual/{}", setup.thumbnail_token),
-                )
-                .send()
-                .await?;
-            let status = resp.status().as_u16();
+            let response = api::visual::download(&ctx.api_client(), &setup.thumbnail_token).await?;
+            let status = response.status.as_u16();
             if status == 202 {
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 continue;
@@ -95,13 +94,12 @@ impl Scenario for VideoDerivativeScenario {
             if status != 200 {
                 return Ok((status, None, Vec::new()));
             }
-            let content_type = resp
-                .headers()
-                .get(reqwest::header::CONTENT_TYPE)
+            let content_type = response
+                .headers
+                .get("content-type")
                 .and_then(|value| value.to_str().ok())
                 .map(str::to_string);
-            let bytes = resp.bytes().await?.to_vec();
-            return Ok((status, content_type, bytes));
+            return Ok((status, content_type, response.body));
         }
         // 轮询耗尽仍为 202: 转码未完成, 但契约成立
         Ok((202, None, Vec::new()))
@@ -126,18 +124,18 @@ impl Scenario for VideoDerivativeScenario {
 
     /// 收尾：删除 setup 阶段上传的视频（会连带清理衍生片）。
     async fn teardown(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
         _result: Option<Result<&Self::Output, &Self::Error>>,
     ) -> Result<(), Self::Error> {
-        crate::cleanup::delete(
-            ctx,
-            "/visual",
-            Some(&setup.auth_header),
-            Some(json!({ "visualIds": [setup.visual_id] })),
+        crate::cleanup::idempotent(
+            api::visual::delete_visuals(
+                setup.session.client(),
+                VisualIds::new(vec![setup.visual_id]).expect("单元素影像列表恒合法"),
+            )
+            .await,
         )
-        .await
     }
 }
 

@@ -1,50 +1,54 @@
 use std::borrow::Cow;
 
 use crate::{
-    error::{AppError, ContextualError, ContextualResult},
+    error::{ContextualError, ContextualResult},
     ext::ToErr,
 };
 
 pub trait OptionExt<T> {
-    fn ok_or_warn(
+    /// 为 `Some` 返回值，`None` 时返回 warn 级上下文错误
+    fn ok_or_warn<E>(
         self,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_err: AppError,
-    ) -> ContextualResult<T>;
+        payload: E,
+    ) -> ContextualResult<T, E>;
 
-    fn ok_or_error(
+    /// 为 `Some` 返回值，`None` 时返回 error 级上下文错误
+    fn ok_or_error<E>(
         self,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_err: AppError,
-    ) -> ContextualResult<T>;
+        payload: E,
+    ) -> ContextualResult<T, E>;
 }
 
 impl<T> OptionExt<T> for Option<T> {
+    /// 为 `Some` 返回值，`None` 时返回 warn 级上下文错误
     #[inline]
-    fn ok_or_warn(
+    fn ok_or_warn<E>(
         self,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_err: AppError,
-    ) -> ContextualResult<T> {
+        payload: E,
+    ) -> ContextualResult<T, E> {
         match self {
             Some(v) => Ok(v),
-            None => ContextualError::warn_without_source(reason, context, app_err).to_err(),
+            None => ContextualError::warn_without_source(reason, context, payload).to_err(),
         }
     }
 
+    /// 为 `Some` 返回值，`None` 时返回 error 级上下文错误
     #[inline]
-    fn ok_or_error(
+    fn ok_or_error<E>(
         self,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_err: AppError,
-    ) -> ContextualResult<T> {
+        payload: E,
+    ) -> ContextualResult<T, E> {
         match self {
             Some(v) => Ok(v),
-            None => ContextualError::error_without_source(reason, context, app_err).to_err(),
+            None => ContextualError::error_without_source(reason, context, payload).to_err(),
         }
     }
 }
@@ -52,6 +56,7 @@ impl<T> OptionExt<T> for Option<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::AppError;
 
     #[test]
     fn some_ok_or_warn_returns_value() {

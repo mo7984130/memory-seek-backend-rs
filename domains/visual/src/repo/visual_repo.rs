@@ -28,8 +28,7 @@ const MEDIA_CURSOR_CACHE_SIZE: u64 = 1024;
 pub struct VisualRepo;
 
 impl VisualRepo {
-    /// 加载影像记录.
-    /// 返回影像记录 和 是否被喜欢的影像Id
+    /// 批量加载影像记录及其当前用户点赞状态（带多级缓存）
     pub async fn load_visual_records(
         state: &VisualState,
         user_id: UserId,
@@ -78,7 +77,7 @@ impl VisualRepo {
         Ok((visuals, liked_visual_ids))
     }
 
-    /// 缓存影像喜欢状态.
+    /// 缓存影像喜欢状态
     pub(super) async fn cache_visual_like_status(
         state: &VisualState,
         user_id: UserId,
@@ -102,7 +101,7 @@ impl VisualRepo {
             .emit_if_err();
     }
 
-    /// 影像聚合字段变更后失效详情缓存。
+    /// 影像聚合字段变更后失效详情缓存
     pub(super) async fn invalidate_visual_info(state: &VisualState, visual_id: VisualId) {
         let key = RedisKeys::visual::visual::visual_info(visual_id);
         state
@@ -114,7 +113,7 @@ impl VisualRepo {
             .emit_if_err();
     }
 
-    /// 游标查询影像id.
+    /// 游标查询影像id
     pub async fn query_visual_cursor_ids(
         state: &VisualState,
         req: VisualCursorParam,
@@ -153,7 +152,7 @@ impl VisualRepo {
         Ok(visual_ids)
     }
 
-    /// 失效影像游标 ID 缓存.
+    /// 失效影像游标 ID 缓存
     async fn invalidate_visual_cursor_ids(state: &VisualState) {
         let keys = [
             RedisKeys::visual::visual::visual_cursor_page_ids(PageDirection::Next).to_owned(),
@@ -167,6 +166,7 @@ impl VisualRepo {
             .emit_if_err();
     }
 
+    /// 将缓存的首页记录按请求页大小截断
     fn resize_cached_first_page(
         mut page: CursorPage<VisualId, ()>,
         size: u64,
@@ -178,9 +178,9 @@ impl VisualRepo {
         page
     }
 
-    /// 插入影像.
+    /// 插入影像
     pub async fn insert_visual(state: &VisualState, visual: NewVisualRecord) -> Result<Model> {
-        db_transaction!(contextual & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             let visual: ActiveModel = visual.into();
             let visual = visual.insert(txn).await?;
             AuditRecorder::append(
@@ -196,13 +196,14 @@ impl VisualRepo {
         .await
     }
 
+    /// 确保影像存在，否则返回未找到错误
     pub async fn ensure_exist(state: &VisualState, visual_id: VisualId) -> Result<()> {
         VisualMapper::ensure_exist(&state.db, visual_id)
             .timed(metrics_name!("db_query"))
             .await
     }
 
-    /// 批量查询影像哈希值是否存在.
+    /// 批量查询影像哈希值是否存在
     pub async fn exists_by_hash_batch(state: &VisualState, hashes: &[String]) -> Result<Vec<bool>> {
         let existing = VisualMapper::exists_by_hash_batch(&state.db, hashes)
             .timed(metrics_name!("db_query"))
@@ -210,21 +211,21 @@ impl VisualRepo {
         Ok(hashes.iter().map(|hash| existing.contains(hash)).collect())
     }
 
-    /// 查询单个影像哈希值是否存在.
+    /// 查询单个影像哈希值是否存在
     pub async fn exists_by_hash(state: &VisualState, hash: &str) -> Result<Option<VisualId>> {
         VisualMapper::exists_by_hash(&state.db, hash)
             .timed(metrics_name!("db_query"))
             .await
     }
 
-    /// 处理影像上传完成后的影像域缓存更新.
+    /// 处理影像上传完成后的影像域缓存更新
     pub async fn after_visual_upload(state: &VisualState) {
         Self::invalidate_visual_cursor_ids(state)
             .timed(metrics_name!("cache_invalidate"))
             .await;
     }
 
-    /// 通过file_id 获取对应的影像尺寸.
+    /// 通过file_id 获取对应的影像尺寸
     pub async fn get_visual_dimensions(
         state: &VisualState,
         file_id: &str,
@@ -249,7 +250,7 @@ impl VisualRepo {
             })
     }
 
-    /// 失效影像删除后受影响的影像和人物缓存.
+    /// 失效影像删除后受影响的影像和人物缓存
     pub async fn invalidate_deleted_visuals(state: &VisualState, visuals: &[VisualRecord]) {
         let visual_keys = visuals
             .iter()

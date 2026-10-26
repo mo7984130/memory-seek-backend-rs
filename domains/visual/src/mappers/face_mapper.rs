@@ -20,6 +20,7 @@ pub struct FaceMapper;
 
 // 创建
 impl FaceMapper {
+    /// 批量插入人脸记录并返回插入数量
     pub async fn inserts(db: &impl ConnectionTrait, new_faces: Vec<NewFaceRecord>) -> Result<u64> {
         Entity::insert_many(new_faces.into_iter().map(ActiveModel::from))
             .exec_without_returning(db)
@@ -30,6 +31,7 @@ impl FaceMapper {
 
 // 修改
 impl FaceMapper {
+    /// 更新单个人脸的人物归属，未命中时报错
     pub async fn update_person_id(
         db: &impl ConnectionTrait,
         person_id: Option<PersonId>,
@@ -41,7 +43,7 @@ impl FaceMapper {
             .exec(db)
             .await?
             .rows_affected
-            .no_zero_or_warn(
+            .nonzero_or_warn(
                 "update_person_id_fail",
                 "修改人脸的人物id失败",
                 AppError::bad_request("修改人脸人物失败"),
@@ -127,6 +129,7 @@ impl FaceMapper {
             )
     }
 
+    /// 按 ID 批量加行锁查询人脸
     pub async fn lock_by_ids(
         db: &impl ConnectionTrait,
         face_ids: impl IntoIterator<Item = &FaceId>,
@@ -158,9 +161,7 @@ impl FaceMapper {
             .to_ok()
     }
 
-    /// 查询某人物下 score 最高的人脸
-    ///
-    /// 若提供了 `exclude_face_ids`，则排除这些人脸的查询结果
+    /// 查询某人物下 score 最高的人脸；可排除指定人脸
     pub async fn query_top_score_by_person_id(
         db: &impl ConnectionTrait,
         person_id: PersonId,
@@ -182,6 +183,7 @@ impl FaceMapper {
     }
 
     // 查询人脸计算所需的照片id和file_id(仅图片, 视频无人脸)
+    /// 分批查询人脸计算所需的照片 ID 与 file_id；仅图片，视频不参与人脸计算
     pub async fn query_face_compute_visuals(
         db: &impl ConnectionTrait,
         full: bool,
@@ -224,7 +226,7 @@ impl FaceMapper {
             .map_err(Into::into)
     }
 
-    /// 查询照片里面的人脸.
+    /// 查询照片里面的人脸
     pub async fn query_by_visual_id(
         db: &impl ConnectionTrait,
         visual_id: VisualId,
@@ -240,6 +242,7 @@ impl FaceMapper {
             .to_ok()
     }
 
+    /// 查询所有未分配归属的人脸
     pub async fn lock_unassigned_faces(db: &impl ConnectionTrait) -> Result<Vec<FaceRecord>> {
         Entity::find()
             .filter(Column::PersonId.is_null())
@@ -251,6 +254,7 @@ impl FaceMapper {
             .to_ok()
     }
 
+    /// 游标分页查询含未分配人脸的照片 ID
     pub async fn query_unassigned_face_visual_ids_cursor_page(
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<VisualId>>,
@@ -290,6 +294,7 @@ impl FaceMapper {
     }
 
     // 游标查询人物的照片
+    /// 游标分页查询人物关联的照片 ID
     pub async fn query_person_visual_ids(
         db: &impl ConnectionTrait,
         person_id: PersonId,
@@ -329,6 +334,7 @@ impl FaceMapper {
         Ok(CursorPage::from_oversize(records, size))
     }
 
+    /// 按人物 ID 加行锁查询其人脸
     pub async fn lock_by_person_id(
         db: &impl ConnectionTrait,
         person_id: PersonId,
@@ -347,6 +353,7 @@ impl FaceMapper {
 
 // 删除
 impl FaceMapper {
+    /// 按 ID 批量删除人脸并返回删除数量
     pub async fn delete_by_ids(db: &impl ConnectionTrait, face_ids: &[FaceId]) -> Result<u64> {
         Entity::delete_many()
             .filter(Column::Id.is_in(face_ids.iter().copied()))

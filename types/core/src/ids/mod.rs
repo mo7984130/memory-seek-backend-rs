@@ -38,6 +38,7 @@ pub struct ParseIdError(pub &'static str);
 
 #[cfg(feature = "orm")]
 impl From<ParseIdError> for AppError {
+    /// 将 ID 解析错误转换为 400 响应
     fn from(e: ParseIdError) -> Self {
         AppError::bad_request(e.0)
     }

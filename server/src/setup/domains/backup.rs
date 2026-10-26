@@ -17,7 +17,7 @@ pub struct BackupRuntime {
     pub state: Arc<backup::BackupState>,
 }
 
-/// 注册备份管理接口。
+/// 注册备份管理接口
 #[common_macros::register_async(
     slice = crate::setup::domains::APP_DOMAINS_FIRST,
     ty = crate::setup::InitFn,

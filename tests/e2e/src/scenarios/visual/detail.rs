@@ -1,28 +1,32 @@
 //! 影像详情:`GET /visual/visual/{visual_id}`。
 
-use common_web::{ErrR, SucR};
-use memseek_test::{
-    TaskIndex,
-    ctxlibs::http_client::{HttpError, reqwest},
-    register_scenario,
-    scenario::Scenario,
-};
+use memory_seek_api::api;
+use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 use sea_orm::EntityTrait;
 use types_visual::dto::visual::VisualView;
 use types_visual::visual as visual_entity;
 use types_visual::visual::VisualId;
 
 use crate::context::Context;
+use crate::error::{E2eError, status};
 
 use super::{Session, seed_visual, session, token_matches};
 
 /// 详情前置:登录 + 定位一张种子影像。
-/// id 以 i64 保存, 便于 `Default`(强类型 ID 不实现 `Default`)。
-#[derive(Default)]
 pub struct DetailSetup {
     pub session: Session,
-    pub visual_id: i64,
+    pub visual_id: VisualId,
     pub file_id: String,
+}
+
+impl Default for DetailSetup {
+    fn default() -> Self {
+        Self {
+            session: Session::default(),
+            visual_id: VisualId(0),
+            file_id: String::new(),
+        }
+    }
 }
 
 /// 获取影像详情: 响应与库中记录一致, token 绑定当前浏览者。
@@ -32,9 +36,9 @@ pub struct GetVisualInfoScenario;
 impl Scenario for GetVisualInfoScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = SucR<VisualView>;
+    type Output = VisualView;
 
     type Setup = DetailSetup;
 
@@ -43,27 +47,17 @@ impl Scenario for GetVisualInfoScenario {
         let visual = seed_visual(ctx, 1).await.ok_or_else(super::seed_missing)?;
         Ok(DetailSetup {
             session,
-            visual_id: visual.id.0,
+            visual_id: visual.id,
             file_id: visual.file_id,
         })
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(
-                reqwest::Method::GET,
-                &format!("/visual/visual/{}", setup.visual_id),
-            )
-            .header("Authorization", &setup.session.auth_header())
-            .send_checked()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        Ok(api::visual::get_visual_info(setup.session.client(), setup.visual_id).await?)
     }
 
     async fn validate(
@@ -72,14 +66,14 @@ impl Scenario for GetVisualInfoScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let Some(row) = visual_entity::Entity::find_by_id(VisualId(setup.visual_id))
+        let Some(row) = visual_entity::Entity::find_by_id(setup.visual_id)
             .one(&ctx.db)
             .await
             .unwrap()
         else {
             return Ok(false);
         };
-        let view = &output.data;
+        let view = output;
         let view_ok = view.id == row.id
             && view.user_id == row.user_id
             && view.name == row.name
@@ -87,9 +81,9 @@ impl Scenario for GetVisualInfoScenario {
             && view.width == row.width as u32
             && view.height == row.height as u32;
         let viewer = setup.session.user_id;
-        let tokens_ok = token_matches(view.thumbnail_token.as_ref(), &row.file_id, viewer)
-            && token_matches(view.preview_token.as_ref(), &row.file_id, viewer)
-            && token_matches(view.original_token.as_ref(), &row.file_id, viewer);
+        let tokens_ok = token_matches(&view.tokens.thumbnail, &row.file_id, viewer)
+            && token_matches(&view.tokens.preview, &row.file_id, viewer)
+            && token_matches(&view.tokens.original, &row.file_id, viewer);
         Ok(view_ok && tokens_ok)
     }
 }
@@ -103,29 +97,22 @@ pub struct GetVisualInfoNotFoundScenario;
 impl Scenario for GetVisualInfoNotFoundScenario {
     type Ctx = Context;
 
-    type Error = HttpError;
+    type Error = E2eError;
 
-    type Output = ErrR;
+    type Output = u16;
 
     type Setup = Session;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        session(ctx, task.index).await
+        Ok(session(ctx, task.index).await?)
     }
 
     async fn run(
-        ctx: &Self::Ctx,
+        _ctx: &Self::Ctx,
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        ctx.client
-            .request(reqwest::Method::GET, "/visual/visual/999999999")
-            .header("Authorization", &setup.auth_header())
-            .send()
-            .await?
-            .json::<Self::Output>()
-            .await
-            .map_err(HttpError::from)
+        status(api::visual::get_visual_info(setup.client(), VisualId(999_999_999)).await)
     }
 
     async fn validate(
@@ -134,7 +121,7 @@ impl Scenario for GetVisualInfoNotFoundScenario {
         _setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.code == 400)
+        Ok(*output == 400)
     }
 }
 

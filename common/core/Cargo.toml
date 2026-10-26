@@ -1,6 +1,6 @@
 [package]
 name = "common-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "公共基础能力: 统一错误、时间、扩展 trait、通用值类型与可选 ID 生成"
 
@@ -11,6 +11,8 @@ axum = ["dep:axum"]
 tokio = ["dep:tokio"]
 multi-cache = ["dep:multi-level-cache"]
 id-gen = ["dep:snowflaked"]
+sea-orm = ["dep:sea-orm"]
+redis = ["dep:redis", "dep:deadpool-redis"]
 
 [dependencies]
 serde.workspace = true
@@ -19,10 +21,11 @@ thiserror.workspace = true
 chrono.workspace = true
 tracing.workspace = true
 
-# `error` 的 From impl 受孤儿规则约束,必须与错误类型同 crate
-sea-orm.workspace = true
-redis.workspace = true
-deadpool-redis.workspace = true
+# `error` 的 From impl 受孤儿规则约束,必须与错误类型同 crate,
+# 故 sea-orm / redis 的转换 impl 只能留在这里; 依赖按 feature 可选。
+sea-orm = { workspace = true, optional = true }
+redis = { workspace = true, optional = true }
+deadpool-redis = { workspace = true, optional = true }
 
 tokio = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
@@ -33,3 +36,5 @@ snowflaked = { workspace = true, optional = true }
 [dev-dependencies]
 # `snowflake` 模块在测试构建下也会编译(见 lib.rs 的 cfg), 单测需要此依赖
 snowflaked.workspace = true
+# `local_store` 单测用临时目录
+tempfile.workspace = true

@@ -86,7 +86,7 @@ impl TableMetadata {
         Ok(tables)
     }
 
-    /// 获取 PostgreSQL 主版本，用于二进制 COPY 归档兼容性校验。
+    /// 获取 PostgreSQL 主版本，用于二进制 COPY 归档兼容性校验
     pub async fn postgres_major_version(db: &impl DbConn) -> Result<u32, sea_orm::DbErr> {
         let stmt = Statement::from_string(
             sea_orm::DatabaseBackend::Postgres,

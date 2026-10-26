@@ -1,3 +1,4 @@
+#[cfg(feature = "axum")]
 use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 
@@ -5,7 +6,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// 所有接口使用此结构体作为响应载体，JSON 序列化后字段名为驼峰命名。
 /// 成功时包含 `code` 和 `data`，失败时包含 `code` 和 `msg`。
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "ts", ts(export, export_to = "common/"))]
@@ -34,6 +35,7 @@ impl<T> R<T>
 where
     T: Serialize,
 {
+    /// 构造成功响应；`code` 固定为 200
     pub fn ok(data: T) -> Self {
         Self {
             code: 200,
@@ -44,6 +46,7 @@ where
 }
 
 impl R<()> {
+    /// 构造错误响应；`code` 为 HTTP 状态码
     pub fn err(code: u16, msg: &str) -> Self {
         Self {
             code,
@@ -53,10 +56,12 @@ impl R<()> {
     }
 }
 
+#[cfg(feature = "axum")]
 impl<T> IntoResponse for R<T>
 where
     T: Serialize,
 {
+    /// 按 `code` 转为 HTTP 状态码，非法值回退为 500
     fn into_response(self) -> axum::response::Response {
         let status = StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         (status, Json(self)).into_response()

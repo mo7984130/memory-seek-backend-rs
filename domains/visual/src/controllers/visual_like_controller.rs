@@ -21,6 +21,7 @@ pub struct VisualLikeController;
 impl ControllerRouter for VisualLikeController {
     type State = VisualState;
 
+    /// 影像点赞模块的受保护路由
     fn protected_routes() -> Router<Arc<Self::State>> {
         Router::new()
             .route(
@@ -30,6 +31,7 @@ impl ControllerRouter for VisualLikeController {
             .route("/visual/liked", get(Self::get_user_liked_visuals))
     }
 
+    /// 影像点赞模块无公开路由
     fn public_routes() -> Router<Arc<Self::State>> {
         Router::new()
     }
@@ -37,7 +39,7 @@ impl ControllerRouter for VisualLikeController {
 
 // 创建
 impl VisualLikeController {
-    /// 为影像点赞.
+    /// 为影像点赞
     async fn like(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -51,7 +53,7 @@ impl VisualLikeController {
 
 // 删除
 impl VisualLikeController {
-    /// 取消影像点赞.
+    /// 取消影像点赞
     async fn unlike(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -65,7 +67,7 @@ impl VisualLikeController {
 
 // 查询
 impl VisualLikeController {
-    /// 返回当前用户点赞过的影像分页.
+    /// 返回当前用户点赞过的影像分页
     async fn get_user_liked_visuals(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,

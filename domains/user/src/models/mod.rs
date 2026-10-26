@@ -1,11 +1,9 @@
-use common_core::Result;
 use sea_orm::FromQueryResult;
 use serde::{Deserialize, Serialize};
 use types_identity::auth::user::UserId;
 use types_identity::user::UserBriefView;
-use types_visual_token::VisualToken;
+use types_visual_token::{VisualToken, VisualTokenStr};
 
-/// 用户信息数据库查询结果（后端内部使用）
 #[derive(Serialize, FromQueryResult, Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserBriefRow {
@@ -15,11 +13,12 @@ pub struct UserBriefRow {
 }
 
 impl UserBriefRow {
-    /// 转换为 API 响应类型，对头像文件 ID 进行加密（内嵌浏览者身份）
-    pub fn into_brief_view(self, viewer: UserId) -> Result<UserBriefView> {
+    /// 转换为用户摘要视图，头像 token 按浏览者签发
+    pub fn into_brief_view(self, viewer: UserId) -> common_core::ContextualResult<UserBriefView> {
         let avatar_token = self
             .avatar_file_id
-            .map(|file_id| VisualToken::image_thumbnail(viewer, file_id).into());
+            .map(|file_id| VisualTokenStr::encrypt(&VisualToken::image_thumbnail(viewer, file_id)))
+            .transpose()?;
 
         Ok(UserBriefView {
             user_id: self.user_id,

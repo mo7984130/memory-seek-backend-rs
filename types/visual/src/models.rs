@@ -58,29 +58,29 @@ crate::validated_newtype!(
     "人物名称长度不能超过64个字符"
 );
 
-crate::in_dto!(UploadVisualParam, "visual/", serialize, docs = "上传影像请求参数（文件的二进制数据由 multipart 单独传递）"; {
+crate::dto!(UploadVisualParam, "visual/", docs = "上传影像请求参数（文件的二进制数据由 multipart 单独传递）"; {
     /// 指定创建时间（可选，仅管理员可设置，RFC3339 格式）
     pub created_at: Option<DateTime>,
 });
 
-crate::in_dto!(ExistsByHashBatchParam, "visual/", serialize; {
+crate::dto!(ExistsByHashBatchParam, "visual/"; {
     /// 哈希值列表，数量限制 1~128
     #[validate(length(min = 1, max = 128, message = "哈希值数量在 1 到 128 之间"))]
     pub hashes: Vec<String>,
 });
 
-crate::in_dto!(DeleteVisualsParam, "visual/", serialize; {
+crate::dto!(DeleteVisualsParam, "visual/"; {
     /// 影像 ID 列表
     #[validate(nested)]
     pub visual_ids: VisualIds,
 });
 
-/// 返回点赞影像分页的默认页大小.
+/// 返回点赞影像分页的默认页大小
 fn liked_visuals_default_size() -> u64 {
     32
 }
 
-crate::in_dto!(LikedVisualsQuery, "visual/"; {
+crate::dto!(LikedVisualsQuery, "visual/"; {
     /// 分页游标（可选，首次查询不传）
     #[cfg_attr(feature = "ts", ts(type = "string | null"))]
     pub cursor: Option<TimeIdCursor<VisualId>>,

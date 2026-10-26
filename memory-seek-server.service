@@ -1,13 +1,14 @@
 # ── Memory Seek 后端服务 systemd 单元示例 ──
 #
 # 前置依赖(裸机/systemd 部署):
-#   - 视频转码需要宿主机已安装 ffmpeg(apt install ffmpeg), 与 config 的
+#   - 视频转码需要宿主机安装带 libsvtav1 的 ffmpeg, 与 config 的
 #     visual.transcode.ffmpeg_path(默认 "ffmpeg", 取自 PATH)对应;
+#     apt 的 ffmpeg 不一定包含该编码器, 建议使用 BtbN 静态构建;
 #   - 容器部署则无需在宿主机安装, 运行镜像已内置(见 build/Dockerfile.runtime)。
 
 [Unit]
 Description=Memory Seek Backend Server
-After=network-online.target postgresql.service redis.service
+After=network-online.target postgresql.service redis-server.service
 Wants=network-online.target
 
 [Service]
@@ -20,7 +21,11 @@ WorkingDirectory=/opt/memory-seek
 Environment=RUST_LOG=info
 EnvironmentFile=/etc/memory-seek/memory-seek-server.env
 
-ExecStart=/usr/local/bin/memory-seek-server -c /etc/memory-seek/config.yaml
+# 二进制与动态库同目录部署:
+#   /opt/memory-seek/memory-seek-server
+#   /opt/memory-seek/libs/libonnxruntime.so
+# 二进制自带 RUNPATH=$ORIGIN/libs
+ExecStart=/opt/memory-seek/memory-seek-server -c /etc/memory-seek/config.yaml
 
 # ── CPU 限制：最多用 90%，留 10% 给系统和 SSH ──
 CPUQuota=90%

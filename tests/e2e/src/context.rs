@@ -1,17 +1,24 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use base64::Engine;
 use deadpool_redis::redis::AsyncCommands;
+use memory_seek_api::{ApiConfig, Client as ApiClient, MemoryStorage, Transport};
 use memseek_test::ctxlibs;
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 
 pub struct Context {
+    /// 基础设施用的框架 HTTP 客户端(MailHog 等直连;业务 API 请用 [`Self::api_client`])。
     pub client: ctxlibs::http_client::Client,
     pub db: DatabaseConnection,
     pub mailhog: ctxlibs::http_client::Client,
     pub redis: deadpool_redis::Pool,
     pub s3: oss::S3Client,
+    /// api-rs 客户端配置(产品 API 调用)。
+    pub api_config: ApiConfig,
+    /// api-rs 传输层(与基础设施 client 共享同一 reqwest 配置)。
+    pub transport: Arc<dyn Transport>,
 }
 
 pub use ctxlibs::http_client::{HttpError, reqwest};
@@ -71,6 +78,18 @@ struct MailHogContent {
 }
 
 impl Context {
+    /// 新建一个未登录的 api-rs 客户端(独立登录态)。
+    ///
+    /// 免鉴权接口(登录/注册/验证码/刷新)直接用;受保护接口需先登录并
+    /// 经 [`memory_seek_api::AuthStorage`] 写入登录态(见 `scenarios::user::session`)。
+    pub fn api_client(&self) -> ApiClient {
+        ApiClient::new(
+            self.api_config.clone(),
+            Arc::clone(&self.transport),
+            MemoryStorage::new(),
+        )
+    }
+
     fn mailhog_not_found(&self) -> HttpError {
         HttpError::status(
             reqwest::StatusCode::NOT_FOUND,

@@ -12,7 +12,7 @@ pub(crate) struct CollectionService;
 
 // 查询
 impl CollectionService {
-    /// 查询用户收藏夹.
+    /// 查询用户收藏夹
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn get_collection_list(
@@ -34,7 +34,7 @@ impl CollectionService {
 
 // 添加
 impl CollectionService {
-    /// 创建收藏夹.
+    /// 创建收藏夹
     #[common_macros::metered]
     #[tracing::instrument(skip_all, fields(user_id = %user_id))]
     pub async fn create_collection(
@@ -71,7 +71,7 @@ impl CollectionService {
 
 // 删除
 impl CollectionService {
-    /// 删除收藏夹.
+    /// 删除收藏夹
     #[common_macros::metered]
     #[tracing::instrument(
         skip_all,
@@ -94,11 +94,9 @@ impl CollectionService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "collection_cleanup",
-    owns = ["CollectionVisualMapper", "CollectionMapper"],
-    method = on_visual_delete,
 )]
 impl CollectionService {
-    /// 清理收藏夹影像 和 更新收藏夹计数.
+    /// 清理收藏夹影像 和 更新收藏夹计数
     async fn on_visual_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,

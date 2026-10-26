@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 初始化全局 token 加密器: 必须与 server 的 token_cipher 一致,
-    // 否则响应中的 avatar_token(VisualTokenStr)无法解密, 反序列化会失败
+    // 供 avatar 等场景对响应中的 token 做 .decrypt() 校验(反序列化本身无需解密)
     common_crypto::init_token_cipher(&common_crypto::TokenCipherConfig {
         key: cfg.token_cipher.key.clone(),
         salt: cfg.token_cipher.salt.clone(),
@@ -65,13 +65,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     redis_cfg.pool = Some(PoolConfig::new(16));
     let redis = redis_cfg.create_pool(Some(Runtime::Tokio1))?;
 
-    // 业务请求统一 5s 超时: 快速暴露慢接口与挂死场景
-    let client = Client::from_reqwest(
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .build()?,
-        cfg.base_url(),
-    )?;
+    // 业务请求统一 5s 超时: 快速暴露慢接口与挂死场景。
+    // 同一个 reqwest 客户端同时供基础设施 client 与 api-rs 传输层复用。
+    let http = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()?;
+    let client = Client::from_reqwest(http.clone(), cfg.base_url())?;
 
     let ctx = Context {
         client,
@@ -79,6 +78,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         mailhog: Client::new(cfg.mailhog.url.clone())?,
         redis,
         s3: oss::S3Client::new(&cfg.s3.to_oss()),
+        api_config: memory_seek_api::ApiConfig::new(cfg.base_url()),
+        transport: std::sync::Arc::new(memory_seek_api::ReqwestTransport::with_client(http)),
     };
     // 前置准备: 灌入种子数据(先清空再灌入)。
     // 外部被测目标、或连续压测复用同一份种子时用 `run.prepare=false` 跳过

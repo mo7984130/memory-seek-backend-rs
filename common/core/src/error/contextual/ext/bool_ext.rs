@@ -1,47 +1,53 @@
-use crate::error::{AppError, ContextualError, contextual::ContextualResult};
+use std::borrow::Cow;
+
+use crate::error::{ContextualError, ContextualResult};
 
 /// 为 `bool` 提供条件校验便捷方法
 pub trait BoolExt {
-    fn true_or_warn(
+    /// 为真返回 `Ok`，否则返回 warn 级上下文错误
+    fn true_or_warn<E>(
         self,
         reason: &'static str,
-        context: &'static str,
-        app_err: AppError,
-    ) -> ContextualResult<()>;
+        context: impl Into<Cow<'static, str>>,
+        payload: E,
+    ) -> ContextualResult<(), E>;
 
-    fn false_or_warn(
+    /// 为假返回 `Ok`，否则返回 warn 级上下文错误
+    fn false_or_warn<E>(
         self,
         reason: &'static str,
-        context: &'static str,
-        app_err: AppError,
-    ) -> ContextualResult<()>;
+        context: impl Into<Cow<'static, str>>,
+        payload: E,
+    ) -> ContextualResult<(), E>;
 }
 
 impl BoolExt for bool {
-    fn true_or_warn(
+    /// 为真返回 `Ok`，否则返回 warn 级上下文错误
+    fn true_or_warn<E>(
         self,
         reason: &'static str,
-        context: &'static str,
-        app_err: AppError,
-    ) -> ContextualResult<()> {
+        context: impl Into<Cow<'static, str>>,
+        payload: E,
+    ) -> ContextualResult<(), E> {
         if self {
             Ok(())
         } else {
             Err(ContextualError::warn_without_source(
-                reason, context, app_err,
+                reason, context, payload,
             ))
         }
     }
 
-    fn false_or_warn(
+    /// 为假返回 `Ok`，否则返回 warn 级上下文错误
+    fn false_or_warn<E>(
         self,
         reason: &'static str,
-        context: &'static str,
-        app_err: AppError,
-    ) -> ContextualResult<()> {
+        context: impl Into<Cow<'static, str>>,
+        payload: E,
+    ) -> ContextualResult<(), E> {
         if self {
             Err(ContextualError::warn_without_source(
-                reason, context, app_err,
+                reason, context, payload,
             ))
         } else {
             Ok(())
@@ -52,9 +58,10 @@ impl BoolExt for bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::AppError;
 
     #[test]
-    fn true_ok_or_warn_returns_ok() {
+    fn true_true_or_warn_returns_ok() {
         let result = true.true_or_warn(
             "test_reason",
             "test_context",
@@ -64,7 +71,7 @@ mod tests {
     }
 
     #[test]
-    fn false_ok_or_warn_returns_err() {
+    fn false_true_or_warn_returns_err() {
         let result = false.true_or_warn(
             "test_reason",
             "test_context",

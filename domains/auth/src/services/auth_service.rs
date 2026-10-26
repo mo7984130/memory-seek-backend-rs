@@ -11,13 +11,12 @@ use common_core::error::{AppError, ContextualError};
 use common_core::time::{after, now};
 use common_core::{ext::ResultInspectErrAsync, ext::ToOk};
 use common_crypto::{HashAlgorithm, rand_utils};
+use common_db::db_transaction;
 use common_metrics::MetricsTimerExt;
 use common_metrics::metrics_name;
 use common_redis::RedisExt;
 use constants::RedisKeys;
 use constants::redis_keys;
-use std::sync::LazyLock;
-use tokio::sync::Semaphore;
 use tokio::task::{self, spawn_blocking};
 use types_identity::auth::user::UserId;
 use types_identity::auth::{
@@ -25,34 +24,7 @@ use types_identity::auth::{
 };
 use types_identity::user::UserInfo;
 
-/// 密码验证并发信号量，限制同时进行的密码验证数量，防止 CPU 密集型操作抢占 runtime 资源
-static PASSWORD_VERIFY_SEM: LazyLock<Semaphore> = LazyLock::new(|| {
-    Semaphore::new(
-        std::thread::available_parallelism()
-            .expect("获取可用并行数错误")
-            .into(),
-    )
-});
-
-/// 邮件发送并发信号量，限制同时发送的邮件数量，防止 SMTP 连接耗尽
-static EMAIL_SEND_SEM: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(16));
-
-/// 用户登录
-///
-/// 通过用户名或邮箱查找用户，验证密码后签发 access_token 和 refresh_token。
-/// 密码验证使用信号量限制并发数，避免 CPU 密集型操作抢占 runtime 资源。
-/// 若用户密码哈希算法过时，登录成功后会异步迁移至最新算法。
-///
-/// # 参数
-/// - `state`: 认证服务状态，包含数据库连接、Redis 连接池和 token 加密器
-/// - `req`: 登录请求，包含账号（用户名或邮箱）和密码
-///
-/// # 返回
-/// 返回登录成功的用户信息，包含 access_token、refresh_token 及其过期时间
-///
-/// # 错误
-/// - `AppError::bad_request`: 账号不存在或密码错误
-/// - `AppError::InternalServerError`: 数据库查询/更新失败或 Redis 操作失败
+/// 用户登录，校验账号密码后签发 access_token 和 refresh_token；密码校验经信号量限流，哈希算法过时会异步迁移
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -87,7 +59,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     // 校验密码
     // 使用信号量限制同时校验的数量
     let old_alg = {
-        let _permit = PASSWORD_VERIFY_SEM
+        let _permit = common_crypto::password_verify_semaphore()
             .acquire()
             .timed(metrics_name!("acquire_permit"))
             .await
@@ -100,10 +72,9 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         })
         .timed(metrics_name!("verify_password"))
         .await
-        .into_contextual()?;
-        let verify_result = result?;
+        .into_contextual()??;
 
-        if !verify_result.0 {
+        if !result.0 {
             return Err(ContextualError::warn_without_source(
                 "invalid_password",
                 "用户登录时密码错误",
@@ -112,11 +83,10 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
             .emit());
         }
 
-        verify_result.1
+        result.1
     };
 
-    // 检查是否需要迁移哈希算法（xxx -> argon2id）
-    // 登录成功后异步迁移，不影响登录响应时间
+    // 检查是否需要迁移哈希算法
     if constants::PasswordHasher != old_alg {
         let password_for_migration = req.password.clone();
         let password_result =
@@ -144,26 +114,33 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         .await
         .into_contextual()?;
 
-    let updated_user = AuthMapper::update_refresh_token(
-        &state.db,
-        user.id,
-        new_refresh_token.clone(),
-        new_refresh_token_expires_at,
-    )
-    .timed(metrics_name!("db_update"))
-    .await
-    .inspect_err_async(|_| async {
-        state
-            .redis
-            .del(RedisKeys::auth::user_access_token(user.id))
-            .await
-            .into_contextual()
-            .emit_if_err();
+    let user = db_transaction!(&state.db, |txn| {
+        let user = AuthMapper::update_refresh_token(
+            txn,
+            user.id,
+            new_refresh_token.clone(),
+            new_refresh_token_expires_at,
+        )
+        .timed(metrics_name!("db_update"))
+        .await
+        .inspect_err_async(|_| async {
+            state
+                .redis
+                .del(RedisKeys::auth::user_access_token(user.id))
+                .await
+                .into_contextual()
+                .emit_if_err();
+        })
+        .await?;
+
+        AuditRecorder::append(txn, AuditEvent::new("auth.user_login").with_actor(user.id)).await?;
+
+        Ok(user)
     })
     .await?;
 
     // 返回 LoginResult（包含用户信息和令牌）
-    let user_info = UserInfo::from_with_token(updated_user);
+    let user_info = UserInfo::from_with_token(user)?;
     Ok(LoginResponse {
         user: user_info,
         access_token: new_access_token,
@@ -173,21 +150,7 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     })
 }
 
-/// 用户注册
-///
-/// 校验邮箱验证码和邀请码后创建新用户。密码通过 `spawn_blocking` 在独立线程中哈希，
-/// 避免阻塞 async runtime。注册成功后删除已使用的邮箱验证码防止重放。
-///
-/// # 参数
-/// - `state`: 认证服务状态，包含数据库连接和 Redis 连接池
-/// - `req`: 注册请求，包含用户名、邮箱、密码、昵称、邀请码和邮箱验证码
-///
-/// # 返回
-/// 返回注册成功的用户信息（不含 token，需单独登录获取）
-///
-/// # 错误
-/// - `AppError::bad_request`: 邮箱验证码错误、邀请码无效、用户名或邮箱已被占用
-/// - `AppError::InternalServerError`: 数据库插入失败或其他内部错误
+/// 用户注册，校验邮箱验证码与邀请码后创建用户；成功后删除已用验证码防止重放
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -226,7 +189,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     };
 
     // 写入用户
-    let user_model = common_db::db_transaction!(scoped & state.db, |txn| {
+    let user_model = common_db::db_transaction!(&state.db, |txn| {
         let user_model = AuthMapper::insert(txn, insert_param)
             .timed(metrics_name!("db_insert"))
             .await?;
@@ -254,20 +217,7 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     Ok(UserInfo::from(user_model))
 }
 
-/// 发送邮箱验证码
-///
-/// 生成 6 位大写字母+数字验证码，存入 Redis（有效期 10 分钟），
-/// 然后通过邮件客户端发送至目标邮箱。使用信号量限制并发邮件发送数量。
-///
-/// # 参数
-/// - `state`: 认证服务状态，包含 Redis 连接池和邮件客户端
-/// - `req`: 请求，包含目标邮箱地址
-///
-/// # 返回
-/// 返回 `()` 表示发送成功
-///
-/// # 错误
-/// - `AppError::InternalServerError`: Redis 操作失败或邮件发送失败
+/// 生成 6 位验证码写入 Redis 并发送到目标邮箱
 #[common_macros::metered]
 #[tracing::instrument(
     skip_all,
@@ -292,44 +242,22 @@ pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Re
         .into_contextual()?;
 
     // 发送邮件
-    {
-        let _permit = EMAIL_SEND_SEM
-            .acquire()
-            .timed(metrics_name!("acquire_permit"))
-            .await
-            .into_contextual()?;
+    let html_body = format!(
+        "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 {} 分钟。</p>",
+        code,
+        EMAIL_CODE_EXPIRE.as_secs() / 60
+    );
 
-        let html_body = format!(
-            "<p>您的验证码为: <strong>{}</strong></p><p>该验证码有效期为 {} 分钟。</p>",
-            code,
-            EMAIL_CODE_EXPIRE.as_secs() / 60
-        );
-
-        state
-            .email_client
-            .send_message(&req.email, "寻忆邮箱验证码", html_body)
-            .timed(metrics_name!("send_message"))
-            .await?;
-    }
+    state
+        .email_client
+        .send_message(&req.email, "寻忆邮箱验证码", html_body)
+        .timed(metrics_name!("send_message"))
+        .await?;
 
     Ok(())
 }
 
-/// 刷新 access_token
-///
-/// 验证用户的 refresh_token 有效性后，生成新的 access_token 并存入 Redis。
-///
-/// # 参数
-/// - `state`: 认证服务状态，包含数据库连接和 Redis 连接池
-/// - `user_id`: 用户 ID
-/// - `refresh_token`: 当前的 refresh_token 字符串
-///
-/// # 返回
-/// 返回新的 access_token 及其过期时间
-///
-/// # 错误
-/// - `AppError::Unauthorized`: refresh_token 不存在、不匹配或已过期
-/// - `AppError::InternalServerError`: 数据库查询或 Redis 操作失败
+/// 校验 refresh_token 后签发新的 access_token 并写入 Redis
 #[common_macros::metered]
 #[tracing::instrument(skip_all, fields(user_id = %user_id))]
 pub async fn refresh_access_token(
@@ -362,6 +290,7 @@ pub async fn refresh_access_token(
 }
 
 // 校验邮箱验证码（大小写不敏感），从 Redis 中比对存储的验证码
+/// 校验邮箱验证码是否匹配，大小写不敏感
 async fn verify_email_verify_code(state: &AuthState, email: &str, code: &str) -> Result<()> {
     let stored_code = state
         .redis
@@ -385,6 +314,7 @@ async fn verify_email_verify_code(state: &AuthState, email: &str, code: &str) ->
 }
 
 // 校验邀请码（大小写不敏感），从 Redis 中查找邀请码对应的用户 ID
+/// 校验邀请码（大小写不敏感）并返回其绑定的用户 ID
 async fn verify_inviter_code(state: &AuthState, inviter_code: &str) -> Result<UserId> {
     // 统一转大写后查找 Redis key
     let code_upper = inviter_code.to_uppercase();
@@ -406,6 +336,7 @@ async fn verify_inviter_code(state: &AuthState, inviter_code: &str) -> Result<Us
 }
 
 // 校验用户的 refresh_token：查询数据库验证匹配性和有效期，不匹配或过期返回 Unauthorized
+/// 校验 refresh_token 与数据库记录一致且未过期
 async fn verify_refresh_token(
     state: &AuthState,
     user_id: UserId,

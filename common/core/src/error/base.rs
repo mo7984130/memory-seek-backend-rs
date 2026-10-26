@@ -1,17 +1,17 @@
-use crate::error::AppError;
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::panic::Location;
 use tracing::Level;
 
+/// 记录错误日志并原样返回传入的载荷；标注调用位置
 #[track_caller]
-pub(crate) fn log_and_map(
+pub(crate) fn log<E>(
     level: Level,
     reason: &'static str,
     context: Cow<'static, str>,
-    err: Option<&dyn Debug>,
-    app_err: AppError,
-) -> AppError {
+    err: Option<&(dyn Debug + Send + Sync)>,
+    payload: E,
+) -> E {
     let loc = Location::caller();
     macro_rules! emit {
         ($lvl:ident) => {
@@ -43,5 +43,5 @@ pub(crate) fn log_and_map(
         Level::TRACE => emit!(trace),
     }
 
-    app_err
+    payload
 }

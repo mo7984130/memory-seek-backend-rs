@@ -1,17 +1,18 @@
-use crate::error::{ContextualError, ContextualResult};
+use crate::error::{AppError, ContextualError, ContextualResult};
 
-pub trait IntoContextualExt<T> {
-    /// 将基础错误延迟转换为上下文错误.
-    fn into_contextual(self) -> ContextualResult<T>;
+pub trait IntoContextualExt<T, E = AppError> {
+    /// 将基础错误延迟转换为上下文错误
+    fn into_contextual(self) -> ContextualResult<T, E>;
 }
 
-impl<T, E> IntoContextualExt<T> for std::result::Result<T, E>
+impl<T, Err, E> IntoContextualExt<T, E> for std::result::Result<T, Err>
 where
-    ContextualError: From<E>,
+    ContextualError<E>: From<Err>,
 {
+    /// 将基础错误延迟转换为上下文错误
     #[inline]
-    fn into_contextual(self) -> ContextualResult<T> {
-        self.map_err(ContextualError::from)
+    fn into_contextual(self) -> ContextualResult<T, E> {
+        self.map_err(ContextualError::<E>::from)
     }
 }
 
@@ -19,12 +20,13 @@ where
 ///
 /// 适用于补偿或清理操作失败时只需记录的场景。
 pub trait ContextualResultExt<T> {
+    /// 记录错误上下文并丢弃错误结果
     #[track_caller]
-    /// 记录错误上下文并丢弃错误结果.
     fn emit_if_err(self);
 }
 
-impl<T> ContextualResultExt<T> for ContextualResult<T> {
+impl<T, E> ContextualResultExt<T> for ContextualResult<T, E> {
+    /// 记录错误上下文并丢弃错误结果
     #[inline]
     #[track_caller]
     fn emit_if_err(self) {

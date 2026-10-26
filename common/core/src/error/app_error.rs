@@ -37,33 +37,21 @@ pub enum AppError {
 
 impl AppError {
     /// 创建请求参数错误
-    ///
-    /// # 参数
-    /// - `msg`: 错误描述信息，支持 `&str` 或 `String`
     pub fn bad_request(msg: impl Into<Cow<'static, str>>) -> Self {
         Self::BadRequest(msg.into())
     }
 
     /// 创建资源不存在错误
-    ///
-    /// # 参数
-    /// - `msg`: 错误描述信息，支持 `&str` 或 `String`
     pub fn not_found(msg: impl Into<Cow<'static, str>>) -> Self {
         Self::NotFound(msg.into())
     }
 
     /// 创建权限不足错误
-    ///
-    /// # 参数
-    /// - `msg`: 错误描述信息，支持 `&str` 或 `String`
     pub fn forbidden(msg: impl Into<Cow<'static, str>>) -> Self {
         Self::Forbidden(msg.into())
     }
 
     /// 创建冲突错误
-    ///
-    /// # 参数
-    /// - `msg`: 错误描述信息，支持 `&str` 或 `String`
     pub fn conflict(msg: impl Into<Cow<'static, str>>) -> Self {
         Self::Conflict(msg.into())
     }

@@ -23,7 +23,7 @@ pub struct FaceRepo;
 
 // 创建
 impl FaceRepo {
-    /// 批量插入人脸.
+    /// 批量插入人脸
     pub async fn insert_faces(state: &VisualState, faces: Vec<NewFaceRecord>) -> Result<()> {
         FaceMapper::inserts(&state.db, faces)
             .timed(metrics_name!("db_insert"))
@@ -35,13 +35,14 @@ impl FaceRepo {
 
 // 修改
 impl FaceRepo {
+    /// 在事务内修改人脸归属，并维护新旧人物的质心、权重与封面
     pub async fn change_face_belonging(
         state: &VisualState,
         face_id: FaceId,
         person_id: Option<PersonId>,
         user_id: UserId,
     ) -> Result<()> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 锁定人脸
             let face = FaceMapper::lock_by_id(txn, face_id).await?;
             // 归属未变化, 直接返回
@@ -110,6 +111,7 @@ impl FaceRepo {
 
 // 查询
 impl FaceRepo {
+    /// 分批查询人脸计算所需的照片 ID 与 file_id
     pub async fn query_face_compute_visuals(
         state: &VisualState,
         full: bool,
@@ -142,14 +144,14 @@ impl FaceRepo {
         Ok((faces, names))
     }
 
-    /// 查询未分配人脸的人脸记录.
+    /// 查询未分配人脸的人脸记录
     pub async fn lock_unassigned_faces(state: &VisualState) -> Result<Vec<FaceRecord>> {
         FaceMapper::lock_unassigned_faces(&state.db)
             .timed(metrics_name!("query_unassigned_faces"))
             .await
     }
 
-    /// 游标查询包含未分配人脸的照片 ID.
+    /// 游标查询包含未分配人脸的照片 ID
     pub async fn query_unassigned_face_visual_ids(
         state: &VisualState,
         param: &UnassignedFaceVisualCursorParam,
@@ -163,7 +165,7 @@ impl FaceRepo {
         .await
     }
 
-    /// 查询人物关联的照片 ID.
+    /// 查询人物关联的照片 ID
     pub async fn query_person_visual_ids(
         state: &VisualState,
         person_id: PersonId,
@@ -178,12 +180,13 @@ impl FaceRepo {
 // 删除
 impl FaceRepo {
     // 删除人脸
+    /// 在事务内删除无归属的人脸；有归属的人脸不可删除
     pub async fn delete_faces(
         state: &VisualState,
         face_ids: Vec<FaceId>,
         user_id: UserId,
     ) -> Result<u64> {
-        db_transaction!(scoped & state.db, |txn| {
+        db_transaction!(&state.db, |txn| {
             // 行锁读取人脸
             let faces = FaceMapper::lock_by_ids(txn, &face_ids).await?;
 
@@ -217,10 +220,11 @@ impl FaceRepo {
 }
 
 impl FaceRepo {
+    /// 备份人脸与人物表后清空两表（重置自增）
     pub async fn backup_and_truncate(state: &VisualState) -> Result<()> {
         Self::backup_face_tables(state).await?;
 
-        common_db::db_transaction!(scoped & state.db, |txn| {
+        common_db::db_transaction!(&state.db, |txn| {
             txn.execute_raw(Statement::from_string(
                 DbBackend::Postgres,
                 format!(
@@ -245,6 +249,7 @@ impl FaceRepo {
         Ok(())
     }
 
+    /// 备份人脸表与人物表
     pub async fn backup_face_tables(state: &VisualState) -> Result<()> {
         use sea_orm::EntityName;
         backup::BackupService::backup_tables(

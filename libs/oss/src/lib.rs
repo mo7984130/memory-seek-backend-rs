@@ -16,6 +16,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::Arc;
 
 static CHUNK_SIZE: usize = 256;
@@ -44,14 +45,22 @@ pub struct S3Config {
     pub force_path_style: bool,
 }
 
+/// 流式下载响应: 状态码、范围信息与字节流
+pub struct DownloadStream {
+    /// 对象存储返回的状态码(200 全量 / 206 部分内容 / 416 范围越界)
+    pub status: u16,
+    /// 对象元数据中的 `Content-Type`
+    pub content_type: Option<String>,
+    /// `Content-Range` 响应头(仅 206 / 416 时存在)
+    pub content_range: Option<String>,
+    /// 本次响应体的字节数
+    pub content_length: Option<u64>,
+    /// 响应体字节流
+    pub stream: Pin<Box<dyn Stream<Item = Result<Bytes, OssError>> + Send>>,
+}
+
 impl S3Client {
-    /// 根据配置创建 S3 客户端
-    ///
-    /// # 参数
-    /// - `s3_config`: S3 连接配置，包含端点、凭证、区域、桶名等
-    ///
-    /// # 返回
-    /// 初始化完成的 `S3Client` 实例
+    /// 根据配置创建 S3 客户端；凭证或桶初始化失败时 panic
     pub fn new(s3_config: &S3Config) -> Self {
         let region = Region::Custom {
             region: s3_config.region.clone(),
@@ -94,17 +103,6 @@ impl S3Client {
     }
 
     /// 上传文件到 OSS
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    /// - `data`: 文件内容（实现 `AsRef<[u8]>` 的类型）
-    /// - `content_type`: MIME 类型，如 "image/jpeg"
-    ///
-    /// # 返回
-    /// 上传成功返回 `()`
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 存储操作失败
     pub async fn upload(
         &self,
         key: &str,
@@ -121,10 +119,7 @@ impl S3Client {
         .await
     }
 
-    /// 以流式方式上传本地文件到 OSS。
-    ///
-    /// 小文件由底层实现直接上传，大文件自动使用 multipart 上传，避免将整个文件读入内存。
-    /// 429 限流重试时会重新打开文件，从文件开头重新上传。
+    /// 以流式方式上传本地文件到 OSS；大文件自动走 multipart,429 重试时重新打开文件从头上传
     pub async fn upload_file(
         &self,
         key: &str,
@@ -148,15 +143,6 @@ impl S3Client {
     }
 
     /// 删除单个文件
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    ///
-    /// # 返回
-    /// 删除成功返回 `()`
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 删除操作失败
     pub async fn delete(&self, key: &str) -> Result<ResponseData, OssError> {
         retry_429("delete", key, || async {
             self.inner
@@ -168,16 +154,7 @@ impl S3Client {
         .await
     }
 
-    /// 批量删除文件，分片并发执行，遇错即停
-    ///
-    /// # 参数
-    /// - `keys`: 待删除的文件路径/键名列表
-    ///
-    /// # 返回
-    /// 全部删除成功返回 `()`
-    ///
-    /// # 错误
-    /// - `OssError`: 删除文件失败
+    /// 批量删除文件；分片并发执行,遇错即停
     pub async fn delete_batch(&self, keys: Vec<impl AsRef<str>>) -> Result<(), OssError> {
         async {
             for concurrent_chunks in keys.chunks(CHUNK_SIZE * CONCURRENCY) {
@@ -206,49 +183,22 @@ impl S3Client {
         .await
     }
 
-    /// 获取对象存储端点(创建时的 `endpoint` 配置值).
+    /// 获取对象存储端点(创建时的 `endpoint` 配置值)
     pub fn endpoint(&self) -> &str {
         &self.inner.endpoint
     }
 
     /// 获取文件的公开访问 URL
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    ///
-    /// # 返回
-    /// 拼接公开域名后的完整 URL
     pub fn get_url(&self, key: &str) -> String {
         format!("{}/{}", self.inner.public_url, key.trim_start_matches('/'))
     }
 
-    /// 获取文件的签名 URL（无图片处理参数）
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    /// - `expires`: 签名有效期
-    ///
-    /// # 返回
-    /// 带签名的临时访问 URL
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 签名生成失败
+    /// 获取文件的签名 URL(无图片处理参数)
     pub async fn get_signed_url(&self, key: &str, expires: Duration) -> Result<String, OssError> {
         self.get_signed_url_with_params(key, expires, None).await
     }
 
     /// 获取带图片处理参数的签名 URL
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    /// - `expires`: 签名有效期
-    /// - `process`: OSS 图片处理参数，如 "image/resize,w_300"，为 `None` 时不附加处理参数
-    ///
-    /// # 返回
-    /// 带签名和图片处理参数的临时访问 URL
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 签名生成失败
     pub async fn get_signed_url_with_params(
         &self,
         key: &str,
@@ -284,15 +234,6 @@ impl S3Client {
     }
 
     /// 下载文件
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    ///
-    /// # 返回
-    /// 文件内容的 `Bytes`，可直接用于 HTTP 响应
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 下载操作失败
     pub async fn download(&self, key: &str) -> Result<Bytes, OssError> {
         async {
             let response_data = retry_429("get", key, || async {
@@ -309,19 +250,7 @@ impl S3Client {
         .await
     }
 
-    /// 判断对象是否存在。
-    ///
-    /// 通过 list(前缀 = key) 判定, 而非 GET / HEAD: 对象不存在时 list 仍返回
-    /// 成功(空结果), 不会触发底层 rust-s3 对 404 的重试与告警。
-    ///
-    /// # 参数
-    /// - `key`: 文件路径/键名
-    ///
-    /// # 返回
-    /// 对象存在返回 `true`, 不存在返回 `false`
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 列举操作失败
+    /// 判断对象是否存在；以 list(前缀 = key) 判定,不触发底层对 404 的重试与告警
     pub async fn exists(&self, key: &str) -> Result<bool, OssError> {
         #[cfg(feature = "metrics")]
         let _timer = common_metrics::MetricsTimer::start(metric_name("exists", "duration_seconds"));
@@ -350,16 +279,7 @@ impl S3Client {
             .any(|object| object.key.as_str() == key))
     }
 
-    /// 列出指定前缀下的全部对象 key（底层自动处理分页）。
-    ///
-    /// # 参数
-    /// - `prefix`: 对象键前缀，如 `backup/scheduled/daily/`
-    ///
-    /// # 返回
-    /// 匹配前缀的全部对象 key 列表
-    ///
-    /// # 错误
-    /// - `OssError`: OSS 列举操作失败
+    /// 列出指定前缀下的全部对象 key(底层自动处理分页)
     pub async fn list(&self, prefix: &str) -> Result<Vec<String>, OssError> {
         retry_429("list", prefix, || async {
             self.inner
@@ -378,7 +298,7 @@ impl S3Client {
         })
     }
 
-    /// 获取对象存储的流式下载响应.
+    /// 获取对象存储的流式下载响应
     pub async fn get_download_stream_response(
         &self,
         key: &str,
@@ -397,7 +317,70 @@ impl S3Client {
         .await
     }
 
-    /// 下载对象并应用指定的图片处理参数.
+    /// 获取对象存储的流式下载响应, 并透传单段 `Range` 头(如 `bytes=0-499`);
+    /// `range` 为 `None` 时读取整个对象。
+    ///
+    /// 通过预签名 URL + reqwest 发起一次请求: 既保持响应体流式, 又能读到
+    /// `Content-Range` / `Content-Length`, 供上层构造 206 / 416 响应。
+    pub async fn get_download_stream_range_response(
+        &self,
+        key: &str,
+        range: Option<&str>,
+    ) -> Result<DownloadStream, OssError> {
+        let url = self.get_signed_url(key, Duration::from_secs(3600)).await?;
+        let range = range.map(str::to_owned);
+
+        let response = retry_429("get_stream_range", key, || {
+            let url = url.clone();
+            let range = range.clone();
+            async move {
+                let mut request = reqwest::Client::new().get(&url);
+                if let Some(range) = range.as_deref() {
+                    request = request.header(reqwest::header::RANGE, range);
+                }
+                let response = request.send().await?;
+                // 仅 429 交给退避重试; 416 是合法的范围不足响应, 需要原样返回
+                if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    return Err(OssError::from_response(response).await);
+                }
+                Ok(response)
+            }
+        })
+        .await?;
+
+        // 非 2xx 除 416 外都视为存储错误, 消费响应体后返回完整错误
+        if !response.status().is_success()
+            && response.status() != reqwest::StatusCode::RANGE_NOT_SATISFIABLE
+        {
+            return Err(OssError::from_response(response).await);
+        }
+
+        let status = response.status().as_u16();
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let content_range = response
+            .headers()
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let content_length = response.content_length();
+        let stream = response
+            .bytes_stream()
+            .map(|item| item.map_err(OssError::from));
+
+        Ok(DownloadStream {
+            status,
+            content_type,
+            content_range,
+            content_length,
+            stream: Box::pin(stream),
+        })
+    }
+
+    /// 下载对象并应用指定的图片处理参数
     pub async fn download_with_process(&self, key: &str, process: &str) -> Result<Bytes, OssError> {
         let url = self
             .get_signed_url_with_params(key, Duration::from_secs(3600), Some(process.to_string()))
@@ -413,7 +396,7 @@ impl S3Client {
         .await
     }
 
-    /// 获取应用图片处理参数后的流式下载响应.
+    /// 获取应用图片处理参数后的流式下载响应
     pub async fn download_stream_with_process(
         &self,
         key: &str,

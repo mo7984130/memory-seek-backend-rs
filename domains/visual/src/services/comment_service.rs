@@ -16,7 +16,7 @@ pub(crate) struct CommentService;
 
 // 创建
 impl CommentService {
-    /// 发布影像评论.
+    /// 发布影像评论
     #[common_macros::metered(name = "publish_comment")]
     #[tracing::instrument(
         name = "publish_comment",
@@ -43,7 +43,7 @@ impl CommentService {}
 
 // 查询
 impl CommentService {
-    /// 获取影像评论列表.
+    /// 获取影像评论列表
     #[common_macros::metered(name = "get_comment_cursor_page")]
     #[tracing::instrument(
         name = "get_comment_cursor_page",
@@ -81,8 +81,7 @@ impl CommentService {
 
 // 删除
 impl CommentService {
-    /// 删除评论.
-    /// 同时会删除评论点赞
+    /// 删除评论及其评论点赞
     #[common_macros::metered(name = "delete_comment")]
     #[tracing::instrument(
         name = "delete_comment",
@@ -102,10 +101,9 @@ impl CommentService {
     ctx = crate::services::visual_service::VisualDeleteContext,
     slice = crate::services::visual_service::MEDIA_DELETE_STEPS,
     name = "comment_cleanup",
-    owns = ["CommentMapper", "CommentLikeMapper"],
-    method = on_visual_delete,
 )]
 impl CommentService {
+    /// 影像删除时清理其评论及评论点赞
     async fn on_visual_delete(
         &self,
         txn: &sea_orm::DatabaseTransaction,

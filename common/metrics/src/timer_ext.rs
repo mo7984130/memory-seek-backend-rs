@@ -8,13 +8,7 @@ use crate::MetricsTimer;
 /// 启用 `metrics` feature 时，会在 future 执行期间插入 `MetricsTimer`，
 /// 执行完成后自动将耗时写入指定的 histogram 指标。
 pub trait MetricsTimerExt: Future + Sized {
-    /// 包装当前 future，在执行期间自动记录耗时到指定的 histogram 指标
-    ///
-    /// # 参数
-    /// - `name`: metrics histogram 指标名称
-    ///
-    /// # 返回
-    /// 包装后的 future，输出类型与原 future 相同
+    /// 包装 future 并在执行期间自动将耗时记录到指定 histogram 指标
     #[inline]
     fn timed(self, name: impl Into<String> + Send) -> impl Future<Output = Self::Output> + Send
     where

@@ -25,6 +25,7 @@ pub struct FaceController;
 impl ControllerRouter for FaceController {
     type State = VisualState;
 
+    /// 人脸模块的受保护路由
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
             .route("/admin/full", get(Self::full_compute))
@@ -43,6 +44,7 @@ impl ControllerRouter for FaceController {
             .route("/feature", delete(Self::delete_faces_batch))
     }
 
+    /// 人脸模块无公开路由
     fn public_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
     }
@@ -50,7 +52,7 @@ impl ControllerRouter for FaceController {
 
 // 创建
 impl FaceController {
-    /// 启动全量人脸计算任务.
+    /// 启动全量人脸计算任务
     async fn full_compute(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -61,7 +63,7 @@ impl FaceController {
         Ok(()).to_r_ok()
     }
 
-    /// 启动增量人脸计算任务.
+    /// 启动增量人脸计算任务
     async fn incremental_compute(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -75,8 +77,7 @@ impl FaceController {
 
 // 修改
 impl FaceController {
-    /// 修改人脸归属: 将单张人脸移动到指定人物
-    /// 修改人脸所属人物, 或取消人物归属.
+    /// 将单张人脸归属到指定人物
     async fn change_belonging(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -87,8 +88,7 @@ impl FaceController {
         Ok(()).to_r_ok()
     }
 
-    /// 取消人脸归属(路径不带 person_id 段)
-    /// 取消单张人脸的人物归属.
+    /// 取消单张人脸的人物归属
     async fn unassign_face(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -102,7 +102,7 @@ impl FaceController {
 
 // 查询
 impl FaceController {
-    /// 查询照片中的人脸列表.
+    /// 查询照片中的人脸列表
     async fn get_faces_by_visual_id(
         State(state): State<Arc<VisualState>>,
         ValidatedPath(visual_id): ValidatedPath<VisualId>,
@@ -112,8 +112,7 @@ impl FaceController {
             .to_r_ok()
     }
 
-    /// 获取"包含未分配人脸"的照片列表(游标分页, 不区分照片归属者)
-    /// 分页查询包含未分配人脸的照片.
+    /// 分页查询包含未分配人脸的照片
     async fn get_unassigned_face_visuals(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -127,8 +126,7 @@ impl FaceController {
 
 // 删除
 impl FaceController {
-    /// 删除人脸(仅限未归属人物的人脸)
-    /// 删除一张未归属人物的人脸.
+    /// 删除一张未归属人物的人脸
     async fn delete_face(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
@@ -139,8 +137,7 @@ impl FaceController {
         Ok(()).to_r_ok()
     }
 
-    /// 批量删除人脸(仅限未归属人物的人脸, 已归属人脸会被跳过)
-    /// 批量删除未归属人物的人脸.
+    /// 批量删除未归属人物的人脸, 已归属人脸会被跳过
     async fn delete_faces_batch(
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,

@@ -34,6 +34,7 @@ pub enum BackupError {
 pub type Result<T> = std::result::Result<T, BackupError>;
 
 impl From<BackupError> for AppError {
+    /// 将备份领域错误转换为统一应用错误并输出结构化日志
     #[track_caller]
     fn from(err: BackupError) -> Self {
         ContextualError::error(

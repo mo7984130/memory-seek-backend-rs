@@ -15,6 +15,7 @@ pub struct Config {
 }
 
 impl Default for Config {
+    /// 返回 Redis 配置的默认值
     fn default() -> Self {
         Self {
             url: default_url(),
@@ -23,14 +24,16 @@ impl Default for Config {
     }
 }
 
-/// 返回 Redis 默认连接地址.
+/// 返回 Redis 默认连接地址
 fn default_url() -> String {
     "redis://127.0.0.1:6379".to_string()
 }
+/// 返回 Redis 连接池默认最大连接数
 const fn default_max_connections() -> u32 {
     16
 }
 
+/// 建立 Redis 连接池并 PING 校验可用性
 #[common_macros::register_async(
     slice = crate::setup::bases::APP_BASES,
     ty = crate::setup::InitFn,

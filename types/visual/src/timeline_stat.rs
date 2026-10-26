@@ -2,6 +2,7 @@
 // TimelineStatId
 // ============================================================
 pub use types_core::TimelineStatId;
+/// 返回以 `%Y-%m` 格式化的日期字符串
 pub fn to_date_str(date: &common_core::time::DateTime) -> String {
     date.format("%Y-%m").to_string()
 }

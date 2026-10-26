@@ -53,18 +53,21 @@ impl<I: DeserializeOwned> TimeIdCursor<I> {
 }
 
 impl<I: Serialize> Serialize for TimeIdCursor<I> {
+    /// 序列化为 Base64 字符串
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.encode())
     }
 }
 
 impl<'de, I: DeserializeOwned> Deserialize<'de> for TimeIdCursor<I> {
+    /// 从 Base64 字符串解码
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         Self::decode(String::deserialize(d)?).map_err(serde::de::Error::custom)
     }
 }
 
 impl<I> validator::Validate for TimeIdCursor<I> {
+    /// 空校验,始终通过
     fn validate(&self) -> Result<(), validator::ValidationErrors> {
         Ok(())
     }
@@ -72,10 +75,7 @@ impl<I> validator::Validate for TimeIdCursor<I> {
 
 #[cfg(feature = "orm")]
 impl<I: Clone + Into<sea_orm::Value>> TimeIdCursor<I> {
-    /// 构造 keyset 分页过滤条件, 需与 `ORDER BY time <dir>, id <dir>` 配套使用。
-    ///
-    /// - `Desc`: 返回 `(time, id) < (self.created_at, self.id)` 的行(向前翻页)
-    /// - `Asc`: 返回 `(time, id) > (self.created_at, self.id)` 的行(向后翻页)
+    /// 构造 keyset 分页过滤条件,需与 `ORDER BY time <dir>, id <dir>` 配套使用；`Desc` 向前翻页,`Asc` 向后翻页
     pub fn keyset_condition<C: sea_orm::ColumnTrait>(
         &self,
         time_col: C,
