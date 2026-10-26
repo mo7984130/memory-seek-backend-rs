@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_core::time::{DateTime, now};
 use types_core::UserId;
 use types_identity::auth::LoginResponse;
-use types_identity::user::UserInfo;
 
 /// 存储操作错误。
 #[derive(Debug, thiserror::Error)]
@@ -30,10 +29,6 @@ pub enum StorageError {
     /// 序列化 / 反序列化失败(如存储文件损坏)。
     #[error("存储序列化错误: {0}")]
     Serde(#[from] serde_json::Error),
-
-    /// 无法定位存储位置(如各平台数据目录解析失败)。
-    #[error("存储路径错误: {0}")]
-    Path(String),
 }
 
 /// 键值存储抽象:由调用方注入具体实现。
@@ -80,17 +75,17 @@ impl<T: Storage + ?Sized> Storage for Box<T> {
 
 /// 存储键名(与 TS 客户端保持一致)。
 mod keys {
+    pub const USER_ID: &str = "MemorySeek.userId";
     pub const ACCESS_TOKEN: &str = "MemorySeek.accessToken";
     pub const ACCESS_TOKEN_EXPIRE_AT: &str = "MemorySeek.accessTokenExpireAt";
     pub const REFRESH_TOKEN: &str = "MemorySeek.refreshToken";
     pub const REFRESH_TOKEN_EXPIRE_AT: &str = "MemorySeek.refreshTokenExpireAt";
-    pub const LOGIN_RESULT: &str = "MemorySeek.loginResult";
 }
 
-/// 登录态读写:包装一个 [`Storage`],提供 token 与登录结果的便捷操作。
+/// 登录态读写:包装一个 [`Storage`],仅管理「用户 ID + 两类 token」。
 ///
-/// 所有方法把底层存储错误透传为 [`StorageError`];token 本质是缓存,读取结果
-/// 缺失或存储中 `loginResult` 无法解析时按「未登录」处理,最坏只需重新登录。
+/// 用户资料不在此持久化(由上层自行保存);token 本质是缓存,读取缺失或过期
+/// 时按「未登录」处理,最坏只需重新登录。
 #[derive(Clone)]
 pub struct AuthStorage {
     storage: Arc<dyn Storage>,
@@ -102,36 +97,35 @@ impl AuthStorage {
         Self { storage }
     }
 
-    /// 保存登录结果,并同步写入 access / refresh token。
+    /// 保存登录结果:只落 user_id 与 access / refresh token,不持久化用户资料。
     pub fn set_login_result(&self, result: &LoginResponse) -> Result<(), StorageError> {
-        let json = serde_json::to_string(result)?;
-        self.storage.set(keys::LOGIN_RESULT, json)?;
+        self.set_user_id(result.user.id)?;
         self.set_access_token(&result.access_token, result.access_token_expire_at)?;
         self.set_refresh_token(&result.refresh_token, result.refresh_token_expire_at)?;
         Ok(())
     }
 
-    /// 读取登录结果;存储中不存在或无法解析时返回 `Ok(None)`。
-    pub fn get_login_result(&self) -> Result<Option<LoginResponse>, StorageError> {
-        let Some(raw) = self.storage.get(keys::LOGIN_RESULT)? else {
-            return Ok(None);
-        };
-        Ok(serde_json::from_str(&raw).ok())
+    /// 写入当前登录用户 ID。
+    pub fn set_user_id(&self, user_id: UserId) -> Result<(), StorageError> {
+        self.storage.set(keys::USER_ID, user_id.to_string())
     }
 
-    /// 当前登录用户 ID。
+    /// 当前登录用户 ID;缺失或无法解析时返回 `Ok(None)`。
     pub fn user_id(&self) -> Result<Option<UserId>, StorageError> {
-        Ok(self.get_login_result()?.map(|r| r.user.id))
+        Ok(self
+            .storage
+            .get(keys::USER_ID)?
+            .and_then(|raw| raw.parse().ok()))
     }
 
-    /// 当前登录用户信息。
-    pub fn user(&self) -> Result<Option<UserInfo>, StorageError> {
-        Ok(self.get_login_result()?.map(|r| r.user))
+    /// 移除用户 ID。
+    pub fn remove_user_id(&self) -> Result<(), StorageError> {
+        self.storage.remove(keys::USER_ID)
     }
 
-    /// 清除全部登录信息(登录结果与两类 token)。
+    /// 清除全部登录信息(用户 ID 与两类 token)。
     pub fn clear_login_result(&self) -> Result<(), StorageError> {
-        self.storage.remove(keys::LOGIN_RESULT)?;
+        self.remove_user_id()?;
         self.remove_access_token()?;
         self.remove_refresh_token()?;
         Ok(())
@@ -205,9 +199,9 @@ impl AuthStorage {
         Ok(())
     }
 
-    /// 是否处于登录态(有登录结果且 refresh token 未过期)。
+    /// 是否处于登录态(有用户 ID 且 refresh token 未过期)。
     pub fn check_login(&self) -> Result<bool, StorageError> {
-        Ok(self.get_login_result()?.is_some() && self.refresh_token()?.is_some())
+        Ok(self.user_id()?.is_some() && self.refresh_token()?.is_some())
     }
 }
 

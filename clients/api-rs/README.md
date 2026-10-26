@@ -85,36 +85,29 @@ let client = Client::new(
 ### 内置文件存储
 
 启用 `file-storage` feature 后可用跨平台的 `FileStorage`(全部键值存于单个
-`credentials.json`,写入采用「临时文件 + 原子替换」):
+JSON 文件,写入采用「临时文件 + 原子替换」):
 
 ```toml
 memory-seek-api-rs = { path = "...", features = ["file-storage"] }
 ```
 
+`FileStorage` 只接受显式路径,存储位置由调用方决定(如自行用 `directories`
+解析各平台用户数据目录):
+
 ```rust
 use memory_seek_api::{ApiConfig, Client, FileStorage};
 
-// 方式一:落到各平台用户数据目录的 <app> 下,文件名固定 credentials.json
-let storage = FileStorage::for_app("MemorySeek")?;
-// 方式二:同上,但自定义凭据文件名(同一应用区分多份凭据)
-// let storage = FileStorage::for_app_with_file_name("MemorySeek", "other.json")?;
-// 方式三:显式指定完整路径(便于测试或自定义位置),构造时即读入磁盘内容
-// let storage = FileStorage::new("/tmp/memoryseek/credentials.json")?;
+let storage = FileStorage::new("/path/to/credentials.json")?;
 
 let client = Client::new(ApiConfig::new("http://127.0.0.1:8080/api"), transport, storage);
 ```
 
-`for_app("<app>")` 的落盘位置:
-
-| 平台 | 路径 |
-| --- | --- |
-| Linux | `$XDG_DATA_HOME/<app>`(缺省 `~/.local/share/<app>`) |
-| macOS | `~/Library/Application Support/<app>` |
-| Windows | `%APPDATA%\<app>\data` |
+> 建议把凭据文件放在各平台用户数据目录下,例如 Linux
+> `~/.local/share/<app>/credentials.json`。
 
 > 说明:token 明文落盘,属已知取舍;如需系统钥匙串,可实现 `Storage` 自行接入。
 > `Storage` 各方法返回 `Result<_, StorageError>`;`AuthStorage` 把底层存储错误透传,
-> 而 `loginResult` 无法解析时按「未登录」处理。
+> 而 token 缺失或解析失败时按「未登录」处理。
 
 接口分组与 TS 客户端一一对应:
 

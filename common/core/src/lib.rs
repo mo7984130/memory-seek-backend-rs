@@ -9,6 +9,7 @@
 //! - [`ext`]：`Result` / `Option` 组合辅助 trait
 //! - [`types`]：`HasChanged`、`CursorPage` 等通用值类型
 //! - [`snowflake`]：分布式有序 ID 生成(`id-gen` feature)
+//! - [`local_store`]：本地 JSON 文件存储
 
 pub mod error;
 pub mod ext;
@@ -20,6 +21,11 @@ pub mod types;
 /// 测试构建下也会编译(`cfg(test)`),以便单测不受 feature 开关影响。
 #[cfg(any(test, feature = "id-gen"))]
 pub mod snowflake;
+
+/// 本地 JSON 文件存储([`JsonFile`] / [`StoreError`])。
+pub mod local_store;
+
+pub use local_store::{JsonFile, StoreError};
 
 /// 统一 API 响应格式 `R`。
 ///

@@ -7,29 +7,32 @@ use tracing::Level;
 
 use crate::error::{AppError, log};
 
-/// 尚未记录日志的应用错误
+/// 尚未记录日志的上下文错误
+///
+/// 泛型参数 `E` 是“最终错误载荷”：`emit` 记录日志后原样返回它，因此本类型不绑定到
+/// 任何具体错误类型。默认载荷为 [`AppError`]，以保持既有调用点无需标注类型参数。
 #[derive(Debug)]
-pub struct ContextualError {
+pub struct ContextualError<E = AppError> {
     level: Level,
     reason: &'static str,
     context: Cow<'static, str>,
     source: Option<Box<dyn Debug + Send + Sync>>,
-    app_error: AppError,
+    payload: E,
 }
 
-impl ContextualError {
-    /// 记录错误日志并返回对应的应用错误
+impl<E> ContextualError<E> {
+    /// 记录错误日志并返回携带的载荷
     #[track_caller]
-    pub fn emit(self) -> AppError {
+    pub fn emit(self) -> E {
         let Self {
             level,
             reason,
             context,
             source,
-            app_error,
+            payload,
         } = self;
 
-        log(level, reason, context, source.as_deref(), app_error)
+        log(level, reason, context, source.as_deref(), payload)
     }
 
     /// 创建带 ERROR 级别与原始错误来源的上下文错误
@@ -37,9 +40,9 @@ impl ContextualError {
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
         source: impl Debug + Send + Sync + 'static,
-        app_error: AppError,
+        payload: E,
     ) -> Self {
-        Self::with_source(Level::ERROR, reason, context, source, app_error)
+        Self::with_source(Level::ERROR, reason, context, source, payload)
     }
 
     /// 创建带 WARN 级别与原始错误来源的上下文错误
@@ -47,46 +50,46 @@ impl ContextualError {
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
         source: impl Debug + Send + Sync + 'static,
-        app_error: AppError,
+        payload: E,
     ) -> Self {
-        Self::with_source(Level::WARN, reason, context, source, app_error)
+        Self::with_source(Level::WARN, reason, context, source, payload)
     }
 
     /// 创建不携带原始错误来源的 ERROR 级别上下文错误
     pub fn error_without_source(
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_error: AppError,
+        payload: E,
     ) -> Self {
-        Self::without_source(Level::ERROR, reason, context, app_error)
+        Self::without_source(Level::ERROR, reason, context, payload)
     }
 
     /// 创建不携带原始错误来源的 WARN 级别上下文错误
     pub fn warn_without_source(
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_error: AppError,
+        payload: E,
     ) -> Self {
-        Self::without_source(Level::WARN, reason, context, app_error)
+        Self::without_source(Level::WARN, reason, context, payload)
     }
 
     /// 构造携带原始错误来源的上下文错误
-    fn with_source<E>(
+    fn with_source<S>(
         level: Level,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        source: E,
-        app_error: AppError,
+        source: S,
+        payload: E,
     ) -> Self
     where
-        E: Debug + Send + Sync + 'static,
+        S: Debug + Send + Sync + 'static,
     {
         Self {
             level,
             reason,
             context: context.into(),
             source: Some(Box::new(source)),
-            app_error,
+            payload,
         }
     }
 
@@ -95,31 +98,31 @@ impl ContextualError {
         level: Level,
         reason: &'static str,
         context: impl Into<Cow<'static, str>>,
-        app_error: AppError,
+        payload: E,
     ) -> Self {
         Self {
             level,
             reason,
             context: context.into(),
             source: None,
-            app_error,
+            payload,
         }
     }
 }
 
-impl Display for ContextualError {
-    /// 委托底层 `AppError` 的显示实现
+impl<E: Display> Display for ContextualError<E> {
+    /// 委托底层载荷的显示实现
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.app_error, f)
+        Display::fmt(&self.payload, f)
     }
 }
 
-impl std::error::Error for ContextualError {}
+impl<E: Debug + Display> std::error::Error for ContextualError<E> {}
 
-impl From<ContextualError> for AppError {
+impl From<ContextualError<AppError>> for AppError {
     /// 转换为 `AppError`，并记录错误日志
     #[track_caller]
-    fn from(error: ContextualError) -> Self {
+    fn from(error: ContextualError<AppError>) -> Self {
         error.emit()
     }
 }

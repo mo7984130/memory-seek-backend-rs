@@ -21,7 +21,6 @@ members = [
     "libs/email",
     "libs/oss",
     "libs/step_derive",
-    "libs/local-store",
     "clients/api-rs",
     "domains/constants",
     "domains/audit",
@@ -55,7 +54,6 @@ common-metrics = { path = "common/metrics" }
 common-web = { path = "common/web" }
 common-runtime = { path = "common/runtime" }
 memory-seek-api-rs = { path = "clients/api-rs" }
-local-store = { path = "libs/local-store" }
 types-core = { path = "types/core" }
 types-visual-token = { path = "types/visual-token" }
 types-db-registry = { path = "types/db-registry" }
@@ -133,8 +131,7 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 # CLI
 clap = { version = "4.5", features = ["derive"] }
 
-# local-store 跨平台数据目录解析;tempfile 供存储相关测试
-directories = "6"
+# 存储相关测试用临时目录
 tempfile = "3"
 
 # 中文转拼音(人物姓名首字母)

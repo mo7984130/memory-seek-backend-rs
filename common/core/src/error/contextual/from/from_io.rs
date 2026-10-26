@@ -1,6 +1,6 @@
 use crate::error::{AppError, contextual::ContextualError};
 
-impl From<std::io::Error> for ContextualError {
+impl From<std::io::Error> for ContextualError<AppError> {
     /// 将 `std::io::Error` 转换为上下文错误
     fn from(error: std::io::Error) -> Self {
         Self::error(

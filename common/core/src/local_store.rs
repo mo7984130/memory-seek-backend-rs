@@ -1,10 +1,27 @@
+//! 本地 JSON 文件存储:原子读写 + 进程内缓存。
+//!
+//! 一个 [`JsonFile<T>`] 对应磁盘上一个 JSON 文件,`T` 为任意可序列化类型。
+//! 存储位置由调用方以显式路径给出。构造时一次性读入内存,写入采用「临时文件 +
+//! 原子替换」,进程内由 [`Mutex`](std::sync::Mutex) 串行化访问(跨进程文件锁
+//! 不在支持范围内)。
+
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::StoreError;
+/// 本地存储错误。
+#[derive(Debug, thiserror::Error)]
+pub enum StoreError {
+    /// 底层 IO 失败(读写文件、创建目录等)。
+    #[error("存储 IO 错误: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// 序列化 / 反序列化失败(如存储文件损坏)。
+    #[error("存储序列化错误: {0}")]
+    Serde(#[from] serde_json::Error),
+}
 
 /// 以单个 JSON 文件为后端的泛型存储。
 ///
@@ -21,7 +38,7 @@ where
 {
     /// 以显式路径构造,文件不存在时使用 [`Default`] 产出初始值。
     ///
-    /// 便于测试或需要自定义存放位置的调用方。
+    /// 存储位置由调用方决定(如自行用 `directories` 解析各平台目录)。
     pub fn new(path: impl Into<PathBuf>) -> Result<Self, StoreError>
     where
         T: Default,
@@ -40,30 +57,6 @@ where
             path,
             data: Mutex::new(data),
         })
-    }
-
-    /// 以应用名 + 文件名构造,文件落在各平台的用户数据目录下:
-    /// - Linux: `$XDG_DATA_HOME/<app>`(缺省 `~/.local/share/<app>`)
-    /// - macOS: `~/Library/Application Support/<app>`
-    /// - Windows: `%APPDATA%\<app>\data`
-    ///
-    /// 文件不存在时使用 [`Default`] 产出初始值。
-    pub fn for_app(app: &str, file_name: &str) -> Result<Self, StoreError>
-    where
-        T: Default,
-    {
-        Self::for_app_with(app, file_name, T::default)
-    }
-
-    /// 以应用名 + 文件名构造,文件不存在时用 `default` 工厂产出初始值。
-    pub fn for_app_with(
-        app: &str,
-        file_name: &str,
-        default: impl FnOnce() -> T,
-    ) -> Result<Self, StoreError> {
-        let dirs = directories::ProjectDirs::from("", "", app)
-            .ok_or_else(|| StoreError::Path(format!("无法定位应用数据目录: {app}")))?;
-        Self::new_with(dirs.data_dir().join(file_name), default)
     }
 
     /// 存储文件路径。

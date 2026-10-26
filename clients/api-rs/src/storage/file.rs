@@ -1,19 +1,17 @@
-//! 基于本地文件的 [`Storage`] 实现,跨 Linux / macOS / Windows。
+//! 基于本地文件的 [`Storage`] 实现。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use local_store::JsonFile;
+use common_core::JsonFile;
 
 use super::{Storage, StorageError};
-
-/// 默认凭据文件名。
-const FILE_NAME: &str = "credentials.json";
 
 /// 基于磁盘文件的 [`Storage`] 实现。
 ///
 /// 全部键值以单个 JSON 对象存于一个文件;构造时一次性读入内存,写入采用
-/// 「临时文件 + 原子替换」。底层复用 [`local_store::JsonFile`]。
+/// 「临时文件 + 原子替换」。存储位置由调用方以显式路径给出,底层复用
+/// [`common_core::JsonFile`]。
 pub struct FileStorage {
     inner: JsonFile<HashMap<String, String>>,
 }
@@ -22,27 +20,10 @@ impl FileStorage {
     /// 以显式文件路径构造并立即读入磁盘内容;文件不存在视为空存储,
     /// 父目录在首次写入时自动创建。
     ///
-    /// 便于测试或需要自定义存放位置的调用方。
+    /// 凭据文件的存放位置由调用方决定(如自行用 `directories` 解析各平台目录)。
     pub fn new(path: impl Into<PathBuf>) -> Result<Self, StorageError> {
         Ok(Self {
             inner: JsonFile::new(path)?,
-        })
-    }
-
-    /// 以应用名构造,凭据文件名用默认的 [`FILE_NAME`];文件落在各平台的用户数据目录下:
-    /// - Linux: `$XDG_DATA_HOME/<app>`(缺省 `~/.local/share/<app>`)
-    /// - macOS: `~/Library/Application Support/<app>`
-    /// - Windows: `%APPDATA%\<app>\data`
-    pub fn for_app(app: &str) -> Result<Self, StorageError> {
-        Self::for_app_with_file_name(app, FILE_NAME)
-    }
-
-    /// 以应用名构造,并自定义凭据文件名(便于同一应用区分多份凭据)。
-    ///
-    /// 落盘目录与 [`for_app`](Self::for_app) 相同,仅文件名不同。
-    pub fn for_app_with_file_name(app: &str, file_name: &str) -> Result<Self, StorageError> {
-        Ok(Self {
-            inner: JsonFile::for_app(app, file_name)?,
         })
     }
 
@@ -73,12 +54,11 @@ impl Storage for FileStorage {
 }
 
 /// 把底层通用存储错误按其同类变体透传为 [`StorageError`]。
-impl From<local_store::StoreError> for StorageError {
-    fn from(error: local_store::StoreError) -> Self {
+impl From<common_core::StoreError> for StorageError {
+    fn from(error: common_core::StoreError) -> Self {
         match error {
-            local_store::StoreError::Io(error) => StorageError::Io(error),
-            local_store::StoreError::Serde(error) => StorageError::Serde(error),
-            local_store::StoreError::Path(message) => StorageError::Path(message),
+            common_core::StoreError::Io(error) => StorageError::Io(error),
+            common_core::StoreError::Serde(error) => StorageError::Serde(error),
         }
     }
 }

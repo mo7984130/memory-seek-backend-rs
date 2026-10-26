@@ -82,7 +82,7 @@ pub use types_visual::{
     CollectionVisualAddBatchParam, CollectionVisualAddBatchResult,
     CollectionVisualRemoveBatchParam, CollectionVisualRemoveBatchResult, CommentContent,
     CommentPublishParam, CommentView, DeleteVisualsParam, ExistsByHashBatchParam, MonthStat,
-    UploadVisualParam, VisualIds, VisualView,
+    UploadVisualParam, VisualIds, VisualTokens, VisualView,
 };
 pub use types_visual_token::VisualTokenStr;
 

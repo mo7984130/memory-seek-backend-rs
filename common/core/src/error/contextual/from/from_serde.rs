@@ -1,6 +1,6 @@
 use crate::error::{AppError, ContextualError};
 
-impl From<serde_json::Error> for ContextualError {
+impl From<serde_json::Error> for ContextualError<AppError> {
     /// 将 `serde_json::Error` 转换为 warn 级上下文错误
     fn from(error: serde_json::Error) -> Self {
         Self::warn(
