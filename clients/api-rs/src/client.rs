@@ -1,6 +1,6 @@
 //! HTTP 客户端:请求构造、鉴权注入、401 自动刷新与统一响应解析。
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -29,11 +29,14 @@ pub struct Client {
     inner: Arc<Inner>,
 }
 
+/// 登录态失效时的回调(用 `Arc` 共享, 调用前先克隆出锁外)。
+type UnauthCallback = Arc<dyn Fn() + Send + Sync + 'static>;
 /// [`Client`] 的共享内部状态。
 struct Inner {
     config: ApiConfig,
     transport: Arc<dyn Transport>,
     storage: Arc<dyn Storage>,
+    on_unauth: Mutex<Option<UnauthCallback>>,
 }
 
 impl Client {
@@ -52,7 +55,27 @@ impl Client {
                 config,
                 transport: Arc::new(transport),
                 storage: Arc::new(storage),
+                on_unauth: Mutex::new(None),
             }),
+        }
+    }
+
+    /// 注册登录态失效回调(如跳转登录页)。
+    ///
+    /// 本地登录态被清除时触发: token 缺失, 或刷新 token 失败。回调在锁外调用,
+    /// 可在其中继续使用 `Client`。
+    pub fn register_unauth_callback<F>(&self, callback: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        *self.inner.on_unauth.lock().unwrap() = Some(Arc::new(callback));
+    }
+
+    /// 触发登录态失效回调: 先克隆出锁外再调用, 避免回调重入时持锁死锁。
+    fn notify_unauth(&self) {
+        let callback = self.inner.on_unauth.lock().unwrap().clone();
+        if let Some(callback) = callback {
+            callback();
         }
     }
 
@@ -162,6 +185,7 @@ impl Client {
             Some(token) => token,
             None => {
                 auth.clear_login_result()?;
+                self.notify_unauth();
                 return Err(ApiError::TokenExpired);
             }
         };
@@ -173,6 +197,7 @@ impl Client {
             }
             Err(error) => {
                 auth.clear_login_result()?;
+                self.notify_unauth();
                 Err(error)
             }
         }
