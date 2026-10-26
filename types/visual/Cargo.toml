@@ -1,6 +1,6 @@
 [package]
 name = "types-visual"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "视觉上下文契约: 实体、视图与请求 DTO"
 

@@ -68,8 +68,8 @@ async fn main() -> Result<()> {
         router
             .merge(public)
             .merge(protected)
-            // 上传请求体上限: 由配置 server.max_upload_bytes 控制(默认 600MB),
-            // 须大于业务校验上限(图片 20MB / 视频 512MB); axum 默认 2MB,
+            // 上传请求体上限: 由配置 server.max_upload_bytes 控制(默认 1GB),
+            // 须大于业务校验上限(图片 32MB / 视频 1GB); axum 默认 2MB,
             // 超过会在请求体流式读取时报 failed to read stream
             .layer(DefaultBodyLimit::max(cfg.server.max_upload_bytes as usize))
             // 已知长度请求预检: 超限直接 413, 避免大文件传完才被拒

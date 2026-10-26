@@ -8,6 +8,12 @@ use crate::visual::{VisualId, VisualKind};
 use types_core::UserId;
 use types_core::cursor::TimeIdCursor;
 
+crate::dto!(VisualTokens, "visual/", rename = "VisualTokens"; {
+    pub thumbnail: String,
+    pub preview: String,
+    pub original: String,
+});
+
 crate::dto!(VisualView, "visual/", rename = "Visual"; {
     pub id: VisualId,
     pub user_id: UserId,
@@ -24,25 +30,46 @@ crate::dto!(VisualView, "visual/", rename = "Visual"; {
     /// 否则同一类型的输出无法被自己解析。
     #[serde(default, skip_serializing_if = "is_zero")]
     pub duration_ms: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_liked: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub thumbnail_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preview_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub original_token: Option<String>,
+    pub is_liked: bool,
+    pub tokens: VisualTokens,
 });
 /// 判断数值是否为零(用于序列化时省略 0 值)
 fn is_zero(num: &u64) -> bool {
     *num == 0
 }
 
+impl VisualView {
+    /// 写入当前用户对影像的点赞状态
+    pub fn with_liked(mut self, is_liked: bool) -> Self {
+        self.is_liked = is_liked;
+        self
+    }
+}
+
 #[cfg(feature = "orm")]
-impl From<VisualRecord> for VisualView {
-    /// 将影像记录转换为影像视图
-    fn from(record: VisualRecord) -> Self {
-        Self {
+impl VisualView {
+    /// 由影像记录与查看者构造视图,并生成各类访问令牌
+    pub fn from_record_with_tokens(
+        record: VisualRecord,
+        viewer: UserId,
+    ) -> common_core::error::contextual::Result<Self> {
+        let kind = record.kind;
+        let file_id = record.file_id.clone();
+
+        let tokens = match kind {
+            VisualKind::Image => VisualTokens {
+                thumbnail: VisualToken::image_thumbnail(viewer, &file_id).encrypt()?,
+                preview: VisualToken::image_preview(viewer, &file_id).encrypt()?,
+                original: VisualToken::original(VisualKind::Image, viewer, &file_id).encrypt()?,
+            },
+            VisualKind::Video => VisualTokens {
+                thumbnail: VisualToken::video_thumbnail(viewer, &file_id).encrypt()?,
+                preview: VisualToken::video_preview(viewer, &file_id).encrypt()?,
+                original: VisualToken::original(VisualKind::Video, viewer, &file_id).encrypt()?,
+            },
+        };
+
+        Ok(Self {
             id: record.id,
             user_id: record.user_id,
             name: record.name,
@@ -50,59 +77,11 @@ impl From<VisualRecord> for VisualView {
             height: record.height,
             size: record.size,
             created_at: record.created_at,
-            kind: record.kind,
+            kind,
             duration_ms: record.duration_ms,
-            is_liked: None,
-            thumbnail_token: None,
-            preview_token: None,
-            original_token: None,
-        }
-    }
-}
-
-impl VisualView {
-    /// 写入当前用户对影像的点赞状态
-    pub fn with_liked(mut self, is_liked: bool) -> Self {
-        self.is_liked = Some(is_liked);
-        self
-    }
-
-    /// 由影像记录与查看者构造视图,并生成各类访问令牌
-    #[cfg(feature = "orm")]
-    pub fn from_record_with_tokens(
-        record: VisualRecord,
-        viewer: UserId,
-    ) -> common_core::error::contextual::Result<Self> {
-        let kind = record.kind;
-        let file_id = record.file_id.clone();
-        Self::from(record).with_tokens(kind, &file_id, viewer)
-    }
-
-    /// 按影像类型为视图填充原图/预览/缩略图令牌
-    #[cfg(feature = "orm")]
-    pub fn with_tokens(
-        mut self,
-        kind: VisualKind,
-        file_id: &str,
-        viewer: UserId,
-    ) -> common_core::error::contextual::Result<Self> {
-        match kind {
-            VisualKind::Image => {
-                self.original_token =
-                    Some(VisualToken::original(VisualKind::Image, viewer, file_id).encrypt()?);
-                self.preview_token = Some(VisualToken::image_preview(viewer, file_id).encrypt()?);
-                self.thumbnail_token =
-                    Some(VisualToken::image_thumbnail(viewer, file_id).encrypt()?);
-            }
-            VisualKind::Video => {
-                self.original_token =
-                    Some(VisualToken::original(VisualKind::Video, viewer, file_id).encrypt()?);
-                self.preview_token = Some(VisualToken::video_preview(viewer, file_id).encrypt()?);
-                self.thumbnail_token =
-                    Some(VisualToken::video_thumbnail(viewer, file_id).encrypt()?);
-            }
-        }
-        Ok(self)
+            is_liked: false,
+            tokens,
+        })
     }
 }
 
@@ -120,7 +99,7 @@ crate::dto!(VisualCursorParam, "visual/", serde_default, docs = "影像游标参
 #[cfg(all(test, feature = "orm"))]
 mod orm_tests {
     use super::*;
-    use crate::VisualTokenType;
+    use crate::{ImageTokenType, VideoTokenType, VisualTokenKind};
     use common_crypto::{TokenCipher, TokenCipherConfig, init_token_cipher};
 
     fn test_cipher() -> &'static TokenCipher {
@@ -149,18 +128,11 @@ mod orm_tests {
         }
     }
 
-    fn assert_token(
-        token: &str,
-        cipher: &TokenCipher,
-        viewer: UserId,
-        kind: VisualKind,
-        token_type: VisualTokenType,
-    ) {
+    fn assert_token(token: &str, cipher: &TokenCipher, viewer: UserId, expected: VisualTokenKind) {
         let token = cipher.decrypt::<VisualToken>(token).unwrap();
         assert_eq!(token.file_id, "file-id");
         assert_eq!(token.viewer_id, viewer);
-        assert_eq!(token.kind, kind);
-        assert_eq!(token.token_type, token_type);
+        assert_eq!(token.kind, expected);
     }
 
     #[test]
@@ -177,25 +149,22 @@ mod orm_tests {
         assert_eq!(view.name, "visual.jpg");
         assert_eq!(view.created_at, expected_created_at);
         assert_token(
-            view.thumbnail_token.as_ref().unwrap(),
+            &view.tokens.thumbnail,
             cipher,
             viewer,
-            VisualKind::Image,
-            VisualTokenType::Thumbnail,
+            VisualTokenKind::Image(ImageTokenType::Thumbnail),
         );
         assert_token(
-            view.preview_token.as_ref().unwrap(),
+            &view.tokens.preview,
             cipher,
             viewer,
-            VisualKind::Image,
-            VisualTokenType::Preview,
+            VisualTokenKind::Image(ImageTokenType::Preview),
         );
         assert_token(
-            view.original_token.as_ref().unwrap(),
+            &view.tokens.original,
             cipher,
             viewer,
-            VisualKind::Image,
-            VisualTokenType::Original,
+            VisualTokenKind::Image(ImageTokenType::Original),
         );
     }
 
@@ -212,25 +181,22 @@ mod orm_tests {
         let view = VisualView::from_record_with_tokens(record, viewer).unwrap();
 
         assert_token(
-            view.thumbnail_token.as_ref().unwrap(),
+            &view.tokens.thumbnail,
             cipher,
             viewer,
-            VisualKind::Video,
-            VisualTokenType::Thumbnail,
+            VisualTokenKind::Video(VideoTokenType::Thumbnail),
         );
         assert_token(
-            view.preview_token.as_ref().unwrap(),
+            &view.tokens.preview,
             cipher,
             viewer,
-            VisualKind::Video,
-            VisualTokenType::Preview,
+            VisualTokenKind::Video(VideoTokenType::Preview),
         );
         assert_token(
-            view.original_token.as_ref().unwrap(),
+            &view.tokens.original,
             cipher,
             viewer,
-            VisualKind::Video,
-            VisualTokenType::Original,
+            VisualTokenKind::Video(VideoTokenType::Original),
         );
     }
 }

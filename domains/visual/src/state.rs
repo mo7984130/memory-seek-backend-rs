@@ -33,8 +33,6 @@ pub struct VisualState {
     pub(crate) cache_visual_cursor_ids: MultiLevelCache<CursorPage<VisualId, ()>, ContextualError>,
     pub(crate) cache_visual_dimensions: MultiLevelCache<(u32, u32), ContextualError>,
     pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
-    /// 图片处理产物缓存(base64 字符串, 见 [`crate::media::process_image`])
-    pub(crate) cache_image_processed: MultiLevelCache<String, ContextualError>,
     pub redis: Pool,
     pub s3_client: S3Client,
     /// 后台任务托管(人脸检测常驻 worker 等)
@@ -92,11 +90,6 @@ impl VisualState {
             ),
             cache_timeline_stat: MultiLevelCache::new_with_name(
                 "timeline_stat",
-                redis.clone(),
-                cache_config,
-            ),
-            cache_image_processed: MultiLevelCache::new_with_name(
-                "visual_image_processed",
                 redis.clone(),
                 cache_config,
             ),

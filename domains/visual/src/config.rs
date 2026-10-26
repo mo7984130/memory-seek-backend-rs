@@ -9,6 +9,10 @@ pub struct VisualConfig {
     #[serde(default)]
     pub image_processor: ImageProcessor,
 
+    /// 处理后的图片存储配置
+    #[serde(default)]
+    pub processed_image: ProcessedImageConfig,
+
     /// 视频转码配置(生成缩略/预览衍生片)
     #[serde(default)]
     pub transcode: TranscodeConfig,
@@ -46,13 +50,18 @@ pub enum ResolvedImageProcessor {
     Local,
 }
 
+/// 处理后的图片存储配置
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+pub struct ProcessedImageConfig {
+    /// 是否把缩略图/预览图持久化到对象存储；false 时每次请求按处理后端直接处理。
+    /// 裁剪图不参与持久化，始终直接处理。
+    #[serde(default)]
+    pub store_in_oss: bool,
+}
+
 /// 视频转码配置
 #[derive(Debug, Clone, Deserialize)]
 pub struct TranscodeConfig {
-    /// 是否启用视频转码; 关闭时不生成衍生片
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
-
     /// ffmpeg 可执行文件路径(或 PATH 中的命令名)
     #[serde(default = "default_ffmpeg_path")]
     pub ffmpeg_path: PathBuf,
@@ -65,17 +74,17 @@ pub struct TranscodeConfig {
     #[serde(default = "default_thumb_max_width")]
     pub thumb_max_width: u32,
 
-    /// 缩略片视频码率
-    #[serde(default = "default_thumb_bitrate")]
-    pub thumb_bitrate: String,
-
     /// 预览片目标高度(像素, 仅缩不放)
     #[serde(default = "default_preview_max_height")]
     pub preview_max_height: u32,
 
-    /// 预览片视频码率
-    #[serde(default = "default_preview_bitrate")]
-    pub preview_bitrate: String,
+    /// SVT-AV1 CRF(0-63, 越大体积越小/画质越低)
+    #[serde(default = "default_av1_crf")]
+    pub av1_crf: u8,
+
+    /// SVT-AV1 preset(0-13, 越大编码越快/压缩率越低)
+    #[serde(default = "default_av1_preset")]
+    pub av1_preset: u8,
 
     /// 单个衍生片转码失败后的最大尝试次数(含首次); 超过后置为终态 failed
     #[serde(default = "default_max_attempts")]
@@ -87,11 +96,8 @@ pub struct TranscodeConfig {
 }
 
 impl TranscodeConfig {
-    /// 校验转码配置, 非法时返回原因字符串；仅在 `enabled` 时校验有意义的字段
+    /// 校验转码配置, 非法时返回原因字符串
     pub fn validate(&self) -> std::result::Result<(), String> {
-        if !self.enabled {
-            return Ok(());
-        }
         if self.thumb_duration_secs == 0 {
             return Err("thumb_duration_secs 必须大于 0".to_string());
         }
@@ -104,56 +110,35 @@ impl TranscodeConfig {
         if self.max_attempts == 0 {
             return Err("max_attempts 必须大于 0".to_string());
         }
-        if !is_valid_bitrate(&self.thumb_bitrate) {
-            return Err(format!(
-                "thumb_bitrate 非法: {}(示例: 600k / 4M / 1200000)",
-                self.thumb_bitrate
-            ));
+        if self.av1_crf > 63 {
+            return Err(format!("av1_crf 必须在 0-63 之间, 当前为 {}", self.av1_crf));
         }
-        if !is_valid_bitrate(&self.preview_bitrate) {
+        if self.av1_preset > 13 {
             return Err(format!(
-                "preview_bitrate 非法: {}(示例: 600k / 4M / 1200000)",
-                self.preview_bitrate
+                "av1_preset 必须在 0-13 之间, 当前为 {}",
+                self.av1_preset
             ));
         }
         Ok(())
     }
 }
 
-/// 校验码率字符串是否为正数且后缀合法(k/K/m/M/g/G)
-fn is_valid_bitrate(value: &str) -> bool {
-    let value = value.trim();
-    let bytes = value.as_bytes();
-    let (num, suffix) = match bytes.last() {
-        Some(c) if c.is_ascii_alphabetic() => (&value[..value.len() - 1], Some(*c)),
-        _ => (value, None),
-    };
-    let number_ok = num.parse::<f64>().is_ok_and(|n| n > 0.0);
-    let suffix_ok = matches!(suffix, None | Some(b'k' | b'K' | b'm' | b'M' | b'g' | b'G'));
-    number_ok && suffix_ok
-}
-
 impl Default for TranscodeConfig {
     /// 返回转码配置的默认值
     fn default() -> Self {
         Self {
-            enabled: default_enabled(),
             ffmpeg_path: default_ffmpeg_path(),
             thumb_duration_secs: default_thumb_duration_secs(),
             thumb_max_width: default_thumb_max_width(),
-            thumb_bitrate: default_thumb_bitrate(),
             preview_max_height: default_preview_max_height(),
-            preview_bitrate: default_preview_bitrate(),
+            av1_crf: default_av1_crf(),
+            av1_preset: default_av1_preset(),
             max_attempts: default_max_attempts(),
             retry_backoff_secs: default_retry_backoff_secs(),
         }
     }
 }
 
-/// 默认启用视频转码
-fn default_enabled() -> bool {
-    true
-}
 /// 默认 ffmpeg 命令
 fn default_ffmpeg_path() -> PathBuf {
     PathBuf::from("ffmpeg")
@@ -166,17 +151,17 @@ fn default_thumb_duration_secs() -> u32 {
 fn default_thumb_max_width() -> u32 {
     640
 }
-/// 默认缩略片码率
-fn default_thumb_bitrate() -> String {
-    "600k".to_string()
-}
 /// 默认预览片高度 1080
 fn default_preview_max_height() -> u32 {
     1080
 }
-/// 默认预览片码率
-fn default_preview_bitrate() -> String {
-    "4M".to_string()
+/// 默认 SVT-AV1 CRF
+fn default_av1_crf() -> u8 {
+    35
+}
+/// 默认 SVT-AV1 preset
+fn default_av1_preset() -> u8 {
+    8
 }
 /// 默认最大尝试次数
 fn default_max_attempts() -> u32 {
@@ -216,12 +201,18 @@ mod tests {
     }
 
     #[test]
+    fn processed_image_defaults_to_direct_processing() {
+        assert!(!VisualConfig::default().processed_image.store_in_oss);
+    }
+
+    #[test]
     fn transcode_defaults_are_stable() {
         let cfg = TranscodeConfig::default();
-        assert!(cfg.enabled);
         assert_eq!(cfg.thumb_duration_secs, 4);
         assert_eq!(cfg.thumb_max_width, 640);
         assert_eq!(cfg.preview_max_height, 1080);
+        assert_eq!(cfg.av1_crf, 35);
+        assert_eq!(cfg.av1_preset, 8);
     }
 
     #[test]
@@ -230,31 +221,17 @@ mod tests {
     }
 
     #[test]
-    fn transcode_validate_rejects_bad_bitrate() {
-        let cfg = TranscodeConfig {
-            thumb_bitrate: "abc".to_string(),
+    fn transcode_validate_rejects_bad_av1_settings() {
+        let crf = TranscodeConfig {
+            av1_crf: 64,
             ..TranscodeConfig::default()
         };
-        assert!(cfg.validate().is_err());
-    }
+        assert!(crf.validate().is_err());
 
-    #[test]
-    fn transcode_validate_skips_when_disabled() {
-        let cfg = TranscodeConfig {
-            enabled: false,
-            thumb_duration_secs: 0,
+        let preset = TranscodeConfig {
+            av1_preset: 14,
             ..TranscodeConfig::default()
         };
-        assert!(cfg.validate().is_ok());
-    }
-
-    #[test]
-    fn bitrate_validation_rules() {
-        for ok in ["600k", "4M", "1200000", "1.5M", "2g"] {
-            assert!(is_valid_bitrate(ok), "{ok} 应合法");
-        }
-        for bad in ["", "abc", "0", "-1", "4X", "M"] {
-            assert!(!is_valid_bitrate(bad), "{bad} 应非法");
-        }
+        assert!(preset.validate().is_err());
     }
 }

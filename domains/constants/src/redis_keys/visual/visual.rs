@@ -31,13 +31,6 @@ pub fn visual_cursor_page_ids(direction: PageDirection) -> &'static str {
     }
 }
 
-/// 生成影像处理产物的 Redis 缓存键；键包含原图 file_id 与处理方式 `op_key`
-#[inline]
-pub fn visual_processed(file_id: &str, op_key: &str) -> String {
-    //visual:visual:processed
-    format!("v:v:p:{op_key}:{file_id}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,11 +64,5 @@ mod tests {
     fn visual_cursor_page_ids_returns_correct_format() {
         assert_eq!(visual_cursor_page_ids(PageDirection::Next), "v:v:c:n");
         assert_eq!(visual_cursor_page_ids(PageDirection::Prev), "v:v:c:p");
-    }
-
-    #[test]
-    fn visual_processed_returns_correct_format() {
-        let key = visual_processed("visuals/2024/01/01/abc.jpg", "local:thumb");
-        assert_eq!(key, "v:v:p:local:thumb:visuals/2024/01/01/abc.jpg");
     }
 }

@@ -2,6 +2,7 @@ pub(crate) mod collection_service;
 pub(crate) mod collection_visual_service;
 pub(crate) mod comment_like_service;
 pub(crate) mod comment_service;
+pub(crate) mod media;
 pub(crate) mod timeline_stat_service;
 pub(crate) mod transcode_service;
 pub(crate) mod visual_like_service;

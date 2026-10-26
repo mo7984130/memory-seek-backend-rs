@@ -1,6 +1,6 @@
 [package]
 name = "types-visual-token"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "视觉访问令牌契约(跨上下文协议)"
 
@@ -8,7 +8,7 @@ description = "视觉访问令牌契约(跨上下文协议)"
 default = []
 ts = ["dep:ts-rs"]
 # 令牌加解密(encrypt/decrypt);纯客户端无需开启,以避免链接加密依赖
-crypto = ["dep:common-crypto"]
+crypto = ["dep:common-crypto", "dep:serde_json"]
 face-engine = ["dep:insight-face-rs"]
 
 [dependencies]
@@ -17,6 +17,7 @@ common-core.path = "../../common/core"
 common-crypto = { path = "../../common/crypto", optional = true }
 
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, optional = true }
 
 insight-face-rs = { workspace = true, optional = true }
 ts-rs = { workspace = true, optional = true }

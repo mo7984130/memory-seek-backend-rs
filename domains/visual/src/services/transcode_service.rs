@@ -85,9 +85,9 @@ impl TranscodeService {
 }
 
 impl TranscodeService {
-    /// 登记待生成的衍生片并入队(非视频 / 未启用时跳过)
+    /// 登记待生成的衍生片并入队(非视频时跳过)
     async fn enqueue(state: &VisualState, visual: &VisualRecord) -> common_core::Result<()> {
-        if visual.kind != VisualKind::Video || !state.config.transcode.enabled {
+        if visual.kind != VisualKind::Video {
             return Ok(());
         }
         let kinds = [DerivativeKind::Thumbnail, DerivativeKind::Preview];
@@ -388,7 +388,7 @@ impl TranscodeService {
         Ok(())
     }
 
-    /// 构造 ffmpeg 转码参数（纯函数便于单测）；统一 H.264 high/yuv420p/faststart 且仅缩不放
+    /// 构造 ffmpeg 转码参数（纯函数便于单测）；统一 AV1(SVT-AV1)/yuv420p/faststart 且仅缩不放
     fn build_args(
         cfg: &TranscodeConfig,
         kind: DerivativeKind,
@@ -418,35 +418,29 @@ impl TranscodeService {
                     "-vf".to_string(),
                     // 逗号在 ffmpeg 过滤器表达式内需转义
                     format!("scale=min({}\\,iw):-2", cfg.thumb_max_width),
-                    "-b:v".to_string(),
-                    cfg.thumb_bitrate.clone(),
-                    "-level".to_string(),
-                    "3.1".to_string(),
                 ]);
             }
             DerivativeKind::Preview => {
                 args.extend([
                     "-vf".to_string(),
                     format!("scale=-2:min({}\\,ih)", cfg.preview_max_height),
-                    "-b:v".to_string(),
-                    cfg.preview_bitrate.clone(),
                     "-c:a".to_string(),
                     "aac".to_string(),
                     "-b:a".to_string(),
                     "128k".to_string(),
                     "-ac".to_string(),
                     "2".to_string(),
-                    "-level".to_string(),
-                    "4.2".to_string(),
                 ]);
             }
         }
 
         args.extend([
             "-c:v".to_string(),
-            "libx264".to_string(),
-            "-profile:v".to_string(),
-            "high".to_string(),
+            "libsvtav1".to_string(),
+            "-preset".to_string(),
+            cfg.av1_preset.to_string(),
+            "-crf".to_string(),
+            cfg.av1_crf.to_string(),
             "-pix_fmt".to_string(),
             "yuv420p".to_string(),
             "-r".to_string(),
@@ -539,8 +533,12 @@ mod tests {
         assert!(joined.contains("-ss 0 -t 4"));
         assert!(joined.contains("-an"));
         assert!(joined.contains("scale=min(640\\,iw):-2"));
+        assert!(joined.contains("-c:v libsvtav1"));
+        assert!(joined.contains("-preset 8"));
+        assert!(joined.contains("-crf 35"));
         assert!(joined.contains("-pix_fmt yuv420p"));
         assert!(joined.contains("-movflags +faststart"));
+        assert!(!joined.contains("libx264"));
     }
 
     #[test]
@@ -556,8 +554,27 @@ mod tests {
         assert!(!joined.contains("-ss"));
         assert!(!joined.contains("-t "));
         assert!(joined.contains("scale=-2:min(1080\\,ih)"));
+        assert!(joined.contains("-c:v libsvtav1"));
         assert!(joined.contains("-c:a aac"));
         assert!(joined.contains("-b:a 128k"));
+    }
+
+    #[test]
+    fn args_use_configured_av1_settings() {
+        let cfg = TranscodeConfig {
+            av1_crf: 28,
+            av1_preset: 6,
+            ..TranscodeConfig::default()
+        };
+        let joined = TranscodeService::build_args(
+            &cfg,
+            DerivativeKind::Preview,
+            Path::new("/tmp/in.mp4"),
+            Path::new("/tmp/out.mp4"),
+        )
+        .join(" ");
+        assert!(joined.contains("-preset 6"));
+        assert!(joined.contains("-crf 28"));
     }
 
     #[test]

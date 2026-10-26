@@ -165,7 +165,7 @@ impl FaceService {
     /// 从对象存储取图并解码为图像缓冲区(按 `image_processor` 选择处理后端)
     async fn download_visual(state: &VisualState, file_id: &String) -> Result<Img> {
         debug!("下载照片{}", file_id);
-        let image = crate::media::fetch_for_detection(
+        let image = crate::services::media::fetch_for_detection(
             &state.s3_client,
             state.image_backend,
             file_id,

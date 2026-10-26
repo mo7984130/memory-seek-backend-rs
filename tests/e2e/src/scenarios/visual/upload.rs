@@ -98,9 +98,9 @@ impl Scenario for UploadVisualScenario {
 
         // 三档 token 均绑定到 file_id 与当前浏览者
         let viewer = setup.session.user_id;
-        let tokens_ok = token_matches(view.thumbnail_token.as_ref(), &row.file_id, viewer)
-            && token_matches(view.preview_token.as_ref(), &row.file_id, viewer)
-            && token_matches(view.original_token.as_ref(), &row.file_id, viewer);
+        let tokens_ok = token_matches(&view.tokens.thumbnail, &row.file_id, viewer)
+            && token_matches(&view.tokens.preview, &row.file_id, viewer)
+            && token_matches(&view.tokens.original, &row.file_id, viewer);
 
         // S3 对象已落盘且内容与上传字节一致
         let s3_ok = ctx.s3_bytes(&row.file_id).await.as_deref() == Some(setup.bytes.as_slice());

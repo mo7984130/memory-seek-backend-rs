@@ -61,8 +61,8 @@ impl Scenario for DownloadOriginalScenario {
         let view = super::upload(&session, bytes.clone()).await?;
         Ok(DownloadSetup {
             bytes,
-            original_token: view.original_token.unwrap_or_default(),
-            thumbnail_token: view.thumbnail_token.unwrap_or_default(),
+            original_token: view.tokens.original,
+            thumbnail_token: view.tokens.thumbnail,
             visual_id: view.id,
             session,
         })
@@ -114,8 +114,8 @@ impl Scenario for DownloadImageThumbnailScenario {
 
     type Error = E2eError;
 
-    /// (状态码, content-type, 字节)
-    type Output = (u16, Option<String>, Vec<u8>);
+    /// (首次状态码, 首次 content-type, 首次字节, 二次状态码, 二次字节)
+    type Output = (u16, Option<String>, Vec<u8>, u16, Vec<u8>);
 
     type Setup = DownloadSetup;
 
@@ -125,8 +125,8 @@ impl Scenario for DownloadImageThumbnailScenario {
         let view = super::upload(&session, bytes.clone()).await?;
         Ok(DownloadSetup {
             bytes,
-            original_token: view.original_token.unwrap_or_default(),
-            thumbnail_token: view.thumbnail_token.unwrap_or_default(),
+            original_token: view.tokens.original,
+            thumbnail_token: view.tokens.thumbnail,
             visual_id: view.id,
             session,
         })
@@ -144,7 +144,15 @@ impl Scenario for DownloadImageThumbnailScenario {
             .get("content-type")
             .and_then(|value| value.to_str().ok())
             .map(str::to_string);
-        Ok((status, content_type, response.body))
+        // 第二次请求应直接命中 OSS 中的处理产物
+        let second = api::visual::download(&ctx.api_client(), &setup.thumbnail_token).await?;
+        Ok((
+            status,
+            content_type,
+            response.body,
+            second.status.as_u16(),
+            second.body,
+        ))
     }
 
     async fn validate(
@@ -153,13 +161,16 @@ impl Scenario for DownloadImageThumbnailScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let (status, content_type, bytes) = output;
+        let (status, content_type, first, second_status, second) = output;
         // 缩略图应为 WebP(RIFF 容器 + 偏移 8 处 "WEBP")
-        let is_webp = bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP";
+        let is_webp =
+            |bytes: &[u8]| bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP";
         Ok(!setup.thumbnail_token.is_empty()
             && *status == 200
             && content_type.as_deref() == Some("image/webp")
-            && is_webp)
+            && is_webp(first)
+            && *second_status == 200
+            && first == second)
     }
 
     /// 收尾: 删除 setup 阶段上传的影像。

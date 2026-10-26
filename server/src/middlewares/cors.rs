@@ -18,5 +18,13 @@ pub fn layer() -> CorsLayer {
             HeaderName::from_static("x-trace-id"),
             HeaderName::from_static("x-user-id"),
             HeaderName::from_static("x-refresh-token"),
+            HeaderName::from_static("range"),
+        ])
+        // 视频拖动依赖 206 / Content-Range, 跨域时需显式暴露给前端脚本
+        .expose_headers([
+            HeaderName::from_static("content-range"),
+            HeaderName::from_static("accept-ranges"),
+            HeaderName::from_static("content-length"),
+            HeaderName::from_static("content-type"),
         ])
 }

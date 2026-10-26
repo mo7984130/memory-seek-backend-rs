@@ -81,9 +81,9 @@ impl Scenario for GetVisualInfoScenario {
             && view.width == row.width as u32
             && view.height == row.height as u32;
         let viewer = setup.session.user_id;
-        let tokens_ok = token_matches(view.thumbnail_token.as_ref(), &row.file_id, viewer)
-            && token_matches(view.preview_token.as_ref(), &row.file_id, viewer)
-            && token_matches(view.original_token.as_ref(), &row.file_id, viewer);
+        let tokens_ok = token_matches(&view.tokens.thumbnail, &row.file_id, viewer)
+            && token_matches(&view.tokens.preview, &row.file_id, viewer)
+            && token_matches(&view.tokens.original, &row.file_id, viewer);
         Ok(view_ok && tokens_ok)
     }
 }

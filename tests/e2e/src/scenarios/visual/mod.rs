@@ -154,16 +154,16 @@ pub fn seed_missing() -> HttpError {
 }
 
 /// 写真用:断言视觉 token 与库中记录一致。
-pub fn token_matches(token: Option<&String>, file_id: &str, viewer: UserId) -> bool {
-    token
-        .and_then(|t| types_visual::VisualToken::decrypt(t).ok())
+pub fn token_matches(token: &str, file_id: &str, viewer: UserId) -> bool {
+    types_visual::VisualToken::decrypt(token)
+        .ok()
         .is_some_and(|t| t.file_id == file_id && t.viewer_id == viewer)
 }
 
 /// 断言视觉 token 可解密且绑定到指定浏览者。
-pub fn token_viewer(token: Option<&String>, viewer: UserId) -> bool {
-    token
-        .and_then(|t| types_visual::VisualToken::decrypt(t).ok())
+pub fn token_viewer(token: &str, viewer: UserId) -> bool {
+    types_visual::VisualToken::decrypt(token)
+        .ok()
         .is_some_and(|t| t.viewer_id == viewer)
 }
 

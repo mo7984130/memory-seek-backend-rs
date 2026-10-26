@@ -86,7 +86,7 @@ impl Scenario for GetVisualsCursorScenario {
         let viewer_ok = page
             .records
             .iter()
-            .all(|p| token_viewer(p.original_token.as_ref(), setup.session.user_id));
+            .all(|p| token_viewer(&p.tokens.original, setup.session.user_id));
         Ok(size_ok && viewer_ok)
     }
 }

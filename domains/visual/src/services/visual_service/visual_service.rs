@@ -1,6 +1,5 @@
-use std::{pin::Pin, sync::Arc};
+use std::sync::Arc;
 
-use bytes::Bytes;
 use common_core::{
     error::{
         AppError, ContextualError,
@@ -13,14 +12,11 @@ use common_core::{
     types::CursorPage,
 };
 use common_metrics::{MetricsTimerExt, metrics_name};
-use file_validator::{FileMetaData, FileValidator};
-use futures::Stream;
-use oss::OssError;
+use file_validator::FileMetaData;
 use tracing::instrument;
 
 use crate::{
-    mappers::{derivative_mapper::DerivativeMapper, visual_mapper::VisualMapper},
-    media,
+    mappers::visual_mapper::VisualMapper,
     repo::VisualRepo,
     services::visual_service::{
         AfterVisualDelete, AfterVisualUpload, VisualDeleteContext, publish_after_visual_delete,
@@ -30,16 +26,14 @@ use crate::{
 };
 use audit::{AuditEvent, AuditRecorder};
 use common_core::Result;
-use types_visual::derivative::{DerivativeKind, DerivativeStatus};
 use types_visual::{
-    VisualToken, VisualTokenType,
     dto::visual::{VisualCursorParam, VisualView},
     models::{DeleteVisualsParam, ExistsByHashBatchParam},
 };
 
 use types_core::cursor::TimeIdCursor;
 use types_identity::auth::user::UserId;
-use types_visual::{visual::VisualId, visual::VisualKind};
+use types_visual::visual::VisualId;
 
 pub struct VisualService;
 
@@ -119,6 +113,13 @@ impl VisualService {
                 id: last_vo.id,
                 time_at: last_vo.created_at,
             }))
+    }
+
+    /// 生成影像在对象存储中的 key（按日期分目录）
+    #[inline]
+    pub fn get_visual_s3_key(uuid: &str, metadata: &FileMetaData) -> String {
+        let date_path = common_core::time::now().format("%Y/%m/%d");
+        format!("visuals/{}/{}.{}", date_path, uuid, metadata.format)
     }
 }
 
@@ -221,6 +222,20 @@ impl VisualService {
         state: Arc<VisualState>,
         event: Arc<AfterVisualDelete>,
     ) -> common_core::Result<()> {
+        // 删除处理产物(processed/{file_id}/ 下的缩略/预览/裁剪变体)
+        for visual in &event.visuals {
+            let prefix = format!("processed/{}/", visual.file_id);
+            match state.s3_client.list(&prefix).await {
+                Ok(keys) if !keys.is_empty() => {
+                    if let Err(error) = state.s3_client.delete_batch(keys).await {
+                        tracing::warn!(%prefix, %error, "删除图片处理产物失败");
+                    }
+                }
+                Ok(_) => {}
+                Err(error) => tracing::warn!(%prefix, %error, "列出图片处理产物失败"),
+            }
+        }
+
         // 删除影像文件
         let file_ids = event
             .visuals
@@ -255,200 +270,6 @@ impl VisualService {
     ) -> common_core::Result<()> {
         VisualRepo::after_visual_upload(&state).await;
         Ok(())
-    }
-}
-
-/// 影像下载结果，Controller 根据此类型构建 HTTP 响应
-pub enum ImageDownloadData {
-    /// 处理后的图片(缩略图/预览/裁剪),MIME 随处理方式变化
-    Processed {
-        /// 处理产物字节
-        bytes: Bytes,
-        /// 处理产物 MIME,按其字节魔数嗅探(后端支持处理时为处理产物格式,
-        /// 后端忽略处理参数而原样返回时则为原始文件的真实格式)
-        content_type: &'static str,
-    },
-    /// 原始影像 / 视频衍生片,以流式返回,动态内容类型
-    Original {
-        /// 影像字节流
-        stream: Pin<Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>>,
-        /// 根据已验证文件格式推断的 MIME 类型
-        content_type: &'static str,
-    },
-    /// 视频衍生片尚未生成完成(异步转码中), 客户端应稍后重试
-    NotReady,
-}
-
-// 影像下载
-impl VisualService {
-    /// 依 VisualToken 下载影像，返回处理后的数据或原始流；视频衍生片转码中返回 `NotReady`
-    #[common_macros::metered]
-    #[tracing::instrument(
-        skip_all,
-        fields(viewer_id = %token.viewer_id, file_id = %token.file_id)
-    )]
-    pub async fn download_visual(
-        state: &VisualState,
-        token: VisualToken,
-    ) -> Result<ImageDownloadData> {
-        // 浏览埋点:仅预览/原图访问计入,缩略图/裁剪不计入
-        if matches!(
-            token.token_type,
-            VisualTokenType::Preview | VisualTokenType::Original
-        ) {
-            let db = state.db.clone();
-            let token = token.clone();
-            tokio::spawn(async move {
-                common_db::db_transaction!(&db, |txn| {
-                    let Some(visual_id) =
-                        VisualMapper::query_visual_id_by_file_id(txn, &token.file_id).await?
-                    else {
-                        return Ok(());
-                    };
-                    AuditRecorder::append(
-                        txn,
-                        AuditEvent::new("view")
-                            .with_actor(token.viewer_id.0)
-                            .with_target("visual", visual_id.0),
-                    )
-                    .await?;
-                    Ok(())
-                })
-                .await
-            });
-        }
-
-        match (token.kind, &token.token_type) {
-            // 图片:缩略图 / 预览 / 人脸裁剪,统一走 OSS 图片处理
-            (
-                VisualKind::Image,
-                VisualTokenType::Thumbnail
-                | VisualTokenType::Preview
-                | VisualTokenType::Crop { .. },
-            ) => {
-                let op = match &token.token_type {
-                    VisualTokenType::Thumbnail => media::ProcessOp::Thumbnail,
-                    VisualTokenType::Preview => media::ProcessOp::Preview,
-                    VisualTokenType::Crop {
-                        bbox,
-                        source_dimensions,
-                    } => media::ProcessOp::Crop {
-                        bbox: *bbox,
-                        source: types_visual::ImageDimensions {
-                            width: source_dimensions.width,
-                            height: source_dimensions.height,
-                        },
-                    },
-                    _ => unreachable!(),
-                };
-                let bytes = media::process_image(
-                    &state.s3_client,
-                    state.image_backend,
-                    &state.cache_image_processed,
-                    &token.file_id,
-                    &op,
-                )
-                .timed(metrics_name!("s3_download_process"))
-                .await?;
-
-                let content_type =
-                    FileValidator::sniff_content_type(&bytes).unwrap_or("application/octet-stream");
-                Ok(ImageDownloadData::Processed {
-                    bytes,
-                    content_type,
-                })
-            }
-            // 视频:缩略图 / 预览为异步生成的衍生片(缩略片前 N 秒 / 预览片整片压缩)
-            (VisualKind::Video, VisualTokenType::Thumbnail | VisualTokenType::Preview) => {
-                let kind = match token.token_type {
-                    VisualTokenType::Thumbnail => DerivativeKind::Thumbnail,
-                    VisualTokenType::Preview => DerivativeKind::Preview,
-                    _ => unreachable!(),
-                };
-                // 未启用转码时无衍生片, 回退为原视频流
-                if !state.config.transcode.enabled {
-                    return Self::stream_original(state, &token).await;
-                }
-                let visual_id = VisualMapper::query_visual_id_by_file_id(&state.db, &token.file_id)
-                    .await?
-                    .ok_or_warn(
-                        "video_file_id_not_found",
-                        "视频文件不存在",
-                        AppError::not_found("视频文件不存在"),
-                    )?;
-                let derivative = DerivativeMapper::query_one(&state.db, visual_id, kind).await?;
-                let object_key = match derivative {
-                    Some(record) if record.status == DerivativeStatus::Ready => record.object_key,
-                    // 已失败: 不再让客户端轮询
-                    Some(record) if record.status == DerivativeStatus::Failed => {
-                        return Err(ContextualError::warn_without_source(
-                            "video_derivative_failed",
-                            "视频衍生片生成失败",
-                            AppError::not_found("视频衍生片生成失败"),
-                        )
-                        .emit());
-                    }
-                    // 仍在转码中
-                    _ => None,
-                };
-                let Some(object_key) = object_key else {
-                    return Ok(ImageDownloadData::NotReady);
-                };
-                let stream_resp = state
-                    .s3_client
-                    .get_download_stream_response(&object_key)
-                    .timed(metrics_name!("s3_download_stream"))
-                    .await
-                    .into_contextual()?;
-                let stream: Pin<
-                    Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>,
-                > = Box::pin(stream_resp);
-                Ok(ImageDownloadData::Original {
-                    stream,
-                    content_type: kind.mime_type(),
-                })
-            }
-            // 原图 / 原视频:流式下载,MIME 按文件扩展名推断
-            (_, VisualTokenType::Original) => Self::stream_original(state, &token).await,
-            // 视频不支持人脸裁剪
-            (VisualKind::Video, VisualTokenType::Crop { .. }) => {
-                Err(AppError::bad_request("视频不支持裁剪 token"))
-            }
-        }
-    }
-
-    /// 流式下载原始影像(原图 / 原视频)
-    async fn stream_original(
-        state: &VisualState,
-        token: &VisualToken,
-    ) -> Result<ImageDownloadData> {
-        let stream_resp = state
-            .s3_client
-            .get_download_stream_response(&token.file_id)
-            .timed(metrics_name!("s3_download_stream"))
-            .await
-            .into_contextual()?;
-        let stream: Pin<Box<dyn Stream<Item = std::result::Result<Bytes, OssError>> + Send>> =
-            Box::pin(stream_resp);
-        let content_type = match token.kind {
-            VisualKind::Image => {
-                FileValidator::image_content_type(&token.file_id).unwrap_or("image/jpeg")
-            }
-            VisualKind::Video => {
-                FileValidator::video_content_type(&token.file_id).unwrap_or("video/mp4")
-            }
-        };
-        Ok(ImageDownloadData::Original {
-            stream,
-            content_type,
-        })
-    }
-
-    /// 生成影像在对象存储中的 key（按日期分目录）
-    #[inline]
-    pub fn get_visual_s3_key(uuid: &str, metadata: &FileMetaData) -> String {
-        let date_path = common_core::time::now().format("%Y/%m/%d");
-        format!("visuals/{}/{}.{}", date_path, uuid, metadata.format)
     }
 }
 

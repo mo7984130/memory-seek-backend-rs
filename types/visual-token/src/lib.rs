@@ -1,20 +1,15 @@
 //! 统一视觉 Token(图片 / 视频)
 //!
 //! 跨上下文协议 crate:提供视觉访问 token 契约类型(`VisualToken` /
-//! `VisualTokenType` / `FaceBBox` / `ImageDimensions`),供 visual / user(身份)
+//! `VisualTokenKind` / `FaceBBox` / `ImageDimensions`),供 visual / user(身份)
 //! 两个上下文复用,并可随 DTO 一起导出 TS。
 //!
 //! 位于 `types-core`(强类型 ID / `VisualKind`)之上、各域契约 crate 之下 ——
-//! `visual_token` 的 `kind` 字段引用 `VisualKind`,所以该枚举必须留在内核,
-//! 而本 crate 不能反过来依赖 visual 域契约。
+//! Token 的 `kind` 是嵌套枚举:图片携带 [`ImageTokenType`],视频携带
+//! [`VideoTokenType`],从类型上排除“视频裁剪”等非法组合。
 //!
 //! 明文序列化由 serde 派生；对外契约是[`VisualTokenStr`](不透明字符串)。
-//! unit 类型为字符串, `Crop` 作为携带数据的变体嵌套输出,形如:
-//! ```json
-//! { "fileId": "...", "kind": "Image", "tokenType": "thumbnail", "viewerId": 1 }
-//! { "fileId": "...", "kind": "Image", "tokenType": { "crop": { "bbox": ..., "sourceDimensions": ... } }, "viewerId": 1 }
-//! ```
-//! 明文形态并非对外契约(对外为不透明字符串),由服务端自产自销。
+//! 明文形态并非对外契约,由服务端自产自销。
 //! 加解密(`VisualToken::encrypt`/`decrypt` 与 [`VisualTokenStr`] 的同名方法)
 //! 仅在 `crypto` feature 下可用。
 
@@ -23,17 +18,18 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "crypto")]
 use common_core::ContextualResult;
 #[cfg(feature = "crypto")]
+use common_core::error::{AppError, ContextualError};
+#[cfg(feature = "crypto")]
 use common_crypto::token_cipher;
 
 use types_core::{UserId, VisualKind};
 
-/// 视觉 token 类型
+/// 图片 token 类型
 ///
-/// `Crop`(人脸封面)携带裁剪信息,由类型系统保证"仅 Crop 需要
-/// bbox / 原图尺寸";其余类型不携带。
+/// `Crop`(人脸封面)携带裁剪信息,仅图片支持。
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]
-pub enum VisualTokenType {
+pub enum ImageTokenType {
     Thumbnail,
     Preview,
     Original,
@@ -42,6 +38,47 @@ pub enum VisualTokenType {
         #[serde(rename = "sourceDimensions")]
         source_dimensions: ImageDimensions,
     },
+}
+
+/// 视频 token 类型(没有 Crop)
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum VideoTokenType {
+    Thumbnail,
+    Preview,
+    Original,
+}
+
+/// 视觉 token 类型维度:图片 / 视频,并内嵌各自的访问类型
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum VisualTokenKind {
+    Image(ImageTokenType),
+    Video(VideoTokenType),
+}
+
+impl VisualTokenKind {
+    /// 对应的共享视觉类型
+    pub fn visual_kind(self) -> VisualKind {
+        match self {
+            Self::Image(_) => VisualKind::Image,
+            Self::Video(_) => VisualKind::Video,
+        }
+    }
+
+    /// 是否计入浏览审计(预览 / 原图)
+    pub fn is_view_event(self) -> bool {
+        matches!(
+            self,
+            Self::Image(ImageTokenType::Preview | ImageTokenType::Original)
+                | Self::Video(VideoTokenType::Preview | VideoTokenType::Original)
+        )
+    }
+
+    /// 是否为视频 token
+    pub fn is_video(self) -> bool {
+        matches!(self, Self::Video(_))
+    }
 }
 
 /// 人脸边界框(归一化坐标,x1/y1 左上角、x2/y2 右下角,取值范围 0~1)
@@ -111,10 +148,8 @@ impl FaceBBox {
 pub struct VisualToken {
     /// 文件路径
     pub file_id: String,
-    /// 视觉类型:图片 / 视频
-    pub kind: VisualKind,
-    /// 视觉类型
-    pub token_type: VisualTokenType,
+    /// 视觉类型 + 访问类型(图片 / 视频,各自内嵌操作)
+    pub kind: VisualTokenKind,
     /// 浏览者用户 ID(视觉访问审计主体)
     pub viewer_id: UserId,
 }
@@ -126,12 +161,22 @@ impl VisualToken {
         token_cipher().decrypt(token)
     }
 
-    /// 将视觉令牌加密为字符串；nonce seed 纳入 `viewer_id`,避免 nonce 复用(需启用 `crypto` feature)
+    /// 将视觉令牌加密为字符串。
+    ///
+    /// nonce 种子取完整明文:同一文件的缩略图 / 预览 / 原图 token 以及不同裁剪参数
+    /// 都会得到不同的 nonce,避免 AES-GCM nonce 复用。相同明文仍得到相同密文,
+    /// 客户端可以把它当作稳定的缓存键。
     #[cfg(feature = "crypto")]
     pub fn encrypt(&self) -> ContextualResult<String> {
-        // nonce seed 纳入 viewer_id:同一文件的 token 按浏览者区分,
-        // 避免"相同 nonce 加密不同明文"导致的 AES-GCM nonce 复用
-        let seed = format!("{}:{}", self.viewer_id, self.file_id);
+        let seed = serde_json::to_string(self).map_err(|error| {
+            ContextualError::error(
+                "token_nonce_seed_error",
+                "序列化 Token nonce 种子失败",
+                error,
+                AppError::InternalServerError,
+            )
+        })?;
+
         token_cipher().encrypt(self, Some(&seed))
     }
 
@@ -139,8 +184,7 @@ impl VisualToken {
     pub fn image_thumbnail(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
-            kind: VisualKind::Image,
-            token_type: VisualTokenType::Thumbnail,
+            kind: VisualTokenKind::Image(ImageTokenType::Thumbnail),
             viewer_id: viewer,
         }
     }
@@ -149,8 +193,7 @@ impl VisualToken {
     pub fn image_preview(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
-            kind: VisualKind::Image,
-            token_type: VisualTokenType::Preview,
+            kind: VisualTokenKind::Image(ImageTokenType::Preview),
             viewer_id: viewer,
         }
     }
@@ -159,8 +202,7 @@ impl VisualToken {
     pub fn video_thumbnail(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
-            kind: VisualKind::Video,
-            token_type: VisualTokenType::Thumbnail,
+            kind: VisualTokenKind::Video(VideoTokenType::Thumbnail),
             viewer_id: viewer,
         }
     }
@@ -169,18 +211,20 @@ impl VisualToken {
     pub fn video_preview(viewer: UserId, file_id: impl Into<String>) -> Self {
         Self {
             file_id: file_id.into(),
-            kind: VisualKind::Video,
-            token_type: VisualTokenType::Preview,
+            kind: VisualTokenKind::Video(VideoTokenType::Preview),
             viewer_id: viewer,
         }
     }
 
     /// 创建原图/原视频 token
     pub fn original(kind: VisualKind, viewer: UserId, file_id: impl Into<String>) -> Self {
+        let kind = match kind {
+            VisualKind::Image => VisualTokenKind::Image(ImageTokenType::Original),
+            VisualKind::Video => VisualTokenKind::Video(VideoTokenType::Original),
+        };
         Self {
             file_id: file_id.into(),
             kind,
-            token_type: VisualTokenType::Original,
             viewer_id: viewer,
         }
     }
@@ -194,11 +238,10 @@ impl VisualToken {
     ) -> Self {
         Self {
             file_id: file_id.into(),
-            kind: VisualKind::Image,
-            token_type: VisualTokenType::Crop {
+            kind: VisualTokenKind::Image(ImageTokenType::Crop {
                 bbox,
                 source_dimensions,
-            },
+            }),
             viewer_id: viewer,
         }
     }
@@ -284,8 +327,10 @@ mod tests {
     fn test_image_thumbnail_constructor() {
         let token = VisualToken::image_thumbnail(UserId(7), "abc123");
         assert_eq!(token.file_id, "abc123");
-        assert_eq!(token.kind, VisualKind::Image);
-        assert_eq!(token.token_type, VisualTokenType::Thumbnail);
+        assert_eq!(
+            token.kind,
+            VisualTokenKind::Image(ImageTokenType::Thumbnail)
+        );
         assert_eq!(token.viewer_id, UserId(7));
     }
 
@@ -293,41 +338,46 @@ mod tests {
     fn test_image_thumbnail_accepts_string() {
         let token = VisualToken::image_thumbnail(UserId(1), String::from("file-001"));
         assert_eq!(token.file_id, "file-001");
-        assert_eq!(token.token_type, VisualTokenType::Thumbnail);
+        assert_eq!(
+            token.kind,
+            VisualTokenKind::Image(ImageTokenType::Thumbnail)
+        );
     }
 
     #[test]
     fn test_video_thumbnail_constructor() {
         let token = VisualToken::video_thumbnail(UserId(8), "video-001");
         assert_eq!(token.file_id, "video-001");
-        assert_eq!(token.kind, VisualKind::Video);
-        assert_eq!(token.token_type, VisualTokenType::Thumbnail);
+        assert_eq!(
+            token.kind,
+            VisualTokenKind::Video(VideoTokenType::Thumbnail)
+        );
         assert_eq!(token.viewer_id, UserId(8));
     }
 
     #[test]
     fn test_video_preview_constructor() {
         let token = VisualToken::video_preview(UserId(9), "video-002");
-        assert_eq!(token.kind, VisualKind::Video);
-        assert_eq!(token.token_type, VisualTokenType::Preview);
+        assert_eq!(token.kind, VisualTokenKind::Video(VideoTokenType::Preview));
     }
 
     #[test]
     fn test_image_preview_constructor() {
         let token = VisualToken::image_preview(UserId(2), "preview-id");
         assert_eq!(token.file_id, "preview-id");
-        assert_eq!(token.kind, VisualKind::Image);
-        assert_eq!(token.token_type, VisualTokenType::Preview);
+        assert_eq!(token.kind, VisualTokenKind::Image(ImageTokenType::Preview));
     }
 
     #[test]
     fn test_original_constructor() {
         let token = VisualToken::original(VisualKind::Image, UserId(3), "original-id");
         assert_eq!(token.file_id, "original-id");
-        assert_eq!(token.kind, VisualKind::Image);
-        assert_eq!(token.token_type, VisualTokenType::Original);
+        assert_eq!(token.kind, VisualTokenKind::Image(ImageTokenType::Original));
         let video_token = VisualToken::original(VisualKind::Video, UserId(3), "video-id");
-        assert_eq!(video_token.kind, VisualKind::Video);
+        assert_eq!(
+            video_token.kind,
+            VisualTokenKind::Video(VideoTokenType::Original)
+        );
     }
 
     #[test]
@@ -344,12 +394,11 @@ mod tests {
         };
         let token = VisualToken::crop(UserId(4), "crop-id", bbox, dimensions);
         assert_eq!(token.file_id, "crop-id");
-        assert_eq!(token.kind, VisualKind::Image);
-        match token.token_type {
-            VisualTokenType::Crop {
+        match token.kind {
+            VisualTokenKind::Image(ImageTokenType::Crop {
                 bbox: b,
                 source_dimensions,
-            } => {
+            }) => {
                 assert_eq!(b.x1, 0.1);
                 assert_eq!(b.y1, 0.2);
                 assert_eq!(b.x2, 0.6);
@@ -366,8 +415,10 @@ mod tests {
         let json = serde_json::to_string(&token).unwrap();
         let deserialized: VisualToken = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.file_id, "file-abc");
-        assert_eq!(deserialized.kind, VisualKind::Image);
-        assert_eq!(deserialized.token_type, VisualTokenType::Thumbnail);
+        assert_eq!(
+            deserialized.kind,
+            VisualTokenKind::Image(ImageTokenType::Thumbnail)
+        );
         assert_eq!(deserialized.viewer_id, UserId(11));
     }
 
@@ -376,8 +427,7 @@ mod tests {
         let token = VisualToken::image_preview(UserId(5), "img-1");
         let json = serde_json::to_value(&token).unwrap();
         assert!(json.is_object());
-        assert_eq!(json["tokenType"], "preview");
-        assert_eq!(json["kind"], "Image");
+        assert_eq!(json["kind"]["image"], "preview");
         assert_eq!(json["fileId"], "img-1");
         assert_eq!(json["viewerId"], "5");
     }
@@ -387,10 +437,12 @@ mod tests {
         let token = VisualToken::video_thumbnail(UserId(13), "video-x");
         let json = serde_json::to_string(&token).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(value["kind"], "Video");
-        assert_eq!(value["tokenType"], "thumbnail");
+        assert_eq!(value["kind"]["video"], "thumbnail");
         let deserialized: VisualToken = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.kind, VisualKind::Video);
+        assert_eq!(
+            deserialized.kind,
+            VisualTokenKind::Video(VideoTokenType::Thumbnail)
+        );
     }
 
     #[test]
@@ -407,16 +459,19 @@ mod tests {
         };
         let token = VisualToken::crop(UserId(12), "file-xyz", bbox, dimensions);
         let json = serde_json::to_string(&token).unwrap();
-        // Crop 作为携带数据的变体,数据嵌套在 tokenType 内
+        // Crop 作为携带数据的变体,数据嵌套在图片 kind 内
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(value["tokenType"]["crop"]["bbox"]["x1"], 0.05);
-        assert_eq!(value["tokenType"]["crop"]["sourceDimensions"]["width"], 800);
+        assert_eq!(value["kind"]["image"]["crop"]["bbox"]["x1"], 0.05);
+        assert_eq!(
+            value["kind"]["image"]["crop"]["sourceDimensions"]["width"],
+            800
+        );
         let deserialized: VisualToken = serde_json::from_str(&json).unwrap();
-        match deserialized.token_type {
-            VisualTokenType::Crop {
+        match deserialized.kind {
+            VisualTokenKind::Image(ImageTokenType::Crop {
                 bbox: b,
                 source_dimensions,
-            } => {
+            }) => {
                 assert_eq!(b.x1, 0.05);
                 assert_eq!(source_dimensions, dimensions);
             }
@@ -428,7 +483,7 @@ mod tests {
     #[test]
     fn test_token_without_kind_fails_deserialize() {
         // kind 为必填字段,缺 kind 应反序列化失败
-        let json = r#"{"fileId":"file-abc","tokenType":"preview","viewerId":1}"#;
+        let json = r#"{"fileId":"file-abc","viewerId":1}"#;
         let result: Result<VisualToken, _> = serde_json::from_str(json);
         assert!(result.is_err(), "缺 kind 字段应反序列化失败");
     }
@@ -436,23 +491,23 @@ mod tests {
     #[test]
     fn test_crop_without_bbox_fails_deserialize() {
         // Crop 变体缺 bbox 字段应反序列化失败
-        let json = r#"{"fileId":"file-abc","kind":"Image","tokenType":{"crop":{"sourceDimensions":{"width":800,"height":400}}},"viewerId":1}"#;
+        let json = r#"{"fileId":"file-abc","kind":{"image":{"crop":{"sourceDimensions":{"width":800,"height":400}}}},"viewerId":1}"#;
         let result: Result<VisualToken, _> = serde_json::from_str(json);
         assert!(result.is_err(), "Crop 缺 bbox 应反序列化失败");
     }
 
     #[test]
     fn test_unknown_token_type_fails_deserialize() {
-        let json = r#"{"fileId":"file-abc","kind":"Image","tokenType":"unknown","viewerId":1}"#;
+        let json = r#"{"fileId":"file-abc","kind":{"image":"unknown"},"viewerId":1}"#;
         let result: Result<VisualToken, _> = serde_json::from_str(json);
         assert!(result.is_err(), "未知 type 应反序列化失败");
     }
 
     #[test]
     fn test_missing_viewer_fails_deserialize() {
-        let json = r#"{"fileId":"file-abc","type":"preview"}"#;
+        let json = r#"{"fileId":"file-abc","kind":{"image":"preview"}}"#;
         let result: Result<VisualToken, _> = serde_json::from_str(json);
-        assert!(result.is_err(), "缺 viewerId 的旧 token 应反序列化失败");
+        assert!(result.is_err(), "缺 viewerId 的 token 应反序列化失败");
     }
 
     #[test]
@@ -482,8 +537,10 @@ mod tests {
         // 持密钥方可显式解密还原
         let decrypted = parsed.decrypt().unwrap();
         assert_eq!(decrypted.file_id, "img-1");
-        assert_eq!(decrypted.kind, VisualKind::Image);
-        assert_eq!(decrypted.token_type, VisualTokenType::Preview);
+        assert_eq!(
+            decrypted.kind,
+            VisualTokenKind::Image(ImageTokenType::Preview)
+        );
         assert_eq!(decrypted.viewer_id, UserId(5));
     }
 
@@ -544,8 +601,10 @@ mod cipher_roundtrip_tests {
         // 验证能解密回来
         let decrypted: VisualToken = VisualToken::decrypt(&token).unwrap();
         assert_eq!(decrypted.file_id, "avatar-file-id");
-        assert_eq!(decrypted.kind, VisualKind::Image);
-        assert_eq!(decrypted.token_type, VisualTokenType::Thumbnail);
+        assert_eq!(
+            decrypted.kind,
+            VisualTokenKind::Image(ImageTokenType::Thumbnail)
+        );
         assert_eq!(decrypted.viewer_id, UserId(9));
     }
 
@@ -556,7 +615,65 @@ mod cipher_roundtrip_tests {
             .encrypt()
             .unwrap();
         let decrypted: VisualToken = VisualToken::decrypt(&token).unwrap();
-        assert_eq!(decrypted.kind, VisualKind::Video);
-        assert_eq!(decrypted.token_type, VisualTokenType::Thumbnail);
+        assert_eq!(
+            decrypted.kind,
+            VisualTokenKind::Video(VideoTokenType::Thumbnail)
+        );
+    }
+
+    #[test]
+    fn distinct_plaintexts_use_distinct_nonces() {
+        test_cipher();
+        let viewer = UserId(21);
+        let file_id = "visuals/2026/01/01/same.png";
+
+        // token = base64(nonce[12] + ciphertext);12 字节 nonce 恰好编码成前 16 个字符。
+        let nonce = |token: &str| token[..16].to_owned();
+
+        let thumbnail = VisualToken::image_thumbnail(viewer, file_id)
+            .encrypt()
+            .unwrap();
+        let preview = VisualToken::image_preview(viewer, file_id)
+            .encrypt()
+            .unwrap();
+        let original = VisualToken::original(VisualKind::Image, viewer, file_id)
+            .encrypt()
+            .unwrap();
+
+        // 同一文件的三类 token 明文不同,nonce 必须互不相同。
+        assert_ne!(nonce(&thumbnail), nonce(&preview));
+        assert_ne!(nonce(&thumbnail), nonce(&original));
+        assert_ne!(nonce(&preview), nonce(&original));
+
+        // 浏览者不同同样要换 nonce。
+        let other_viewer = VisualToken::image_thumbnail(UserId(22), file_id)
+            .encrypt()
+            .unwrap();
+        assert_ne!(nonce(&thumbnail), nonce(&other_viewer));
+
+        // 裁剪参数不同也必须换 nonce。
+        let dimensions = ImageDimensions {
+            width: 800,
+            height: 400,
+        };
+        let bbox = |x1: f32| FaceBBox {
+            x1,
+            y1: 0.,
+            x2: 0.5,
+            y2: 0.5,
+        };
+        let crop_a = VisualToken::crop(viewer, file_id, bbox(0.), dimensions)
+            .encrypt()
+            .unwrap();
+        let crop_b = VisualToken::crop(viewer, file_id, bbox(0.1), dimensions)
+            .encrypt()
+            .unwrap();
+        assert_ne!(nonce(&crop_a), nonce(&crop_b));
+
+        // 相同明文保持确定性,客户端可以继续把 token 当稳定缓存键。
+        let again = VisualToken::image_thumbnail(viewer, file_id)
+            .encrypt()
+            .unwrap();
+        assert_eq!(thumbnail, again);
     }
 }

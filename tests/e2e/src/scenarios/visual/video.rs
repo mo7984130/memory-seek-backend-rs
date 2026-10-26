@@ -1,6 +1,6 @@
 //! 视频衍生片：上传后异步生成缩略/预览片，下载轮询至就绪。
 //!
-//! 覆盖：视频上传 → `thumbnail_token` 下载在转码完成前返回 202、
+//! 覆盖：视频上传 → `tokens.thumbnail` 下载在转码完成前返回 202、
 //! 完成后返回 200 且为 `video/mp4` 的衍生片（非原视频）。
 
 use std::time::Duration;
@@ -70,8 +70,8 @@ impl Scenario for VideoDerivativeScenario {
         let bytes = unique_mp4(&unique_tag(task));
         let view = super::upload_video(&session, bytes).await?;
         Ok(VideoDerivativeSetup {
-            thumbnail_token: view.thumbnail_token.unwrap_or_default(),
-            preview_token: view.preview_token.unwrap_or_default(),
+            thumbnail_token: view.tokens.thumbnail,
+            preview_token: view.tokens.preview,
             visual_id: view.id,
             session,
         })

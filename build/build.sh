@@ -24,8 +24,8 @@ CONTAINER_TARGET_DIR="target/container"
 # 运行镜像(内置 ffmpeg)与 ffmpeg 来源
 # 锁定 BtbN autobuild tag + sha256, 保证可复现; 需要加速时可换镜像站
 RUNTIME_IMAGE="memory-seek-server-test:local"
-FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-27-13-04/ffmpeg-n9.0.2-12-gc867e13549-linux64-gpl-9.0.tar.xz"
-FFMPEG_SHA256="16ca27dbb0d113d74fc6072ef3436fcb66efff2c501416317e6b6961b242f992"
+FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-21-13-06/ffmpeg-n9.0.2-31-gc89d6ee1ca-linux64-gpl-9.0.tar.xz"
+FFMPEG_SHA256="2212009529e7a18809c0a23700e8045364c17853c4390cf8c051e6b65dd97bde"
 
 # 构建基础镜像（如果不存在）
 if ! podman image exists $IMAGE_NAME; then

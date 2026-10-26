@@ -1,9 +1,11 @@
+mod download;
 mod on_visual_delete;
 mod upload;
 mod visual_events;
 #[allow(clippy::module_inception)]
 mod visual_service;
 
+pub(crate) use download::*;
 pub(crate) use on_visual_delete::*;
 pub(crate) use visual_events::*;
 pub(crate) use visual_service::*;

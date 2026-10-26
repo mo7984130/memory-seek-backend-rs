@@ -80,7 +80,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     Ok(())
 }
 
-/// 校验视频转码配置并探测 ffmpeg 可用性；启用时非法配置会启动失败
+/// 校验视频转码配置并探测 ffmpeg 可用性；非法配置会启动失败
 async fn validate_transcode(config: &AppConfig) -> Result<()> {
     let transcode = &config.visual.transcode;
 
@@ -93,19 +93,28 @@ async fn validate_transcode(config: &AppConfig) -> Result<()> {
         .emit());
     }
 
-    if !transcode.enabled {
-        return Ok(());
-    }
-
     match timeout(
         Duration::from_secs(5),
         Command::new(&transcode.ffmpeg_path)
-            .arg("-version")
+            .args(["-hide_banner", "-encoders"])
             .output(),
     )
     .await
     {
-        Ok(Ok(output)) if output.status.success() => Ok(()),
+        Ok(Ok(output)) if output.status.success() => {
+            let encoders = String::from_utf8_lossy(&output.stdout);
+            if encoders.contains("libsvtav1") {
+                Ok(())
+            } else {
+                Err(ContextualError::warn_without_source(
+                    "visual_ffmpeg_missing_libsvtav1",
+                    "ffmpeg 缺少 libsvtav1 编码器; 请安装带该编码器的 ffmpeg \
+                     (如 BtbN 静态构建), 否则视频转码会失败",
+                    AppError::InternalServerError,
+                )
+                .emit())
+            }
+        }
         Ok(Ok(output)) => Err(ContextualError::warn_without_source(
             "visual_ffmpeg_unavailable",
             format!(
