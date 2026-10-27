@@ -281,6 +281,13 @@ fn fit_within(image: DynamicImage, max_width: u32, max_height: u32) -> DynamicIm
     image.resize(max_width, max_height, FilterType::Lanczos3)
 }
 
+/// OSS 图片处理参数:等比缩放到 `max_width×max_height` 框内。
+///
+/// OSS 的 resize 参数必须带 `w_` / `h_` 前缀,写成裸数字会被解析成 0 并返回 400。
+fn oss_resize_param(max_width: u32, max_height: u32) -> String {
+    format!("image/resize,m_lfit,w_{max_width},h_{max_height}")
+}
+
 /// 供人脸检测取图: 按后端处理为限制在 `max_width×max_height` 内的位图(仅缩不放)
 pub async fn fetch_for_detection(
     s3: &S3Client,
@@ -291,7 +298,7 @@ pub async fn fetch_for_detection(
 ) -> Result<DynamicImage> {
     match backend {
         ResolvedImageProcessor::Oss => {
-            let param = format!("image/resize,m_lfit,{max_width},{max_height}");
+            let param = oss_resize_param(max_width, max_height);
             let bytes = s3
                 .download_with_process(file_id, &param)
                 .await
@@ -417,6 +424,14 @@ mod tests {
         let small = DynamicImage::ImageRgb8(RgbImage::from_pixel(100, 80, Rgb([1, 2, 3])));
         let kept = fit_within(small, 1920, 1920);
         assert_eq!((kept.width(), kept.height()), (100, 80));
+    }
+
+    #[test]
+    fn oss_resize_param_prefixes_dimensions() {
+        assert_eq!(
+            oss_resize_param(1920, 1080),
+            "image/resize,m_lfit,w_1920,h_1080"
+        );
     }
 
     #[test]

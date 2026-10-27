@@ -27,7 +27,7 @@ use crate::{
 
 /// 影像下载结果，Controller 根据此类型构建 HTTP 响应
 pub enum ImageDownloadData {
-    /// 已完整载入内存的字节(图片缩略图/裁剪、视频缩略片)
+    /// 已完整载入内存的字节(图片缩略图/裁剪)
     Buffered {
         /// 完整字节
         bytes: Bytes,
@@ -186,7 +186,7 @@ impl VisualService {
             VisualTokenKind::Image(ImageTokenType::Original) => {
                 Self::stream_original(state, &token, range).await
             }
-            // 视频缩略片: 直接字节
+            // 视频缩略片: 流式, 支持 Range(客户端需要按 Range 读取 MP4)
             VisualTokenKind::Video(VideoTokenType::Thumbnail) => {
                 Self::download_video_derivative(state, &token, DerivativeKind::Thumbnail, range)
                     .await
@@ -201,7 +201,7 @@ impl VisualService {
         }
     }
 
-    /// 下载视频衍生片(缩略片直接字节, 预览片流式)
+    /// 下载视频衍生片(缩略片 / 预览片均流式, 透传单段 Range)
     async fn download_video_derivative(
         state: &VisualState,
         token: &VisualToken,
@@ -233,24 +233,9 @@ impl VisualService {
         let Some(object_key) = object_key else {
             return Ok(ImageDownloadData::NotReady);
         };
-        match kind {
-            // 视频缩略片较小, 直接返回完整字节
-            DerivativeKind::Thumbnail => {
-                let bytes = state
-                    .s3_client
-                    .download(&object_key)
-                    .timed(metrics_name!("s3_download"))
-                    .await
-                    .into_contextual()?;
-                Ok(ImageDownloadData::Buffered {
-                    bytes,
-                    content_type: kind.mime_type(),
-                })
-            }
-            DerivativeKind::Preview => {
-                Self::stream_key(state, &object_key, kind.mime_type(), range).await
-            }
-        }
+        // 缩略片和预览片都走 stream_key:客户端(尤其 alhazen)需要对 MP4 做 Range 读取,
+        // 返回 200 + 完整体会让它判定为 non-seekable,首帧/悬停播放都会失败。
+        Self::stream_key(state, &object_key, kind.mime_type(), range).await
     }
 
     /// 处理图片并记录处理耗时
