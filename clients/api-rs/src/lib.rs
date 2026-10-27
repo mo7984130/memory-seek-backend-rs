@@ -41,8 +41,8 @@ pub use storage::{AuthStorage, MemoryStorage, Storage, StorageError};
 #[cfg(feature = "file-storage")]
 pub use storage::FileStorage;
 pub use transport::{
-    HeaderMap, HeaderName, HeaderValue, HttpRequest, HttpResponse, Method, StatusCode, Transport,
-    TransportError,
+    DownloadResponse, HeaderMap, HeaderName, HeaderValue, HttpRequest, HttpResponse, Method,
+    StatusCode, Transport, TransportError,
 };
 
 #[cfg(feature = "reqwest-transport")]

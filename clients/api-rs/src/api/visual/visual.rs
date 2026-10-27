@@ -4,7 +4,7 @@
 
 use crate::client::{Client, Request};
 use crate::error::Result;
-use crate::transport::{HttpResponse, Method};
+use crate::transport::{DownloadResponse, HttpResponse, Method};
 use common_core::time::DateTime;
 use common_core::types::CursorPage;
 use types_core::cursor::TimeIdCursor;
@@ -90,6 +90,22 @@ pub async fn download(client: &Client, token: &str) -> Result<HttpResponse> {
         .raw(Method::GET, format!("/visual/{token}"))
         .no_auth()
         .send()
+        .await
+}
+
+/// 把影像资源流式写入 `dest`(原图 / 缩略图 / 裁剪 / 视频衍生片)。
+///
+/// 与 [`download`] 相同端点,但支持流式的 [`Transport`](crate::Transport) 实现会边读
+/// 响应体边写文件,不会把整个原视频放进内存。非 2xx 不会创建/保留目标文件。
+pub async fn download_to(
+    client: &Client,
+    token: &str,
+    dest: impl AsRef<std::path::Path>,
+) -> Result<DownloadResponse> {
+    client
+        .raw(Method::GET, format!("/visual/{token}"))
+        .no_auth()
+        .download(dest)
         .await
 }
 

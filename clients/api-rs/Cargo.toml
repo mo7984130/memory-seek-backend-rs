@@ -1,6 +1,6 @@
 [package]
 name = "memory-seek-api-rs"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 description = "Memory Seek API 客户端(Rust)，运行时与 HTTP 库无关"
 license = "MIT"
@@ -15,8 +15,8 @@ default = []
 # 跨平台本地文件存储(FileStorage)。
 file-storage = []
 # 基于 reqwest 的 Transport 实现(ReqwestTransport);启用后引入 reqwest。
-# 注意:reqwest 需要调用方提供异步运行时(如 tokio)。
-reqwest-transport = ["dep:reqwest"]
+# 注意:reqwest 需要调用方提供异步运行时(如 tokio);流式下载还需要 tokio 的 fs/io-util。
+reqwest-transport = ["dep:reqwest", "dep:tokio"]
 
 [dependencies]
 common-core = { workspace = true }
@@ -36,6 +36,8 @@ http = { workspace = true }
 # 采用 0.13(与 e2e / memseek-test 使用的 reqwest 同版本,便于类型零成本互通);
 # 工作区 reqwest 固定 0.12 供 oss/rust-s3 使用,二者互不影响。
 reqwest = { version = "0.13", optional = true }
+# reqwest-transport 的流式下载用 tokio::fs 写文件;不启用 reqwest-transport 时不引入 tokio。
+tokio = { workspace = true, optional = true, features = ["fs", "io-util"] }
 
 [dev-dependencies]
 futures = { workspace = true }

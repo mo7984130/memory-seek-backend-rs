@@ -1,5 +1,6 @@
 //! HTTP 客户端:请求构造、鉴权注入、401 自动刷新与统一响应解析。
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
@@ -10,7 +11,8 @@ use crate::config::ApiConfig;
 use crate::error::{ApiError, Result};
 use crate::storage::{AuthStorage, Storage};
 use crate::transport::{
-    HeaderMap, HeaderName, HeaderValue, HttpRequest, HttpResponse, Method, StatusCode, Transport,
+    DownloadResponse, HeaderMap, HeaderName, HeaderValue, HttpRequest, HttpResponse, Method,
+    StatusCode, Transport,
 };
 use common_core::r::R;
 use http::header;
@@ -292,26 +294,47 @@ impl RawRequest<'_> {
         self
     }
 
-    /// 发送一次并返回原始响应(不解析包壳、不重试)。
-    ///
     /// 已显式设置 `Authorization` 头时不再注入存储中的鉴权。
-    pub async fn send(self) -> Result<HttpResponse> {
+    async fn auth_header(&self) -> Result<Option<String>> {
         let has_auth_header = self
             .request
             .headers
             .iter()
             .any(|(key, _)| key.eq_ignore_ascii_case("Authorization"));
-        let auth = if self.request.auth && !has_auth_header {
-            Some(self.client.auth_header().await?)
+        if self.request.auth && !has_auth_header {
+            Ok(Some(self.client.auth_header().await?))
         } else {
-            None
-        };
+            Ok(None)
+        }
+    }
+
+    /// 发送一次并返回原始响应(不解析包壳、不重试)。
+    pub async fn send(self) -> Result<HttpResponse> {
+        let auth = self.auth_header().await?;
         self.client
             .inner
             .transport
             .send(
                 self.client
                     .build_http_request(&self.request, auth.as_deref()),
+            )
+            .await
+            .map_err(ApiError::from)
+    }
+
+    /// 发送一次并把响应体流式写入 `dest`(不解析包壳、不重试)。
+    ///
+    /// 成功时返回的 [`DownloadResponse::bytes`] 是实际写入的字节数;非 2xx 不会
+    /// 创建/保留目标文件,错误响应体放在 [`DownloadResponse::body`] 里。
+    pub async fn download(self, dest: impl AsRef<Path>) -> Result<DownloadResponse> {
+        let auth = self.auth_header().await?;
+        self.client
+            .inner
+            .transport
+            .download(
+                self.client
+                    .build_http_request(&self.request, auth.as_deref()),
+                dest.as_ref(),
             )
             .await
             .map_err(ApiError::from)
@@ -524,6 +547,32 @@ mod tests {
                 .unwrap()
                 .pop_front()
                 .expect("测试未提供足够的预设响应"))
+        }
+
+        async fn download(
+            &self,
+            request: HttpRequest,
+            dest: &Path,
+        ) -> std::result::Result<DownloadResponse, TransportError> {
+            // 测试用 mock 明确选择非流式:先 send,再整段写文件。
+            let response = self.send(request).await?;
+            let bytes = response.body.len() as u64;
+            if response.status.is_success() {
+                std::fs::write(dest, &response.body)?;
+                Ok(DownloadResponse {
+                    status: response.status,
+                    headers: response.headers,
+                    body: Vec::new(),
+                    bytes,
+                })
+            } else {
+                Ok(DownloadResponse {
+                    status: response.status,
+                    headers: response.headers,
+                    body: response.body,
+                    bytes: 0,
+                })
+            }
         }
     }
 
@@ -767,6 +816,55 @@ mod tests {
             Some("Bearer 1 new-token")
         );
     }
+    #[test]
+    fn raw_download_writes_body_to_file() {
+        let transport = MockTransport::queue(vec![HttpResponse {
+            status: StatusCode::OK,
+            headers: HeaderMap::new(),
+            body: b"hello".to_vec(),
+        }]);
+        let client = Client::new(ApiConfig::new("/api"), transport, MemoryStorage::new());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out.bin");
+
+        let response = futures::executor::block_on(
+            client
+                .raw(Method::GET, "/visual/token")
+                .no_auth()
+                .download(&path),
+        )
+        .unwrap();
+
+        assert!(response.is_success());
+        assert_eq!(response.bytes, 5);
+        assert_eq!(std::fs::read(path).unwrap(), b"hello");
+    }
+
+    #[test]
+    fn raw_download_does_not_write_on_error_status() {
+        let transport = MockTransport::queue(vec![HttpResponse {
+            status: StatusCode::NOT_FOUND,
+            headers: HeaderMap::new(),
+            body: b"missing".to_vec(),
+        }]);
+        let client = Client::new(ApiConfig::new("/api"), transport, MemoryStorage::new());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out.bin");
+
+        let response = futures::executor::block_on(
+            client
+                .raw(Method::GET, "/visual/token")
+                .no_auth()
+                .download(&path),
+        )
+        .unwrap();
+
+        assert_eq!(response.status, StatusCode::NOT_FOUND);
+        assert_eq!(response.bytes, 0);
+        assert_eq!(response.body, b"missing");
+        assert!(!path.exists());
+    }
+
     #[test]
     fn deserializes_avatar_token_without_cipher() {
         // 关键回归:UserInfo 的 avatar_token(VisualTokenStr)无需密钥也能反序列化
