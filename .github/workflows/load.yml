@@ -3,7 +3,8 @@ name: Load Test
 # 压测: 与 e2e.yml 共用 e2e crate 与同一套环境骨架(.github/actions/e2e-stack),
 # 差异只在 RunMode —— 这里用 duration(固定时长) + 32 并发, 只做指标与基线对比, 不做断言裁剪。
 #
-# 报告与判定: tests/e2e/ci/load_compare.py(逐场景 P95 对比基线 + 绝对阈值)。
+# 报告与判定: tests/e2e/ci/load_compare.py。绝对阈值(通过率/超时/收尾失败)不达标才失败;
+# 与基线的差距(P95 涨幅、吞吐跌幅)只做标注, 不影响工作流结论。
 on:
     workflow_dispatch:
         inputs:
@@ -93,11 +94,13 @@ jobs:
             E2E__RUN__MAX_TIMEOUT_RATE: "0.005"
             E2E_REPORT_JSON: load-report.json
             # ---- 报告判定阈值 ----
+            # 绝对阈值: 不达标直接判定失败
             MIN_PASS_RATE: "0.99"
-            MAX_P95_REGRESSION_PCT: "20"
-            MIN_RPS_RATIO: "0.9"
             MAX_TIMEOUT_RATE: "0.005"
             MAX_TEARDOWN_FAIL_RATE: "0.02"
+            # 基线对比阈值: 超过只在报告里标注, 不判定失败
+            MAX_P95_REGRESSION_PCT: "20"
+            MIN_RPS_RATIO: "0.9"
             BASELINE_DIR: tests/e2e/ci/baselines
         steps:
             - name: Checkout

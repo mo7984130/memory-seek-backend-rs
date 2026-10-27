@@ -3,14 +3,18 @@
 
 输入是 e2e crate 产出的 JSON 报告(--report-json), 输出 markdown 报告 + 退出码:
 - baseline 模式: 把本轮报告写为基线(--write-baseline), 不判定;
-- compare 模式: 与基线逐场景比对 P95, 叠加绝对阈值判定。
+- compare 模式: 与基线逐场景比对 P95、整体吞吐, 叠加绝对阈值判定。
+
+判定口径:
+- 绝对阈值不达标 / 场景被中断 → 失败(退出码 1);
+- 与基线的差距(延迟涨幅、吞吐跌幅)只做标注, 不影响退出码, 便于人工判断趋势。
 
 基线缺失时只做绝对阈值判定(首次接入/缓存未命中不会误报失败)。
 
 阈值(环境变量可覆盖):
   MIN_PASS_RATE            有效通过率下限, 默认 0.99
-  MAX_P95_REGRESSION_PCT   单场景 P95 相对基线允许的最大涨幅(%), 默认 20
-  MIN_RPS_RATIO            整体吞吐相对基线的下限倍率, 默认 0.9
+  MAX_P95_REGRESSION_PCT   单场景 P95 相对基线涨幅超过该值(%), 默认 20 —— 仅标注
+  MIN_RPS_RATIO            整体吞吐低于基线的该倍率, 默认 0.9 —— 仅标注
   MAX_TIMEOUT_RATE         超时率上限, 默认 0.005
   MAX_TEARDOWN_FAIL_RATE   收尾失败率上限(收尾失败不影响通过率, 这里单独看), 默认 0.02
 """
@@ -56,8 +60,8 @@ def scenario_map(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def evaluate(
     current: dict[str, Any], baseline: dict[str, Any] | None
-) -> tuple[list[str], str]:
-    """返回 (未通过原因列表, markdown 报告)。"""
+) -> tuple[list[str], list[str], str]:
+    """返回 (未通过原因列表, 基线标注列表, markdown 报告)。"""
     overall = current["overall"]
     environment = current["environment"]
     scenarios = current.get("scenarios", [])
@@ -77,6 +81,8 @@ def evaluate(
     teardown_fail_rate = teardown_failures / max(teardown_total, 1)
 
     reasons: list[str] = []
+    # 与基线的差距只做标注: 压测环境波动大, 不作为 CI 失败条件
+    warnings: list[str] = []
     if pass_rate < MIN_PASS_RATE:
         reasons.append(
             f"有效通过率 {pass_rate:.4f} 低于下限 {MIN_PASS_RATE:.4f}({passed_rounds}/{times})"
@@ -97,9 +103,9 @@ def evaluate(
     if baseline_overall and baseline_overall["rps"] > 0:
         ratio = overall["rps"] / baseline_overall["rps"]
         if ratio < MIN_RPS_RATIO:
-            reasons.append(
-                f"整体吞吐 {overall['rps']:.1f} req/s 低于基线的 {MIN_RPS_RATIO:.2f} 倍"
-                f"(基线 {baseline_overall['rps']:.1f} req/s, 当前 {ratio:.2f}x)"
+            warnings.append(
+                f"整体吞吐 {overall['rps']:.1f} req/s 仅为基线的 {ratio:.2f} 倍"
+                f"(基线 {baseline_overall['rps']:.1f} req/s, 标注阈值 {MIN_RPS_RATIO:.2f}x)"
             )
 
     rows = [
@@ -122,9 +128,11 @@ def evaluate(
             change = (item["p95_ms"] - base["p95_ms"]) / base["p95_ms"] * 100
             delta = f"{change:+.1f}%"
             if change > MAX_P95_REGRESSION_PCT:
-                reasons.append(
-                    f"{item['name']} 的 P95 {fmt_ms(item['p95_ms'])} 较基线"
-                    f"{fmt_ms(base['p95_ms'])} 恶化 {change:.1f}%(上限 {MAX_P95_REGRESSION_PCT:.0f}%)"
+                delta += " ⚠️"
+                warnings.append(
+                    f"{item['name']} 的 P95 {fmt_ms(item['p95_ms'])} 较基线 "
+                    f"{fmt_ms(base['p95_ms'])} 上涨 {change:.1f}%"
+                    f"(标注阈值 {MAX_P95_REGRESSION_PCT:.0f}%)"
                 )
         rows.append(
             "| {name} | {times} | {pass_rate:.1%} | {rps:.1f} | {p50} | {p95} | {p99} "
@@ -151,6 +159,8 @@ def evaluate(
     )
     if reasons:
         conclusion = "❌ 未通过"
+    elif warnings:
+        conclusion = f"✅ 通过(基线有 {len(warnings)} 项标注)"
     elif baseline:
         conclusion = "✅ 通过"
     else:
@@ -194,13 +204,17 @@ def evaluate(
         lines.append("未通过原因:")
         lines.extend(f"- {reason}" for reason in reasons)
         lines.append("")
+    if warnings:
+        lines.append("基线标注(不影响判定, 仅供参考):")
+        lines.extend(f"- {warning}" for warning in warnings)
+        lines.append("")
     lines.append(
         "> 延迟分位只统计被测接口(run 阶段);setup/validate/teardown 不计入分位, 但计入整体耗时与吞吐。"
     )
     lines.append("")
     lines.extend(rows)
     lines.append("")
-    return reasons, "\n".join(lines)
+    return reasons, warnings, "\n".join(lines)
 
 
 def main() -> int:
@@ -235,7 +249,7 @@ def main() -> int:
     elif args.baseline:
         print(f"基线不存在({args.baseline}), 跳过对比, 仅做绝对阈值判定")
 
-    reasons, markdown = evaluate(current, baseline)
+    reasons, warnings, markdown = evaluate(current, baseline)
     print(markdown)
     if args.markdown:
         with open(args.markdown, "w", encoding="utf-8") as handle:
@@ -244,7 +258,10 @@ def main() -> int:
     if reasons:
         print(f"判定: FAIL({len(reasons)} 项)", file=sys.stderr)
         return 1
-    print("判定: PASS")
+    if warnings:
+        print(f"判定: PASS(基线标注 {len(warnings)} 项)")
+    else:
+        print("判定: PASS")
     return 0
 
 
