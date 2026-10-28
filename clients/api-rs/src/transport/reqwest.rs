@@ -60,7 +60,7 @@ impl Transport for ReqwestTransport {
         })
     }
 
-    async fn download(
+    async fn download_to(
         &self,
         request: HttpRequest,
         dest: &Path,

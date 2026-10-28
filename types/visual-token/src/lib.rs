@@ -12,6 +12,9 @@
 //! 明文形态并非对外契约,由服务端自产自销。
 //! 加解密(`VisualToken::encrypt`/`decrypt` 与 [`VisualTokenStr`] 的同名方法)
 //! 仅在 `crypto` feature 下可用。
+//!
+//! 人脸相关的纯数据类型(`BoundingBox` / `FaceLandmarks` / `FaceEmbedding` 等)
+//! 直接 re-export 自 [`insight_face_rs_type`],不依赖 ONNX 引擎。
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -23,6 +26,14 @@ use common_core::error::{AppError, ContextualError};
 use common_crypto::token_cipher;
 
 use types_core::{UserId, VisualKind};
+
+/// 人脸纯数据类型(来自轻量的 `insight-face-rs-type`)。
+///
+/// 契约层只依赖这组纯数据类型,不引入 ONNX 引擎;检测 / 识别实现仍在
+/// `insight-face-rs`(由后端领域层使用)。
+pub use insight_face_rs_type::{
+    BoundingBox, DIMS, DetectedFace, Face, FaceEmbedding, FaceLandmarks,
+};
 
 /// 图片 token 类型
 ///
@@ -92,10 +103,9 @@ pub struct FaceBBox {
     pub x2: f32,
     pub y2: f32,
 }
-#[cfg(feature = "face-engine")]
-impl From<insight_face_rs::BoundingBox> for FaceBBox {
-    /// 将 insight-face-rs 的边界框转换为归一化 `FaceBBox`
-    fn from(v: insight_face_rs::BoundingBox) -> Self {
+impl From<BoundingBox> for FaceBBox {
+    /// 将 insight-face-rs-type 的边界框转换为归一化 `FaceBBox`
+    fn from(v: BoundingBox) -> Self {
         Self {
             x1: v.x1,
             y1: v.y1,
@@ -104,9 +114,8 @@ impl From<insight_face_rs::BoundingBox> for FaceBBox {
         }
     }
 }
-#[cfg(feature = "face-engine")]
-impl From<FaceBBox> for insight_face_rs::BoundingBox {
-    /// 将归一化 `FaceBBox` 转换为 insight-face-rs 的边界框
+impl From<FaceBBox> for BoundingBox {
+    /// 将归一化 `FaceBBox` 转换为 insight-face-rs-type 的边界框
     fn from(v: FaceBBox) -> Self {
         Self {
             x1: v.x1,

@@ -4,7 +4,7 @@
 
 use crate::client::{Client, Request};
 use crate::error::Result;
-use crate::transport::{DownloadResponse, HttpResponse, Method};
+use crate::transport::{DownloadResponse, HttpResponse, Method, StatusCode};
 use common_core::time::DateTime;
 use common_core::types::CursorPage;
 use types_core::cursor::TimeIdCursor;
@@ -96,17 +96,58 @@ pub async fn download(client: &Client, token: &str) -> Result<HttpResponse> {
 /// 把影像资源流式写入 `dest`(原图 / 缩略图 / 裁剪 / 视频衍生片)。
 ///
 /// 与 [`download`] 相同端点,但支持流式的 [`Transport`](crate::Transport) 实现会边读
-/// 响应体边写文件,不会把整个原视频放进内存。非 2xx 不会创建/保留目标文件。
+/// 响应体边写文件,不会把整个原视频放进内存。非 2xx 不会创建/保留目标文件;
+/// 视频衍生片返回 `202 Accepted`(转码未就绪)时也会清理空文件,可通过
+/// [`DownloadResponse::is_ready`] 判断内容是否可用。
 pub async fn download_to(
     client: &Client,
     token: &str,
     dest: impl AsRef<std::path::Path>,
 ) -> Result<DownloadResponse> {
+    let dest = dest.as_ref();
+    let response = client
+        .raw(Method::GET, format!("/visual/{token}"))
+        .no_auth()
+        .download_to(dest)
+        .await?;
+    if response.status == StatusCode::ACCEPTED {
+        let _ = std::fs::remove_file(dest);
+    }
+    Ok(response)
+}
+
+/// 以单段 HTTP Range 下载影像资源(如 `bytes=0-499`)。`GET /visual/{token}`
+///
+/// 返回原始 [`HttpResponse`];后端支持 `206 Partial Content` 与 `Content-Range`。
+pub async fn download_range(client: &Client, token: &str, range: &str) -> Result<HttpResponse> {
     client
         .raw(Method::GET, format!("/visual/{token}"))
         .no_auth()
-        .download(dest)
+        .header("Range", range)
+        .send()
         .await
+}
+
+/// 以单段 HTTP Range 流式写入 `dest`。`GET /visual/{token}`
+///
+/// 与 [`download_to`] 相同,但额外携带 `Range` 头,适用于按分片读取大视频。
+pub async fn download_range_to(
+    client: &Client,
+    token: &str,
+    range: &str,
+    dest: impl AsRef<std::path::Path>,
+) -> Result<DownloadResponse> {
+    let dest = dest.as_ref();
+    let response = client
+        .raw(Method::GET, format!("/visual/{token}"))
+        .no_auth()
+        .header("Range", range)
+        .download_to(dest)
+        .await?;
+    if response.status == StatusCode::ACCEPTED {
+        let _ = std::fs::remove_file(dest);
+    }
+    Ok(response)
 }
 
 /// 分页方向 → 线协议字符串(后端 `#[serde(rename_all = "lowercase")]`)。

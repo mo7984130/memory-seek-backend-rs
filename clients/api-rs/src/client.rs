@@ -326,12 +326,12 @@ impl RawRequest<'_> {
     ///
     /// 成功时返回的 [`DownloadResponse::bytes`] 是实际写入的字节数;非 2xx 不会
     /// 创建/保留目标文件,错误响应体放在 [`DownloadResponse::body`] 里。
-    pub async fn download(self, dest: impl AsRef<Path>) -> Result<DownloadResponse> {
+    pub async fn download_to(self, dest: impl AsRef<Path>) -> Result<DownloadResponse> {
         let auth = self.auth_header().await?;
         self.client
             .inner
             .transport
-            .download(
+            .download_to(
                 self.client
                     .build_http_request(&self.request, auth.as_deref()),
                 dest.as_ref(),
@@ -549,7 +549,7 @@ mod tests {
                 .expect("测试未提供足够的预设响应"))
         }
 
-        async fn download(
+        async fn download_to(
             &self,
             request: HttpRequest,
             dest: &Path,
@@ -831,7 +831,7 @@ mod tests {
             client
                 .raw(Method::GET, "/visual/token")
                 .no_auth()
-                .download(&path),
+                .download_to(&path),
         )
         .unwrap();
 
@@ -855,7 +855,7 @@ mod tests {
             client
                 .raw(Method::GET, "/visual/token")
                 .no_auth()
-                .download(&path),
+                .download_to(&path),
         )
         .unwrap();
 

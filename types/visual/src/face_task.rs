@@ -1,11 +1,11 @@
 // ============================================================
-// SeaORM 实体（仅 face-engine feature）
+// SeaORM 实体（仅 face feature）
 // ============================================================
 //
 // 人脸检测任务的持久化 outbox: 每张图片一条, 承载"上传后待人脸检测"的进度。
 // 内存队列(mpsc)只做唤醒, 崩溃后由本表在启动时恢复未完成任务(见 FaceService)。
 
-#[cfg(feature = "face-engine")]
+#[cfg(feature = "face")]
 mod entity {
     use common_core::time::DateTime;
     use sea_orm::entity::prelude::*;
@@ -102,5 +102,5 @@ mod entity {
     }
 }
 
-#[cfg(feature = "face-engine")]
+#[cfg(feature = "face")]
 pub use entity::*;

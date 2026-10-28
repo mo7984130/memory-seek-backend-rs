@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "async-compression",
  "audit",
@@ -2712,24 +2712,33 @@ dependencies = [
 
 [[package]]
 name = "insight-face-rs"
-version = "4.2.0"
+version = "4.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "170407334f12b9ee84d7696a13a9fc28a6e36d90a4b8eb843d3bdec3b71cfa4d"
+checksum = "89b0f4adbcf6b2a8e3941ea8f505609711a96f30017cad39f93371fa4a28b286"
 dependencies = [
  "image",
  "imageproc",
+ "insight-face-rs-type",
  "libc",
  "nalgebra",
  "ndarray",
  "ort",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "insight-face-rs-type"
+version = "4.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c723a5839e010b384cc08edfcf2771bc74bed277023e87adb88e460242844b5a"
+dependencies = [
  "pgvector",
  "sea-orm",
  "serde",
  "serde-big-array",
  "serde_json",
- "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -3235,7 +3244,7 @@ dependencies = [
 
 [[package]]
 name = "memory-seek-api-rs"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "common-core",
@@ -3248,6 +3257,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "types-audit",
+ "types-backup",
  "types-core",
  "types-identity",
  "types-visual",
@@ -5315,7 +5325,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "audit",
  "auth",
@@ -6330,7 +6340,7 @@ dependencies = [
 
 [[package]]
 name = "types-backup"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
 ]
@@ -6352,7 +6362,7 @@ dependencies = [
 
 [[package]]
 name = "types-db-init"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "common-core",
  "sea-orm",
@@ -6392,13 +6402,12 @@ dependencies = [
 
 [[package]]
 name = "types-visual"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "common-core",
  "common-crypto",
  "common_macros",
  "derive_more 1.0.0",
- "insight-face-rs",
  "linkme",
  "sea-orm",
  "serde",
@@ -6412,11 +6421,11 @@ dependencies = [
 
 [[package]]
 name = "types-visual-token"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "common-core",
  "common-crypto",
- "insight-face-rs",
+ "insight-face-rs-type",
  "serde",
  "serde_json",
  "ts-rs",
@@ -6649,7 +6658,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "visual"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "async-trait",
  "audit",

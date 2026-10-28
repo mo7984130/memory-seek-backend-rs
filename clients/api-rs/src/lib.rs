@@ -81,13 +81,22 @@ pub use types_visual::{
     CollectionBriefView, CollectionCreateParam, CollectionUpdateParam, CollectionView,
     CollectionVisualAddBatchParam, CollectionVisualAddBatchResult,
     CollectionVisualRemoveBatchParam, CollectionVisualRemoveBatchResult, CommentContent,
-    CommentPublishParam, CommentView, DeleteVisualsParam, ExistsByHashBatchParam, MonthStat,
-    UploadVisualParam, VisualIds, VisualTokens, VisualView,
+    CommentPublishParam, CommentView, DeleteVisualsParam, ExistsByHashBatchParam, FaceBBox,
+    FaceDeleteBatchParam, FaceDeleteBatchResult, FaceIds, FaceView, MergePersonParam, MonthStat,
+    PersonCursorParam, PersonName, PersonSearchParam, PersonView, PersonVisualCursorParam,
+    RenamePersonParam, SecondaryClusterParam, UnassignedFaceVisualCursorParam, UploadVisualParam,
+    VisualIds, VisualTokens, VisualView,
 };
 pub use types_visual_token::VisualTokenStr;
 
 /// 审计契约:`types-audit`。
 pub use types_audit::{AuditGranularity, AuditItem, AuditStatsItem, AuditTopItem};
+
+/// 备份契约:`types-backup`。
+pub use types_backup::{
+    BackupSource, BackupTier, ManualBackupResult, RestoreRequest, RestoreResult,
+    ScheduledBackupResult,
+};
 
 /// 时间类型(UTC),与后端契约一致。
 pub use common_core::time::DateTime;

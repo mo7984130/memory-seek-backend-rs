@@ -1,6 +1,6 @@
 [package]
 name = "types-visual-token"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "视觉访问令牌契约(跨上下文协议)"
 
@@ -9,7 +9,8 @@ default = []
 ts = ["dep:ts-rs"]
 # 令牌加解密(encrypt/decrypt);纯客户端无需开启,以避免链接加密依赖
 crypto = ["dep:common-crypto", "dep:serde_json"]
-face-engine = ["dep:insight-face-rs"]
+# 为 re-export 的 insight-face-rs-type 类型启用 SeaORM 集成(供 ORM 实体使用)
+orm = ["insight-face-rs-type/sea-orm"]
 
 [dependencies]
 types-core.workspace = true
@@ -19,7 +20,7 @@ common-crypto = { path = "../../common/crypto", optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, optional = true }
 
-insight-face-rs = { workspace = true, optional = true }
+insight-face-rs-type = { workspace = true }
 ts-rs = { workspace = true, optional = true }
 
 [dev-dependencies]

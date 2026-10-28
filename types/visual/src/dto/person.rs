@@ -1,9 +1,14 @@
 use validator::Validate;
 
+use crate::VisualTokenStr;
 use crate::models::PersonName;
-use crate::person::{PersonId, PersonRecord};
+use crate::person::PersonId;
+#[cfg(feature = "face")]
+use crate::person::PersonRecord;
 use crate::visual::VisualId;
-use crate::{ImageDimensions, VisualToken, VisualTokenStr};
+#[cfg(feature = "face")]
+use crate::{ImageDimensions, VisualToken};
+#[cfg(feature = "face")]
 use types_core::UserId;
 use types_core::cursor::{CountIdCursor, TimeIdCursor};
 
@@ -52,6 +57,7 @@ crate::dto!(PersonView, "visual/", rename = "Person"; {
     pub cover_token: VisualTokenStr,
     pub face_count: u64
 });
+#[cfg(feature = "face")]
 impl PersonView {
     /// 由人物记录、查看者与图片尺寸构造人物视图,并生成封面裁剪令牌
     pub fn from_record(
@@ -111,7 +117,7 @@ crate::dto!(SecondaryClusterParam, "visual/", docs = "二次聚类参数(将未�
 ///
 /// 跨字段校验("不能合并到自身")放在 `Validate` 阶段,而非 `try_from`
 /// 反序列化校验,避免业务错误被 serde 误判为解析错误并混入位置信息。
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "ts", ts(export, export_to = "visual/"))]
