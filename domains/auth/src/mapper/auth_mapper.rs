@@ -25,6 +25,12 @@ pub struct RefreshTokenValidation {
     pub refresh_token: Option<String>,
     pub refresh_token_expire_at: Option<DateTime>,
 }
+
+#[derive(Debug, FromQueryResult)]
+struct UserIdOnly {
+    id: UserId,
+}
+
 // 创建
 impl AuthMapper {
     /// 插入用户及其认证记录
@@ -125,6 +131,19 @@ pub struct UserPasswordId {
 }
 // 查询
 impl AuthMapper {
+    /// 检查邮箱是否已关联现有用户。
+    pub async fn email_exists(db: &impl DbConn, email: &str) -> Result<bool> {
+        let user_id = Entity::find()
+            .select_only()
+            .column(Column::Id)
+            .filter(Column::Email.eq(email))
+            .into_model::<UserIdOnly>()
+            .one(db)
+            .await?
+            .map(|UserIdOnly { id }| id);
+        user_id.is_some().to_ok()
+    }
+
     /// 按账号查询用户认证记录
     pub async fn query_by_account(
         db: &impl DbConn,

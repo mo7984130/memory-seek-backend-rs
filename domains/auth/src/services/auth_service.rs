@@ -226,6 +226,16 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     )
 )]
 pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Result<()> {
+    // 验证码接口用于注册,已注册邮箱不再发送注册验证码。
+    AuthMapper::email_exists(&state.db, &req.email)
+        .timed(metrics_name!("db_query"))
+        .await?
+        .false_or_warn(
+            "email_existed",
+            "发送注册验证码时邮箱已注册",
+            AppError::bad_request("该邮箱已被注册"),
+        )?;
+
     // 生成大写字母+数字验证码
     let code = rand_utils::generate_random_uppercase_str(6);
 
