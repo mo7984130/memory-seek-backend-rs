@@ -137,7 +137,7 @@ impl Scenario for SendCodeRegisteredEmailScenario {
         _task: &TaskIndex,
         setup: &Self::Setup,
     ) -> Result<Self::Output, Self::Error> {
-        Ok(crate::error::status(
+        crate::error::status(
             api::auth::send_email_code(
                 &ctx.api_client(),
                 &SendEmailCodeRequest {
@@ -145,7 +145,7 @@ impl Scenario for SendCodeRegisteredEmailScenario {
                 },
             )
             .await,
-        )?)
+        )
     }
 
     async fn validate(
