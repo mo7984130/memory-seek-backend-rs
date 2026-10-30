@@ -274,6 +274,7 @@ fn fit_width(image: DynamicImage, max_width: u32) -> DynamicImage {
 }
 
 /// 等比缩放图片到 `max_width×max_height` 框内, 仅缩小不放大
+#[cfg(feature = "face")]
 fn fit_within(image: DynamicImage, max_width: u32, max_height: u32) -> DynamicImage {
     if image.width() <= max_width && image.height() <= max_height {
         return image;
@@ -284,11 +285,13 @@ fn fit_within(image: DynamicImage, max_width: u32, max_height: u32) -> DynamicIm
 /// OSS 图片处理参数:等比缩放到 `max_width×max_height` 框内。
 ///
 /// OSS 的 resize 参数必须带 `w_` / `h_` 前缀,写成裸数字会被解析成 0 并返回 400。
+#[cfg(feature = "face")]
 fn oss_resize_param(max_width: u32, max_height: u32) -> String {
     format!("image/resize,m_lfit,w_{max_width},h_{max_height}")
 }
 
 /// 供人脸检测取图: 按后端处理为限制在 `max_width×max_height` 内的位图(仅缩不放)
+#[cfg(feature = "face")]
 pub async fn fetch_for_detection(
     s3: &S3Client,
     backend: ResolvedImageProcessor,
@@ -316,6 +319,7 @@ pub async fn fetch_for_detection(
 }
 
 /// 在阻塞线程中解码图片字节
+#[cfg(feature = "face")]
 async fn decode(bytes: Bytes) -> Result<DynamicImage> {
     tokio::task::spawn_blocking(move || {
         image::load_from_memory(&bytes).context_error(
@@ -416,6 +420,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "face")]
     fn fit_within_downscales_and_never_upscales() {
         let big = DynamicImage::ImageRgb8(RgbImage::from_pixel(4000, 2000, Rgb([1, 2, 3])));
         let fitted = fit_within(big, 1920, 1920);
@@ -427,6 +432,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "face")]
     fn oss_resize_param_prefixes_dimensions() {
         assert_eq!(
             oss_resize_param(1920, 1080),

@@ -47,10 +47,11 @@ fn classify_module(route: &str) -> &'static str {
         Some("auth") => "auth",
         Some("user") => "user",
         Some("visual") => "visual",
-        // /admin/backup/* → backup；其余 /admin/*（如 /admin/audits）→ audit
+        // 将集中管理端入口归类到对应业务域；用户/影像统计与任务统一归 admin。
         Some("admin") => match segments.next() {
             Some("backup") => "backup",
-            _ => "audit",
+            Some("audits") => "audit",
+            _ => "admin",
         },
         _ => "other",
     }
@@ -90,6 +91,8 @@ mod tests {
         assert_eq!(classify_module("/admin/audits"), "audit");
         assert_eq!(classify_module("/admin/backup/trigger"), "backup");
         assert_eq!(classify_module("/admin/backup/restore"), "backup");
+        assert_eq!(classify_module("/admin/jobs"), "admin");
+        assert_eq!(classify_module("/admin/dashboard/visuals"), "admin");
     }
 
     #[test]

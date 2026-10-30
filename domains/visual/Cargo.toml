@@ -1,6 +1,6 @@
 [package]
 name = "visual"
-version = "0.12.2"
+version = "0.13.0"
 edition = "2024"
 
 [features]
@@ -30,11 +30,13 @@ oss.path = "../../libs/oss"
 types-core = { workspace = true, features = ["orm"] }
 types-identity = { workspace = true }
 types-visual = { workspace = true, features = ["orm"] }
+types-admin.workspace = true
 
 linkme.workspace = true
 async-trait.workspace = true
 
 tokio.workspace = true
+tokio-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sea-orm.workspace = true

@@ -16,7 +16,8 @@ use common_metrics::{
 };
 use image::{ImageBuffer, Rgb};
 use insight_face_rs::Face;
-use tokio::{spawn, sync::mpsc, task::spawn_blocking};
+use tokio::{sync::mpsc, task::spawn_blocking};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use types_core::cursor::TimeIdCursor;
 use types_identity::auth::user::{AdminId, UserId};
@@ -45,8 +46,13 @@ const DETECT_IMAGE_MAX_EDGE: u32 = 1920;
 
 // 创建
 impl FaceService {
-    /// 触发人脸计算；全量先备份并清空表重算，增量按有无 face 判断
-    pub async fn compute(state: Arc<VisualState>, admin: AdminId, full: bool) -> Result<()> {
+    /// 由管理员任务编排器调用并等待计算完成。
+    pub async fn run_for_admin(
+        state: Arc<VisualState>,
+        admin: AdminId,
+        full: bool,
+        cancellation: CancellationToken,
+    ) -> Result<()> {
         let user_id = admin.into_inner();
         let admin = AdminId::new(user_id)?;
         common_db::db_transaction!(&state.db, |txn| {
@@ -60,8 +66,7 @@ impl FaceService {
             Ok(())
         })
         .await?;
-        spawn(async move { Self::compute_inner(state, admin, full).await });
-        Ok(())
+        Self::compute_inner(state, admin, full, cancellation).await
     }
 
     /// 人脸计算
@@ -71,7 +76,12 @@ impl FaceService {
         skip_all,
         fields(user_id = %admin, full = %full)
     )]
-    async fn compute_inner(state: Arc<VisualState>, admin: AdminId, full: bool) -> Result<()> {
+    async fn compute_inner(
+        state: Arc<VisualState>,
+        admin: AdminId,
+        full: bool,
+        cancellation: CancellationToken,
+    ) -> Result<()> {
         let user_id = admin.into_inner();
         info!(user_id = %user_id, "人脸计算触发, full: {}", full);
 
@@ -81,6 +91,9 @@ impl FaceService {
         // 如果是全量计算的话
         // 备份并且清空表
         if full {
+            if cancellation.is_cancelled() {
+                return Err(AppError::conflict("任务已取消"));
+            }
             FaceRepo::backup_and_truncate(&state).await?;
         }
 
@@ -91,6 +104,9 @@ impl FaceService {
         let mut total_faces = 0u64;
         let mut total_no_face = 0u64;
         loop {
+            if !full && cancellation.is_cancelled() {
+                return Err(AppError::conflict("任务已取消"));
+            }
             batch_idx += 1;
             set_gauge!("batch", batch_idx as f64);
 

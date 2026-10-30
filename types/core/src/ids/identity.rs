@@ -38,3 +38,14 @@ impl AdminId {
         }
     }
 }
+
+#[cfg(all(test, feature = "orm"))]
+mod tests {
+    use super::{AdminId, UserId};
+
+    #[test]
+    fn admin_id_requires_the_configured_admin_user() {
+        assert!(AdminId::new(UserId(1)).is_ok());
+        assert!(AdminId::new(UserId(2)).is_err());
+    }
+}

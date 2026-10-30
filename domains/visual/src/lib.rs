@@ -1,3 +1,5 @@
+#[cfg(feature = "controller")]
+pub mod admin;
 pub mod config;
 #[cfg(feature = "controller")]
 pub mod controllers;

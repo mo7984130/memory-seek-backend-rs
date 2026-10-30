@@ -1,10 +1,5 @@
-use crate::{config::AppConfig, setup::AppSetup, util::MissDepError};
-use audit::{AuditController, AuditState};
-use axum::Router;
+use crate::{config::AppConfig, setup::AppSetup};
 use common_core::Result;
-use common_web::controller_router::ControllerRouter;
-use sea_orm::DatabaseConnection;
-use std::sync::Arc;
 use tracing::{debug, info};
 
 /// 初始化审计域并挂载管理员审计路由
@@ -15,21 +10,7 @@ use tracing::{debug, info};
 pub async fn init(_config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
     debug!("初始化 Audit domain");
 
-    let register = &mut setup.registry;
-    let router = &mut setup.router;
-
-    let audit_state = Arc::new(AuditState {
-        db: register
-            .get::<DatabaseConnection>()
-            .miss_dep("audit", "DatabaseConnection")?
-            .clone(),
-    });
-    let protected_router = Router::new().nest(
-        "/admin/audits",
-        AuditController::protected_routes().with_state(audit_state),
-    );
-    router.add_protected(protected_router);
-
+    let _ = setup;
     info!("初始化 Audit domain 成功");
     Ok(())
 }

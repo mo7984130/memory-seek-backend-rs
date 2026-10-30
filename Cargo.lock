@@ -25,6 +25,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "admin"
+version = "0.1.0"
+dependencies = [
+ "audit",
+ "axum",
+ "backup",
+ "common-core",
+ "common-db",
+ "common-runtime",
+ "common-web",
+ "dashmap",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "types-admin",
+ "types-audit",
+ "types-backup",
+ "types-core",
+ "types-identity",
+ "types-visual",
+ "user",
+ "uuid",
+ "visual",
+]
+
+[[package]]
 name = "aead"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -501,12 +529,10 @@ dependencies = [
 
 [[package]]
 name = "audit"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
- "axum",
  "common-core",
  "common-metrics",
- "common-web",
  "common_macros",
  "sea-orm",
  "tracing",
@@ -700,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.4.4"
+version = "0.5.0"
 dependencies = [
  "async-compression",
  "audit",
@@ -721,6 +747,7 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tracing",
  "types-backup",
  "types-core",
@@ -1158,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "common-runtime"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3245,7 +3272,7 @@ dependencies = [
 
 [[package]]
 name = "memory-seek-api-rs"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "common-core",
@@ -3257,6 +3284,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "types-admin",
  "types-audit",
  "types-backup",
  "types-core",
@@ -5326,8 +5354,9 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
+ "admin",
  "audit",
  "auth",
  "axum",
@@ -6325,6 +6354,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
+name = "types-admin"
+version = "0.1.0"
+dependencies = [
+ "common-core",
+ "linkme",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "types-core",
+ "types-db-registry",
+ "types-visual",
+ "validator",
+]
+
+[[package]]
 name = "types-audit"
 version = "0.1.0"
 dependencies = [
@@ -6363,11 +6408,12 @@ dependencies = [
 
 [[package]]
 name = "types-db-init"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "common-core",
  "sea-orm",
  "tracing",
+ "types-admin",
  "types-audit",
  "types-db-registry",
  "types-identity",
@@ -6543,7 +6589,7 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "audit",
  "axum",
@@ -6564,6 +6610,8 @@ dependencies = [
  "serde",
  "tokio",
  "tracing",
+ "types-admin",
+ "types-core",
  "types-identity",
  "types-visual-token",
  "uuid",
@@ -6659,7 +6707,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "visual"
-version = "0.12.2"
+version = "0.13.0"
 dependencies = [
  "async-trait",
  "audit",
@@ -6690,7 +6738,9 @@ dependencies = [
  "serde_json",
  "step_derive",
  "tokio",
+ "tokio-util",
  "tracing",
+ "types-admin",
  "types-core",
  "types-identity",
  "types-visual",

@@ -128,6 +128,7 @@ let client = Client::new(ApiConfig::new("http://127.0.0.1:8080/api"), transport,
 | 影像 / 收藏夹 / 评论 / 时间线 / 点赞 / 人脸 / 人物 | `api::visual` 及 `api::visual::{collection, comment, timeline, like, face, person}` |
 | 审计(管理端) | `api::audit` |
 | 备份(管理端) | `api::backup` |
+| 管理端(用户查询、统计、后台任务) | `api::admin` |
 | 系统 | `api::system` |
 
 ## 当前范围
@@ -135,8 +136,9 @@ let client = Client::new(ApiConfig::new("http://127.0.0.1:8080/api"), transport,
 已覆盖后端全部公开业务路由,包括:
 
 - 用户端:认证、资料、影像、收藏夹、评论、时间线、点赞、人脸、人物。
-- 管理端:审计、备份 trigger / manual / restore、人脸全量 / 增量计算、
-  人物全量扫描 / 二次聚类。
+- 管理端:用户只读分页查询、全站影像总数/容量/月度时间线、持久化后台任务
+  (人脸全量/增量、人物扫描、二次聚类、备份)状态查询与取消、审计、备份恢复、
+  人物合并/删除。
 - 系统:Prometheus 指标、健康检查。
 
 人脸 / 人物 DTO 直接复用 `types-visual`,其纯数据类型来自轻量的
@@ -159,6 +161,16 @@ let found = person::search_persons(&client, "ZS", None, Some(32)).await?;
 
 // 合并人物
 let merged = person::merge_person(&client, source_id, target_id).await?;
+
+// 管理端后台任务返回任务记录，可通过 api::admin 查询状态或请求取消
+let job = memory_seek_api::api::admin::start_job(
+    &client,
+    &types_admin::job::StartAdminJobRequest {
+        kind: types_admin::job::AdminJobKind::FaceIncremental,
+        threshold: None,
+    },
+).await?;
+let current = memory_seek_api::api::admin::get_job(&client, &job.id).await?;
 ```
 
 ### 下载 Range 与未就绪状态

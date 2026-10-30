@@ -13,7 +13,7 @@ NC=$'\033[0m'
 
 IMAGE_NAME="ubuntu22.04-rust-build-base"
 PROJECT_NAME="memory-seek-server"
-FEATURES="metrics,auth,user,visual,face-engine,audit,audit-recording,backup"
+FEATURES="metrics,auth,user,visual,face-engine,audit,audit-recording,backup,admin"
 
 # 容器内 cargo 产物目录(容器专用), 与宿主 target/ 完全隔离:
 # 1) 两边 glibc 不同(宿主较新), 编译产物(尤其 proc-macro .so)不可互相加载;
@@ -65,26 +65,27 @@ podman run -it --rm \
   -v "$HOME/.rustup:/root/.rustup:Z" \
   -v "$HOME/.cargo:/root/.cargo:Z" \
   -v "$HOME/.cargo/registry:/root/.cargo/registry:Z" \
-  $IMAGE_NAME \
-  bash -c "
-    set -e
-    export PATH=\"/root/.cargo/bin:\$PATH\"
-    cd /app
+  "$IMAGE_NAME" \
+  bash -s -- "$FEATURES" <<'CONTAINER_BUILD'
+set -e
+FEATURES="$1"
+export PATH="/root/.cargo/bin:$PATH"
+cd /app
 
-    echo '=== 环境信息 ==='
-    rustc --version
-    cargo --version
-    mold --version
-    echo '=== 开始构建 ==='
+echo '=== 环境信息 ==='
+rustc --version
+cargo --version
+mold --version
+echo '=== 开始构建 ==='
 
-    # 构建项目
-    cargo build \
-      --release \
-      -p server \
-      --features \"$FEATURES\"
+# 构建项目
+cargo build \
+  --release \
+  -p server \
+  --features "$FEATURES"
 
-    echo '=== 构建完成 ==='
-  "
+echo '=== 构建完成 ==='
+CONTAINER_BUILD
 
 # 检查构建结果
 if [ ! -f "$CONTAINER_TARGET_DIR/release/$PROJECT_NAME" ]; then

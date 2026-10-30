@@ -5,7 +5,8 @@
 ///
 /// # 示例
 /// ```no_run
-/// use common::{ContextualResult, db_transaction};
+/// use common_core::ContextualResult;
+/// use common_db::db_transaction;
 /// use sea_orm::DatabaseConnection;
 ///
 /// async fn update(db: &DatabaseConnection, value: &mut u64) -> ContextualResult<()> {

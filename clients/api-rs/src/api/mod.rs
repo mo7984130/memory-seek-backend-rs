@@ -9,6 +9,7 @@
 //! - [`backup`]：管理端备份与恢复
 //! - [`system`]：系统级端点(Prometheus 指标抓取、健康检查等)
 
+pub mod admin;
 pub mod audit;
 pub mod auth;
 pub mod backup;

@@ -13,6 +13,7 @@ use common_db::utils::table_metadata::TableMetadata;
 use common_metrics::inc_counter;
 use serde_json::json;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 use types_core::AdminId;
 
 /// 备份领域用例服务。
@@ -133,9 +134,41 @@ impl BackupService {
     #[common_macros::metered(name = "scheduled")]
     #[tracing::instrument(name = "scheduled", skip_all)]
     pub async fn execute_scheduled(state: Arc<BackupState>) -> Result<BackupResult> {
+        Self::execute_scheduled_inner(state, None, None).await
+    }
+
+    /// 管理员手动触发定时备份；保留管理员身份用于审计记录。
+    pub async fn execute_scheduled_for_admin(
+        state: Arc<BackupState>,
+        admin: AdminId,
+    ) -> Result<BackupResult> {
+        Self::execute_scheduled_inner(state, Some(admin), None).await
+    }
+
+    /// 管理员触发的可取消定时备份；仅在表与对象存储操作之间响应取消。
+    pub async fn execute_scheduled_cancellable(
+        state: Arc<BackupState>,
+        admin: AdminId,
+        cancellation: CancellationToken,
+    ) -> Result<BackupResult> {
+        Self::execute_scheduled_inner(state, Some(admin), Some(cancellation)).await
+    }
+
+    async fn execute_scheduled_inner(
+        state: Arc<BackupState>,
+        admin: Option<AdminId>,
+        cancellation: Option<CancellationToken>,
+    ) -> Result<BackupResult> {
         let tables = Self::configured_tables(&state).await?;
         // 备份失败不能短路清理：归档可能已部分上传到存储，过期 run 仍需要收敛
-        let mut result = match Self::execute(state.clone(), tables, BackupMode::Scheduled).await {
+        let mut result = match Self::execute(
+            state.clone(),
+            tables,
+            BackupMode::Scheduled,
+            cancellation.as_ref(),
+        )
+        .await
+        {
             Ok(result) => result,
             Err(error) => {
                 tracing::error!(error = %error, "定时备份执行失败");
@@ -149,7 +182,13 @@ impl BackupService {
         // 清理是任务的一部分：清理失败视为本次定时任务失败，向上返回错误
         result.cleaned = Self::run_cleanup(&state).await?;
 
-        Self::record_run_audit(&state, "backup.scheduled_completed", None, &result).await?;
+        Self::record_run_audit(
+            &state,
+            "backup.scheduled_completed",
+            admin.map(AdminId::into_inner),
+            &result,
+        )
+        .await?;
         inc_counter!("scheduled", "tables_exported", result.exported as u64);
         inc_counter!("scheduled", "tables_failed", result.failed as u64);
         inc_counter!("scheduled", "cleaned", result.cleaned as u64);
@@ -166,7 +205,33 @@ impl BackupService {
     #[tracing::instrument(name = "manual", skip_all)]
     pub async fn execute_manual(state: Arc<BackupState>, admin: AdminId) -> Result<BackupResult> {
         let tables = Self::configured_tables(&state).await?;
-        let result = Self::execute(state.clone(), tables, BackupMode::Manual).await?;
+        let result = Self::execute(state.clone(), tables, BackupMode::Manual, None).await?;
+        Self::record_run_audit(
+            &state,
+            "backup.manual_completed",
+            Some(admin.into_inner()),
+            &result,
+        )
+        .await?;
+        inc_counter!("manual", "tables_exported", result.exported as u64);
+        inc_counter!("manual", "tables_failed", result.failed as u64);
+        Ok(result)
+    }
+
+    /// 管理员触发的可取消手动备份。
+    pub async fn execute_manual_cancellable(
+        state: Arc<BackupState>,
+        admin: AdminId,
+        cancellation: CancellationToken,
+    ) -> Result<BackupResult> {
+        let tables = Self::configured_tables(&state).await?;
+        let result = Self::execute(
+            state.clone(),
+            tables,
+            BackupMode::Manual,
+            Some(&cancellation),
+        )
+        .await?;
         Self::record_run_audit(
             &state,
             "backup.manual_completed",
@@ -188,6 +253,7 @@ impl BackupService {
             state,
             tables.iter().map(ToString::to_string).collect(),
             BackupMode::Manual,
+            None,
         )
         .await?
         .to_ok()
@@ -210,7 +276,20 @@ impl BackupService {
         state: Arc<BackupState>,
         tables: Vec<String>,
         mode: BackupMode,
+        cancellation: Option<&CancellationToken>,
     ) -> std::result::Result<BackupResult, BackupError> {
+        let _operation_guard = if let Some(cancellation) = cancellation {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => {
+                    return Err(BackupError::Msg("任务已取消".to_owned()));
+                }
+                guard = state.operation_lock.lock() => guard,
+            }
+        } else {
+            state.operation_lock.lock().await
+        };
+
         let manifest_tables = tables.clone();
         let start = std::time::Instant::now();
         let run_id = now().format("%Y%m%d_%H%M%S").to_string();
@@ -223,10 +302,17 @@ impl BackupService {
         let mut result = BackupResult::new(run_id.clone());
 
         for table_name in tables {
+            if cancellation.is_some_and(CancellationToken::is_cancelled) {
+                let _ = std::fs::remove_dir_all(&work_dir);
+                return Err(BackupError::Msg("任务已取消".to_owned()));
+            }
             match BinaryCopyExporter::export_to_dir(&state.db, &table_name, &work_dir).await {
                 Ok(archive_path) => {
                     let save_result = async {
                         for tier in mode.tiers(&backup_time) {
+                            if cancellation.is_some_and(CancellationToken::is_cancelled) {
+                                return Err(BackupError::Msg("任务已取消".to_owned()));
+                            }
                             state
                                 .storage
                                 .save(&table_name, &archive_path, tier, &run_id)
@@ -249,6 +335,10 @@ impl BackupService {
                     result.failed += 1;
                     tracing::error!(run_id = %run_id, table = %table_name, error = %error, "导出备份失败");
                 }
+            }
+            if cancellation.is_some_and(CancellationToken::is_cancelled) {
+                let _ = std::fs::remove_dir_all(&work_dir);
+                return Err(BackupError::Msg("任务已取消".to_owned()));
             }
         }
 

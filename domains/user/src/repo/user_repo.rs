@@ -6,13 +6,13 @@ use common_redis::{Pool, RedisExt};
 use constants::RedisKeys;
 use multi_level_cache::{CacheConfig, MultiLevelCache};
 use sea_orm::DatabaseConnection;
-use types_identity::auth::user::UserId;
+use types_identity::auth::user::{AdminId, UserId};
 use types_identity::user::UserInfo;
 
 use crate::config::USER_INFO_CACHE_TTL;
 use crate::error_ext::UserOptionExt;
 use crate::mapper::UserMapper;
-use crate::models::UserBriefRow;
+use crate::models::{AdminUserRow, UserBriefRow};
 
 /// 用户数据访问仓储，封装数据库与缓存，向 service 层提供统一的数据访问入口
 pub struct UserRepo {
@@ -23,6 +23,17 @@ pub struct UserRepo {
 }
 
 impl UserRepo {
+    /// 管理员只读查询用户列表。
+    pub(crate) async fn query_admin_users(
+        &self,
+        _admin: AdminId,
+        keyword: Option<&str>,
+        cursor: Option<UserId>,
+        limit: u64,
+    ) -> Result<Vec<AdminUserRow>> {
+        UserMapper::query_admin_users(&self.db, keyword, cursor, limit).await
+    }
+
     /// 创建用户数据访问仓储
     pub fn new(db: DatabaseConnection, redis: Pool, cache_config: CacheConfig) -> Self {
         let cache_user_info =

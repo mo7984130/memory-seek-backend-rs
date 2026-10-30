@@ -3,7 +3,7 @@ use common_metrics::{MetricsTimerExt, metrics_name};
 use types_audit::{
     AuditId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem, AuditTopQuery,
 };
-use types_core::cursor::TimeIdCursor;
+use types_core::{AdminId, cursor::TimeIdCursor};
 
 use crate::mapper::AuditMapper;
 
@@ -15,6 +15,7 @@ impl AuditQueryer {
     #[tracing::instrument(skip_all)]
     pub async fn query_stats(
         db: &impl DbConn,
+        _admin: AdminId,
         req: &AuditStatsQuery,
     ) -> Result<Vec<AuditStatsItem>> {
         Ok(AuditMapper::query_stats(
@@ -35,7 +36,11 @@ impl AuditQueryer {
     /// 查询事件数量最多的目标排行
     #[common_macros::metered]
     #[tracing::instrument(skip_all)]
-    pub async fn query_top(db: &impl DbConn, req: &AuditTopQuery) -> Result<Vec<AuditTopItem>> {
+    pub async fn query_top(
+        db: &impl DbConn,
+        _admin: AdminId,
+        req: &AuditTopQuery,
+    ) -> Result<Vec<AuditTopItem>> {
         Ok(
             AuditMapper::query_top_targets(db, &req.event_type, &req.target_type, req.limit)
                 .timed(metrics_name!("db_query"))
@@ -51,6 +56,7 @@ impl AuditQueryer {
     #[tracing::instrument(skip_all)]
     pub async fn query_events(
         db: &impl DbConn,
+        _admin: AdminId,
         req: &AuditQuery,
     ) -> Result<CursorPage<AuditItem, TimeIdCursor<AuditId>>> {
         AuditMapper::query_audit_page(

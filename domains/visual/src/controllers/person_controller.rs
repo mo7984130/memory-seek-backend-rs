@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     Extension, Router,
     extract::State,
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 use common_core::{Result, types::CursorPage};
 use common_web::{
@@ -11,11 +11,10 @@ use common_web::{
     extractors::ValidatedPath, extractors::ValidatedQuery,
 };
 use types_core::cursor::{CountIdCursor, TimeIdCursor};
-use types_identity::auth::user::{AdminId, UserId};
+use types_identity::auth::user::UserId;
 use types_visual::{
-    PersonView, dto::person::MergePersonParam, dto::person::PersonCursorParam,
-    dto::person::PersonSearchParam, dto::person::PersonVisualCursorParam,
-    dto::person::RenamePersonParam, dto::person::SecondaryClusterParam, dto::visual::VisualView,
+    PersonView, dto::person::PersonCursorParam, dto::person::PersonSearchParam,
+    dto::person::PersonVisualCursorParam, dto::person::RenamePersonParam, dto::visual::VisualView,
     person::PersonId, visual::VisualId,
 };
 
@@ -29,45 +28,15 @@ impl ControllerRouter for PersonController {
     /// 人物模块的受保护路由
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
-            .route("/admin/full_scan", get(Self::full_scan))
-            .route("/admin/secondary_cluster", post(Self::secondary_cluster))
             .route("/", get(Self::get_persons))
             .route("/search", get(Self::search_persons))
-            .route("/merge", post(Self::merge))
             .route("/{person_id}/name", post(Self::rename))
             .route("/{person_id}/visuals", get(Self::get_person_visuals))
-            .route("/{person_id}", delete(Self::delete))
     }
 
     /// 人物模块无公开路由
     fn public_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
-    }
-}
-
-// 创建
-impl PersonController {
-    /// 启动全量人物扫描任务
-    pub async fn full_scan(
-        State(state): State<Arc<VisualState>>,
-        Extension(user_id): Extension<UserId>,
-    ) -> Result<R<()>> {
-        let admin = AdminId::new(user_id)?;
-        PersonService::full_scan(state.clone(), admin).await?;
-
-        Ok(()).to_r_ok()
-    }
-
-    /// 将未分配人脸按 centroid 余弦相似度二次聚类指派到已有人物；仅管理员
-    pub async fn secondary_cluster(
-        State(state): State<Arc<VisualState>>,
-        Extension(user_id): Extension<UserId>,
-        ValidatedJson(req): ValidatedJson<SecondaryClusterParam>,
-    ) -> Result<R<()>> {
-        let admin = AdminId::new(user_id)?;
-        PersonService::assign_unassigned_faces(state.clone(), admin, req).await?;
-
-        Ok(()).to_r_ok()
     }
 }
 
@@ -83,32 +52,6 @@ impl PersonController {
         PersonService::rename_person(&state, person_id, req, user_id).await?;
 
         Ok(()).to_r_ok()
-    }
-
-    /// 合并两个人物，将源人物的人脸转移到目标人物；高危操作，仅管理员
-    async fn merge(
-        State(state): State<Arc<VisualState>>,
-        Extension(user_id): Extension<UserId>,
-        ValidatedJson(req): ValidatedJson<MergePersonParam>,
-    ) -> Result<R<PersonView>> {
-        let admin = AdminId::new(user_id)?;
-
-        let MergePersonParam {
-            source_person_id,
-            target_person_id,
-        } = req;
-
-        let result = PersonService::merge_person(
-            &state,
-            admin,
-            MergePersonParam {
-                source_person_id,
-                target_person_id,
-            },
-        )
-        .await?;
-
-        Ok(result).to_r_ok()
     }
 }
 
@@ -146,21 +89,5 @@ impl PersonController {
         PersonService::get_person_visuals(&state, user_id, person_id, req)
             .await
             .to_r_ok()
-    }
-}
-
-// 删除
-impl PersonController {
-    /// 删除人物及其关联数据；高危操作，仅管理员
-    async fn delete(
-        State(state): State<Arc<VisualState>>,
-        Extension(user_id): Extension<UserId>,
-        ValidatedPath(person_id): ValidatedPath<PersonId>,
-    ) -> Result<R<()>> {
-        let admin = AdminId::new(user_id)?;
-
-        PersonService::delete_person(&state, admin, person_id).await?;
-
-        Ok(()).to_r_ok()
     }
 }

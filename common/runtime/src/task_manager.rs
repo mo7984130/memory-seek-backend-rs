@@ -285,7 +285,10 @@ impl TaskManager {
 
     /// 将任务句柄追加到同名任务列表
     fn push_handle(&self, name: String, handle: JoinHandle<()>) {
-        self.inner.tasks.entry(name).or_default().push(handle);
+        let mut handles = self.inner.tasks.entry(name).or_default();
+        // 一次性任务可能持续创建; 已完成句柄不需要保留到 shutdown 阶段。
+        handles.retain(|handle| !handle.is_finished());
+        handles.push(handle);
     }
 }
 

@@ -85,6 +85,9 @@ impl AppSetup {
         inits(config, &mut setup, &domains::APP_DOMAINS_FIRST).await?;
         inits(config, &mut setup, &domains::APP_DOMAINS).await?;
 
+        #[cfg(feature = "admin")]
+        crate::setup::domains::admin::init(config, &mut setup).await?;
+
         // 最后注册 metrics(需要 registry 与 router 均就绪)
         inits(config, &mut setup, &bases::APP_BASES_LAST).await?;
 

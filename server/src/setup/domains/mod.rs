@@ -7,6 +7,9 @@ pub mod backup;
 #[cfg(feature = "audit")]
 pub mod audit;
 
+#[cfg(feature = "admin")]
+pub mod admin;
+
 #[cfg(feature = "user")]
 pub mod user;
 

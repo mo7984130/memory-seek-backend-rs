@@ -4,17 +4,18 @@
 
 use crate::client::{Client, Request};
 use crate::error::Result;
-use types_backup::{ManualBackupResult, RestoreRequest, RestoreResult, ScheduledBackupResult};
+use types_admin::job::AdminJobView;
+use types_backup::{RestoreRequest, RestoreResult};
 
 /// 触发一次定时备份流程(含过期备份清理)。`POST /admin/backup/trigger`
-pub async fn trigger_backup(client: &Client) -> Result<ScheduledBackupResult> {
+pub async fn trigger_backup(client: &Client) -> Result<AdminJobView> {
     client
         .send_json(Request::post("/admin/backup/trigger"))
         .await
 }
 
 /// 触发一次管理员手动备份。`POST /admin/backup/manual`
-pub async fn manual_backup(client: &Client) -> Result<ManualBackupResult> {
+pub async fn manual_backup(client: &Client) -> Result<AdminJobView> {
     client
         .send_json(Request::post("/admin/backup/manual"))
         .await
