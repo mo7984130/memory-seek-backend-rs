@@ -30,12 +30,7 @@ impl TimelineStatService {
         txn: &sea_orm::DatabaseTransaction,
         ctx: &mut crate::services::visual_service::VisualDeleteContext,
     ) -> common_core::error::contextual::Result<()> {
-        let created_ats = ctx
-            .visuals
-            .iter()
-            .map(|p| &p.created_at)
-            .collect::<Vec<_>>();
-        crate::repo::TimelineStatRepo::decrement_by_created_ats(txn, &created_ats).await?;
+        crate::repo::TimelineStatRepo::refresh_after_delete(txn, &ctx.visuals).await?;
         Ok(())
     }
 }
