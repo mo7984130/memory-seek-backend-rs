@@ -7,6 +7,7 @@ use common_core::{
     time::{DateTime, now},
 };
 use sea_orm::{
+    ActiveModelTrait,
     ActiveValue::Set,
     ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, Expr, Func, OnConflict},
