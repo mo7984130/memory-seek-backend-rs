@@ -1,6 +1,6 @@
 [package]
 name = "auth"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2024"
 
 [features]
@@ -23,6 +23,7 @@ email.path = "../../libs/email"
 common_macros.path = "../../libs/common_macros"
 
 tokio.workspace = true
+redis.workspace = true
 tracing.workspace = true
 sea-orm.workspace = true
 axum = { workspace = true, optional = true }

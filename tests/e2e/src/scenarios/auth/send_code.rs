@@ -100,7 +100,7 @@ impl Scenario for SendCodeRegisteredEmailScenario {
     const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
 
     async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
-        let username = format!("e2e_code_existing_{}_{}", task.index, task.round);
+        let username = format!("e2e_reg_{}_{}", task.index, task.round);
         let email = format!("{username}@test.com");
 
         api::auth::send_email_code(

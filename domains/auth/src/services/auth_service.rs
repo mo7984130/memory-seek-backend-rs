@@ -24,6 +24,8 @@ use types_identity::auth::{
 };
 use types_identity::user::UserInfo;
 
+const ACCESS_TOKEN_REFRESH_COALESCE_SECS: u64 = 2;
+
 /// 用户登录，校验账号密码后签发 access_token 和 refresh_token；密码校验经信号量限流，哈希算法过时会异步迁移
 #[common_macros::metered]
 #[tracing::instrument(
@@ -103,16 +105,9 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     let new_refresh_token = rand_utils::generate_random_str(32);
     let new_refresh_token_expires_at = after(REFRESH_TOKEN_EXPIRE);
 
-    state
-        .redis
-        .set_ex(
-            RedisKeys::auth::user_access_token(user.id),
-            &new_access_token,
-            ACCESS_TOKEN_EXPIRE.as_secs(),
-        )
+    set_login_access_token(state, user.id, &new_access_token)
         .timed(metrics_name!("redis_set"))
-        .await
-        .into_contextual()?;
+        .await?;
 
     let user = db_transaction!(&state.db, |txn| {
         let user = AuthMapper::update_refresh_token(
@@ -148,6 +143,33 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         refresh_token: new_refresh_token,
         refresh_token_expire_at: new_refresh_token_expires_at,
     })
+}
+
+/// 登录时原子更新 access token 并清除之前刷新产生的短期合并结果。
+async fn set_login_access_token(
+    state: &AuthState,
+    user_id: UserId,
+    access_token: &str,
+) -> Result<()> {
+    let mut conn = state.redis.get_conn().await.into_contextual()?;
+    redis::Script::new(
+        r#"
+        redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+        redis.call('DEL', KEYS[2])
+        return 1
+        "#,
+    )
+    .key(RedisKeys::auth::user_access_token(user_id))
+    .key(format!(
+        "{}:refresh",
+        RedisKeys::auth::user_access_token(user_id)
+    ))
+    .arg(access_token)
+    .arg(ACCESS_TOKEN_EXPIRE.as_secs())
+    .invoke_async::<i32>(&mut conn)
+    .await
+    .into_contextual()?;
+    Ok(())
 }
 
 /// 用户注册，校验邮箱验证码与邀请码后创建用户；成功后删除已用验证码防止重放
@@ -280,37 +302,29 @@ pub async fn refresh_access_token(
         .timed(metrics_name!("verify_token"))
         .await?;
 
-    // 并发刷新时只允许一个请求创建 access token，其余请求复用已创建的值。
-    // Redis NX 是原子操作，因此多进程/多实例部署也不会互相覆盖刚签发的 token。
+    // 在 Redis 原子地写入 access token 和短期合并结果：并发请求复用新 token，
+    // 而不是误把登录时已存在的 access token 当成刷新结果。
     let access_token_key = RedisKeys::auth::user_access_token(user_id);
-    let new_access_token = loop {
-        let candidate = rand_utils::generate_random_str(32);
-        let inserted = state
-            .redis
-            .set_ex_nx(
-                &access_token_key,
-                candidate.clone(),
-                ACCESS_TOKEN_EXPIRE.as_secs(),
-            )
-            .timed(metrics_name!("set_token"))
-            .await
-            .into_contextual()?;
-
-        if inserted {
-            break candidate;
-        }
-
-        // 另一个并发刷新请求已经创建了 token；复用它，避免覆盖并使其重试失效。
-        if let Some(access_token) = state
-            .redis
-            .get_as::<String>(&access_token_key)
-            .await
-            .into_contextual()?
-        {
-            break access_token;
-        }
-        // 键可能恰好在 NX 与读取之间过期，再尝试一次创建。
-    };
+    let coalesced_token_key = format!("{access_token_key}:refresh");
+    let mut conn = state.redis.get_conn().await.into_contextual()?;
+    let new_access_token: String = redis::Script::new(
+        r#"
+        local token = redis.call('GET', KEYS[1])
+        if token then return token end
+        redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[2])
+        redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[3])
+        return ARGV[1]
+        "#,
+    )
+    .key(coalesced_token_key)
+    .key(access_token_key)
+    .arg(rand_utils::generate_random_str(32))
+    .arg(ACCESS_TOKEN_EXPIRE.as_secs())
+    .arg(ACCESS_TOKEN_REFRESH_COALESCE_SECS)
+    .invoke_async(&mut conn)
+    .timed(metrics_name!("set_token"))
+    .await
+    .into_contextual()?;
 
     Ok(RefreshAccessTokenResponse {
         access_token: new_access_token,

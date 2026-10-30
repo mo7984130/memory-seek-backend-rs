@@ -7,7 +7,7 @@ use crate::person::PersonId;
 use crate::person::PersonRecord;
 use crate::visual::VisualId;
 #[cfg(feature = "face")]
-use crate::{ImageDimensions, VisualToken};
+use crate::{FaceBBox, ImageDimensions, VisualToken};
 #[cfg(feature = "face")]
 use types_core::UserId;
 use types_core::cursor::{CountIdCursor, TimeIdCursor};
@@ -65,17 +65,60 @@ impl PersonView {
         viewer: UserId,
         dimension: ImageDimensions,
     ) -> common_core::ContextualResult<Self> {
+        // 人脸框原始宽高各异。给人物卡片封面生成统一的正方形裁切,
+        // 并在脸框周围留出固定比例的背景,避免列表中人脸大小忽大忽小。
+        let bbox = square_person_cover_bbox(value.cover.bbox, dimension);
+        let cover_token = VisualTokenStr::encrypt(&VisualToken::crop(
+            viewer,
+            value.cover.file_id,
+            bbox,
+            dimension,
+        ))?;
+
         Ok(Self {
             id: value.id,
             name: value.name,
-            cover_token: VisualTokenStr::encrypt(&VisualToken::crop(
-                viewer,
-                value.cover.file_id,
-                value.cover.bbox,
-                dimension,
-            ))?,
+            cover_token,
             face_count: value.face_count,
         })
+    }
+}
+
+/// 返回以人脸框中心为中心、边长为人脸较长边 1.5 倍的正方形封面裁剪框。
+/// 靠近原图边缘时平移裁剪框以尽可能保留完整的人脸。
+#[cfg(feature = "face")]
+fn square_person_cover_bbox(bbox: FaceBBox, dimensions: ImageDimensions) -> FaceBBox {
+    let image_width = dimensions.width as i32;
+    let image_height = dimensions.height as i32;
+    if image_width <= 0 || image_height <= 0 {
+        return bbox;
+    }
+
+    let (x, y, width, height) = bbox.to_pixel_rect(dimensions.width, dimensions.height);
+    if width <= 0 || height <= 0 {
+        return bbox;
+    }
+
+    let face_side = width.max(height);
+    let max_square_side = image_width.min(image_height);
+    let square_side = ((face_side as f32 * 1.5).round() as i32).min(max_square_side);
+    // 原图本身不足以容纳完整的人脸正方形时,保留原始框避免裁掉人脸。
+    if square_side < face_side {
+        return bbox;
+    }
+
+    let center_x = x + width / 2;
+    let center_y = y + height / 2;
+    let left = (center_x - square_side / 2).clamp(0, image_width - square_side);
+    let top = (center_y - square_side / 2).clamp(0, image_height - square_side);
+    let right = left + square_side;
+    let bottom = top + square_side;
+
+    FaceBBox {
+        x1: left as f32 / image_width as f32,
+        y1: top as f32 / image_height as f32,
+        x2: right as f32 / image_width as f32,
+        y2: bottom as f32 / image_height as f32,
     }
 }
 
@@ -144,6 +187,50 @@ impl validator::Validate for MergePersonParam {
 mod tests {
     use super::*;
     use validator::Validate;
+
+    #[cfg(feature = "face")]
+    #[test]
+    fn person_cover_crop_is_square_with_consistent_padding() {
+        let bbox = FaceBBox {
+            x1: 0.4,
+            y1: 0.4,
+            x2: 0.5,
+            y2: 0.6,
+        };
+        let dimensions = ImageDimensions {
+            width: 1000,
+            height: 800,
+        };
+
+        let cover = square_person_cover_bbox(bbox, dimensions);
+        let (_, _, width, height) = cover.to_pixel_rect(dimensions.width, dimensions.height);
+
+        assert_eq!(width, 240);
+        assert_eq!(height, 240);
+    }
+
+    #[cfg(feature = "face")]
+    #[test]
+    fn person_cover_crop_shifts_inward_near_image_edges() {
+        let bbox = FaceBBox {
+            x1: 0.01,
+            y1: 0.01,
+            x2: 0.11,
+            y2: 0.16,
+        };
+        let dimensions = ImageDimensions {
+            width: 1000,
+            height: 800,
+        };
+
+        let cover = square_person_cover_bbox(bbox, dimensions);
+        let (x, y, width, height) = cover.to_pixel_rect(dimensions.width, dimensions.height);
+
+        assert_eq!((x, y), (0, 0));
+        assert_eq!(width, height);
+        assert!(cover.x2 >= bbox.x2);
+        assert!(cover.y2 >= bbox.y2);
+    }
 
     #[test]
     fn test_merge_person_param_deserialize_valid() {
