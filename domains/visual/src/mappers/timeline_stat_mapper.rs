@@ -10,10 +10,14 @@ use sea_orm::{
     ActiveModelTrait,
     ActiveValue::Set,
     ColumnTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect,
-    sea_query::{Alias, CaseStatement, Expr, Func, SimpleExpr},
+    sea_query::{Alias, Expr, Func, OnConflict},
 };
 use types_visual::timeline_stat::TimelineStatId;
-use types_visual::{dto::timeline_stat::MonthStat, timeline_stat::*};
+use types_visual::{
+    dto::timeline_stat::MonthStat,
+    timeline_stat::*,
+    visual::{Column as VisualColumn, Entity as VisualEntity, VisualId, VisualRecord},
+};
 
 pub(crate) struct TimelineStatMapper;
 
@@ -61,45 +65,69 @@ impl TimelineStatMapper {
         Ok(())
     }
 
-    /// 按影像创建时间批量扣减月份统计
-    pub async fn decr_by_created_ats(
+    /// 删除影像后按剩余影像重建受影响月份的统计
+    pub async fn refresh_after_delete(
         db: &impl ConnectionTrait,
-        created_ats: &[&DateTime],
+        visuals: &[VisualRecord],
     ) -> Result<()> {
-        let mut date_count_map: HashMap<String, i64> = HashMap::new();
-        for created_at in created_ats {
+        let mut date_visual_ids: HashMap<String, Vec<VisualId>> = HashMap::new();
+        for visual in visuals {
+            let created_at = &visual.created_at;
             let date_str = created_at.format("%Y-%m").to_string();
-            *date_count_map.entry(date_str).or_insert(0) += 1;
+            date_visual_ids.entry(date_str).or_default().push(visual.id);
         }
 
-        // 构建 CASE WHEN date_str = 'x' THEN n ... END
-        let mut case_expr = CaseStatement::new();
-        let mut date_strs = Vec::new();
-
-        for (date_str, decr_count) in date_count_map {
-            let id = TimelineStatId(date_str);
-            case_expr = case_expr.case(
-                Expr::col(Column::DateStr).eq(id.clone()),
-                Expr::col(Column::Count).sub(decr_count),
-            );
-            date_strs.push(id);
+        if date_visual_ids.is_empty() {
+            return Ok(());
         }
-        // ELSE count (不在列表中的行保持不变，实际上 filter 已经限制了)
-        case_expr = case_expr.finally(Expr::col(Column::Count));
 
-        Entity::update_many()
-            .col_expr(
-                Column::Count,
-                // GREATEST(CASE WHEN ... END, 0)
-                Func::cust(Alias::new("GREATEST"))
-                    .arg(SimpleExpr::Case(Box::new(case_expr)))
-                    .arg(0i64)
-                    .into(),
+        for (date_str, deleted_visual_ids) in date_visual_ids {
+            // 删除步骤在主表删除之前执行，因此显式排除本次待删除的影像。
+            // 直接基于剩余影像重算，确保 count 和 anchor_time 同步准确。
+            let remaining = VisualEntity::find()
+                .select_only()
+                .column_as(VisualColumn::Id.count(), "count")
+                .expr_as(
+                    Func::cust(Alias::new("max"))
+                        .arg(Expr::col((VisualEntity, VisualColumn::CreatedAt))),
+                    "anchor_time",
+                )
+                .filter(VisualColumn::Id.is_not_in(deleted_visual_ids))
+                .filter(
+                    Expr::cust("to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM')")
+                        .eq(date_str.as_str()),
+                )
+                .into_tuple::<(i64, Option<DateTime>)>()
+                .one(db)
+                .await?
+                .unwrap_or((0, None));
+
+            let (count, anchor_time) = remaining;
+            let Some(anchor_time) = anchor_time else {
+                // 该月已无剩余影像，删除统计行（即使原计数已经不准确）。
+                Entity::delete_many()
+                    .filter(Column::DateStr.eq(TimelineStatId(date_str)))
+                    .exec(db)
+                    .await?;
+                continue;
+            };
+
+            let now = now();
+            Entity::insert(ActiveModel {
+                date_str: Set(TimelineStatId(date_str)),
+                count: Set(count),
+                anchor_time: Set(anchor_time),
+                created_at: Set(now),
+                updated_at: Set(now),
+            })
+            .on_conflict(
+                OnConflict::column(Column::DateStr)
+                    .update_columns([Column::Count, Column::AnchorTime, Column::UpdatedAt])
+                    .to_owned(),
             )
-            .col_expr(Column::UpdatedAt, Expr::current_timestamp())
-            .filter(Column::DateStr.is_in(date_strs))
-            .exec(db)
+            .exec_without_returning(db)
             .await?;
+        }
 
         Ok(())
     }

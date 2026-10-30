@@ -28,11 +28,11 @@ impl TimelineStatRepo {
     }
 
     /// 扣减对应月份的统计
-    pub async fn decrement_by_created_ats(
+    pub async fn refresh_after_delete(
         txn: &DatabaseTransaction,
-        created_ats: &[&DateTime],
+        visuals: &[types_visual::visual::VisualRecord],
     ) -> Result<()> {
-        TimelineStatMapper::decr_by_created_ats(txn, created_ats)
+        TimelineStatMapper::refresh_after_delete(txn, visuals)
             .timed(metrics_name!("db_update"))
             .await
     }

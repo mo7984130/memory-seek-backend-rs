@@ -1,11 +1,12 @@
 //! 视频衍生片：上传后异步生成缩略/预览片，下载轮询至就绪。
 //!
 //! 覆盖：视频上传 → `tokens.thumbnail` 下载在转码完成前返回 202、
-//! 完成后返回 200 且为 `video/mp4` 的衍生片（非原视频）。
+//! 完成后返回 200 且为 `video/mp4` 的衍生片（非原视频），
+//! 并支持单段 Range（206 + `Content-Range`）供客户端 seek。
 
 use std::time::Duration;
 
-use memory_seek_api::{VisualIds, api};
+use memory_seek_api::{Method, VisualIds, api};
 use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 use types_visual::visual::VisualId;
 
@@ -51,7 +52,20 @@ impl Default for VideoDerivativeSetup {
     }
 }
 
-/// 视频缩略片：轮询至就绪后为 `video/mp4` 衍生片。
+/// 视频缩略片的 Range 探测结果。
+#[derive(Default)]
+pub struct RangeProbe {
+    /// HTTP 状态码(就绪时应为 206)
+    pub status: u16,
+    /// `Accept-Ranges` 响应头
+    pub accept_ranges: Option<String>,
+    /// `Content-Range` 响应头
+    pub content_range: Option<String>,
+    /// 响应体字节
+    pub body: Vec<u8>,
+}
+
+/// 视频缩略片：轮询至就绪后为 `video/mp4` 衍生片，且支持 Range 读取。
 #[derive(Default)]
 pub struct VideoDerivativeScenario;
 
@@ -60,8 +74,8 @@ impl Scenario for VideoDerivativeScenario {
 
     type Error = E2eError;
 
-    /// (状态码, content-type, 字节)
-    type Output = (u16, Option<String>, Vec<u8>);
+    /// (状态码, content-type, 字节, Range 探测)
+    type Output = (u16, Option<String>, Vec<u8>, RangeProbe);
 
     type Setup = VideoDerivativeSetup;
 
@@ -92,17 +106,40 @@ impl Scenario for VideoDerivativeScenario {
                 continue;
             }
             if status != 200 {
-                return Ok((status, None, Vec::new()));
+                return Ok((status, None, Vec::new(), RangeProbe::default()));
             }
             let content_type = response
                 .headers
                 .get("content-type")
                 .and_then(|value| value.to_str().ok())
                 .map(str::to_string);
-            return Ok((status, content_type, response.body));
+            // 就绪后按 Range 取前 2 字节: 客户端(尤其 alhazen)依赖 206 + Content-Range
+            // 判定 MP4 可 seek, 只回 200 会导致首帧/悬停播放失败。
+            let probe = setup
+                .session
+                .client()
+                .raw(Method::GET, format!("/visual/{}", setup.thumbnail_token))
+                .no_auth()
+                .header("range", "bytes=0-1")
+                .send()
+                .await?;
+            let header = |name: &str| {
+                probe
+                    .headers
+                    .get(name)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_string)
+            };
+            let range = RangeProbe {
+                status: probe.status.as_u16(),
+                accept_ranges: header("accept-ranges"),
+                content_range: header("content-range"),
+                body: probe.body,
+            };
+            return Ok((status, content_type, response.body, range));
         }
         // 轮询耗尽仍为 202: 转码未完成, 但契约成立
-        Ok((202, None, Vec::new()))
+        Ok((202, None, Vec::new(), RangeProbe::default()))
     }
 
     async fn validate(
@@ -111,7 +148,7 @@ impl Scenario for VideoDerivativeScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        let (status, content_type, bytes) = output;
+        let (status, content_type, bytes, range) = output;
         let tokens_ok = !setup.thumbnail_token.is_empty() && !setup.preview_token.is_empty();
         if *status == 202 {
             // 仍在异步转码: 非错误, 契约成立
@@ -119,7 +156,19 @@ impl Scenario for VideoDerivativeScenario {
         }
         // 就绪的衍生片应为 MP4(ISOBMFF: 偏移 4 处为 `ftyp`)
         let is_mp4 = bytes.len() >= 8 && &bytes[4..8] == b"ftyp";
-        Ok(tokens_ok && *status == 200 && content_type.as_deref() == Some("video/mp4") && is_mp4)
+        // 单段 Range: 206 + `Content-Range: bytes 0-1/<total>` + 前 2 字节
+        let range_ok = range.status == 206
+            && range.accept_ranges.as_deref() == Some("bytes")
+            && range
+                .content_range
+                .as_deref()
+                .is_some_and(|value| value.starts_with("bytes 0-1/"))
+            && range.body == bytes[..2.min(bytes.len())];
+        Ok(tokens_ok
+            && *status == 200
+            && content_type.as_deref() == Some("video/mp4")
+            && is_mp4
+            && range_ok)
     }
 
     /// 收尾：删除 setup 阶段上传的视频（会连带清理衍生片）。

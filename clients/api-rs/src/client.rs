@@ -1,5 +1,6 @@
 //! HTTP 客户端:请求构造、鉴权注入、401 自动刷新与统一响应解析。
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
@@ -10,7 +11,8 @@ use crate::config::ApiConfig;
 use crate::error::{ApiError, Result};
 use crate::storage::{AuthStorage, Storage};
 use crate::transport::{
-    HeaderMap, HeaderName, HeaderValue, HttpRequest, HttpResponse, Method, StatusCode, Transport,
+    DownloadResponse, HeaderMap, HeaderName, HeaderValue, HttpRequest, HttpResponse, Method,
+    StatusCode, Transport,
 };
 use common_core::r::R;
 use http::header;
@@ -36,6 +38,7 @@ struct Inner {
     config: ApiConfig,
     transport: Arc<dyn Transport>,
     storage: Arc<dyn Storage>,
+    refresh_lock: futures::lock::Mutex<()>,
     on_unauth: Mutex<Option<UnauthCallback>>,
 }
 
@@ -55,6 +58,7 @@ impl Client {
                 config,
                 transport: Arc::new(transport),
                 storage: Arc::new(storage),
+                refresh_lock: futures::lock::Mutex::new(()),
                 on_unauth: Mutex::new(None),
             }),
         }
@@ -154,7 +158,10 @@ impl Client {
             .await?;
 
         if response.status == StatusCode::UNAUTHORIZED && request.auth {
-            self.refresh_and_store().await?;
+            let rejected_token = auth
+                .as_deref()
+                .and_then(|header| header.rsplit_once(' ').map(|(_, token)| token));
+            self.refresh_and_store(rejected_token).await?;
             let auth = Some(self.auth_header().await?);
             return Ok(self
                 .inner
@@ -172,15 +179,25 @@ impl Client {
         let user_id = auth.user_id()?.ok_or(ApiError::NotLoggedIn)?;
         let access_token = match auth.access_token()? {
             Some(token) => token,
-            None => self.refresh_and_store().await?.access_token,
+            None => self.refresh_and_store(None).await?,
         };
         Ok(format!("Bearer {user_id} {access_token}"))
     }
 
     /// 使用存储中的 refresh token 刷新 access token,并写回存储。
-    async fn refresh_and_store(&self) -> Result<RefreshAccessTokenResponse> {
+    async fn refresh_and_store(&self, rejected_token: Option<&str>) -> Result<String> {
         let auth = self.auth_storage();
         let user_id = auth.user_id()?.ok_or(ApiError::NotLoggedIn)?;
+
+        // 多个请求可能同时因 access token 过期进入刷新流程。串行化后，
+        // 后续请求先复用前一个请求刚写入的 access token，不重复刷新。
+        let _guard = self.inner.refresh_lock.lock().await;
+        if let Some(access_token) = auth.access_token()?
+            && rejected_token != Some(access_token.as_str())
+        {
+            return Ok(access_token);
+        }
+
         let refresh_token = match auth.refresh_token()? {
             Some(token) => token,
             None => {
@@ -193,11 +210,15 @@ impl Client {
         match self.fetch_refresh(user_id, &refresh_token).await {
             Ok(response) => {
                 auth.set_access_token(&response.access_token, response.access_token_expire_at)?;
-                Ok(response)
+                Ok(response.access_token)
             }
             Err(error) => {
-                auth.clear_login_result()?;
-                self.notify_unauth();
+                // 只有服务端明确拒绝 refresh token 才登出；网络错误及 5xx
+                // 应保留仍可能有效的 refresh token，允许后续重试。
+                if matches!(&error, ApiError::HttpStatus { code: 401, .. }) {
+                    auth.clear_login_result()?;
+                    self.notify_unauth();
+                }
                 Err(error)
             }
         }
@@ -292,26 +313,47 @@ impl RawRequest<'_> {
         self
     }
 
-    /// 发送一次并返回原始响应(不解析包壳、不重试)。
-    ///
     /// 已显式设置 `Authorization` 头时不再注入存储中的鉴权。
-    pub async fn send(self) -> Result<HttpResponse> {
+    async fn auth_header(&self) -> Result<Option<String>> {
         let has_auth_header = self
             .request
             .headers
             .iter()
             .any(|(key, _)| key.eq_ignore_ascii_case("Authorization"));
-        let auth = if self.request.auth && !has_auth_header {
-            Some(self.client.auth_header().await?)
+        if self.request.auth && !has_auth_header {
+            Ok(Some(self.client.auth_header().await?))
         } else {
-            None
-        };
+            Ok(None)
+        }
+    }
+
+    /// 发送一次并返回原始响应(不解析包壳、不重试)。
+    pub async fn send(self) -> Result<HttpResponse> {
+        let auth = self.auth_header().await?;
         self.client
             .inner
             .transport
             .send(
                 self.client
                     .build_http_request(&self.request, auth.as_deref()),
+            )
+            .await
+            .map_err(ApiError::from)
+    }
+
+    /// 发送一次并把响应体流式写入 `dest`(不解析包壳、不重试)。
+    ///
+    /// 成功时返回的 [`DownloadResponse::bytes`] 是实际写入的字节数;非 2xx 不会
+    /// 创建/保留目标文件,错误响应体放在 [`DownloadResponse::body`] 里。
+    pub async fn download_to(self, dest: impl AsRef<Path>) -> Result<DownloadResponse> {
+        let auth = self.auth_header().await?;
+        self.client
+            .inner
+            .transport
+            .download_to(
+                self.client
+                    .build_http_request(&self.request, auth.as_deref()),
+                dest.as_ref(),
             )
             .await
             .map_err(ApiError::from)
@@ -496,6 +538,7 @@ mod tests {
     struct MockTransport {
         requests: Mutex<Vec<HttpRequest>>,
         responses: Mutex<VecDeque<HttpResponse>>,
+        yield_refresh_once: bool,
     }
 
     impl MockTransport {
@@ -503,6 +546,15 @@ mod tests {
             Arc::new(Self {
                 requests: Mutex::new(Vec::new()),
                 responses: Mutex::new(responses.into()),
+                yield_refresh_once: false,
+            })
+        }
+
+        fn queue_yielding_refresh(responses: Vec<HttpResponse>) -> Arc<Self> {
+            Arc::new(Self {
+                requests: Mutex::new(Vec::new()),
+                responses: Mutex::new(responses.into()),
+                yield_refresh_once: true,
             })
         }
 
@@ -518,12 +570,52 @@ mod tests {
             request: HttpRequest,
         ) -> std::result::Result<HttpResponse, TransportError> {
             self.requests.lock().unwrap().push(request);
-            Ok(self
+            let response = self
                 .responses
                 .lock()
                 .unwrap()
                 .pop_front()
-                .expect("测试未提供足够的预设响应"))
+                .expect("测试未提供足够的预设响应");
+            if self.yield_refresh_once {
+                let mut yielded = false;
+                futures::future::poll_fn(|cx| {
+                    if yielded {
+                        std::task::Poll::Ready(())
+                    } else {
+                        yielded = true;
+                        cx.waker().wake_by_ref();
+                        std::task::Poll::Pending
+                    }
+                })
+                .await;
+            }
+            Ok(response)
+        }
+
+        async fn download_to(
+            &self,
+            request: HttpRequest,
+            dest: &Path,
+        ) -> std::result::Result<DownloadResponse, TransportError> {
+            // 测试用 mock 明确选择非流式:先 send,再整段写文件。
+            let response = self.send(request).await?;
+            let bytes = response.body.len() as u64;
+            if response.status.is_success() {
+                std::fs::write(dest, &response.body)?;
+                Ok(DownloadResponse {
+                    status: response.status,
+                    headers: response.headers,
+                    body: Vec::new(),
+                    bytes,
+                })
+            } else {
+                Ok(DownloadResponse {
+                    status: response.status,
+                    headers: response.headers,
+                    body: response.body,
+                    bytes: 0,
+                })
+            }
         }
     }
 
@@ -767,6 +859,106 @@ mod tests {
             Some("Bearer 1 new-token")
         );
     }
+
+    #[test]
+    fn concurrent_refreshes_share_one_request_and_token() {
+        let transport = MockTransport::queue_yielding_refresh(vec![ok_response(
+            r#"{"accessToken":"new-token","accessTokenExpireAt":"2100-01-01T00:00:00Z"}"#,
+        )]);
+        let storage = Arc::new(MemoryStorage::new());
+        let mut login = login_response();
+        login.access_token_expire_at = crate::DateTime::from_timestamp(1, 0).unwrap();
+        AuthStorage::new(storage.clone())
+            .set_login_result(&login)
+            .unwrap();
+        let client = Client::new(ApiConfig::new("/api"), transport.clone(), storage);
+
+        let (first, second) = futures::executor::block_on(async {
+            futures::join!(
+                client.refresh_and_store(Some("old-token")),
+                client.refresh_and_store(Some("old-token")),
+            )
+        });
+
+        assert_eq!(first.unwrap(), "new-token");
+        assert_eq!(second.unwrap(), "new-token");
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].url.ends_with("/auth/token"));
+    }
+
+    #[test]
+    fn refresh_server_error_does_not_clear_login_credentials() {
+        let transport = MockTransport::queue(vec![HttpResponse {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            headers: HeaderMap::new(),
+            body: br#"{"code":503,"msg":"temporarily unavailable"}"#.to_vec(),
+        }]);
+        let storage = Arc::new(MemoryStorage::new());
+        let mut login = login_response();
+        login.access_token_expire_at = crate::DateTime::from_timestamp(1, 0).unwrap();
+        let auth = AuthStorage::new(storage.clone());
+        auth.set_login_result(&login).unwrap();
+        let client = Client::new(ApiConfig::new("/api"), transport, storage);
+
+        let result = futures::executor::block_on(client.refresh_and_store(None));
+
+        assert!(matches!(
+            result,
+            Err(ApiError::HttpStatus { code: 503, .. })
+        ));
+        assert!(auth.check_login().unwrap());
+    }
+
+    #[test]
+    fn raw_download_writes_body_to_file() {
+        let transport = MockTransport::queue(vec![HttpResponse {
+            status: StatusCode::OK,
+            headers: HeaderMap::new(),
+            body: b"hello".to_vec(),
+        }]);
+        let client = Client::new(ApiConfig::new("/api"), transport, MemoryStorage::new());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out.bin");
+
+        let response = futures::executor::block_on(
+            client
+                .raw(Method::GET, "/visual/token")
+                .no_auth()
+                .download_to(&path),
+        )
+        .unwrap();
+
+        assert!(response.is_success());
+        assert_eq!(response.bytes, 5);
+        assert_eq!(std::fs::read(path).unwrap(), b"hello");
+    }
+
+    #[test]
+    fn raw_download_does_not_write_on_error_status() {
+        let transport = MockTransport::queue(vec![HttpResponse {
+            status: StatusCode::NOT_FOUND,
+            headers: HeaderMap::new(),
+            body: b"missing".to_vec(),
+        }]);
+        let client = Client::new(ApiConfig::new("/api"), transport, MemoryStorage::new());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out.bin");
+
+        let response = futures::executor::block_on(
+            client
+                .raw(Method::GET, "/visual/token")
+                .no_auth()
+                .download_to(&path),
+        )
+        .unwrap();
+
+        assert_eq!(response.status, StatusCode::NOT_FOUND);
+        assert_eq!(response.bytes, 0);
+        assert_eq!(response.body, b"missing");
+        assert!(!path.exists());
+    }
+
     #[test]
     fn deserializes_avatar_token_without_cipher() {
         // 关键回归:UserInfo 的 avatar_token(VisualTokenStr)无需密钥也能反序列化

@@ -1,4 +1,6 @@
-use crate::face::{FaceId, FaceRecord};
+use crate::face::FaceId;
+#[cfg(feature = "face")]
+use crate::face::FaceRecord;
 use crate::models::FaceIds;
 use crate::person::PersonId;
 use crate::visual::VisualId;
@@ -16,6 +18,7 @@ crate::dto!(FaceView, "visual/", rename = "Face"; {
     pub person_name: Option<String>,
 });
 
+#[cfg(feature = "face")]
 impl From<FaceRecord> for FaceView {
     /// 将人脸记录转换为人脸视图
     fn from(value: FaceRecord) -> Self {
@@ -63,10 +66,10 @@ mod tests {
         (a - b).abs() < 1e-4
     }
 
-    /// insight-face-rs 2.x 输出归一化坐标 [0,1],FaceBBox 应直接透传
+    /// insight-face-rs-type 输出归一化坐标 [0,1],FaceBBox 应直接透传
     #[test]
     fn face_bbox_passthrough_normalized_coords() {
-        let bbox = insight_face_rs::BoundingBox {
+        let bbox = crate::BoundingBox {
             x1: 0.1,
             y1: 0.2,
             x2: 0.55,
@@ -78,15 +81,15 @@ mod tests {
         assert!(approx(dto.x2, 0.55));
         assert!(approx(dto.y2, 0.9));
 
-        let back: insight_face_rs::BoundingBox = dto.into();
+        let back: crate::BoundingBox = dto.into();
         assert!(approx(back.x1, 0.1));
         assert!(approx(back.y1, 0.2));
     }
 
-    /// 库 2.x 提供的 相对坐标 <-> 绝对像素 转换(裁剪链路依赖)
+    /// insight-face-rs-type 提供的 相对坐标 <-> 绝对像素 转换(裁剪链路依赖)
     #[test]
     fn bounding_box_relative_absolute_roundtrip() {
-        let abs = insight_face_rs::BoundingBox {
+        let abs = crate::BoundingBox {
             x1: 10.0,
             y1: 20.0,
             x2: 100.0,

@@ -1,6 +1,6 @@
 [package]
 name = "visual"
-version = "0.11.0"
+version = "0.12.2"
 edition = "2024"
 
 [features]
@@ -8,7 +8,7 @@ default = []
 metrics = ["multi-level-cache/metrics", "oss/metrics"]
 controller = ["dep:axum", "dep:common-web"]
 audit = ["audit/recording"]
-face = ["dep:insight-face-rs", "dep:backup", "types-visual/face-engine"]
+face = ["dep:insight-face-rs", "dep:backup", "types-visual/face"]
 ts = ["types-visual/ts", "common-core/ts"]
 
 [dependencies]

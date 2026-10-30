@@ -119,7 +119,8 @@ linkme = "0.3"
 # Snowflake ID
 snowflaked = { version = "1.0.3", features = ["sync"] }
 
-insight-face-rs = { version = "4.2.0" , features = ["sea-orm", "tokio", "load-dynamic"] }
+insight-face-rs = { version = "4.2.1", features = ["sea-orm", "tokio", "load-dynamic"] }
+insight-face-rs-type = "4.2.1"
 
 multi-level-cache = { version = "0.1.1", features = ["redis-deadpool"] }
 

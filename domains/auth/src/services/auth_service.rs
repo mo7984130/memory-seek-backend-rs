@@ -24,6 +24,8 @@ use types_identity::auth::{
 };
 use types_identity::user::UserInfo;
 
+const ACCESS_TOKEN_REFRESH_COALESCE_SECS: u64 = 2;
+
 /// 用户登录，校验账号密码后签发 access_token 和 refresh_token；密码校验经信号量限流，哈希算法过时会异步迁移
 #[common_macros::metered]
 #[tracing::instrument(
@@ -103,16 +105,9 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
     let new_refresh_token = rand_utils::generate_random_str(32);
     let new_refresh_token_expires_at = after(REFRESH_TOKEN_EXPIRE);
 
-    state
-        .redis
-        .set_ex(
-            RedisKeys::auth::user_access_token(user.id),
-            &new_access_token,
-            ACCESS_TOKEN_EXPIRE.as_secs(),
-        )
+    set_login_access_token(state, user.id, &new_access_token)
         .timed(metrics_name!("redis_set"))
-        .await
-        .into_contextual()?;
+        .await?;
 
     let user = db_transaction!(&state.db, |txn| {
         let user = AuthMapper::update_refresh_token(
@@ -148,6 +143,33 @@ pub async fn login(state: &AuthState, req: LoginRequest) -> Result<LoginResponse
         refresh_token: new_refresh_token,
         refresh_token_expire_at: new_refresh_token_expires_at,
     })
+}
+
+/// 登录时原子更新 access token 并清除之前刷新产生的短期合并结果。
+async fn set_login_access_token(
+    state: &AuthState,
+    user_id: UserId,
+    access_token: &str,
+) -> Result<()> {
+    let mut conn = state.redis.get_conn().await.into_contextual()?;
+    redis::Script::new(
+        r#"
+        redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+        redis.call('DEL', KEYS[2])
+        return 1
+        "#,
+    )
+    .key(RedisKeys::auth::user_access_token(user_id))
+    .key(format!(
+        "{}:refresh",
+        RedisKeys::auth::user_access_token(user_id)
+    ))
+    .arg(access_token)
+    .arg(ACCESS_TOKEN_EXPIRE.as_secs())
+    .invoke_async::<i32>(&mut conn)
+    .await
+    .into_contextual()?;
+    Ok(())
 }
 
 /// 用户注册，校验邮箱验证码与邀请码后创建用户；成功后删除已用验证码防止重放
@@ -226,6 +248,16 @@ pub async fn register(state: &AuthState, req: RegisterRequest) -> Result<UserInf
     )
 )]
 pub async fn send_email_code(state: &AuthState, req: SendEmailCodeRequest) -> Result<()> {
+    // 验证码接口用于注册,已注册邮箱不再发送注册验证码。
+    AuthMapper::email_exists(&state.db, &req.email)
+        .timed(metrics_name!("db_query"))
+        .await?
+        .false_or_warn(
+            "email_existed",
+            "发送注册验证码时邮箱已注册",
+            AppError::bad_request("该邮箱已被注册"),
+        )?;
+
     // 生成大写字母+数字验证码
     let code = rand_utils::generate_random_uppercase_str(6);
 
@@ -270,18 +302,29 @@ pub async fn refresh_access_token(
         .timed(metrics_name!("verify_token"))
         .await?;
 
-    // 设置新的access_token到redis
-    let new_access_token = rand_utils::generate_random_str(32);
-    state
-        .redis
-        .set_ex(
-            &RedisKeys::auth::user_access_token(user_id),
-            &new_access_token,
-            ACCESS_TOKEN_EXPIRE.as_secs(),
-        )
-        .timed(metrics_name!("set_token"))
-        .await
-        .into_contextual()?;
+    // 在 Redis 原子地写入 access token 和短期合并结果：并发请求复用新 token，
+    // 而不是误把登录时已存在的 access token 当成刷新结果。
+    let access_token_key = RedisKeys::auth::user_access_token(user_id);
+    let coalesced_token_key = format!("{access_token_key}:refresh");
+    let mut conn = state.redis.get_conn().await.into_contextual()?;
+    let new_access_token: String = redis::Script::new(
+        r#"
+        local token = redis.call('GET', KEYS[1])
+        if token then return token end
+        redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[2])
+        redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[3])
+        return ARGV[1]
+        "#,
+    )
+    .key(coalesced_token_key)
+    .key(access_token_key)
+    .arg(rand_utils::generate_random_str(32))
+    .arg(ACCESS_TOKEN_EXPIRE.as_secs())
+    .arg(ACCESS_TOKEN_REFRESH_COALESCE_SECS)
+    .invoke_async(&mut conn)
+    .timed(metrics_name!("set_token"))
+    .await
+    .into_contextual()?;
 
     Ok(RefreshAccessTokenResponse {
         access_token: new_access_token,

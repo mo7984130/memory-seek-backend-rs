@@ -1,6 +1,6 @@
 [package]
 name = "common-redis"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Redis 访问层: 连接池与常用命令扩展"
 

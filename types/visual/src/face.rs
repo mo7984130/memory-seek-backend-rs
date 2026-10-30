@@ -5,15 +5,15 @@
 pub use types_core::FaceId;
 
 // ============================================================
-// SeaORM 实体（仅 face-engine feature）
+// SeaORM 实体（仅 face feature）
 // ============================================================
 
-#[cfg(feature = "face-engine")]
+#[cfg(feature = "face")]
 mod entity {
     use common_core::time::{DateTime, now};
-    use insight_face_rs::types::{BoundingBox, Face, FaceEmbedding, FaceLandmarks};
     use sea_orm::entity::prelude::*;
     use serde::{Deserialize, Serialize};
+    use types_visual_token::{BoundingBox, Face, FaceEmbedding, FaceLandmarks};
 
     use super::*;
     use crate::person::PersonId;
@@ -133,5 +133,5 @@ mod entity {
     }
 }
 
-#[cfg(feature = "face-engine")]
+#[cfg(feature = "face")]
 pub use entity::*;

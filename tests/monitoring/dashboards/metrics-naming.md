@@ -273,7 +273,7 @@ L1 本地 moka → L2 Redis → L3 数据库（loader）。
 |------|------|
 | login | `auth:login:attempts` `auth:login:success` `auth:login:duration_seconds`<br>`auth:login:db_query` `auth:login:acquire_permit` `auth:login:verify_password` `auth:login:redis_set` `auth:login:db_update` |
 | register | `auth:register:attempts` `auth:register:success` `auth:register:duration_seconds`<br>`auth:register:verify_email_code` `auth:register:verify_inviter_code` `auth:register:hash_password` `auth:register:db_insert` `auth:register:redis_delete` |
-| send_email_code | `auth:send_email_code:attempts` `auth:send_email_code:success` `auth:send_email_code:duration_seconds`<br>`auth:send_email_code:redis_set` `auth:send_email_code:send_message` `auth:send_email_code:acquire_permit` |
+| send_email_code | `auth:send_email_code:attempts` `auth:send_email_code:success` `auth:send_email_code:duration_seconds`<br>`auth:send_email_code:db_query` `auth:send_email_code:redis_set` `auth:send_email_code:send_message` `auth:send_email_code:acquire_permit` |
 | refresh_access_token | `auth:refresh_access_token:attempts` `auth:refresh_access_token:success` `auth:refresh_access_token:duration_seconds`<br>`auth:refresh_access_token:verify_token` `auth:refresh_access_token:set_token` |
 
 ### user 模块
