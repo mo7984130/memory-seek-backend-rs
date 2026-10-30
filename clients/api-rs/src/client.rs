@@ -38,6 +38,7 @@ struct Inner {
     config: ApiConfig,
     transport: Arc<dyn Transport>,
     storage: Arc<dyn Storage>,
+    refresh_lock: futures::lock::Mutex<()>,
     on_unauth: Mutex<Option<UnauthCallback>>,
 }
 
@@ -57,6 +58,7 @@ impl Client {
                 config,
                 transport: Arc::new(transport),
                 storage: Arc::new(storage),
+                refresh_lock: futures::lock::Mutex::new(()),
                 on_unauth: Mutex::new(None),
             }),
         }
@@ -156,7 +158,10 @@ impl Client {
             .await?;
 
         if response.status == StatusCode::UNAUTHORIZED && request.auth {
-            self.refresh_and_store().await?;
+            let rejected_token = auth
+                .as_deref()
+                .and_then(|header| header.rsplit_once(' ').map(|(_, token)| token));
+            self.refresh_and_store(rejected_token).await?;
             let auth = Some(self.auth_header().await?);
             return Ok(self
                 .inner
@@ -174,15 +179,25 @@ impl Client {
         let user_id = auth.user_id()?.ok_or(ApiError::NotLoggedIn)?;
         let access_token = match auth.access_token()? {
             Some(token) => token,
-            None => self.refresh_and_store().await?.access_token,
+            None => self.refresh_and_store(None).await?,
         };
         Ok(format!("Bearer {user_id} {access_token}"))
     }
 
     /// 使用存储中的 refresh token 刷新 access token,并写回存储。
-    async fn refresh_and_store(&self) -> Result<RefreshAccessTokenResponse> {
+    async fn refresh_and_store(&self, rejected_token: Option<&str>) -> Result<String> {
         let auth = self.auth_storage();
         let user_id = auth.user_id()?.ok_or(ApiError::NotLoggedIn)?;
+
+        // 多个请求可能同时因 access token 过期进入刷新流程。串行化后，
+        // 后续请求先复用前一个请求刚写入的 access token，不重复刷新。
+        let _guard = self.inner.refresh_lock.lock().await;
+        if let Some(access_token) = auth.access_token()?
+            && rejected_token != Some(access_token.as_str())
+        {
+            return Ok(access_token);
+        }
+
         let refresh_token = match auth.refresh_token()? {
             Some(token) => token,
             None => {
@@ -195,11 +210,15 @@ impl Client {
         match self.fetch_refresh(user_id, &refresh_token).await {
             Ok(response) => {
                 auth.set_access_token(&response.access_token, response.access_token_expire_at)?;
-                Ok(response)
+                Ok(response.access_token)
             }
             Err(error) => {
-                auth.clear_login_result()?;
-                self.notify_unauth();
+                // 只有服务端明确拒绝 refresh token 才登出；网络错误及 5xx
+                // 应保留仍可能有效的 refresh token，允许后续重试。
+                if matches!(&error, ApiError::HttpStatus { code: 401, .. }) {
+                    auth.clear_login_result()?;
+                    self.notify_unauth();
+                }
                 Err(error)
             }
         }
@@ -519,6 +538,7 @@ mod tests {
     struct MockTransport {
         requests: Mutex<Vec<HttpRequest>>,
         responses: Mutex<VecDeque<HttpResponse>>,
+        yield_refresh_once: bool,
     }
 
     impl MockTransport {
@@ -526,6 +546,15 @@ mod tests {
             Arc::new(Self {
                 requests: Mutex::new(Vec::new()),
                 responses: Mutex::new(responses.into()),
+                yield_refresh_once: false,
+            })
+        }
+
+        fn queue_yielding_refresh(responses: Vec<HttpResponse>) -> Arc<Self> {
+            Arc::new(Self {
+                requests: Mutex::new(Vec::new()),
+                responses: Mutex::new(responses.into()),
+                yield_refresh_once: true,
             })
         }
 
@@ -541,12 +570,26 @@ mod tests {
             request: HttpRequest,
         ) -> std::result::Result<HttpResponse, TransportError> {
             self.requests.lock().unwrap().push(request);
-            Ok(self
+            let response = self
                 .responses
                 .lock()
                 .unwrap()
                 .pop_front()
-                .expect("测试未提供足够的预设响应"))
+                .expect("测试未提供足够的预设响应");
+            if self.yield_refresh_once {
+                let mut yielded = false;
+                futures::future::poll_fn(|cx| {
+                    if yielded {
+                        std::task::Poll::Ready(())
+                    } else {
+                        yielded = true;
+                        cx.waker().wake_by_ref();
+                        std::task::Poll::Pending
+                    }
+                })
+                .await;
+            }
+            Ok(response)
         }
 
         async fn download_to(
@@ -816,6 +859,57 @@ mod tests {
             Some("Bearer 1 new-token")
         );
     }
+
+    #[test]
+    fn concurrent_refreshes_share_one_request_and_token() {
+        let transport = MockTransport::queue_yielding_refresh(vec![ok_response(
+            r#"{"accessToken":"new-token","accessTokenExpireAt":"2100-01-01T00:00:00Z"}"#,
+        )]);
+        let storage = Arc::new(MemoryStorage::new());
+        let mut login = login_response();
+        login.access_token_expire_at = crate::DateTime::from_timestamp(1, 0).unwrap();
+        AuthStorage::new(storage.clone())
+            .set_login_result(&login)
+            .unwrap();
+        let client = Client::new(ApiConfig::new("/api"), transport.clone(), storage);
+
+        let (first, second) = futures::executor::block_on(async {
+            futures::join!(
+                client.refresh_and_store(Some("old-token")),
+                client.refresh_and_store(Some("old-token")),
+            )
+        });
+
+        assert_eq!(first.unwrap(), "new-token");
+        assert_eq!(second.unwrap(), "new-token");
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].url.ends_with("/auth/token"));
+    }
+
+    #[test]
+    fn refresh_server_error_does_not_clear_login_credentials() {
+        let transport = MockTransport::queue(vec![HttpResponse {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            headers: HeaderMap::new(),
+            body: br#"{"code":503,"msg":"temporarily unavailable"}"#.to_vec(),
+        }]);
+        let storage = Arc::new(MemoryStorage::new());
+        let mut login = login_response();
+        login.access_token_expire_at = crate::DateTime::from_timestamp(1, 0).unwrap();
+        let auth = AuthStorage::new(storage.clone());
+        auth.set_login_result(&login).unwrap();
+        let client = Client::new(ApiConfig::new("/api"), transport, storage);
+
+        let result = futures::executor::block_on(client.refresh_and_store(None));
+
+        assert!(matches!(
+            result,
+            Err(ApiError::HttpStatus { code: 503, .. })
+        ));
+        assert!(auth.check_login().unwrap());
+    }
+
     #[test]
     fn raw_download_writes_body_to_file() {
         let transport = MockTransport::queue(vec![HttpResponse {

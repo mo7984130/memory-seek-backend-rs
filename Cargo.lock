@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "auth"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "audit",
  "axum",
@@ -1148,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "common-redis"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "common-core",
  "deadpool-redis",
@@ -3244,7 +3244,7 @@ dependencies = [
 
 [[package]]
 name = "memory-seek-api-rs"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "async-trait",
  "common-core",

@@ -280,18 +280,37 @@ pub async fn refresh_access_token(
         .timed(metrics_name!("verify_token"))
         .await?;
 
-    // 设置新的access_token到redis
-    let new_access_token = rand_utils::generate_random_str(32);
-    state
-        .redis
-        .set_ex(
-            &RedisKeys::auth::user_access_token(user_id),
-            &new_access_token,
-            ACCESS_TOKEN_EXPIRE.as_secs(),
-        )
-        .timed(metrics_name!("set_token"))
-        .await
-        .into_contextual()?;
+    // 并发刷新时只允许一个请求创建 access token，其余请求复用已创建的值。
+    // Redis NX 是原子操作，因此多进程/多实例部署也不会互相覆盖刚签发的 token。
+    let access_token_key = RedisKeys::auth::user_access_token(user_id);
+    let new_access_token = loop {
+        let candidate = rand_utils::generate_random_str(32);
+        let inserted = state
+            .redis
+            .set_ex_nx(
+                &access_token_key,
+                candidate.clone(),
+                ACCESS_TOKEN_EXPIRE.as_secs(),
+            )
+            .timed(metrics_name!("set_token"))
+            .await
+            .into_contextual()?;
+
+        if inserted {
+            break candidate;
+        }
+
+        // 另一个并发刷新请求已经创建了 token；复用它，避免覆盖并使其重试失效。
+        if let Some(access_token) = state
+            .redis
+            .get_as::<String>(&access_token_key)
+            .await
+            .into_contextual()?
+        {
+            break access_token;
+        }
+        // 键可能恰好在 NX 与读取之间过期，再尝试一次创建。
+    };
 
     Ok(RefreshAccessTokenResponse {
         access_token: new_access_token,

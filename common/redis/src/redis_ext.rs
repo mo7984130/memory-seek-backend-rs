@@ -22,6 +22,14 @@ pub trait RedisExt {
         ttl: u64,
     ) -> impl Future<Output = Result<(), PoolError>> + Send;
 
+    /// 仅当键不存在时写入并设置过期时间；返回是否成功写入。
+    fn set_ex_nx(
+        &self,
+        key: impl AsRef<str> + Send + Sync,
+        value: String,
+        ttl: u64,
+    ) -> impl Future<Output = Result<bool, PoolError>> + Send;
+
     /// 删除 Redis 中指定 key
     fn del(
         &self,
@@ -58,6 +66,25 @@ impl RedisExt for Pool {
         let mut conn = self.get_conn().await?;
         let _: () = conn.set_ex(key.as_ref(), value, ttl).await?;
         Ok(())
+    }
+
+    #[inline]
+    async fn set_ex_nx(
+        &self,
+        key: impl AsRef<str> + Send + Sync,
+        value: String,
+        ttl: u64,
+    ) -> Result<bool, PoolError> {
+        let mut conn = self.get_conn().await?;
+        let inserted: bool = redis::cmd("SET")
+            .arg(key.as_ref())
+            .arg(value)
+            .arg("EX")
+            .arg(ttl)
+            .arg("NX")
+            .query_async(&mut conn)
+            .await?;
+        Ok(inserted)
     }
 
     /// 删除 Redis 中指定 key
