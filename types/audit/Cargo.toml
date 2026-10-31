@@ -2,6 +2,7 @@
 name = "types-audit"
 version = "0.1.0"
 edition = "2024"
+license.workspace = true
 description = "审计上下文契约: audit_event 实体与查询 DTO"
 
 [features]

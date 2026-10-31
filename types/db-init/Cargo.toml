@@ -2,6 +2,7 @@
 name = "types-db-init"
 version = "0.3.0"
 edition = "2024"
+license.workspace = true
 description = "数据库初始化编排: 按注册表同步表结构并执行幂等索引回调"
 
 [features]

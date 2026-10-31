@@ -2,6 +2,7 @@
 name = "common-redis"
 version = "0.1.1"
 edition = "2024"
+license.workspace = true
 description = "Redis 访问层: 连接池与常用命令扩展"
 
 [dependencies]

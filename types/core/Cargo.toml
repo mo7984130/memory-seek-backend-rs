@@ -2,6 +2,7 @@
 name = "types-core"
 version = "0.1.0"
 edition = "2024"
+license.workspace = true
 description = "跨上下文共享的领域通用语言: 强类型 ID 与解析错误"
 
 [features]

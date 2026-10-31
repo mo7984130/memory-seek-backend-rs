@@ -2,6 +2,7 @@
 name = "common-core"
 version = "0.2.0"
 edition = "2024"
+license.workspace = true
 description = "公共基础能力: 统一错误、时间、扩展 trait、通用值类型与可选 ID 生成"
 
 [features]

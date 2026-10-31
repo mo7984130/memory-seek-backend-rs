@@ -2,6 +2,7 @@
 name = "common-runtime"
 version = "0.2.2"
 edition = "2024"
+license.workspace = true
 description = "运行时基础设施: 任务管理器与事件"
 
 [dependencies]

@@ -34,6 +34,9 @@ members = [
     "tests/e2e"
 ]
 
+[workspace.package]
+license = "MIT OR Apache-2.0"
+
 [profile.release]
 opt-level = 3
 debug = false

@@ -3,7 +3,7 @@ name = "memory-seek-api-rs"
 version = "0.7.0"
 edition = "2024"
 description = "Memory Seek API 客户端(Rust)，运行时与 HTTP 库无关"
-license = "MIT"
+license.workspace = true
 publish = false
 
 [lib]
