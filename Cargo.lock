@@ -26,16 +26,18 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "admin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "audit",
  "axum",
  "backup",
  "common-core",
  "common-db",
+ "common-redis",
  "common-runtime",
  "common-web",
  "dashmap",
+ "multi-level-cache",
  "sea-orm",
  "serde",
  "serde_json",
@@ -529,11 +531,13 @@ dependencies = [
 
 [[package]]
 name = "audit"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
+ "blake3",
  "common-core",
  "common-metrics",
  "common_macros",
+ "multi-level-cache",
  "sea-orm",
  "tracing",
  "types-audit",
@@ -1118,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "common-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "axum",
  "chrono",
@@ -1304,8 +1308,9 @@ checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
 name = "constants"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
+ "blake3",
  "common-crypto",
  "types-core",
 ]
@@ -3272,7 +3277,7 @@ dependencies = [
 
 [[package]]
 name = "memory-seek-api-rs"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "async-trait",
  "common-core",
@@ -5354,7 +5359,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "admin",
  "audit",
@@ -6589,10 +6594,11 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "audit",
  "axum",
+ "blake3",
  "bytes",
  "common-core",
  "common-crypto",
@@ -6707,7 +6713,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "visual"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "async-trait",
  "audit",

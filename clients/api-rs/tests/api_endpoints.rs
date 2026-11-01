@@ -121,7 +121,7 @@ fn body_json(request: &HttpRequest) -> Value {
 }
 
 fn empty_page() -> Value {
-    json!({ "records": [], "nextCursor": null, "hasMore": false })
+    json!({ "records": [], "nextCursor": null, "hasMore": false, "totalCount": 0 })
 }
 
 fn admin_job(kind: &str) -> HttpResponse {

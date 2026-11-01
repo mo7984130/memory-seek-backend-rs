@@ -1,5 +1,8 @@
-use common_core::{DbConn, Result, ext::ToOk, types::CursorPage};
+use std::time::Duration;
+
+use common_core::{DbConn, Result, error::ContextualError, ext::ToOk, types::CursorPage};
 use common_metrics::{MetricsTimerExt, metrics_name};
+use multi_level_cache::MultiLevelCache;
 use types_audit::{
     AuditId, AuditItem, AuditQuery, AuditStatsItem, AuditStatsQuery, AuditTopItem, AuditTopQuery,
 };
@@ -8,6 +11,8 @@ use types_core::{AdminId, cursor::TimeIdCursor};
 use crate::mapper::AuditMapper;
 
 pub struct AuditQueryer;
+
+const AUDIT_CURSOR_COUNT_CACHE_TTL: Duration = Duration::from_secs(30);
 
 impl AuditQueryer {
     /// 查询审计事件统计数据
@@ -58,23 +63,29 @@ impl AuditQueryer {
         db: &impl DbConn,
         _admin: AdminId,
         req: &AuditQuery,
+        count_cache: &MultiLevelCache<u64, ContextualError>,
     ) -> Result<CursorPage<AuditItem, TimeIdCursor<AuditId>>> {
-        AuditMapper::query_audit_page(
-            db,
-            req.event_type.as_deref(),
-            req.target_type.as_deref(),
-            req.target_id,
-            req.actor_id,
-            &req.cursor,
-            req.size,
-        )
-        .timed(metrics_name!("db_query"))
-        .await?
-        .map_records(|records| records.into_iter().map(AuditItem::from).collect())
-        .with_next_cursor(|record| TimeIdCursor {
-            time_at: record.created_at,
-            id: record.id,
-        })
-        .to_ok()
+        let key_material = format!(
+            "{:?}|{:?}|{:?}|{:?}",
+            req.event_type, req.target_type, req.target_id, req.actor_id
+        );
+        let count_key = format!(
+            "a:audit:count:{}",
+            blake3::hash(key_material.as_bytes()).to_hex()
+        );
+        let total_count = count_cache
+            .get_or_load(&count_key, AUDIT_CURSOR_COUNT_CACHE_TTL, || async {
+                AuditMapper::query_audit_count(db, req).await
+            })
+            .await?;
+        AuditMapper::query_audit_page(db, req, total_count)
+            .timed(metrics_name!("db_query"))
+            .await?
+            .map_records(|records| records.into_iter().map(AuditItem::from).collect())
+            .with_next_cursor(|record| TimeIdCursor {
+                time_at: record.created_at,
+                id: record.id,
+            })
+            .to_ok()
     }
 }

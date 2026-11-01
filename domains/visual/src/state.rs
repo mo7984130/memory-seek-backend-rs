@@ -31,6 +31,7 @@ pub struct VisualState {
     pub(crate) cache_visual_info: MultiLevelCache<VisualRecord, ContextualError>,
     pub(crate) cache_visual_like: MultiLevelCache<CachedVisualLike, ContextualError>,
     pub(crate) cache_visual_cursor_ids: MultiLevelCache<CursorPage<VisualId, ()>, ContextualError>,
+    pub(crate) cache_visual_counts: MultiLevelCache<u64, ContextualError>,
     pub(crate) cache_visual_dimensions: MultiLevelCache<(u32, u32), ContextualError>,
     pub(crate) cache_timeline_stat: MultiLevelCache<Vec<MonthStat>, ContextualError>,
     pub redis: Pool,
@@ -80,6 +81,11 @@ impl VisualState {
             ),
             cache_visual_cursor_ids: MultiLevelCache::new_with_name(
                 "visual_cursor_ids",
+                redis.clone(),
+                cache_config,
+            ),
+            cache_visual_counts: MultiLevelCache::new_with_name(
+                "visual_counts",
                 redis.clone(),
                 cache_config,
             ),

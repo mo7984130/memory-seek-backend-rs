@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     VisualRepo, VisualState,
     mappers::{face_mapper::FaceMapper, person_mapper::PersonMapper},
-    repo::{FaceRepo, PersonRepo},
+    repo::{FaceRepo, PersonRepo, count_cache},
     services::visual_service::VisualService,
 };
 use audit::{AuditEvent, AuditRecorder};
@@ -18,6 +18,7 @@ use common_core::{
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
+use constants::RedisKeys;
 use insight_face_rs::{FaceEmbedding, types::DIMS};
 use ndarray::Array2;
 use petal_clustering::{Fit, HDbscan};
@@ -158,6 +159,9 @@ impl PersonService {
         })
         .await?;
 
+        count_cache::invalidate(&state, RedisKeys::visual::count::PERSONS).await;
+        count_cache::invalidate(&state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
+
         Ok(())
     }
 
@@ -263,6 +267,8 @@ impl PersonService {
         })
         .await?;
 
+        count_cache::invalidate(&state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
+
         Ok(())
     }
 
@@ -338,7 +344,10 @@ impl PersonService {
         req: PersonCursorParam,
     ) -> Result<CursorPage<PersonView, CountIdCursor<PersonId>>> {
         let CursorPage {
-            records, has_more, ..
+            records,
+            has_more,
+            total_count,
+            ..
         } = PersonRepo::query_page(state, req.cursor, req.size).await?;
 
         let mut views = Vec::with_capacity(records.len());
@@ -350,7 +359,7 @@ impl PersonService {
                 VisualRepo::get_visual_dimensions(state, &file_id).await?,
             )?);
         }
-        CursorPage::from_has_more(views, has_more)
+        CursorPage::from_has_more(views, has_more, total_count)
             .with_next_cursor(|view| CountIdCursor {
                 count: view.face_count,
                 id: view.id,
@@ -372,7 +381,10 @@ impl PersonService {
             size,
         } = req;
         let CursorPage {
-            records, has_more, ..
+            records,
+            has_more,
+            total_count,
+            ..
         } = PersonRepo::search_person_page(state, &keyword, cursor, size).await?;
 
         let mut views = Vec::with_capacity(records.len());
@@ -384,7 +396,7 @@ impl PersonService {
                 VisualRepo::get_visual_dimensions(state, &file_id).await?,
             )?);
         }
-        CursorPage::from_has_more(views, has_more)
+        CursorPage::from_has_more(views, has_more, total_count)
             .with_next_cursor(|view| view.id)
             .to_ok()
     }
@@ -405,7 +417,7 @@ impl PersonService {
             .timed(metrics_name!("query_visual_ids"))
             .await?;
         if page.records.is_empty() {
-            return Ok(CursorPage::empty());
+            return Ok(CursorPage::empty(page.total_count));
         }
 
         let visuals = VisualService::load_visuals_info(state, user_id, &page.records)

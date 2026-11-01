@@ -2,9 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use audit::{AuditEvent, AuditRecorder};
 use common_core::error::{ContextualError, contextual::Result};
-use common_core::{ext::ToOk, types::CursorPage, types::HasChanged::Changed};
+use common_core::{types::CursorPage, types::HasChanged::Changed};
 use common_db::{db_transaction, utils::DbUtils};
 use common_metrics::{MetricsTimerExt, metrics_name};
+use constants::RedisKeys;
 use serde_json::json;
 use types_core::cursor::CountIdCursor;
 use types_core::{AdminId, UserId};
@@ -17,6 +18,7 @@ use crate::VisualState;
 use crate::mappers::face_mapper::FaceMapper;
 use crate::mappers::person_mapper::PersonMapper;
 use crate::mappers::visual_mapper::VisualMapper;
+use crate::repo::count_cache;
 
 pub struct PersonRepo;
 
@@ -67,7 +69,7 @@ impl PersonRepo {
             target_person_id,
         } = req;
 
-        db_transaction!(&state.db, |txn| {
+        let merged = db_transaction!(&state.db, |txn| {
             // 锁定人物
             let (source, target) = DbUtils::ensure_lock_two_ordered(
                 txn,
@@ -104,8 +106,19 @@ impl PersonRepo {
             Ok(person)
         })
         .timed(metrics_name!("db_transaction"))
-        .await?
-        .to_ok()
+        .await?;
+        count_cache::invalidate(state, RedisKeys::visual::count::PERSONS).await;
+        count_cache::invalidate(
+            state,
+            &RedisKeys::visual::count::person_visuals(source_person_id),
+        )
+        .await;
+        count_cache::invalidate(
+            state,
+            &RedisKeys::visual::count::person_visuals(target_person_id),
+        )
+        .await;
+        Ok(merged)
     }
 
     /// 为人物添加人脸
@@ -114,9 +127,11 @@ impl PersonRepo {
         person: PersonRecord,
         faces: Vec<FaceRecord>,
     ) -> Result<()> {
+        let person_id = person.id;
         PersonMapper::add_faces(&state.db, person, &faces)
             .timed(metrics_name!("db_update"))
             .await?;
+        count_cache::invalidate(state, &RedisKeys::visual::count::person_visuals(person_id)).await;
         Ok(())
     }
 }
@@ -136,7 +151,12 @@ impl PersonRepo {
         cursor: Option<CountIdCursor<PersonId>>,
         size: u64,
     ) -> Result<CursorPage<PersonRecord, ()>> {
-        PersonMapper::query_page(&state.db, cursor, size)
+        let total_count =
+            count_cache::get_or_load(state, RedisKeys::visual::count::PERSONS, || async {
+                PersonMapper::count_persons(&state.db).await
+            })
+            .await?;
+        PersonMapper::query_page(&state.db, cursor, size, total_count)
             .timed(metrics_name!("query_page"))
             .await
     }
@@ -148,7 +168,12 @@ impl PersonRepo {
         cursor: Option<PersonId>,
         size: u64,
     ) -> Result<CursorPage<types_visual::person::PersonRecord, ()>> {
-        PersonMapper::query_search(&state.db, keyword, cursor, size)
+        let key = RedisKeys::visual::count::person_search(keyword);
+        let total_count = count_cache::get_or_load(state, &key, || async {
+            PersonMapper::count_person_search(&state.db, keyword).await
+        })
+        .await?;
+        PersonMapper::query_search(&state.db, keyword, cursor, size, total_count)
             .timed(metrics_name!("query_search"))
             .await
     }
@@ -201,6 +226,10 @@ impl PersonRepo {
         })
         .timed(metrics_name!("db_transaction"))
         .await?;
+
+        count_cache::invalidate(state, RedisKeys::visual::count::PERSONS).await;
+        count_cache::invalidate(state, &RedisKeys::visual::count::person_visuals(person_id)).await;
+        count_cache::invalidate(state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
 
         Ok(())
     }

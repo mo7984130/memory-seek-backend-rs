@@ -9,7 +9,7 @@ use sea_orm::DatabaseConnection;
 use types_identity::auth::user::{AdminId, UserId};
 use types_identity::user::UserInfo;
 
-use crate::config::USER_INFO_CACHE_TTL;
+use crate::config::{ADMIN_USER_COUNT_CACHE_TTL, USER_INFO_CACHE_TTL};
 use crate::error_ext::UserOptionExt;
 use crate::mapper::UserMapper;
 use crate::models::{AdminUserRow, UserBriefRow};
@@ -20,6 +20,7 @@ pub struct UserRepo {
     redis: Pool,
     cache_user_info: MultiLevelCache<UserBriefRow, ContextualError>,
     cache_user_info_single: MultiLevelCache<UserInfo, ContextualError>,
+    cache_admin_user_count: MultiLevelCache<u64, ContextualError>,
 }
 
 impl UserRepo {
@@ -30,8 +31,23 @@ impl UserRepo {
         keyword: Option<&str>,
         cursor: Option<UserId>,
         limit: u64,
-    ) -> Result<Vec<AdminUserRow>> {
-        UserMapper::query_admin_users(&self.db, keyword, cursor, limit).await
+    ) -> Result<(Vec<AdminUserRow>, u64)> {
+        let key_keyword = keyword
+            .filter(|value| !value.is_empty())
+            .unwrap_or_default();
+        let key = format!(
+            "a:admin:users:count:{}",
+            blake3::hash(key_keyword.as_bytes()).to_hex()
+        );
+        let total_count = self
+            .cache_admin_user_count
+            .get_or_load(&key, ADMIN_USER_COUNT_CACHE_TTL, || async {
+                UserMapper::count_admin_users(&self.db, keyword).await
+            })
+            .timed(metrics_name!("cache_get_or_load_admin_user_count"))
+            .await?;
+        let rows = UserMapper::query_admin_users(&self.db, keyword, cursor, limit).await?;
+        Ok((rows, total_count))
     }
 
     /// 创建用户数据访问仓储
@@ -40,11 +56,14 @@ impl UserRepo {
             MultiLevelCache::new_with_name("user_info", redis.clone(), cache_config);
         let cache_user_info_single =
             MultiLevelCache::new_with_name("user_info_single", redis.clone(), cache_config);
+        let cache_admin_user_count =
+            MultiLevelCache::new_with_name("admin_user_counts", redis.clone(), cache_config);
         Self {
             db,
             redis,
             cache_user_info,
             cache_user_info_single,
+            cache_admin_user_count,
         }
     }
 

@@ -12,12 +12,13 @@ use common_core::{
     types::CursorPage,
 };
 use common_metrics::{MetricsTimerExt, metrics_name};
+use constants::RedisKeys;
 use file_validator::FileMetaData;
 use tracing::instrument;
 
 use crate::{
     mappers::visual_mapper::VisualMapper,
-    repo::VisualRepo,
+    repo::{VisualRepo, count_cache},
     services::visual_service::{
         AfterVisualDelete, AfterVisualUpload, VisualDeleteContext, publish_after_visual_delete,
         run_visual_delete_pipeline,
@@ -98,7 +99,7 @@ impl VisualService {
             .timed(metrics_name!("find_cursor_page_ids"))
             .await?;
         if page.records.is_empty() {
-            return Ok(CursorPage::empty());
+            return Ok(CursorPage::empty(page.total_count));
         }
 
         // 加载信息
@@ -174,6 +175,7 @@ impl VisualService {
                 visuals: ctx.visuals,
             },
         );
+        count_cache::invalidate(&state, &RedisKeys::visual::count::liked_visuals(user_id)).await;
 
         Ok(())
     }

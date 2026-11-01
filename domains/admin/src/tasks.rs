@@ -7,9 +7,10 @@ use common_core::{
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, DatabaseConnection, EntityTrait,
-    QueryFilter, QueryOrder, QuerySelect,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 use serde_json::json;
+use std::time::Duration;
 use types_admin::{
     job::{AdminJobKind, AdminJobQuery, AdminJobStatus, AdminJobView, StartAdminJobRequest},
     job_entity::{ActiveModel, Column, Entity, Model},
@@ -18,6 +19,8 @@ use types_core::{AdminId, cursor::TimeIdCursor};
 use uuid::Uuid;
 
 use crate::AdminState;
+
+const ADMIN_CURSOR_COUNT_CACHE_TTL: Duration = Duration::from_secs(30);
 
 /// 启动时把上次进程遗留的未完成任务标记为中断，并建立跨进程去重约束。
 pub async fn prepare_job_store(db: &DatabaseConnection) -> Result<()> {
@@ -122,15 +125,30 @@ impl AdminJobService {
         _admin: AdminId,
         query: AdminJobQuery,
     ) -> Result<CursorPage<AdminJobView, TimeIdCursor<String>>> {
-        let mut select = Entity::find()
+        let mut base_query = Entity::find();
+        if let Some(kind) = query.kind.as_ref() {
+            base_query = base_query.filter(Column::Kind.eq(kind.as_str()));
+        }
+        if let Some(status) = query.status.as_ref() {
+            base_query = base_query.filter(Column::Status.eq(status.as_str()));
+        }
+        let count_key = format!(
+            "a:jobs:count:{}:{}",
+            query.kind.as_ref().map_or("all", |kind| kind.as_str()),
+            query
+                .status
+                .as_ref()
+                .map_or("all", |status| status.as_str())
+        );
+        let total_count = state
+            .cursor_counts
+            .get_or_load(&count_key, ADMIN_CURSOR_COUNT_CACHE_TTL, || async {
+                base_query.clone().count(&state.db).await.into_contextual()
+            })
+            .await?;
+        let mut select = base_query
             .order_by_desc(Column::CreatedAt)
             .order_by_desc(Column::Id);
-        if let Some(kind) = query.kind {
-            select = select.filter(Column::Kind.eq(kind.as_str()));
-        }
-        if let Some(status) = query.status {
-            select = select.filter(Column::Status.eq(status.as_str()));
-        }
         if let Some(cursor) = query.cursor {
             select = select.filter(
                 Condition::any()
@@ -148,9 +166,11 @@ impl AdminJobService {
             .await
             .into_contextual()?;
         let page =
-            CursorPage::from_oversize(rows, query.size).with_next_cursor(|row| TimeIdCursor {
-                time_at: row.created_at,
-                id: row.id.clone(),
+            CursorPage::from_oversize(rows, query.size, total_count).with_next_cursor(|row| {
+                TimeIdCursor {
+                    time_at: row.created_at,
+                    id: row.id.clone(),
+                }
             });
         Ok(CursorPage {
             records: page
@@ -160,6 +180,7 @@ impl AdminJobService {
                 .collect::<Result<Vec<_>>>()?,
             next_cursor: page.next_cursor,
             has_more: page.has_more,
+            total_count: page.total_count,
         })
     }
 

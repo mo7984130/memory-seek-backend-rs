@@ -14,6 +14,7 @@ use common_core::{
 use common_metrics::{
     GaugeGuard, MetricsTimer, MetricsTimerExt, inc_counter, metrics_name, set_gauge,
 };
+use constants::RedisKeys;
 use image::{ImageBuffer, Rgb};
 use insight_face_rs::Face;
 use tokio::{sync::mpsc, task::spawn_blocking};
@@ -33,7 +34,7 @@ use crate::{
         face_mapper::FaceMapper, face_task_mapper::FaceTaskMapper, person_mapper::PersonMapper,
         visual_mapper::VisualMapper,
     },
-    repo::FaceRepo,
+    repo::{FaceRepo, count_cache},
     services::visual_service::{AfterVisualUpload, VisualService},
 };
 
@@ -322,7 +323,7 @@ impl FaceService {
             .timed(metrics_name!("query_unassigned_face_visual_ids"))
             .await?;
         if page.records.is_empty() {
-            return Ok(CursorPage::empty());
+            return Ok(CursorPage::empty(page.total_count));
         }
 
         let visuals = VisualService::load_visuals_info(state, user_id, &page.records)
@@ -588,6 +589,7 @@ impl FaceService {
         visual_id: VisualId,
         faces: Vec<face::NewFaceRecord>,
     ) -> common_core::Result<()> {
+        let has_faces = !faces.is_empty();
         common_db::db_transaction!(&state.db, |txn| {
             // 任务在检测期间被删(影像被删)则不落库
             if !FaceTaskMapper::mark_done(txn, visual_id).await? {
@@ -599,6 +601,9 @@ impl FaceService {
             Ok(())
         })
         .await?;
+        if has_faces {
+            count_cache::invalidate(state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
+        }
         Ok(())
     }
 

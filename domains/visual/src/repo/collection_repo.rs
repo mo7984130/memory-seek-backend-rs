@@ -53,12 +53,14 @@ impl CollectionRepo {
         collection_id: CollectionId,
         req: &CollectionVisualCursorPageParam,
     ) -> Result<CursorPage<VisualId, ()>> {
+        let collection = Self::ensure_belong_with_return(state, user_id, collection_id).await?;
         CollectionVisualMapper::query_visual_id_by_collection_id(
             &state.db,
             user_id,
             collection_id,
             req.cursor.as_ref(),
             req.size,
+            collection.visual_count,
         )
         .timed(metrics_name!("query_visual_ids"))
         .await
@@ -154,6 +156,7 @@ impl CollectionRepo {
                     collection.id,
                     None,
                     1,
+                    collection.visual_count,
                 )
                 .await?
                 .records

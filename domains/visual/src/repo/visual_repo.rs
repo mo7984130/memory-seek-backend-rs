@@ -17,6 +17,7 @@ use types_visual::visual::{ActiveModel, Model, NewVisualRecord, VisualId, Visual
 
 use crate::{
     mappers::{visual_like_mapper::VisualLikeMapper, visual_mapper::VisualMapper},
+    repo::TimelineStatRepo,
     state::{CachedVisualLike, VisualState},
 };
 
@@ -118,6 +119,11 @@ impl VisualRepo {
         state: &VisualState,
         req: VisualCursorParam,
     ) -> Result<CursorPage<VisualId, ()>> {
+        let total_count = TimelineStatRepo::get_monthly_stats(state)
+            .await?
+            .into_iter()
+            .map(|stat| stat.count.max(0) as u64)
+            .sum();
         let visual_ids = if req.cursor.is_none() && req.anchor_time.is_none() {
             let key = RedisKeys::visual::visual::visual_cursor_page_ids(req.direction);
             let direction = req.direction;
@@ -131,6 +137,7 @@ impl VisualRepo {
                         MEDIA_CURSOR_CACHE_SIZE,
                         direction,
                         None,
+                        total_count,
                     )
                     .await
                 })
@@ -144,6 +151,7 @@ impl VisualRepo {
                 req.size,
                 req.direction,
                 req.anchor_time,
+                total_count,
             )
             .timed(metrics_name!("db_query"))
             .await?
@@ -282,7 +290,7 @@ mod tests {
 
     #[test]
     fn cached_first_page_is_trimmed_to_requested_size() {
-        let page = CursorPage::from_has_more(vec![VisualId(1), VisualId(2), VisualId(3)], false);
+        let page = CursorPage::from_has_more(vec![VisualId(1), VisualId(2), VisualId(3)], false, 3);
 
         let page = VisualRepo::resize_cached_first_page(page, 2);
 
@@ -292,7 +300,7 @@ mod tests {
 
     #[test]
     fn cached_first_page_preserves_source_has_more() {
-        let page = CursorPage::from_has_more(vec![VisualId(1)], true);
+        let page = CursorPage::from_has_more(vec![VisualId(1)], true, 2);
 
         let page = VisualRepo::resize_cached_first_page(page, 32);
 

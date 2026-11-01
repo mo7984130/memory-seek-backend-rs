@@ -163,7 +163,7 @@ impl Controller {
         ValidatedQuery(query): ValidatedQuery<AuditQuery>,
     ) -> Result<R<CursorPage<types_audit::AuditItem, TimeIdCursor<types_audit::AuditId>>>> {
         let admin = AdminId::new(user_id)?;
-        audit::AuditQueryer::query_events(&state.db, admin, &query)
+        audit::AuditQueryer::query_events(&state.db, admin, &query, &state.cursor_counts)
             .await
             .to_r_ok()
     }

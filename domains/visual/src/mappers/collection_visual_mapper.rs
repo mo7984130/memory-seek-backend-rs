@@ -70,6 +70,7 @@ impl CollectionVisualMapper {
         collection_id: CollectionId,
         cursor: Option<&TimeIdCursor<VisualId>>,
         size: u64,
+        total_count: u64,
     ) -> Result<CursorPage<VisualId, ()>> {
         let mut query = Entity::find()
             .filter(Column::CollectionId.eq(collection_id))
@@ -89,7 +90,7 @@ impl CollectionVisualMapper {
             .all(db)
             .await?;
 
-        Ok(CursorPage::from_oversize(records, size))
+        Ok(CursorPage::from_oversize(records, size, total_count))
     }
 
     /// 删除相册下的全部影像关联

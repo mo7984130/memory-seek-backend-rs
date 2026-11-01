@@ -8,6 +8,7 @@ use common_core::{
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
+use constants::RedisKeys;
 use types_identity::auth::user::UserId;
 use types_visual::{
     CommentCursorPageParam, comment::CommentId, comment::CommentRecord,
@@ -20,6 +21,7 @@ use crate::mappers::{
     visual_mapper::VisualMapper,
 };
 use crate::repo::VisualRepo;
+use crate::repo::count_cache;
 use crate::state::VisualState;
 
 pub(crate) struct CommentRepo;
@@ -36,6 +38,12 @@ impl CommentRepo {
         CursorPage<CommentRecord, ()>,
         HashSet<CommentId>,
     )> {
+        let count_key = RedisKeys::visual::count::comments(visual_id);
+        let total_count = count_cache::get_or_load(state, &count_key, || async {
+            CommentMapper::count_by_visual_id(&state.db, visual_id).await
+        })
+        .await?;
+
         // 获取热门评论
         let hot_comments = if req.cursor.is_none() {
             CommentMapper::query_hot_comments(
@@ -61,6 +69,7 @@ impl CommentRepo {
             &exclude_ids,
             req.cursor.as_ref(),
             req.size,
+            total_count,
         )
         .timed(metrics_name!("query_by_visual_id"))
         .await?;
@@ -105,6 +114,7 @@ impl CommentRepo {
         .timed(metrics_name!("db_transaction"))
         .await?;
         VisualRepo::invalidate_visual_info(state, visual_id).await;
+        count_cache::invalidate(state, &RedisKeys::visual::count::comments(visual_id)).await;
         Ok(comment)
     }
 
@@ -149,6 +159,7 @@ impl CommentRepo {
         .timed(metrics_name!("db_transaction"))
         .await?;
         VisualRepo::invalidate_visual_info(state, visual_id).await;
+        count_cache::invalidate(state, &RedisKeys::visual::count::comments(visual_id)).await;
         Ok(())
     }
 

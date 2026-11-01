@@ -1,8 +1,8 @@
 use common_core::{DbConn, error::contextual::Result, ext::ToOk};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set,
 };
 use types_identity::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
@@ -44,11 +44,24 @@ impl UserMapper {
             query = query.filter(Column::Id.lt(cursor));
         }
 
-        Ok(query
+        query
             .limit(limit)
             .into_model::<AdminUserRow>()
             .all(db)
-            .await?)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub(crate) async fn count_admin_users(db: &impl DbConn, keyword: Option<&str>) -> Result<u64> {
+        let mut query = Entity::find();
+        if let Some(keyword) = keyword.filter(|value| !value.is_empty()) {
+            query = query.filter(
+                sea_orm::Condition::any()
+                    .add(Column::Username.contains(keyword))
+                    .add(Column::Email.contains(keyword)),
+            );
+        }
+        query.count(db).await.map_err(Into::into)
     }
 
     /// 修改用户昵称

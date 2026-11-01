@@ -104,6 +104,7 @@ impl CommentMapper {
         exclude_ids: &[CommentId],
         cursor: Option<&TimeIdCursor<CommentId>>,
         size: u64,
+        total_count: u64,
     ) -> Result<CursorPage<CommentRecord, ()>> {
         let mut query = Entity::find()
             .filter(Column::VisualId.eq(visual_id))
@@ -126,7 +127,16 @@ impl CommentMapper {
             .map(CommentRecord::from)
             .collect::<Vec<_>>();
 
-        Ok(CursorPage::from_oversize(records, size))
+        Ok(CursorPage::from_oversize(records, size, total_count))
+    }
+
+    /// 查询单张影像的评论总量(包含热门评论)。
+    pub async fn count_by_visual_id(db: &impl ConnectionTrait, visual_id: VisualId) -> Result<u64> {
+        Entity::find()
+            .filter(Column::VisualId.eq(visual_id))
+            .count(db)
+            .await
+            .map_err(Into::into)
     }
 }
 

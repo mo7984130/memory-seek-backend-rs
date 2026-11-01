@@ -44,7 +44,7 @@ impl VisualLikeService {
             .timed(metrics_name!("query_ids"))
             .await?;
         if page.records.is_empty() {
-            return Ok(CursorPage::empty());
+            return Ok(CursorPage::empty(page.total_count));
         }
 
         // 加载影像详细信息

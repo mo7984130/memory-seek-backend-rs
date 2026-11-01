@@ -37,6 +37,11 @@ pub async fn init(_config: &crate::config::AppConfig, setup: &mut AppSetup) -> R
         .get::<TaskManager>()
         .miss_dep("Admin", "TaskManager")?
         .clone();
+    let redis = setup
+        .registry
+        .get::<common_redis::Pool>()
+        .miss_dep("Admin", "RedisPool")?
+        .clone();
 
     admin::tasks::prepare_job_store(&db).await?;
     let state = Arc::new(::admin::AdminState::new(
@@ -45,6 +50,8 @@ pub async fn init(_config: &crate::config::AppConfig, setup: &mut AppSetup) -> R
         visual_state,
         backup_state,
         task_manager,
+        redis,
+        _config.cache.to(),
     ));
     let protected = ::admin::Controller::protected_routes().with_state(state);
     setup.router.add_protected(protected);

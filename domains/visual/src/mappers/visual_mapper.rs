@@ -169,6 +169,7 @@ impl VisualMapper {
         size: u64,
         direction: PageDirection,
         anchor_time: Option<DateTime>,
+        total_count: u64,
     ) -> Result<CursorPage<VisualId, ()>> {
         let records = Self::build_cursor_query(cursor.as_ref(), size, direction, anchor_time)
             .select_only()
@@ -177,7 +178,7 @@ impl VisualMapper {
             .all(db)
             .await?;
 
-        Ok(CursorPage::from_oversize(records, size))
+        Ok(CursorPage::from_oversize(records, size, total_count))
     }
 
     /// 按影像id查询记录
