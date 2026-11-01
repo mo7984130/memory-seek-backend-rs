@@ -86,7 +86,6 @@ sea-orm = { version = "2.0.3", features = [
 chrono = { version = "0.4.44", features = ["serde"] }
 thiserror = "2.0.18"
 derive_more = { version = "1", default-features = false, features = ["from", "into", "display", "deref"] }
-ts-rs = { version = "12", features = ["chrono-impl", "no-serde-warnings"] }
 bcrypt = "0.19.0"
 argon2 = { version = "0.5", features = ["std"] }
 password-hash = "0.5"

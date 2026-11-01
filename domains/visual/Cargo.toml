@@ -1,6 +1,6 @@
 [package]
 name = "visual"
-version = "0.14.0"
+version = "0.15.0"
 edition = "2024"
 license.workspace = true
 
@@ -10,7 +10,6 @@ metrics = ["multi-level-cache/metrics", "oss/metrics"]
 controller = ["dep:axum", "dep:common-web"]
 audit = ["audit/recording"]
 face = ["dep:insight-face-rs", "dep:backup", "types-visual/face"]
-ts = ["types-visual/ts", "common-core/ts"]
 
 [dependencies]
 common-core = { workspace = true, features = [

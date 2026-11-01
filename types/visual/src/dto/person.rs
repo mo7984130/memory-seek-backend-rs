@@ -12,10 +12,8 @@ use crate::{FaceBBox, ImageDimensions, VisualToken};
 use types_core::UserId;
 use types_core::cursor::{CountIdCursor, TimeIdCursor};
 
-crate::dto!(PersonCursorParam, "visual/", serde_default, docs = "人物列表参数(cursor 为 FaceCountIdCursor<PersonId> 的 Base64 编码, 按 face_count 倒序分页)"; {
-    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+crate::dto!(PersonCursorParam, serde_default, docs = "人物列表参数(cursor 为 FaceCountIdCursor<PersonId> 的 Base64 编码, 按 face_count 倒序分页)"; {
     pub cursor: Option<CountIdCursor<PersonId>>,
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 
@@ -29,12 +27,11 @@ impl Default for PersonCursorParam {
     }
 }
 
-crate::dto!(PersonSearchParam, "visual/", serde_default, docs = "人物搜索参数(keyword 前缀匹配完整名字或姓名首字母)"; {
+crate::dto!(PersonSearchParam, serde_default, docs = "人物搜索参数(keyword 前缀匹配完整名字或姓名首字母)"; {
     /// 搜索关键词: 完整名字或姓名首字母(如 张三 / ZS)
     #[validate(length(min = 1, max = 64, message = "搜索关键词长度在 1 到 64 之间"))]
     pub keyword: String,
     pub cursor: Option<PersonId>,
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 
@@ -49,11 +46,10 @@ impl Default for PersonSearchParam {
     }
 }
 
-crate::dto!(PersonView, "visual/", rename = "Person"; {
+crate::dto!(PersonView; {
     pub id: PersonId,
     pub name: String,
     /// 封面图 token(加密串, 经 `GET /visual/{token}` 访问)
-    #[cfg_attr(feature = "ts", ts(type = "string"))]
     pub cover_token: VisualTokenStr,
     pub face_count: u64
 });
@@ -129,17 +125,14 @@ fn person_visual_cursor_page_default_size() -> u64 {
     PERSON_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }
 
-crate::dto!(PersonVisualCursorParam, "visual/", docs = "人物照片游标参数(cursor 为 TimeIdCursor<VisualId> 的 Base64 编码)"; {
-    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+crate::dto!(PersonVisualCursorParam, docs = "人物照片游标参数(cursor 为 TimeIdCursor<VisualId> 的 Base64 编码)"; {
     pub cursor: Option<TimeIdCursor<VisualId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "person_visual_cursor_page_default_size")]
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 
-crate::dto!(RenamePersonParam, "visual/", docs = "重命名人物参数"; {
+crate::dto!(RenamePersonParam, docs = "重命名人物参数"; {
     #[validate(nested)]
     pub new_name: PersonName,
 });
@@ -149,7 +142,7 @@ fn secondary_cluster_default_threshold() -> f32 {
     0.55
 }
 
-crate::dto!(SecondaryClusterParam, "visual/", docs = "二次聚类参数(将未分配人脸按 centroid 余弦相似度指派到已有人物)"; {
+crate::dto!(SecondaryClusterParam, docs = "二次聚类参数(将未分配人脸按 centroid 余弦相似度指派到已有人物)"; {
     /// 余弦相似度阈值: 高于等于该值才指派, 否则保持未分配(范围 0 到 1, 默认 0.55)
     #[validate(range(min = 0.0, max = 1.0, message = "相似度阈值在 0 到 1 之间"))]
     #[serde(default = "secondary_cluster_default_threshold")]
@@ -162,8 +155,6 @@ crate::dto!(SecondaryClusterParam, "visual/", docs = "二次聚类参数(将未�
 /// 反序列化校验,避免业务错误被 serde 误判为解析错误并混入位置信息。
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export, export_to = "visual/"))]
 pub struct MergePersonParam {
     pub source_person_id: PersonId,
     pub target_person_id: PersonId,

@@ -7,11 +7,10 @@ use crate::collection::CollectionId;
 use crate::models::VisualIds;
 use crate::visual::VisualId;
 
-crate::dto!(CollectionView, "visual/", rename = "Collection"; {
+crate::dto!(CollectionView; {
     pub id: CollectionId,
     pub name: String,
     pub description: Option<String>,
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub visual_count: u64,
     pub cover_token: Option<String>,
     /// 封面影像 ID（字符串）
@@ -19,19 +18,19 @@ crate::dto!(CollectionView, "visual/", rename = "Collection"; {
     pub created_at: DateTime,
 });
 
-crate::dto!(CollectionBriefView, "visual/", rename = "CollectionBrief"; {
+crate::dto!(CollectionBriefView; {
     pub id: CollectionId,
     pub name: String,
 });
 
-crate::dto!(CollectionCreateParam, "visual/"; {
+crate::dto!(CollectionCreateParam; {
     #[validate(length(min = 1, max = 128, message = "相册名长度在 1 到 128 个字符"))]
     pub name: String,
     #[validate(length(max = 512, message = "描述长度不能超过 512 个字符"))]
     pub description: Option<String>,
 });
 
-crate::dto!(CollectionUpdateParam, "visual/"; {
+crate::dto!(CollectionUpdateParam; {
     #[validate(length(min = 1, max = 128, message = "相册名长度在 1 到 128 个字符"))]
     pub name: Option<String>,
     #[validate(length(max = 512, message = "描述长度不能超过 512 个字符"))]
@@ -45,33 +44,28 @@ fn collection_visual_cursor_page_default_size() -> u64 {
     COLLECTION_PHOTO_CURSOR_PAGE_DEFAULT_SIZE
 }
 
-crate::dto!(CollectionVisualCursorPageParam, "visual/", docs = "收藏夹影像游标参数（cursor 为 TimeIdCursor<VisualId> 的 Base64 编码）"; {
-    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+crate::dto!(CollectionVisualCursorPageParam, docs = "收藏夹影像游标参数（cursor 为 TimeIdCursor<VisualId> 的 Base64 编码）"; {
     pub cursor: Option<TimeIdCursor<VisualId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "collection_visual_cursor_page_default_size")]
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 
-crate::dto!(CollectionVisualAddBatchParam, "visual/"; {
+crate::dto!(CollectionVisualAddBatchParam; {
     #[validate(nested)]
     pub visual_ids: VisualIds,
 });
 
-crate::dto!(CollectionVisualAddBatchResult, "visual/", Default; {
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
+crate::dto!(CollectionVisualAddBatchResult, Default; {
     pub new_visual_count: u64,
 });
 
-crate::dto!(CollectionVisualRemoveBatchParam, "visual/"; {
+crate::dto!(CollectionVisualRemoveBatchParam; {
     #[validate(nested)]
     pub visual_ids: VisualIds,
 });
 
-crate::dto!(CollectionVisualRemoveBatchResult, "visual/", Default; {
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
+crate::dto!(CollectionVisualRemoveBatchResult, Default; {
     pub removed_visual_count: u64,
 });
 

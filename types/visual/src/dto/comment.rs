@@ -21,7 +21,7 @@ fn comment_cursor_page_default_size() -> u64 {
 pub const HOT_COMMENT_MIN_LIKES: u64 = 5;
 pub const HOT_COMMENT_MAX_COUNT: u64 = 3;
 
-crate::dto!(CommentView, "visual/", rename = "Comment"; {
+crate::dto!(CommentView; {
     pub id: CommentId,
     pub user_id: UserId,
     pub content: String,
@@ -53,18 +53,15 @@ impl CommentView {
     }
 }
 
-crate::dto!(CommentPublishParam, "visual/"; {
+crate::dto!(CommentPublishParam; {
     #[validate(nested)]
     pub content: CommentContent,
 });
 
-crate::dto!(CommentCursorPageParam, "visual/", docs = "评论游标参数（cursor 为 TimeIdCursor<CommentId> 的 Base64 编码）"; {
-    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+crate::dto!(CommentCursorPageParam, docs = "评论游标参数（cursor 为 TimeIdCursor<CommentId> 的 Base64 编码）"; {
     pub cursor: Option<TimeIdCursor<CommentId>>,
     #[validate(range(min = 1, max = 128, message = "分页大小在 1 到 128 之间"))]
     #[serde(default = "comment_cursor_page_default_size")]
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 

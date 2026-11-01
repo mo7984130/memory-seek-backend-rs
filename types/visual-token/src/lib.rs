@@ -2,7 +2,7 @@
 //!
 //! 跨上下文协议 crate:提供视觉访问 token 契约类型(`VisualToken` /
 //! `VisualTokenKind` / `FaceBBox` / `ImageDimensions`),供 visual / user(身份)
-//! 两个上下文复用,并可随 DTO 一起导出 TS。
+//! 两个上下文复用。
 //!
 //! 位于 `types-core`(强类型 ID / `VisualKind`)之上、各域契约 crate 之下 ——
 //! Token 的 `kind` 是嵌套枚举:图片携带 [`ImageTokenType`],视频携带
@@ -95,8 +95,6 @@ impl VisualTokenKind {
 /// 人脸边界框(归一化坐标,x1/y1 左上角、x2/y2 右下角,取值范围 0~1)
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export, export_to = "visual/", rename = "FaceBBox"))]
 pub struct FaceBBox {
     pub x1: f32,
     pub y1: f32,
@@ -129,11 +127,6 @@ impl From<FaceBBox> for BoundingBox {
 /// 原图尺寸(像素)。
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(
-    feature = "ts",
-    ts(export, export_to = "visual/", rename = "ImageDimensions")
-)]
 pub struct ImageDimensions {
     pub width: u32,
     pub height: u32,
@@ -265,8 +258,6 @@ impl VisualToken {
 /// - [`VisualTokenStr::encrypt`]：由明文令牌生成
 /// - [`VisualTokenStr::decrypt`]：还原明文令牌
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(type = "string"))]
 pub struct VisualTokenStr(String);
 
 impl VisualTokenStr {

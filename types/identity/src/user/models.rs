@@ -15,12 +15,11 @@ crate::validated_newtype!(
     UserIds,
     Vec<UserId>,
     1024,
-    "user/",
     "用户ID列表不能为空",
     "用户数量不能超过1024"
 );
 
-crate::dto!(UserInfo, "user/"; {
+crate::dto!(UserInfo; {
     /// 用户ID
     pub id: UserId,
 
@@ -40,7 +39,7 @@ crate::dto!(UserInfo, "user/"; {
     pub created_at: DateTime,
 });
 
-crate::dto!(ChangePasswordParam, "user/"; {
+crate::dto!(ChangePasswordParam; {
     #[validate(custom(function = "validate_password"))]
     pub old_password: String,
 
@@ -53,7 +52,7 @@ crate::dto!(ChangePasswordParam, "user/"; {
     pub confirm_password: String,
 });
 
-crate::dto!(ChangeNicknameParam, "user/"; {
+crate::dto!(ChangeNicknameParam; {
     #[validate(
         length(min = 1, max = 20, message = "昵称长度在 1 到 20 个字符"),
         custom(function = "validate_normal_char")
@@ -61,17 +60,17 @@ crate::dto!(ChangeNicknameParam, "user/"; {
     pub new_nickname: String,
 });
 
-crate::dto!(GetUserInfoBatchParam, "user/"; {
+crate::dto!(GetUserInfoBatchParam; {
     #[validate(nested)]
     pub user_ids: UserIds,
 });
 
-crate::dto!(InviterCodeView, "user/", rename = "InviterCode"; {
+crate::dto!(InviterCodeView; {
     pub inviter_code: String,
     pub expire_at: DateTime,
 });
 
-crate::dto!(UserBriefView, "user/", rename = "UserBrief"; {
+crate::dto!(UserBriefView; {
     pub user_id: UserId,
     pub nickname: String,
     pub avatar_token: Option<VisualTokenStr>,

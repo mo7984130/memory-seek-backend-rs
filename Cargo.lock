@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "common-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "axum",
  "chrono",
@@ -1137,7 +1137,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "ts-rs",
 ]
 
 [[package]]
@@ -5951,15 +5950,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "termcolor"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
-dependencies = [
- "winapi-util",
-]
-
-[[package]]
 name = "thiserror"
 version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6318,29 +6308,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
-name = "ts-rs"
-version = "12.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "756050066659291d47a554a9f558125db17428b073c5ffce1daf5dcb0f7231d8"
-dependencies = [
- "chrono",
- "thiserror",
- "ts-rs-macros",
-]
-
-[[package]]
-name = "ts-rs-macros"
-version = "12.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38d90eea51bc7988ef9e674bf80a85ba6804739e535e9cab48e4bb34a8b652aa"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
- "termcolor",
-]
-
-[[package]]
 name = "ttf-parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6360,14 +6327,13 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types-admin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "common-core",
  "linkme",
  "sea-orm",
  "serde",
  "serde_json",
- "ts-rs",
  "types-core",
  "types-db-registry",
  "types-visual",
@@ -6376,14 +6342,13 @@ dependencies = [
 
 [[package]]
 name = "types-audit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "common-core",
  "linkme",
  "sea-orm",
  "serde",
  "serde_json",
- "ts-rs",
  "types-core",
  "types-db-registry",
  "validator",
@@ -6398,7 +6363,7 @@ dependencies = [
 
 [[package]]
 name = "types-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "common-core",
@@ -6407,7 +6372,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "ts-rs",
  "validator",
 ]
 
@@ -6436,7 +6400,7 @@ dependencies = [
 
 [[package]]
 name = "types-identity"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "common-core",
  "derive_more 1.0.0",
@@ -6445,7 +6409,6 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
- "ts-rs",
  "types-core",
  "types-db-registry",
  "types-visual-token",
@@ -6454,7 +6417,7 @@ dependencies = [
 
 [[package]]
 name = "types-visual"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "common-core",
  "common-crypto",
@@ -6464,7 +6427,6 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
- "ts-rs",
  "types-core",
  "types-db-registry",
  "types-visual-token",
@@ -6473,14 +6435,13 @@ dependencies = [
 
 [[package]]
 name = "types-visual-token"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "common-core",
  "common-crypto",
  "insight-face-rs-type",
  "serde",
  "serde_json",
- "ts-rs",
  "types-core",
 ]
 
@@ -6713,7 +6674,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "visual"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "async-trait",
  "audit",

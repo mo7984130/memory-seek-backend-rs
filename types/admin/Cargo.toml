@@ -1,13 +1,12 @@
 [package]
 name = "types-admin"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license.workspace = true
 
 [features]
 default = []
 orm = ["dep:sea-orm", "dep:linkme", "types-db-registry"]
-ts = ["dep:ts-rs", "types-core/ts", "types-visual/ts"]
 
 [dependencies]
 common-core = { workspace = true }
@@ -18,5 +17,4 @@ serde.workspace = true
 serde_json.workspace = true
 validator.workspace = true
 sea-orm = { workspace = true, optional = true }
-ts-rs = { workspace = true, optional = true }
 linkme = { workspace = true, optional = true }

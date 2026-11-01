@@ -9,7 +9,7 @@ use validator::Validate;
 /// 人脸边界框（归一化坐标）——统一复用 `crate::visual_token::FaceBBox`
 use crate::FaceBBox;
 
-crate::dto!(FaceView, "visual/", rename = "Face"; {
+crate::dto!(FaceView; {
     pub id: FaceId,
     pub bbox: FaceBBox,
     /// 归属人物 ID（未分配时为 null）
@@ -36,24 +36,20 @@ fn unassigned_face_visual_cursor_page_default_size() -> u64 {
     32
 }
 
-crate::dto!(UnassignedFaceVisualCursorParam, "visual/", docs = "未分配人脸照片游标参数(cursor 为 TimeIdCursor<VisualId> 的 Base64 编码)"; {
-    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+crate::dto!(UnassignedFaceVisualCursorParam, docs = "未分配人脸照片游标参数(cursor 为 TimeIdCursor<VisualId> 的 Base64 编码)"; {
     pub cursor: Option<types_core::cursor::TimeIdCursor<VisualId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
     #[serde(default = "unassigned_face_visual_cursor_page_default_size")]
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 
-crate::dto!(FaceDeleteBatchParam, "visual/", docs = "批量删除人脸参数（仅限未归属人脸）"; {
+crate::dto!(FaceDeleteBatchParam, docs = "批量删除人脸参数（仅限未归属人脸）"; {
     #[validate(nested)]
     pub face_ids: FaceIds,
 });
 
-crate::dto!(FaceDeleteBatchResult, "visual/", Default; {
+crate::dto!(FaceDeleteBatchResult, Default; {
     /// 实际删除的人脸数量
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub deleted_face_count: u64,
 });
 

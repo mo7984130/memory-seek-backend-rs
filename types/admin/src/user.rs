@@ -9,8 +9,6 @@ fn default_page_size() -> u64 {
 /// 管理员只读查询用户的分页参数。
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export, export_to = "admin/"))]
 pub struct AdminUserQuery {
     /// 用户名或邮箱的模糊搜索词。
     #[validate(length(max = 255, message = "搜索关键词不能超过255个字符"))]
@@ -20,7 +18,6 @@ pub struct AdminUserQuery {
     /// 每页数量，默认 32，范围 1 到 100。
     #[serde(default = "default_page_size")]
     #[validate(range(min = 1, max = 100, message = "size 在 1 到 100 之间"))]
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size: u64,
 }
 

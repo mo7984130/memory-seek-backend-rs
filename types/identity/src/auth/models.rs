@@ -3,7 +3,7 @@
 use super::validators::*;
 use common_core::time::DateTime;
 
-crate::dto!(LoginRequest, "auth/"; {
+crate::dto!(LoginRequest; {
     #[validate(custom(function = "validate_account"))]
     pub account: String,
 
@@ -11,7 +11,7 @@ crate::dto!(LoginRequest, "auth/"; {
     pub password: String,
 });
 
-crate::dto!(LoginResponse, "auth/"; {
+crate::dto!(LoginResponse; {
     pub user: crate::user::models::UserInfo,
     pub access_token: String,
     pub access_token_expire_at: DateTime,
@@ -19,14 +19,14 @@ crate::dto!(LoginResponse, "auth/"; {
     pub refresh_token_expire_at: DateTime,
 });
 
-crate::dto!(RefreshAccessTokenResponse, "auth/"; {
+crate::dto!(RefreshAccessTokenResponse; {
     /// 访问令牌
     pub access_token: String,
     /// 访问令牌过期时间
     pub access_token_expire_at: DateTime,
 });
 
-crate::dto!(RegisterRequest, "auth/"; {
+crate::dto!(RegisterRequest; {
     /// 用户名
     #[validate(custom(function = "validate_username"))]
     pub username: String,
@@ -58,7 +58,7 @@ crate::dto!(RegisterRequest, "auth/"; {
     pub email_verify_code: String,
 });
 
-crate::dto!(SendEmailCodeRequest, "auth/"; {
+crate::dto!(SendEmailCodeRequest; {
     /// 邮箱
     #[validate(custom(function = "validate_email"))]
     pub email: String,

@@ -1,13 +1,12 @@
 [package]
 name = "types-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license.workspace = true
 description = "跨上下文共享的领域通用语言: 强类型 ID 与解析错误"
 
 [features]
 default = []
-ts = ["dep:ts-rs"]
 orm = ["dep:sea-orm", "common-core/sea-orm"]
 
 [dependencies]
@@ -20,4 +19,3 @@ validator.workspace = true
 
 common-core.path = "../../common/core"
 sea-orm = { workspace = true, features = ["macros"], optional = true }
-ts-rs = { workspace = true, optional = true }
