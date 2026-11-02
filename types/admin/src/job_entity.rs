@@ -15,6 +15,10 @@ use crate::job::{AdminJobKind, AdminJobStatus};
 pub struct Model {
     #[sea_orm(primary_key, column_type = "String(StringLen::N(36))")]
     pub id: String,
+    /// 标记 `indexed` 是为了让 SeaORM 的 schema sync 识别出 `kind` 上已存在索引：
+    /// 真正的唯一约束是下方 `create_indexes` 用原生 SQL 建的部分唯一索引，
+    /// 若不声明，sync 会把它当成多余的唯一索引并尝试 `DROP CONSTRAINT`。
+    #[sea_orm(indexed)]
     pub kind: AdminJobKind,
     pub status: AdminJobStatus,
     pub requested_by: i64,
@@ -50,6 +54,8 @@ impl ActiveModelBehavior for ActiveModel {}
 /// 创建任务领取与列表查询所需的索引。
 ///
 /// 部分唯一索引必须使用原生 SQL：SeaORM 的 `Index` builder 不支持 `WHERE` 谓词。
+/// 实体上 `kind` 已标记为 `indexed`，避免 schema sync 把这个部分唯一索引当成
+/// 未声明的唯一索引而尝试删除（PostgreSQL 会报 constraint 不存在）。
 pub async fn create_indexes(db: &DatabaseConnection) -> common_core::ContextualResult<()> {
     const STATEMENTS: &[&str] = &[
         // 同一 kind 最多一个活动任务：多实例去重的唯一正确性来源。
@@ -83,4 +89,68 @@ pub async fn create_indexes(db: &DatabaseConnection) -> common_core::ContextualR
 )]
 async fn init_index(db: &DatabaseConnection) -> common_core::ContextualResult<()> {
     create_indexes(db).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::{ConnectionTrait, Database, DbBackend, Schema, Statement};
+
+    /// 回归：`kind` 必须在实体上声明为 indexed。
+    ///
+    /// 否则 SeaORM 的 schema sync 会把原生创建的部分唯一索引
+    /// `uniq_admin_job_active_kind` 视为未声明的唯一索引并尝试删除。
+    #[test]
+    fn kind_is_declared_indexed_for_schema_sync() {
+        let indexes = Schema::new(DbBackend::Postgres).create_index_from_entity(Entity);
+        let kind_column = Column::Kind.to_string();
+        assert!(indexes.iter().any(|index| {
+            let columns = index.get_index_spec().get_column_names();
+            columns.len() == 1 && columns[0] == kind_column
+        }));
+    }
+
+    /// 需要真实 PostgreSQL 验证 schema sync 不会删除部分唯一索引。
+    ///
+    /// ```text
+    /// ADMIN_TEST_DB='postgres://user:pass@127.0.0.1:5432/memory_seek_test' \
+    ///   cargo test -p types-admin --features orm -- --ignored
+    /// ```
+    #[tokio::test]
+    #[ignore = "需要 ADMIN_TEST_DB 指向专用 PostgreSQL 测试库"]
+    async fn schema_sync_keeps_partial_unique_index() {
+        let url = std::env::var("ADMIN_TEST_DB").expect("需要设置 ADMIN_TEST_DB");
+        assert!(
+            url.contains("test"),
+            "拒绝在非测试库上执行（ADMIN_TEST_DB 必须包含 test）"
+        );
+        let db = Database::connect(&url).await.unwrap();
+
+        db.execute_unprepared("DROP TABLE IF EXISTS admin_job")
+            .await
+            .unwrap();
+        let schema = Schema::new(DbBackend::Postgres);
+        db.execute(&schema.create_table_from_entity(Entity))
+            .await
+            .unwrap();
+        create_indexes(&db).await.unwrap();
+
+        // 第二次同步必须保留原生创建的部分唯一索引，而不是尝试 DROP CONSTRAINT。
+        db.get_schema_registry("types_admin")
+            .sync(&db)
+            .await
+            .unwrap();
+
+        let row = db
+            .query_one_raw(Statement::from_string(
+                DbBackend::Postgres,
+                "SELECT to_regclass('uniq_admin_job_active_kind') IS NOT NULL AS ok",
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(row.try_get::<bool>("", "ok").unwrap());
+
+        db.execute_unprepared("DROP TABLE admin_job").await.unwrap();
+    }
 }
