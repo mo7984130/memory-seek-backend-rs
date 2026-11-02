@@ -12,12 +12,14 @@
 
 ## 构建与验证
 
+本地一律使用 dev profile（Cargo 默认 profile）；CI 仍用 `--release`（见 `.github/workflows/ci.yml`），本地验收不要求。
+
 ```bash
 cargo fmt --all -- --check
-cargo clippy --release --all-targets -- -D warnings
-cargo test --release --lib                       # workspace 单元测试（CI 实际命令）
-cargo test --release -p visual <test_name>       # 单个测试
-cargo test --release -p memory-seek-api-rs       # 客户端集成测试
+cargo clippy --all-targets -- -D warnings
+cargo test --lib                       # workspace 单元测试
+cargo test -p visual <test_name>       # 单个测试
+cargo test -p memory-seek-api-rs       # 客户端集成测试
 ```
 
 - 根是 virtual workspace 且未设 `default-members`：构建 server 时必须带 `-p server`，否则会连 `tests/e2e` 一起编译。
@@ -26,7 +28,7 @@ cargo test --release -p memory-seek-api-rs       # 客户端集成测试
 - `server` 默认 feature 为空，裸 `cargo build -p server` 不含任何业务域。完整构建：
 
 ```bash
-cargo build --release -p server --features "metrics,auth,user,visual,face-engine,audit,audit-recording,backup,admin"
+cargo build -p server --features "metrics,auth,user,visual,face-engine,audit,audit-recording,backup,admin"
 ```
 
 ## 配置与启动
@@ -67,7 +69,7 @@ podman compose -f tests/run/docker-compose.yml run --rm rustfs-init
 - 本地完整环境：`./build/build.sh` 生成 `target/dist`，`./build/runtime-image.sh` 构建运行镜像，再 `podman compose -f tests/run/docker-compose.yml up -d server`。
 - e2e 默认 `run.prepare=true`，会先清空并重灌种子数据库；不要指向共享库，复用数据时设 `run.prepare=false`。
 - 常用覆盖：`E2E__RUN__SCENARIOS=UploadVisualScenario` 只跑单场景（名字是注册的 Rust 类型名，不是文件路径），`E2E__RUN__CONCURRENCY` 不得超过种子池大小（`auth_users` / `visual_users` / `uit_users`）。
-- 常用命令：`cargo run -p e2e --release -- -c tests/e2e/e2e.config.yml`。
+- 常用命令：`cargo run -p e2e -- -c tests/e2e/e2e.config.yml`。
 
 ## 分支与提交
 
