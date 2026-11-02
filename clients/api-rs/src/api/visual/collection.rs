@@ -4,7 +4,7 @@
 //!
 use crate::client::{Client, Request};
 use crate::error::Result;
-use common_core::types::CursorPage;
+use common_core::types::CursorPageWithTotal;
 use types_core::cursor::TimeIdCursor;
 use types_core::{CollectionId, VisualId};
 use types_visual::{
@@ -54,7 +54,7 @@ pub async fn get_collection_visuals(
     collection_id: CollectionId,
     cursor: Option<TimeIdCursor<VisualId>>,
     size: Option<u64>,
-) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
     let mut request = Request::get(format!("/visual/collections/{collection_id}/visuals"));
     if let Some(cursor) = cursor {
         request = request.query("cursor", cursor);

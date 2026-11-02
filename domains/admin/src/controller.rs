@@ -16,7 +16,9 @@ use common_web::{
 };
 use types_admin::{
     dashboard::VisualDashboardStats,
-    job::{AdminJobKind, AdminJobQuery, AdminJobView, StartAdminJobRequest},
+    job::{
+        AbandonAdminJobRequest, AdminJobKind, AdminJobQuery, AdminJobView, StartAdminJobRequest,
+    },
     user::AdminUserQuery,
 };
 use types_audit::{AuditQuery, AuditStatsQuery, AuditTopQuery};
@@ -46,6 +48,7 @@ impl ControllerRouter for Controller {
                 .route("/jobs", get(Self::jobs).post(Self::start_job))
                 .route("/jobs/{job_id}", get(Self::get_job))
                 .route("/jobs/{job_id}/cancel", post(Self::cancel_job))
+                .route("/jobs/{job_id}/abandon", post(Self::abandon_job))
                 .route("/audits/stats", get(Self::audit_stats))
                 .route("/audits/top", get(Self::audit_top))
                 .route("/audits/audit", get(Self::audits))
@@ -135,6 +138,18 @@ impl Controller {
             .to_r_ok()
     }
 
+    async fn abandon_job(
+        State(state): State<Arc<AdminState>>,
+        Extension(user_id): Extension<UserId>,
+        Path(job_id): Path<String>,
+        ValidatedJson(request): ValidatedJson<AbandonAdminJobRequest>,
+    ) -> Result<R<AdminJobView>> {
+        let admin = AdminId::new(user_id)?;
+        AdminJobService::abandon(&state, admin, &job_id, request)
+            .await
+            .to_r_ok()
+    }
+
     async fn audit_stats(
         State(state): State<Arc<AdminState>>,
         Extension(user_id): Extension<UserId>,
@@ -163,7 +178,7 @@ impl Controller {
         ValidatedQuery(query): ValidatedQuery<AuditQuery>,
     ) -> Result<R<CursorPage<types_audit::AuditItem, TimeIdCursor<types_audit::AuditId>>>> {
         let admin = AdminId::new(user_id)?;
-        audit::AuditQueryer::query_events(&state.db, admin, &query, &state.cursor_counts)
+        audit::AuditQueryer::query_events(&state.db, admin, &query)
             .await
             .to_r_ok()
     }

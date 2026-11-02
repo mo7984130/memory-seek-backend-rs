@@ -6,14 +6,14 @@ use futures::executor::block_on;
 use memory_seek_api::{CountIdCursor, Method, PersonId, PersonName, SecondaryClusterParam};
 use serde_json::json;
 
-use common::{admin_job, body_json, client, empty_page, ok};
+use common::{admin_job, body_json, client, empty_page_with_total, ok};
 
 #[test]
 fn person_endpoints_build_expected_requests() {
     let (client, transport) = client(vec![
-        ok(empty_page()),
-        ok(empty_page()),
-        ok(empty_page()),
+        ok(empty_page_with_total()),
+        ok(empty_page_with_total()),
+        ok(empty_page_with_total()),
         ok(json!(null)),
         ok(json!(null)),
         ok(json!({
@@ -36,7 +36,7 @@ fn person_endpoints_build_expected_requests() {
         Some(20),
     ))
     .unwrap();
-    assert!(persons.records.is_empty());
+    assert!(persons.page.records.is_empty());
 
     let page = block_on(memory_seek_api::api::visual::person::search_persons(
         &client,
@@ -45,7 +45,7 @@ fn person_endpoints_build_expected_requests() {
         None,
     ))
     .unwrap();
-    assert!(page.records.is_empty());
+    assert!(page.page.records.is_empty());
 
     let page = block_on(memory_seek_api::api::visual::person::get_person_visuals(
         &client,
@@ -54,7 +54,7 @@ fn person_endpoints_build_expected_requests() {
         Some(50),
     ))
     .unwrap();
-    assert!(page.records.is_empty());
+    assert!(page.page.records.is_empty());
 
     block_on(memory_seek_api::api::visual::person::rename_person(
         &client,

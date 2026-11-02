@@ -29,12 +29,8 @@ impl UserRepo {
         _admin: AdminId,
         cursor: Option<UserId>,
         limit: u64,
-    ) -> Result<(Vec<AdminUserRow>, u64)> {
-        let total_count = UserMapper::count_admin_users(&self.db)
-            .timed(metrics_name!("db_count_admin_users"))
-            .await?;
-        let rows = UserMapper::query_admin_users(&self.db, cursor, limit).await?;
-        Ok((rows, total_count))
+    ) -> Result<Vec<AdminUserRow>> {
+        UserMapper::query_admin_users(&self.db, cursor, limit).await
     }
 
     /// 创建用户数据访问仓储

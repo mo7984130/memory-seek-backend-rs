@@ -1,8 +1,8 @@
 use common_core::{DbConn, error::contextual::Result, ext::ToOk};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set,
 };
 use types_identity::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
@@ -40,15 +40,6 @@ impl UserMapper {
             .limit(limit)
             .into_model::<AdminUserRow>()
             .all(db)
-            .await
-            .map_err(Into::into)
-    }
-
-    pub(crate) async fn count_admin_users(db: &impl DbConn) -> Result<u64> {
-        Entity::find()
-            .select_only()
-            .column(Column::Id)
-            .count(db)
             .await
             .map_err(Into::into)
     }

@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     routing::{delete, get, post},
 };
-use common_core::{Result, types::CursorPage};
+use common_core::{Result, types::CursorPageWithTotal};
 use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
     extractors::ValidatedPath, extractors::ValidatedQuery,
@@ -90,7 +90,7 @@ impl FaceController {
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<UnassignedFaceVisualCursorParam>,
-    ) -> Result<R<CursorPage<VisualView, TimeIdCursor<VisualId>>>> {
+    ) -> Result<R<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>>> {
         FaceService::get_unassigned_face_visuals(&state, user_id, req)
             .await
             .to_r_ok()

@@ -260,7 +260,6 @@ impl FaceMapper {
         db: &impl ConnectionTrait,
         cursor: Option<TimeIdCursor<VisualId>>,
         size: u64,
-        total_count: u64,
     ) -> Result<CursorPage<VisualId, ()>> {
         let subquery = Query::select()
             .expr(Expr::val(1))
@@ -291,7 +290,7 @@ impl FaceMapper {
             .all(db)
             .await?;
 
-        Ok(CursorPage::from_oversize(records, size, total_count))
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 统计至少含一张未分配人脸的不同影像数。
@@ -319,7 +318,6 @@ impl FaceMapper {
         person_id: PersonId,
         cursor: Option<TimeIdCursor<VisualId>>,
         size: u64,
-        total_count: u64,
     ) -> Result<CursorPage<VisualId, ()>> {
         let subquery = Query::select()
             .expr(Expr::val(1))
@@ -350,7 +348,7 @@ impl FaceMapper {
             .all(db)
             .await?;
 
-        Ok(CursorPage::from_oversize(records, size, total_count))
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 统计与人物关联的不同影像数。

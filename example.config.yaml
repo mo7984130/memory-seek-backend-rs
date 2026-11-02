@@ -106,3 +106,18 @@ visual:
     # 转码失败的有限重试: 最大尝试次数(含首次)与退避秒数
     # max_attempts: 3
     # retry_backoff_secs: 30
+
+admin:
+  # 后台任务调度（多实例共享数据库时由数据库唯一索引与心跳协调）
+  # supervisor 轮询队列、回收失联任务的间隔（秒），默认 5
+  # 环境变量覆盖: MEMORY_SEEK_ADMIN__POLL_INTERVAL_SECS=5
+  poll_interval_secs: 5
+  # 执行器续心跳与轮询取消的间隔（秒），默认 10；自动限制为失联阈值的一半以内
+  # 环境变量覆盖: MEMORY_SEEK_ADMIN__HEARTBEAT_INTERVAL_SECS=10
+  heartbeat_interval_secs: 10
+  # 超过多久没有心跳视为实例失联（秒），默认 30；失联任务会自动标记 failed
+  # 环境变量覆盖: MEMORY_SEEK_ADMIN__STALE_AFTER_SECS=30
+  stale_after_secs: 30
+  # 单实例同时执行的后台任务数上限，默认 2
+  # 环境变量覆盖: MEMORY_SEEK_ADMIN__MAX_CONCURRENCY=2
+  max_concurrency: 2

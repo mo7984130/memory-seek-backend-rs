@@ -3,7 +3,7 @@
 //! 各场景使用不同的种子影像(file_id 里的 user ordinal 前缀不同), 避免同一
 //! (user, visual) 在不同场景重复点赞触发 400。
 
-use common_core::types::CursorPage;
+use common_core::types::CursorPageWithTotal;
 use memory_seek_api::{CommentContent, CommentPublishParam, api};
 use memseek_test::{
     TaskIndex, register_scenario,
@@ -218,7 +218,7 @@ impl Scenario for GetLikedVisualsScenario {
 
     type Error = E2eError;
 
-    type Output = CursorPage<VisualView, TimeIdCursor<VisualId>>;
+    type Output = CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>;
 
     type Setup = LikedVisualsSetup;
 
@@ -246,7 +246,7 @@ impl Scenario for GetLikedVisualsScenario {
         setup: &Self::Setup,
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
-        Ok(output.records.iter().any(|p| p.id == setup.visual_id))
+        Ok(output.page.records.iter().any(|p| p.id == setup.visual_id))
     }
 
     /// 收尾: 取消本任务的点赞, 让种子影像回到初始状态

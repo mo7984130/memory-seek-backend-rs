@@ -1,5 +1,11 @@
-use common_core::{Result, error::contextual::ext::IntoContextualExt};
-use sea_orm::{ColumnTrait, EntityTrait, QuerySelect};
+use common_core::{
+    Result,
+    error::{
+        AppError,
+        contextual::ext::{IntoContextualExt, ResultExt},
+    },
+};
+use sea_orm::{ColumnTrait, EntityTrait, QuerySelect, sea_query::ExprTrait};
 use types_admin::dashboard::VisualDashboardStats;
 use types_admin::job::AdminJobKind;
 use types_core::AdminId;
@@ -18,20 +24,31 @@ impl VisualAdminService {
         state: &VisualState,
         _admin: AdminId,
     ) -> Result<VisualDashboardStats> {
-        let (total_count, total_bytes): (i64, Option<i64>) = Entity::find()
+        let (total_count, total_bytes): (i64, i64) = Entity::find()
             .select_only()
             .column_as(Column::Id.count(), "total_count")
-            .column_as(Column::Size.sum(), "total_bytes")
+            .column_as(Column::Size.sum().if_null(0), "total_bytes")
             .into_tuple()
             .one(&state.db)
             .await
             .into_contextual()?
-            .unwrap_or((0, None));
+            .unwrap_or_default();
         let monthly_timeline = TimelineStatRepo::get_monthly_stats(state).await?;
 
+        let total_count = u64::try_from(total_count).context_error(
+            "dashboard_total_count_negative",
+            "影像总数为负值",
+            AppError::InternalServerError,
+        )?;
+        let total_bytes = u64::try_from(total_bytes).context_error(
+            "dashboard_total_bytes_negative",
+            "影像总字节数为负值",
+            AppError::InternalServerError,
+        )?;
+
         Ok(VisualDashboardStats {
-            total_count: total_count.max(0) as u64,
-            total_bytes: total_bytes.unwrap_or_default().max(0) as u64,
+            total_count,
+            total_bytes,
             monthly_timeline,
         })
     }

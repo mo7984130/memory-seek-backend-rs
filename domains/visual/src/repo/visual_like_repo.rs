@@ -2,7 +2,7 @@ use audit::{AuditEvent, AuditRecorder};
 use common_core::{
     error::{AppError, ContextualError, contextual::Result},
     time::DateTime,
-    types::CursorPage,
+    types::CursorPageWithTotal,
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
@@ -96,21 +96,29 @@ impl VisualLikeRepo {
         state: &VisualState,
         user_id: UserId,
         req: &LikedVisualsQuery,
-    ) -> Result<CursorPage<(VisualId, DateTime), TimeIdCursor<VisualId>>> {
+    ) -> Result<CursorPageWithTotal<(VisualId, DateTime), TimeIdCursor<VisualId>>> {
         let key = RedisKeys::visual::count::liked_visuals(user_id);
-        let total_count = count_cache::get_or_load(state, &key, || async {
-            VisualLikeMapper::count_user_liked_visuals(&state.db, user_id).await
-        })
-        .await?;
+        let total_count = if req.cursor.is_none() {
+            Some(
+                count_cache::get_or_load(state, &key, || async {
+                    VisualLikeMapper::count_user_liked_visuals(&state.db, user_id).await
+                })
+                .await?,
+            )
+        } else {
+            None
+        };
 
-        VisualLikeMapper::query_user_liked_visual_ids(
-            &state.db,
-            user_id,
-            &req.cursor,
-            req.size,
-            total_count,
+        Ok(
+            VisualLikeMapper::query_user_liked_visual_ids(
+                &state.db,
+                user_id,
+                &req.cursor,
+                req.size,
+            )
+            .timed(metrics_name!("query_ids"))
+            .await?
+            .with_optional_total(total_count),
         )
-        .timed(metrics_name!("query_ids"))
-        .await
     }
 }

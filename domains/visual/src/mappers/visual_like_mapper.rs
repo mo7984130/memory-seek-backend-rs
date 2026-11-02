@@ -72,7 +72,6 @@ impl VisualLikeMapper {
         user_id: UserId,
         cursor: &Option<TimeIdCursor<VisualId>>,
         size: u64,
-        total_count: u64,
     ) -> Result<CursorPage<(VisualId, DateTime), TimeIdCursor<VisualId>>> {
         let mut query = Entity::find()
             .filter(Column::UserId.eq(user_id))
@@ -94,7 +93,7 @@ impl VisualLikeMapper {
             .all(db)
             .await?;
 
-        Ok(CursorPage::from_oversize(records, size, total_count)
+        Ok(CursorPage::from_oversize(records, size)
             .with_next_cursor(|&(id, time_at)| TimeIdCursor { time_at, id }))
     }
 

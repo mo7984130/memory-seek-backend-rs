@@ -14,7 +14,7 @@ use common_core::{
         contextual::ext::{IntoContextualExt, OptionExt, ResultExt},
     },
     ext::ToOk,
-    types::CursorPage,
+    types::{CursorPage, CursorPageWithTotal},
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
@@ -342,13 +342,12 @@ impl PersonService {
         state: &VisualState,
         user_id: UserId,
         req: PersonCursorParam,
-    ) -> Result<CursorPage<PersonView, CountIdCursor<PersonId>>> {
+    ) -> Result<CursorPageWithTotal<PersonView, CountIdCursor<PersonId>>> {
+        let CursorPageWithTotal { page, total_count } =
+            PersonRepo::query_page(state, req.cursor, req.size).await?;
         let CursorPage {
-            records,
-            has_more,
-            total_count,
-            ..
-        } = PersonRepo::query_page(state, req.cursor, req.size).await?;
+            records, has_more, ..
+        } = page;
 
         let mut views = Vec::with_capacity(records.len());
         for person in records.into_iter() {
@@ -359,11 +358,12 @@ impl PersonService {
                 VisualRepo::get_visual_dimensions(state, &file_id).await?,
             )?);
         }
-        CursorPage::from_has_more(views, has_more, total_count)
+        CursorPage::from_has_more(views, has_more)
             .with_next_cursor(|view| CountIdCursor {
                 count: view.face_count,
                 id: view.id,
             })
+            .with_optional_total(total_count)
             .to_ok()
     }
 
@@ -374,18 +374,17 @@ impl PersonService {
         state: &VisualState,
         user_id: UserId,
         req: PersonSearchParam,
-    ) -> Result<CursorPage<PersonView, PersonId>> {
+    ) -> Result<CursorPageWithTotal<PersonView, PersonId>> {
         let PersonSearchParam {
             keyword,
             cursor,
             size,
         } = req;
+        let CursorPageWithTotal { page, total_count } =
+            PersonRepo::search_person_page(state, &keyword, cursor, size).await?;
         let CursorPage {
-            records,
-            has_more,
-            total_count,
-            ..
-        } = PersonRepo::search_person_page(state, &keyword, cursor, size).await?;
+            records, has_more, ..
+        } = page;
 
         let mut views = Vec::with_capacity(records.len());
         for person in records.into_iter() {
@@ -396,8 +395,9 @@ impl PersonService {
                 VisualRepo::get_visual_dimensions(state, &file_id).await?,
             )?);
         }
-        CursorPage::from_has_more(views, has_more, total_count)
+        CursorPage::from_has_more(views, has_more)
             .with_next_cursor(|view| view.id)
+            .with_optional_total(total_count)
             .to_ok()
     }
 
@@ -412,15 +412,15 @@ impl PersonService {
         user_id: UserId,
         person_id: PersonId,
         req: PersonVisualCursorParam,
-    ) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+    ) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
         let page = FaceRepo::query_person_visual_ids(state, person_id, &req)
             .timed(metrics_name!("query_visual_ids"))
             .await?;
-        if page.records.is_empty() {
-            return Ok(CursorPage::empty(page.total_count));
+        if page.page.records.is_empty() {
+            return Ok(CursorPageWithTotal::empty(page.total_count));
         }
 
-        let visuals = VisualService::load_visuals_info(state, user_id, &page.records)
+        let visuals = VisualService::load_visuals_info(state, user_id, &page.page.records)
             .timed(metrics_name!("load_visuals_info"))
             .await?;
 

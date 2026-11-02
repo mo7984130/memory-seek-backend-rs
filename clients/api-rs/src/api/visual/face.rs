@@ -6,7 +6,7 @@
 
 use crate::client::{Client, Request};
 use crate::error::Result;
-use common_core::types::CursorPage;
+use common_core::types::CursorPageWithTotal;
 use types_admin::job::{AdminJobKind, AdminJobView, StartAdminJobRequest};
 use types_core::cursor::TimeIdCursor;
 use types_core::{FaceId, PersonId, VisualId};
@@ -28,7 +28,7 @@ pub async fn get_unassigned_face_visuals(
     client: &Client,
     cursor: Option<TimeIdCursor<VisualId>>,
     size: Option<u64>,
-) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
     let param = UnassignedFaceVisualCursorParam {
         cursor,
         size: size.unwrap_or(32),

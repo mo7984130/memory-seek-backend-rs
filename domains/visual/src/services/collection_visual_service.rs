@@ -1,6 +1,6 @@
 use crate::repo::CollectionRepo;
 use crate::{services::visual_service::VisualService, state::VisualState};
-use common_core::{Result, ext::ToOk, types::CursorPage};
+use common_core::{Result, ext::ToOk, types::CursorPageWithTotal};
 use common_metrics::{MetricsTimerExt, metrics_name};
 use types_core::cursor::TimeIdCursor;
 use types_identity::auth::user::UserId;
@@ -55,12 +55,12 @@ impl CollectionVisualService {
         user_id: UserId,
         collection_id: CollectionId,
         req: CollectionVisualCursorPageParam,
-    ) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+    ) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
         let page = CollectionRepo::query_collection_visual_ids(state, user_id, collection_id, &req)
             .timed(metrics_name!("query_visual_ids"))
             .await?;
 
-        let visual_vos = VisualService::load_visuals_info(state, user_id, &page.records)
+        let visual_vos = VisualService::load_visuals_info(state, user_id, &page.page.records)
             .timed(metrics_name!("load_visuals_info"))
             .await?;
         Ok(page

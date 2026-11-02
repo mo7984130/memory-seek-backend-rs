@@ -5,7 +5,7 @@ use common_core::{
     types::CursorPage,
 };
 use sea_orm::{
-    ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, Expr, Func},
 };
 use types_audit::{AuditQuery, AuditRecord};
@@ -81,7 +81,6 @@ impl AuditMapper {
     pub(super) async fn query_audit_page(
         db: &impl DbConn,
         req: &AuditQuery,
-        total_count: u64,
     ) -> Result<CursorPage<AuditRecord, ()>> {
         let mut base_query = Entity::find();
         if let Some(event_type) = req.event_type.as_deref() {
@@ -116,24 +115,6 @@ impl AuditMapper {
             has_more: records.len() > req.size as usize,
             records,
             next_cursor: None,
-            total_count,
         })
-    }
-
-    pub(super) async fn query_audit_count(db: &impl DbConn, req: &AuditQuery) -> Result<u64> {
-        let mut query = Entity::find();
-        if let Some(event_type) = req.event_type.as_deref() {
-            query = query.filter(Column::EventType.eq(event_type));
-        }
-        if let Some(target_type) = req.target_type.as_deref() {
-            query = query.filter(Column::TargetType.eq(target_type));
-        }
-        if let Some(target_id) = req.target_id {
-            query = query.filter(Column::TargetId.eq(target_id));
-        }
-        if let Some(actor_id) = req.actor_id {
-            query = query.filter(Column::ActorId.eq(actor_id.0));
-        }
-        query.count(db).await.into_contextual()
     }
 }

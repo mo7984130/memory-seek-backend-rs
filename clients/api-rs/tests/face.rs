@@ -6,13 +6,13 @@ use futures::executor::block_on;
 use memory_seek_api::{DateTime, FaceId, FaceIds, Method, PersonId, TimeIdCursor, VisualId};
 use serde_json::json;
 
-use common::{admin_job, assert_authorized, body_json, client, empty_page, ok};
+use common::{admin_job, assert_authorized, body_json, client, empty_page_with_total, ok};
 
 #[test]
 fn face_queries_build_expected_requests() {
     let (client, transport) = client(vec![
         ok(json!([])),
-        ok(empty_page()),
+        ok(empty_page_with_total()),
         ok(json!(null)),
         ok(json!(null)),
         ok(json!(null)),
@@ -38,7 +38,7 @@ fn face_queries_build_expected_requests() {
         ),
     )
     .unwrap();
-    assert!(page.records.is_empty());
+    assert!(page.page.records.is_empty());
 
     block_on(memory_seek_api::api::visual::face::change_face_belonging(
         &client,

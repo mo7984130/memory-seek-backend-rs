@@ -6,7 +6,7 @@ use crate::client::{Client, Request};
 use crate::error::Result;
 use crate::transport::{DownloadResponse, HttpResponse, Method, StatusCode};
 use common_core::time::DateTime;
-use common_core::types::CursorPage;
+use common_core::types::CursorPageWithTotal;
 use types_core::cursor::TimeIdCursor;
 use types_core::{PageDirection, VisualId};
 use types_visual::dto::visual::VisualView;
@@ -36,7 +36,7 @@ pub async fn get_visuals(
     size: Option<u64>,
     direction: Option<PageDirection>,
     anchor_time: Option<DateTime>,
-) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
     let mut request = Request::get("/visual");
     if let Some(cursor) = cursor {
         request = request.query("cursor", cursor);

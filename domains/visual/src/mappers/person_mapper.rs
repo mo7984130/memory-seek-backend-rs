@@ -235,7 +235,6 @@ impl PersonMapper {
         db: &impl ConnectionTrait,
         cursor: Option<CountIdCursor<PersonId>>,
         size: u64,
-        total_count: u64,
     ) -> Result<CursorPage<PersonRecord, ()>> {
         let mut query = Entity::find()
             .order_by_desc(Column::FaceCount)
@@ -251,7 +250,7 @@ impl PersonMapper {
             .map(PersonRecord::from)
             .collect();
 
-        Ok(CursorPage::from_oversize(records, size, total_count))
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 查询人物列表总量。
@@ -265,7 +264,6 @@ impl PersonMapper {
         keyword: &str,
         cursor: Option<PersonId>,
         size: u64,
-        total_count: u64,
     ) -> Result<CursorPage<PersonRecord, ()>> {
         let escaped = keyword
             .replace('\\', "\\\\")
@@ -286,7 +284,7 @@ impl PersonMapper {
             .map(PersonRecord::from)
             .collect();
 
-        Ok(CursorPage::from_oversize(records, size, total_count))
+        Ok(CursorPage::from_oversize(records, size))
     }
 
     /// 查询关键词匹配的人物总量。

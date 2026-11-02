@@ -15,13 +15,12 @@ impl UserAdminService {
         admin: AdminId,
         query: AdminUserQuery,
     ) -> Result<CursorPage<UserInfo, UserId>> {
-        let (rows, total_count) = state
+        let rows = state
             .repo
             .query_admin_users(admin, query.cursor, query.size + 1)
             .await?;
 
-        let page =
-            CursorPage::from_oversize(rows, query.size, total_count).with_next_cursor(|row| row.id);
+        let page = CursorPage::from_oversize(rows, query.size).with_next_cursor(|row| row.id);
         let records = page
             .records
             .into_iter()
@@ -32,7 +31,6 @@ impl UserAdminService {
             records,
             next_cursor: page.next_cursor,
             has_more: page.has_more,
-            total_count: page.total_count,
         })
     }
 }

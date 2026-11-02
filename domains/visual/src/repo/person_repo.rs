@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use audit::{AuditEvent, AuditRecorder};
 use common_core::error::{ContextualError, contextual::Result};
-use common_core::{types::CursorPage, types::HasChanged::Changed};
+use common_core::{types::CursorPageWithTotal, types::HasChanged::Changed};
 use common_db::{db_transaction, utils::DbUtils};
 use common_metrics::{MetricsTimerExt, metrics_name};
 use constants::RedisKeys;
@@ -150,15 +150,21 @@ impl PersonRepo {
         state: &VisualState,
         cursor: Option<CountIdCursor<PersonId>>,
         size: u64,
-    ) -> Result<CursorPage<PersonRecord, ()>> {
-        let total_count =
-            count_cache::get_or_load(state, RedisKeys::visual::count::PERSONS, || async {
-                PersonMapper::count_persons(&state.db).await
-            })
-            .await?;
-        PersonMapper::query_page(&state.db, cursor, size, total_count)
+    ) -> Result<CursorPageWithTotal<PersonRecord, ()>> {
+        let total_count = if cursor.is_none() {
+            Some(
+                count_cache::get_or_load(state, RedisKeys::visual::count::PERSONS, || async {
+                    PersonMapper::count_persons(&state.db).await
+                })
+                .await?,
+            )
+        } else {
+            None
+        };
+        Ok(PersonMapper::query_page(&state.db, cursor, size)
             .timed(metrics_name!("query_page"))
-            .await
+            .await?
+            .with_optional_total(total_count))
     }
 
     /// 按关键词查询人物分页
@@ -167,15 +173,22 @@ impl PersonRepo {
         keyword: &str,
         cursor: Option<PersonId>,
         size: u64,
-    ) -> Result<CursorPage<types_visual::person::PersonRecord, ()>> {
+    ) -> Result<CursorPageWithTotal<types_visual::person::PersonRecord, ()>> {
         let key = RedisKeys::visual::count::person_search(keyword);
-        let total_count = count_cache::get_or_load(state, &key, || async {
-            PersonMapper::count_person_search(&state.db, keyword).await
-        })
-        .await?;
-        PersonMapper::query_search(&state.db, keyword, cursor, size, total_count)
+        let total_count = if cursor.is_none() {
+            Some(
+                count_cache::get_or_load(state, &key, || async {
+                    PersonMapper::count_person_search(&state.db, keyword).await
+                })
+                .await?,
+            )
+        } else {
+            None
+        };
+        Ok(PersonMapper::query_search(&state.db, keyword, cursor, size)
             .timed(metrics_name!("query_search"))
-            .await
+            .await?
+            .with_optional_total(total_count))
     }
 
     /// 加载全部人脸及其对应影像文件的 file_id

@@ -6,3 +6,4 @@ pub mod tasks;
 
 pub use controller::Controller;
 pub use state::AdminState;
+pub use tasks::{AdminJobConfig, AdminJobService, start as start_jobs};

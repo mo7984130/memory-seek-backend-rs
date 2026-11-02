@@ -9,7 +9,7 @@ use common_core::{
         },
     },
     ext::ToOk,
-    types::CursorPage,
+    types::CursorPageWithTotal,
 };
 use common_metrics::{MetricsTimerExt, metrics_name};
 use constants::RedisKeys;
@@ -93,17 +93,17 @@ impl VisualService {
         state: &VisualState,
         user_id: UserId,
         req: VisualCursorParam,
-    ) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+    ) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
         // 获取visual_id
         let page = VisualRepo::query_visual_cursor_ids(state, req)
             .timed(metrics_name!("find_cursor_page_ids"))
             .await?;
-        if page.records.is_empty() {
-            return Ok(CursorPage::empty(page.total_count));
+        if page.page.records.is_empty() {
+            return Ok(CursorPageWithTotal::empty(page.total_count));
         }
 
         // 加载信息
-        let visual_vos = Self::load_visuals_info(state, user_id, &page.records)
+        let visual_vos = Self::load_visuals_info(state, user_id, &page.page.records)
             .timed(metrics_name!("load_visuals_info"))
             .await?;
 

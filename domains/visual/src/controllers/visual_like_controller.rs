@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     routing::{get, post},
 };
-use common_core::{Result, types::CursorPage};
+use common_core::{Result, types::CursorPageWithTotal};
 use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedPath,
     extractors::ValidatedQuery,
@@ -72,7 +72,7 @@ impl VisualLikeController {
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<LikedVisualsQuery>,
-    ) -> Result<R<CursorPage<VisualView, TimeIdCursor<VisualId>>>> {
+    ) -> Result<R<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>>> {
         VisualLikeService::get_user_liked_visuals(&state, user_id, req)
             .await
             .to_r_ok()

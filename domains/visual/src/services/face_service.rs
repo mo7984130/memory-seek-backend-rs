@@ -9,7 +9,7 @@ use common_core::{
     error::contextual::ext::{IntoContextualExt, OptionExt, ResultExt},
     error::{AppError, ContextualError, contextual},
     ext::ToOk,
-    types::CursorPage,
+    types::CursorPageWithTotal,
 };
 use common_metrics::{
     GaugeGuard, MetricsTimer, MetricsTimerExt, inc_counter, metrics_name, set_gauge,
@@ -318,15 +318,15 @@ impl FaceService {
         state: &VisualState,
         user_id: UserId,
         req: UnassignedFaceVisualCursorParam,
-    ) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+    ) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
         let page = FaceRepo::query_unassigned_face_visual_ids(state, &req)
             .timed(metrics_name!("query_unassigned_face_visual_ids"))
             .await?;
-        if page.records.is_empty() {
-            return Ok(CursorPage::empty(page.total_count));
+        if page.page.records.is_empty() {
+            return Ok(CursorPageWithTotal::empty(page.total_count));
         }
 
-        let visuals = VisualService::load_visuals_info(state, user_id, &page.records)
+        let visuals = VisualService::load_visuals_info(state, user_id, &page.page.records)
             .timed(metrics_name!("load_visuals_info"))
             .await?;
 

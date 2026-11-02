@@ -6,7 +6,7 @@
 
 use crate::client::{Client, Request};
 use crate::error::Result;
-use common_core::types::CursorPage;
+use common_core::types::CursorPageWithTotal;
 use types_admin::job::{AdminJobKind, AdminJobView, StartAdminJobRequest};
 use types_core::cursor::{CountIdCursor, TimeIdCursor};
 use types_core::{PersonId, VisualId};
@@ -20,7 +20,7 @@ pub async fn get_persons(
     client: &Client,
     cursor: Option<CountIdCursor<PersonId>>,
     size: Option<u64>,
-) -> Result<CursorPage<PersonView, CountIdCursor<PersonId>>> {
+) -> Result<CursorPageWithTotal<PersonView, CountIdCursor<PersonId>>> {
     let param = PersonCursorParam {
         cursor,
         size: size.unwrap_or(32),
@@ -39,7 +39,7 @@ pub async fn search_persons(
     keyword: &str,
     cursor: Option<PersonId>,
     size: Option<u64>,
-) -> Result<CursorPage<PersonView, PersonId>> {
+) -> Result<CursorPageWithTotal<PersonView, PersonId>> {
     let param = PersonSearchParam {
         keyword: keyword.to_owned(),
         cursor,
@@ -60,7 +60,7 @@ pub async fn get_person_visuals(
     person_id: PersonId,
     cursor: Option<TimeIdCursor<VisualId>>,
     size: Option<u64>,
-) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
     let param = PersonVisualCursorParam {
         cursor,
         size: size.unwrap_or(32),

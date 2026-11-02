@@ -3,7 +3,7 @@ use common_core::{
     DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
     ext::ToOk,
-    types::CursorPage,
+    types::CursorPageWithTotal,
 };
 use common_db::{db_transaction, utils::DbUtils};
 use common_metrics::{MetricsTimerExt, metrics_name};
@@ -173,21 +173,27 @@ impl FaceRepo {
     pub async fn query_unassigned_face_visual_ids(
         state: &VisualState,
         param: &UnassignedFaceVisualCursorParam,
-    ) -> Result<CursorPage<VisualId, ()>> {
-        let total_count = count_cache::get_or_load(
-            state,
-            RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS,
-            || async { FaceMapper::count_unassigned_face_visuals(&state.db).await },
-        )
-        .await?;
-        FaceMapper::query_unassigned_face_visual_ids_cursor_page(
+    ) -> Result<CursorPageWithTotal<VisualId, ()>> {
+        let total_count = if param.cursor.is_none() {
+            Some(
+                count_cache::get_or_load(
+                    state,
+                    RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS,
+                    || async { FaceMapper::count_unassigned_face_visuals(&state.db).await },
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+        Ok(FaceMapper::query_unassigned_face_visual_ids_cursor_page(
             &state.db,
             param.cursor.clone(),
             param.size,
-            total_count,
         )
         .timed(metrics_name!("query_unassigned_face_visual_ids"))
-        .await
+        .await?
+        .with_optional_total(total_count))
     }
 
     /// 查询人物关联的照片 ID
@@ -195,21 +201,24 @@ impl FaceRepo {
         state: &VisualState,
         person_id: PersonId,
         req: &PersonVisualCursorParam,
-    ) -> Result<CursorPage<VisualId, ()>> {
+    ) -> Result<CursorPageWithTotal<VisualId, ()>> {
         let key = RedisKeys::visual::count::person_visuals(person_id);
-        let total_count = count_cache::get_or_load(state, &key, || async {
-            FaceMapper::count_person_visuals(&state.db, person_id).await
-        })
-        .await?;
-        FaceMapper::query_person_visual_ids(
-            &state.db,
-            person_id,
-            req.cursor.clone(),
-            req.size,
-            total_count,
+        let total_count = if req.cursor.is_none() {
+            Some(
+                count_cache::get_or_load(state, &key, || async {
+                    FaceMapper::count_person_visuals(&state.db, person_id).await
+                })
+                .await?,
+            )
+        } else {
+            None
+        };
+        Ok(
+            FaceMapper::query_person_visual_ids(&state.db, person_id, req.cursor.clone(), req.size)
+                .timed(metrics_name!("query_visual_ids"))
+                .await?
+                .with_optional_total(total_count),
         )
-        .timed(metrics_name!("query_visual_ids"))
-        .await
     }
 }
 

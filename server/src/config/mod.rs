@@ -37,6 +37,10 @@ pub struct AppConfig {
     #[serde(default)]
     pub backup: crate::setup::domains::backup::Config,
 
+    #[cfg(feature = "admin")]
+    #[serde(default)]
+    pub admin: crate::setup::domains::admin::Config,
+
     #[cfg(feature = "face-engine")]
     pub face_engine: crate::setup::libs::face_engine::Config,
 

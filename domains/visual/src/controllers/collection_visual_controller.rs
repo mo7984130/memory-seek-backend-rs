@@ -6,7 +6,7 @@ use axum::{
     extract::State,
     routing::{delete, get},
 };
-use common_core::{Result, types::CursorPage};
+use common_core::{Result, types::CursorPageWithTotal};
 use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
     extractors::ValidatedPath, extractors::ValidatedQuery,
@@ -93,7 +93,7 @@ impl CollectionVisualController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(collection_id): ValidatedPath<CollectionId>,
         ValidatedQuery(req): ValidatedQuery<CollectionVisualCursorPageParam>,
-    ) -> Result<R<CursorPage<VisualView, TimeIdCursor<VisualId>>>> {
+    ) -> Result<R<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>>> {
         CollectionVisualService::get_visuals(&state, user_id, collection_id, req)
             .await
             .to_r_ok()

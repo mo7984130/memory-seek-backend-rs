@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     routing::{get, post},
 };
-use common_core::{Result, types::CursorPage};
+use common_core::{Result, types::CursorPageWithTotal};
 use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
     extractors::ValidatedPath, extractors::ValidatedQuery,
@@ -62,7 +62,7 @@ impl PersonController {
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<PersonCursorParam>,
-    ) -> Result<R<CursorPage<PersonView, CountIdCursor<PersonId>>>> {
+    ) -> Result<R<CursorPageWithTotal<PersonView, CountIdCursor<PersonId>>>> {
         PersonService::get_persons(&state, user_id, req)
             .await
             .to_r_ok()
@@ -73,7 +73,7 @@ impl PersonController {
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<PersonSearchParam>,
-    ) -> Result<R<CursorPage<PersonView, PersonId>>> {
+    ) -> Result<R<CursorPageWithTotal<PersonView, PersonId>>> {
         PersonService::search_persons(&state, user_id, req)
             .await
             .to_r_ok()
@@ -85,7 +85,7 @@ impl PersonController {
         Extension(user_id): Extension<UserId>,
         ValidatedPath(person_id): ValidatedPath<PersonId>,
         ValidatedQuery(req): ValidatedQuery<PersonVisualCursorParam>,
-    ) -> Result<R<CursorPage<VisualView, TimeIdCursor<VisualId>>>> {
+    ) -> Result<R<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>>> {
         PersonService::get_person_visuals(&state, user_id, person_id, req)
             .await
             .to_r_ok()

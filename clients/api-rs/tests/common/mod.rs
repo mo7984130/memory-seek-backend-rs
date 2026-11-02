@@ -123,7 +123,14 @@ pub fn body_json(request: &HttpRequest) -> Value {
 }
 
 pub fn empty_page() -> Value {
-    json!({ "records": [], "nextCursor": null, "hasMore": false, "totalCount": 0 })
+    json!({ "records": [], "nextCursor": null, "hasMore": false })
+}
+
+pub fn empty_page_with_total() -> Value {
+    json!({
+        "page": { "records": [], "nextCursor": null, "hasMore": false },
+        "totalCount": 0
+    })
 }
 
 pub fn admin_job(kind: &str) -> HttpResponse {
@@ -131,6 +138,7 @@ pub fn admin_job(kind: &str) -> HttpResponse {
         "id": "job-1",
         "kind": kind,
         "status": "queued",
+        "attempts": 0,
         "requestedBy": "1",
         "createdAt": "2026-01-01T00:00:00Z",
         "startedAt": null,

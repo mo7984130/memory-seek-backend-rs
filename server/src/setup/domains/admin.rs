@@ -9,8 +9,10 @@ use sea_orm::DatabaseConnection;
 use user::UserState;
 use visual::VisualState;
 
+pub use ::admin::AdminJobConfig as Config;
+
 /// 在各业务域初始化完成后，统一挂载管理端路由。
-pub async fn init(_config: &crate::config::AppConfig, setup: &mut AppSetup) -> Result<()> {
+pub async fn init(config: &crate::config::AppConfig, setup: &mut AppSetup) -> Result<()> {
     let user_state = setup
         .registry
         .get::<Arc<UserState>>()
@@ -37,22 +39,16 @@ pub async fn init(_config: &crate::config::AppConfig, setup: &mut AppSetup) -> R
         .get::<TaskManager>()
         .miss_dep("Admin", "TaskManager")?
         .clone();
-    let redis = setup
-        .registry
-        .get::<common_redis::Pool>()
-        .miss_dep("Admin", "RedisPool")?
-        .clone();
 
-    admin::tasks::prepare_job_store(&db).await?;
     let state = Arc::new(::admin::AdminState::new(
         db,
         user_state,
         visual_state,
         backup_state,
         task_manager,
-        redis,
-        _config.cache.to(),
+        config.admin.clone(),
     ));
+    ::admin::start_jobs(Arc::clone(&state));
     let protected = ::admin::Controller::protected_routes().with_state(state);
     setup.router.add_protected(protected);
     Ok(())
