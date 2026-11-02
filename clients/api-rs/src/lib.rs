@@ -100,5 +100,13 @@ pub use types_backup::{
     ScheduledBackupResult,
 };
 
+/// 管理端契约:`types-admin`。
+pub use types_admin::dashboard::VisualDashboardStats;
+pub use types_admin::job::{
+    AbandonAdminJobRequest, AdminJobKind, AdminJobPayload, AdminJobQuery, AdminJobStatus,
+    AdminJobView, StartAdminJobRequest,
+};
+pub use types_admin::user::AdminUserQuery;
+
 /// 时间类型(UTC),与后端契约一致。
 pub use common_core::time::DateTime;

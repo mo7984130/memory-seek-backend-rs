@@ -5,7 +5,7 @@ use crate::error::Result;
 use common_core::types::CursorPage;
 use types_admin::{
     dashboard::VisualDashboardStats,
-    job::{AdminJobQuery, AdminJobView, StartAdminJobRequest},
+    job::{AbandonAdminJobRequest, AdminJobQuery, AdminJobView, StartAdminJobRequest},
     user::AdminUserQuery,
 };
 use types_core::{UserId, cursor::TimeIdCursor};
@@ -71,5 +71,16 @@ pub async fn get_job(client: &Client, job_id: &str) -> Result<AdminJobView> {
 pub async fn cancel_job(client: &Client, job_id: &str) -> Result<AdminJobView> {
     client
         .send_json(Request::post(format!("/admin/jobs/{job_id}/cancel")))
+        .await
+}
+
+/// 人工放弃运行中的任务；用于实例存活但任务卡死的场景。
+pub async fn abandon_job(
+    client: &Client,
+    job_id: &str,
+    request: &AbandonAdminJobRequest,
+) -> Result<AdminJobView> {
+    client
+        .send_json(Request::post(format!("/admin/jobs/{job_id}/abandon")).json(request))
         .await
 }

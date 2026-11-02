@@ -21,6 +21,7 @@ fn admin_endpoints_build_expected_requests() {
         admin_job("face_incremental"),
         admin_job("face_incremental"),
         admin_job("face_incremental"),
+        admin_job("face_incremental"),
     ]);
 
     let dashboard = block_on(memory_seek_api::api::admin::get_visual_dashboard(&client)).unwrap();
@@ -52,6 +53,14 @@ fn admin_endpoints_build_expected_requests() {
     assert_eq!(started.status, types_admin::job::AdminJobStatus::Queued);
     let _ = block_on(memory_seek_api::api::admin::get_job(&client, "job-1")).unwrap();
     let _ = block_on(memory_seek_api::api::admin::cancel_job(&client, "job-1")).unwrap();
+    let _ = block_on(memory_seek_api::api::admin::abandon_job(
+        &client,
+        "job-1",
+        &types_admin::job::AbandonAdminJobRequest {
+            reason: Some("hung".to_owned()),
+        },
+    ))
+    .unwrap();
 
     let requests = transport.requests();
     assert_eq!(requests[0].url, "/api/admin/dashboard/visuals");
@@ -69,4 +78,7 @@ fn admin_endpoints_build_expected_requests() {
     );
     assert_eq!(requests[4].url, "/api/admin/jobs/job-1");
     assert_eq!(requests[5].url, "/api/admin/jobs/job-1/cancel");
+    assert_eq!(requests[6].method, Method::POST);
+    assert_eq!(requests[6].url, "/api/admin/jobs/job-1/abandon");
+    assert_eq!(body_json(&requests[6]), json!({ "reason": "hung" }));
 }

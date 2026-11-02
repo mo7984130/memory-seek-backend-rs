@@ -124,7 +124,7 @@ fn person_endpoints_build_expected_requests() {
     assert_eq!(requests[6].url, "/api/admin/jobs");
     assert_eq!(
         body_json(&requests[6]),
-        json!({ "kind": "person_full_scan", "threshold": null })
+        json!({ "kind": "person_full_scan" })
     );
 
     assert_eq!(requests[7].method, Method::POST);

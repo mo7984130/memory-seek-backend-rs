@@ -113,14 +113,11 @@ fn face_admin_endpoints_build_expected_requests() {
     let requests = transport.requests();
     assert_eq!(requests[0].method, Method::POST);
     assert_eq!(requests[0].url, "/api/admin/jobs");
-    assert_eq!(
-        body_json(&requests[0]),
-        json!({ "kind": "face_full", "threshold": null })
-    );
+    assert_eq!(body_json(&requests[0]), json!({ "kind": "face_full" }));
     assert_eq!(requests[1].method, Method::POST);
     assert_eq!(requests[1].url, "/api/admin/jobs");
     assert_eq!(
         body_json(&requests[1]),
-        json!({ "kind": "face_incremental", "threshold": null })
+        json!({ "kind": "face_incremental" })
     );
 }
