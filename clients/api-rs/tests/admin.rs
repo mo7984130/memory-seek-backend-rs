@@ -29,7 +29,6 @@ fn admin_endpoints_build_expected_requests() {
 
     let users = block_on(memory_seek_api::api::admin::get_users(
         &client,
-        Some("alice"),
         Some(UserId(9)),
         Some(8),
     ))
@@ -60,7 +59,6 @@ fn admin_endpoints_build_expected_requests() {
     let requests = transport.requests();
     assert_eq!(requests[0].url, "/api/admin/dashboard/visuals");
     assert!(requests[1].url.starts_with("/api/admin/users?"));
-    assert!(requests[1].url.contains("keyword=alice"));
     assert!(requests[1].url.contains("cursor=9"));
     assert!(requests[1].url.contains("size=8"));
     assert!(requests[2].url.starts_with("/api/admin/jobs?"));

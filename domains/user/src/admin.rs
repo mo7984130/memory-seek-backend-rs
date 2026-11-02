@@ -9,7 +9,7 @@ use crate::UserState;
 pub struct UserAdminService;
 
 impl UserAdminService {
-    /// 按关键词游标分页查询用户；调用者必须传入已校验的管理员身份。
+    /// 按游标分页查询用户；调用者必须传入已校验的管理员身份。
     pub async fn query_users(
         state: &UserState,
         admin: AdminId,
@@ -17,12 +17,7 @@ impl UserAdminService {
     ) -> Result<CursorPage<UserInfo, UserId>> {
         let (rows, total_count) = state
             .repo
-            .query_admin_users(
-                admin,
-                query.keyword.as_deref(),
-                query.cursor,
-                query.size + 1,
-            )
+            .query_admin_users(admin, query.cursor, query.size + 1)
             .await?;
 
         let page =

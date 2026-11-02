@@ -18,22 +18,17 @@ pub async fn get_visual_dashboard(client: &Client) -> Result<VisualDashboardStat
         .await
 }
 
-/// 分页查询用户，可按用户名或邮箱模糊搜索。
+/// 分页查询用户。
 pub async fn get_users(
     client: &Client,
-    keyword: Option<&str>,
     cursor: Option<UserId>,
     size: Option<u64>,
 ) -> Result<CursorPage<UserInfo, UserId>> {
     let query = AdminUserQuery {
-        keyword: keyword.map(str::to_owned),
         cursor,
         size: size.unwrap_or(32),
     };
     let mut request = Request::get("/admin/users").query("size", query.size);
-    if let Some(keyword) = query.keyword {
-        request = request.query("keyword", keyword);
-    }
     if let Some(cursor) = query.cursor {
         request = request.query("cursor", cursor);
     }

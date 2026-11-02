@@ -3276,7 +3276,7 @@ dependencies = [
 
 [[package]]
 name = "memory-seek-api-rs"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
  "async-trait",
  "common-core",
@@ -6327,7 +6327,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types-admin"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "common-core",
  "linkme",
@@ -6555,11 +6555,10 @@ dependencies = [
 
 [[package]]
 name = "user"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "audit",
  "axum",
- "blake3",
  "bytes",
  "common-core",
  "common-crypto",

@@ -10,9 +10,6 @@ fn default_page_size() -> u64 {
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminUserQuery {
-    /// 用户名或邮箱的模糊搜索词。
-    #[validate(length(max = 255, message = "搜索关键词不能超过255个字符"))]
-    pub keyword: Option<String>,
     /// 上一页最后一条记录的用户 ID。
     pub cursor: Option<UserId>,
     /// 每页数量，默认 32，范围 1 到 100。
@@ -28,7 +25,6 @@ mod tests {
     #[test]
     fn default_page_size_is_valid() {
         let query = AdminUserQuery {
-            keyword: None,
             cursor: None,
             size: default_page_size(),
         };
@@ -38,7 +34,6 @@ mod tests {
     #[test]
     fn page_size_is_bounded() {
         let query = AdminUserQuery {
-            keyword: None,
             cursor: None,
             size: 101,
         };

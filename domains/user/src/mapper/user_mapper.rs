@@ -14,10 +14,9 @@ pub struct UserMapper;
 
 // 修改
 impl UserMapper {
-    /// 按 ID 倒序分页查询用户，支持用户名或邮箱模糊匹配。
+    /// 按 ID 倒序分页查询用户。
     pub(crate) async fn query_admin_users(
         db: &impl DbConn,
-        keyword: Option<&str>,
         cursor: Option<UserId>,
         limit: u64,
     ) -> Result<Vec<AdminUserRow>> {
@@ -33,13 +32,6 @@ impl UserMapper {
             ])
             .order_by_desc(Column::Id);
 
-        if let Some(keyword) = keyword.filter(|value| !value.is_empty()) {
-            query = query.filter(
-                sea_orm::Condition::any()
-                    .add(Column::Username.contains(keyword))
-                    .add(Column::Email.contains(keyword)),
-            );
-        }
         if let Some(cursor) = cursor {
             query = query.filter(Column::Id.lt(cursor));
         }
@@ -52,16 +44,13 @@ impl UserMapper {
             .map_err(Into::into)
     }
 
-    pub(crate) async fn count_admin_users(db: &impl DbConn, keyword: Option<&str>) -> Result<u64> {
-        let mut query = Entity::find();
-        if let Some(keyword) = keyword.filter(|value| !value.is_empty()) {
-            query = query.filter(
-                sea_orm::Condition::any()
-                    .add(Column::Username.contains(keyword))
-                    .add(Column::Email.contains(keyword)),
-            );
-        }
-        query.count(db).await.map_err(Into::into)
+    pub(crate) async fn count_admin_users(db: &impl DbConn) -> Result<u64> {
+        Entity::find()
+            .select_only()
+            .column(Column::Id)
+            .count(db)
+            .await
+            .map_err(Into::into)
     }
 
     /// 修改用户昵称
