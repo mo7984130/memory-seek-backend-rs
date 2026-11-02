@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use types_core::{UserId, cursor::TimeIdCursor};
-use validator::Validate;
+use validator::{Validate, ValidationError, ValidationErrors};
 
 #[cfg(feature = "orm")]
 use sea_orm::sea_query::StringLen;
@@ -120,13 +120,61 @@ pub struct AbandonAdminJobRequest {
 }
 
 /// 启动后台任务的参数。
-#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
-pub struct StartAdminJobRequest {
-    pub kind: AdminJobKind,
-    /// 二次聚类阈值，仅 `face_secondary_cluster` 使用。
-    #[validate(range(min = 0.0, max = 1.0, message = "threshold 在 0 到 1 之间"))]
-    pub threshold: Option<f32>,
+///
+/// 执行参数收拢在对应任务类型的变体内，从类型上排除「类型与参数不匹配」的非法状态。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum StartAdminJobRequest {
+    FaceFull,
+    FaceIncremental,
+    PersonFullScan,
+    /// 二次聚类；`threshold` 为相似度阈值。
+    FaceSecondaryCluster {
+        threshold: f32,
+    },
+    BackupScheduled,
+    BackupManual,
+}
+
+impl StartAdminJobRequest {
+    /// 对应的持久化任务类型。
+    pub const fn kind(&self) -> AdminJobKind {
+        match self {
+            Self::FaceFull => AdminJobKind::FaceFull,
+            Self::FaceIncremental => AdminJobKind::FaceIncremental,
+            Self::PersonFullScan => AdminJobKind::PersonFullScan,
+            Self::FaceSecondaryCluster { .. } => AdminJobKind::FaceSecondaryCluster,
+            Self::BackupScheduled => AdminJobKind::BackupScheduled,
+            Self::BackupManual => AdminJobKind::BackupManual,
+        }
+    }
+
+    /// 要持久化的任务执行参数。
+    pub fn payload(&self) -> serde_json::Value {
+        match self {
+            Self::FaceSecondaryCluster { threshold } => {
+                serde_json::json!({ "threshold": threshold })
+            }
+            _ => serde_json::Value::Object(Default::default()),
+        }
+    }
+}
+
+impl Validate for StartAdminJobRequest {
+    fn validate(&self) -> Result<(), ValidationErrors> {
+        let Self::FaceSecondaryCluster { threshold } = self else {
+            return Ok(());
+        };
+        if (0.0..=1.0).contains(threshold) {
+            return Ok(());
+        }
+
+        let mut errors = ValidationErrors::new();
+        let mut error = ValidationError::new("range");
+        error.message = Some("threshold 在 0 到 1 之间".into());
+        errors.add("threshold", error);
+        Err(errors)
+    }
 }
 
 /// 后台任务信息。
@@ -175,6 +223,48 @@ mod tests {
     fn empty_payload_omits_threshold() {
         let value = serde_json::to_value(AdminJobPayload::default()).unwrap();
         assert_eq!(value, serde_json::json!({}));
+    }
+
+    #[test]
+    fn start_request_serializes_params_with_kind() {
+        let request = StartAdminJobRequest::FaceSecondaryCluster { threshold: 0.7 };
+        assert_eq!(
+            serde_json::to_string(&request).unwrap(),
+            r#"{"kind":"face_secondary_cluster","threshold":0.7}"#
+        );
+        assert_eq!(request.kind(), AdminJobKind::FaceSecondaryCluster);
+        assert_eq!(
+            request.payload(),
+            serde_json::json!({ "threshold": f64::from(0.7_f32) })
+        );
+
+        let request: StartAdminJobRequest =
+            serde_json::from_str(r#"{"kind":"face_secondary_cluster","threshold":0.7}"#).unwrap();
+        assert_eq!(
+            request,
+            StartAdminJobRequest::FaceSecondaryCluster { threshold: 0.7 }
+        );
+    }
+
+    #[test]
+    fn start_request_omits_params_for_jobs_without_them() {
+        let value = serde_json::to_value(StartAdminJobRequest::FaceFull).unwrap();
+        assert_eq!(value, serde_json::json!({ "kind": "face_full" }));
+    }
+
+    #[test]
+    fn start_request_validates_threshold_range() {
+        assert!(
+            StartAdminJobRequest::FaceSecondaryCluster { threshold: 0.7 }
+                .validate()
+                .is_ok()
+        );
+        assert!(
+            StartAdminJobRequest::FaceSecondaryCluster { threshold: 1.5 }
+                .validate()
+                .is_err()
+        );
+        assert!(StartAdminJobRequest::BackupManual.validate().is_ok());
     }
 
     #[test]

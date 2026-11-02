@@ -3,7 +3,7 @@ use std::sync::Arc;
 use audit::{AuditEvent, AuditRecorder};
 use common_core::{
     Result,
-    error::{AppError, ContextualError},
+    error::{AppError, ContextualError, contextual::ext::OptionExt},
     types::CursorPage,
 };
 use types_admin::job::{
@@ -29,8 +29,8 @@ impl AdminJobService {
         admin: AdminId,
         request: StartAdminJobRequest,
     ) -> Result<AdminJobView> {
-        let payload = payload_for(&request)?;
-        let kind = request.kind;
+        let kind = request.kind();
+        let payload = request.payload();
         let actor = admin.into_inner().0;
 
         let row = common_db::db_transaction!(&state.db, |txn| {
@@ -72,9 +72,11 @@ impl AdminJobService {
 
     /// 查询单个任务。
     pub async fn get(state: &AdminState, _admin: AdminId, id: &str) -> Result<AdminJobView> {
-        let row = repo::find_by_id(&state.db, id)
-            .await?
-            .ok_or_else(|| AppError::not_found("后台任务不存在"))?;
+        let row = repo::find_by_id(&state.db, id).await?.ok_or_warn(
+            "admin_job_not_found",
+            "后台任务不存在",
+            AppError::not_found("后台任务不存在"),
+        )?;
         Ok(Self::to_view(row))
     }
 
@@ -85,13 +87,11 @@ impl AdminJobService {
         let actor = admin.into_inner().0;
 
         common_db::db_transaction!(&state.db, |txn| {
-            let row = repo::find_by_id(txn, id).await?.ok_or_else(|| {
-                ContextualError::warn_without_source(
-                    "admin_job_not_found",
-                    "后台任务不存在",
-                    AppError::not_found("后台任务不存在"),
-                )
-            })?;
+            let row = repo::find_by_id(txn, id).await?.ok_or_warn(
+                "admin_job_not_found",
+                "后台任务不存在",
+                AppError::not_found("后台任务不存在"),
+            )?;
 
             match row.status {
                 types_admin::job::AdminJobStatus::Queued => {
@@ -137,13 +137,11 @@ impl AdminJobService {
         let actor = admin.into_inner().0;
 
         common_db::db_transaction!(&state.db, |txn| {
-            let row = repo::find_by_id(txn, id).await?.ok_or_else(|| {
-                ContextualError::warn_without_source(
-                    "admin_job_not_found",
-                    "后台任务不存在",
-                    AppError::not_found("后台任务不存在"),
-                )
-            })?;
+            let row = repo::find_by_id(txn, id).await?.ok_or_warn(
+                "admin_job_not_found",
+                "后台任务不存在",
+                AppError::not_found("后台任务不存在"),
+            )?;
 
             if !matches!(
                 row.status,
@@ -192,54 +190,7 @@ impl AdminJobService {
     }
 }
 
-/// 构造并校验任务执行参数。
-fn payload_for(request: &StartAdminJobRequest) -> Result<serde_json::Value> {
-    match (request.kind, request.threshold) {
-        (AdminJobKind::FaceSecondaryCluster, Some(threshold)) => {
-            Ok(serde_json::json!({ "threshold": threshold }))
-        }
-        (AdminJobKind::FaceSecondaryCluster, None) => {
-            Err(AppError::bad_request("二次聚类任务需要提供 threshold"))
-        }
-        (_, Some(_)) => Err(AppError::bad_request("仅二次聚类任务需要提供 threshold")),
-        (_, None) => Ok(serde_json::Value::Object(Default::default())),
-    }
-}
-
 /// 构造任务冲突错误。
 fn conflict(message: &'static str) -> ContextualError<AppError> {
     ContextualError::warn_without_source("admin_job_conflict", message, AppError::conflict(message))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn secondary_cluster_requires_threshold() {
-        let request = StartAdminJobRequest {
-            kind: AdminJobKind::FaceSecondaryCluster,
-            threshold: None,
-        };
-        assert!(payload_for(&request).is_err());
-    }
-
-    #[test]
-    fn other_jobs_reject_threshold() {
-        let request = StartAdminJobRequest {
-            kind: AdminJobKind::BackupManual,
-            threshold: Some(0.6),
-        };
-        assert!(payload_for(&request).is_err());
-    }
-
-    #[test]
-    fn threshold_is_persisted() {
-        let request = StartAdminJobRequest {
-            kind: AdminJobKind::FaceSecondaryCluster,
-            threshold: Some(0.75),
-        };
-        let payload = payload_for(&request).unwrap();
-        assert_eq!(payload, serde_json::json!({ "threshold": 0.75 }));
-    }
 }

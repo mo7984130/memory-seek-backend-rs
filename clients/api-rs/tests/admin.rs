@@ -46,10 +46,7 @@ fn admin_endpoints_build_expected_requests() {
 
     let started = block_on(memory_seek_api::api::admin::start_job(
         &client,
-        &types_admin::job::StartAdminJobRequest {
-            kind: types_admin::job::AdminJobKind::FaceIncremental,
-            threshold: None,
-        },
+        &types_admin::job::StartAdminJobRequest::FaceIncremental,
     ))
     .unwrap();
     assert_eq!(started.status, types_admin::job::AdminJobStatus::Queued);
@@ -68,7 +65,7 @@ fn admin_endpoints_build_expected_requests() {
     assert_eq!(requests[3].url, "/api/admin/jobs");
     assert_eq!(
         body_json(&requests[3]),
-        json!({ "kind": "face_incremental", "threshold": null })
+        json!({ "kind": "face_incremental" })
     );
     assert_eq!(requests[4].url, "/api/admin/jobs/job-1");
     assert_eq!(requests[5].url, "/api/admin/jobs/job-1/cancel");

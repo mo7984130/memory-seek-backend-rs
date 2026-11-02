@@ -7,7 +7,7 @@
 use crate::client::{Client, Request};
 use crate::error::Result;
 use common_core::types::CursorPageWithTotal;
-use types_admin::job::{AdminJobKind, AdminJobView, StartAdminJobRequest};
+use types_admin::job::{AdminJobView, StartAdminJobRequest};
 use types_core::cursor::{CountIdCursor, TimeIdCursor};
 use types_core::{PersonId, VisualId};
 use types_visual::{
@@ -110,14 +110,7 @@ pub async fn merge_person(
 
 /// 启动全量人物扫描任务(管理员)，返回持久化任务记录。
 pub async fn full_scan(client: &Client) -> Result<AdminJobView> {
-    crate::api::admin::start_job(
-        client,
-        &StartAdminJobRequest {
-            kind: AdminJobKind::PersonFullScan,
-            threshold: None,
-        },
-    )
-    .await
+    crate::api::admin::start_job(client, &StartAdminJobRequest::PersonFullScan).await
 }
 
 /// 对未分配人脸执行二次聚类指派(管理员)。
@@ -128,9 +121,8 @@ pub async fn secondary_cluster(
 ) -> Result<AdminJobView> {
     crate::api::admin::start_job(
         client,
-        &StartAdminJobRequest {
-            kind: AdminJobKind::FaceSecondaryCluster,
-            threshold: Some(param.threshold),
+        &StartAdminJobRequest::FaceSecondaryCluster {
+            threshold: param.threshold,
         },
     )
     .await

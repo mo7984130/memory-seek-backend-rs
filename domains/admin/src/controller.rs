@@ -16,9 +16,7 @@ use common_web::{
 };
 use types_admin::{
     dashboard::VisualDashboardStats,
-    job::{
-        AbandonAdminJobRequest, AdminJobKind, AdminJobQuery, AdminJobView, StartAdminJobRequest,
-    },
+    job::{AbandonAdminJobRequest, AdminJobQuery, AdminJobView, StartAdminJobRequest},
     user::AdminUserQuery,
 };
 use types_audit::{AuditQuery, AuditStatsQuery, AuditTopQuery};
@@ -187,32 +185,25 @@ impl Controller {
         State(state): State<Arc<AdminState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<AdminJobView>> {
-        Self::start_backup(state, user_id, AdminJobKind::BackupScheduled).await
+        Self::start_backup(state, user_id, StartAdminJobRequest::BackupScheduled).await
     }
 
     async fn backup_manual(
         State(state): State<Arc<AdminState>>,
         Extension(user_id): Extension<UserId>,
     ) -> Result<R<AdminJobView>> {
-        Self::start_backup(state, user_id, AdminJobKind::BackupManual).await
+        Self::start_backup(state, user_id, StartAdminJobRequest::BackupManual).await
     }
 
     async fn start_backup(
         state: Arc<AdminState>,
         user_id: UserId,
-        kind: AdminJobKind,
+        request: StartAdminJobRequest,
     ) -> Result<R<AdminJobView>> {
         let admin = AdminId::new(user_id)?;
-        AdminJobService::start(
-            state,
-            admin,
-            StartAdminJobRequest {
-                kind,
-                threshold: None,
-            },
-        )
-        .await
-        .to_r_ok()
+        AdminJobService::start(state, admin, request)
+            .await
+            .to_r_ok()
     }
 
     async fn backup_restore(

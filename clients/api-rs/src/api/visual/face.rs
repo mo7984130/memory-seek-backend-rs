@@ -7,7 +7,7 @@
 use crate::client::{Client, Request};
 use crate::error::Result;
 use common_core::types::CursorPageWithTotal;
-use types_admin::job::{AdminJobKind, AdminJobView, StartAdminJobRequest};
+use types_admin::job::{AdminJobView, StartAdminJobRequest};
 use types_core::cursor::TimeIdCursor;
 use types_core::{FaceId, PersonId, VisualId};
 use types_visual::{
@@ -79,24 +79,10 @@ pub async fn delete_faces_batch(
 
 /// 启动全量人脸计算任务(管理员)，返回持久化任务记录。
 pub async fn full_compute(client: &Client) -> Result<AdminJobView> {
-    crate::api::admin::start_job(
-        client,
-        &StartAdminJobRequest {
-            kind: AdminJobKind::FaceFull,
-            threshold: None,
-        },
-    )
-    .await
+    crate::api::admin::start_job(client, &StartAdminJobRequest::FaceFull).await
 }
 
 /// 启动增量人脸计算任务(管理员)，返回持久化任务记录。
 pub async fn incremental_compute(client: &Client) -> Result<AdminJobView> {
-    crate::api::admin::start_job(
-        client,
-        &StartAdminJobRequest {
-            kind: AdminJobKind::FaceIncremental,
-            threshold: None,
-        },
-    )
-    .await
+    crate::api::admin::start_job(client, &StartAdminJobRequest::FaceIncremental).await
 }
