@@ -1,6 +1,6 @@
 [package]
 name = "memory-seek-api-rs"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 description = "Memory Seek API 客户端(Rust)，运行时与 HTTP 库无关"
 license.workspace = true

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use types_backup::RestoreRequest;
 use types_core::{UserId, cursor::TimeIdCursor};
 use validator::{Validate, ValidationError, ValidationErrors};
 
@@ -26,6 +27,8 @@ pub enum AdminJobKind {
     BackupScheduled,
     #[cfg_attr(feature = "orm", sea_orm(string_value = "backup_manual"))]
     BackupManual,
+    #[cfg_attr(feature = "orm", sea_orm(string_value = "backup_restore"))]
+    BackupRestore,
 }
 
 impl AdminJobKind {
@@ -37,6 +40,7 @@ impl AdminJobKind {
             Self::FaceSecondaryCluster => "face_secondary_cluster",
             Self::BackupScheduled => "backup_scheduled",
             Self::BackupManual => "backup_manual",
+            Self::BackupRestore => "backup_restore",
         }
     }
 }
@@ -92,6 +96,9 @@ pub struct AdminJobPayload {
     /// 二次聚类阈值，仅 `face_secondary_cluster` 使用。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub threshold: Option<f32>,
+    /// 恢复参数，仅 `backup_restore` 使用。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restore: Option<RestoreRequest>,
 }
 
 fn default_job_page_size() -> u64 {
@@ -134,6 +141,8 @@ pub enum StartAdminJobRequest {
     },
     BackupScheduled,
     BackupManual,
+    /// 备份恢复；参数包含来源、层级与确认 ID。
+    BackupRestore(RestoreRequest),
 }
 
 impl StartAdminJobRequest {
@@ -146,6 +155,7 @@ impl StartAdminJobRequest {
             Self::FaceSecondaryCluster { .. } => AdminJobKind::FaceSecondaryCluster,
             Self::BackupScheduled => AdminJobKind::BackupScheduled,
             Self::BackupManual => AdminJobKind::BackupManual,
+            Self::BackupRestore(_) => AdminJobKind::BackupRestore,
         }
     }
 
@@ -155,6 +165,9 @@ impl StartAdminJobRequest {
             Self::FaceSecondaryCluster { threshold } => {
                 serde_json::json!({ "threshold": threshold })
             }
+            Self::BackupRestore(request) => {
+                serde_json::json!({ "restore": request })
+            }
             _ => serde_json::Value::Object(Default::default()),
         }
     }
@@ -162,18 +175,35 @@ impl StartAdminJobRequest {
 
 impl Validate for StartAdminJobRequest {
     fn validate(&self) -> Result<(), ValidationErrors> {
-        let Self::FaceSecondaryCluster { threshold } = self else {
-            return Ok(());
-        };
-        if (0.0..=1.0).contains(threshold) {
-            return Ok(());
+        let mut errors = ValidationErrors::new();
+        match self {
+            Self::FaceSecondaryCluster { threshold } => {
+                if !(0.0..=1.0).contains(threshold) {
+                    let mut error = ValidationError::new("range");
+                    error.message = Some("threshold 在 0 到 1 之间".into());
+                    errors.add("threshold", error);
+                }
+            }
+            Self::BackupRestore(request) => {
+                if request.run_id.is_empty() {
+                    let mut error = ValidationError::new("required");
+                    error.message = Some("run_id 不能为空".into());
+                    errors.add("runId", error);
+                }
+                if request.run_id != request.confirm_run_id {
+                    let mut error = ValidationError::new("mismatch");
+                    error.message = Some("恢复确认 ID 不匹配".into());
+                    errors.add("confirmRunId", error);
+                }
+            }
+            _ => {}
         }
 
-        let mut errors = ValidationErrors::new();
-        let mut error = ValidationError::new("range");
-        error.message = Some("threshold 在 0 到 1 之间".into());
-        errors.add("threshold", error);
-        Err(errors)
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }
 
@@ -199,6 +229,7 @@ pub struct AdminJobView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use types_backup::{BackupSource, BackupTier};
 
     #[test]
     fn job_names_are_stable() {
@@ -211,6 +242,7 @@ mod tests {
     fn payload_round_trips_threshold() {
         let payload = AdminJobPayload {
             threshold: Some(0.7),
+            ..Default::default()
         };
         let value = serde_json::to_value(&payload).unwrap();
         assert_eq!(
@@ -265,6 +297,57 @@ mod tests {
                 .is_err()
         );
         assert!(StartAdminJobRequest::BackupManual.validate().is_ok());
+    }
+
+    #[test]
+    fn start_request_carries_restore_params() {
+        let request = StartAdminJobRequest::BackupRestore(RestoreRequest {
+            tier: BackupTier::Daily,
+            source: BackupSource::Local,
+            run_id: "run-1".to_owned(),
+            confirm_run_id: "run-1".to_owned(),
+        });
+        assert_eq!(request.kind(), AdminJobKind::BackupRestore);
+        assert_eq!(
+            serde_json::to_value(&request).unwrap(),
+            serde_json::json!({
+                "kind": "backup_restore",
+                "tier": "daily",
+                "source": "local",
+                "runId": "run-1",
+                "confirmRunId": "run-1",
+            })
+        );
+        assert_eq!(
+            request.payload(),
+            serde_json::json!({
+                "restore": {
+                    "tier": "daily",
+                    "source": "local",
+                    "runId": "run-1",
+                    "confirmRunId": "run-1",
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn start_request_rejects_mismatched_restore_confirmation() {
+        let request = StartAdminJobRequest::BackupRestore(RestoreRequest {
+            tier: BackupTier::Daily,
+            source: BackupSource::Local,
+            run_id: "run-1".to_owned(),
+            confirm_run_id: "run-2".to_owned(),
+        });
+        assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn payload_parses_threshold_without_restore() {
+        let payload: AdminJobPayload =
+            serde_json::from_value(serde_json::json!({ "threshold": 0.7 })).unwrap();
+        assert_eq!(payload.threshold, Some(0.7));
+        assert!(payload.restore.is_none());
     }
 
     #[test]

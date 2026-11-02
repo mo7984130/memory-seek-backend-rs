@@ -1,6 +1,6 @@
 [package]
 name = "types-backup"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license.workspace = true
 description = "备份上下文契约: 层级与恢复请求"

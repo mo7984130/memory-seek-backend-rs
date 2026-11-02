@@ -102,6 +102,15 @@ impl Dispatcher {
                     "durationSecs": result.duration.as_secs_f64(),
                 })
             }),
+            AdminJobKind::BackupRestore => {
+                let payload: types_admin::job::AdminJobPayload =
+                    serde_json::from_value(job.payload.clone())
+                        .map_err(common_core::ContextualError::from)?;
+                let request = payload.restore.ok_or(AppError::InternalServerError)?;
+                backup::BackupService::restore(state.backup.clone(), admin, request, cancellation)
+                    .await
+                    .map(|restored| serde_json::json!({ "restored": restored }))
+            }
         }
     }
 }

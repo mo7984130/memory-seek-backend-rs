@@ -14,6 +14,7 @@ use common_metrics::inc_counter;
 use serde_json::json;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+use types_backup::RestoreRequest;
 use types_core::AdminId;
 
 /// 备份领域用例服务。
@@ -56,21 +57,37 @@ impl BackupMode {
 }
 
 impl BackupService {
-    /// 从指定备份恢复数据；校验确认 ID 与清单格式一致后在操作锁内执行
+    /// 从指定备份恢复数据；校验确认 ID 与清单格式一致后在操作锁内执行。
+    ///
+    /// 取消会在每张表导入前与提交前生效，事务回滚后不会留下半套数据。
     #[common_macros::metered(name = "restore")]
-    #[tracing::instrument(name = "restore", skip_all, fields(run_id = %run_id))]
+    #[tracing::instrument(name = "restore", skip_all, fields(run_id = %request.run_id))]
     pub async fn restore(
         state: Arc<BackupState>,
         admin: AdminId,
-        source: BackupSource,
-        tier: BackupTier,
-        run_id: String,
-        confirm_run_id: String,
+        request: RestoreRequest,
+        cancellation: CancellationToken,
     ) -> Result<u64> {
-        if run_id != confirm_run_id {
+        if request.run_id != request.confirm_run_id {
             return Err(BackupError::Msg("恢复确认 ID 不匹配".to_string()).into());
         }
-        let _guard = state.operation_lock.lock().await;
+        let _guard = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => {
+                return Err(BackupError::Msg("任务已取消".to_owned()).into());
+            }
+            guard = state.operation_lock.lock() => guard,
+        };
+        if cancellation.is_cancelled() {
+            return Err(BackupError::Msg("任务已取消".to_owned()).into());
+        }
+
+        let RestoreRequest {
+            source,
+            tier,
+            run_id,
+            ..
+        } = request;
         let manifest = state.storage.load_manifest(source, tier, &run_id).await?;
         if manifest.run_id != run_id || manifest.format_version != crate::manifest::FORMAT_VERSION {
             return Err(BackupError::Msg("备份清单无效或格式不兼容".to_string()).into());
@@ -97,6 +114,10 @@ impl BackupService {
                 .await
                 .map_err(BackupError::from)?;
             for table in &tables {
+                if cancellation.is_cancelled() {
+                    let _ = tokio::fs::remove_dir_all(&restore_dir).await;
+                    return Err(BackupError::Msg("任务已取消".to_owned()).into());
+                }
                 use futures_util::TryStreamExt;
                 use tokio::io::AsyncWriteExt;
                 let mut stream = state
@@ -113,10 +134,15 @@ impl BackupService {
                 file.flush().await.map_err(BackupError::from)?;
             }
         }
-        let result = BinaryCopyImporter::restore_local(&state.db, &tables, |table| match source {
-            BackupSource::Local => state.storage.local_archive_path(tier, &run_id, table),
-            BackupSource::S3 => restore_dir.join(format!("{table}.copy.zst")),
-        })
+        let result = BinaryCopyImporter::restore_local(
+            &state.db,
+            &tables,
+            |table| match source {
+                BackupSource::Local => state.storage.local_archive_path(tier, &run_id, table),
+                BackupSource::S3 => restore_dir.join(format!("{table}.copy.zst")),
+            },
+            &cancellation,
+        )
         .await;
         let _ = tokio::fs::remove_dir_all(&restore_dir).await;
         let restored = result?;

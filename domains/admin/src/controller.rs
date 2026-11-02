@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     routing::{get, post},
 };
-use common_core::{Result, types::CursorPage};
+use common_core::{Result, error::AppError, types::CursorPage};
 use common_web::{
     R,
     controller_router::ControllerRouter,
@@ -20,7 +20,7 @@ use types_admin::{
     user::AdminUserQuery,
 };
 use types_audit::{AuditQuery, AuditStatsQuery, AuditTopQuery};
-use types_backup::{RestoreRequest, RestoreResult};
+use types_backup::RestoreRequest;
 use types_core::{AdminId, UserId, cursor::TimeIdCursor};
 use types_identity::user::UserInfo;
 #[cfg(feature = "face")]
@@ -210,18 +210,16 @@ impl Controller {
         State(state): State<Arc<AdminState>>,
         Extension(user_id): Extension<UserId>,
         Json(request): Json<RestoreRequest>,
-    ) -> Result<R<RestoreResult>> {
+    ) -> Result<R<AdminJobView>> {
+        if request.run_id != request.confirm_run_id {
+            return Err(AppError::bad_request("恢复确认 ID 不匹配"));
+        }
+
         let admin = AdminId::new(user_id)?;
-        let restored = backup::BackupService::restore(
-            state.backup.clone(),
-            admin,
-            request.source,
-            request.tier,
-            request.run_id,
-            request.confirm_run_id,
-        )
-        .await?;
-        Ok(R::ok(RestoreResult { restored }))
+        let job =
+            AdminJobService::start(state, admin, StartAdminJobRequest::BackupRestore(request))
+                .await?;
+        Ok(R::ok(job))
     }
 
     #[cfg(feature = "face")]

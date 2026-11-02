@@ -6,14 +6,14 @@ use futures::executor::block_on;
 use memory_seek_api::{BackupSource, BackupTier, Method, RestoreRequest};
 use serde_json::json;
 
-use common::{admin_job, body_json, client, ok};
+use common::{admin_job, body_json, client};
 
 #[test]
 fn backup_endpoints_build_expected_requests() {
     let (client, transport) = client(vec![
         admin_job("backup_scheduled"),
         admin_job("backup_manual"),
-        ok(json!({ "restored": 42 })),
+        admin_job("backup_restore"),
     ]);
 
     let scheduled = block_on(memory_seek_api::api::backup::trigger_backup(&client)).unwrap();
@@ -35,7 +35,7 @@ fn backup_endpoints_build_expected_requests() {
         &client, &request,
     ))
     .unwrap();
-    assert_eq!(restored.restored, 42);
+    assert_eq!(restored.kind, types_admin::job::AdminJobKind::BackupRestore);
 
     let requests = transport.requests();
     assert_eq!(requests[0].method, Method::POST);

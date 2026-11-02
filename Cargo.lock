@@ -26,7 +26,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "admin"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "audit",
  "axum",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "backup"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "async-compression",
  "audit",
@@ -3276,7 +3276,7 @@ dependencies = [
 
 [[package]]
 name = "memory-seek-api-rs"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-trait",
  "common-core",
@@ -6327,7 +6327,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "types-admin"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "common-core",
  "common_macros",
@@ -6335,6 +6335,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "types-backup",
  "types-core",
  "types-db-registry",
  "types-visual",
@@ -6357,7 +6358,7 @@ dependencies = [
 
 [[package]]
 name = "types-backup"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]

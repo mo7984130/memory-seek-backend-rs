@@ -5,7 +5,7 @@
 use crate::client::{Client, Request};
 use crate::error::Result;
 use types_admin::job::AdminJobView;
-use types_backup::{RestoreRequest, RestoreResult};
+use types_backup::RestoreRequest;
 
 /// 触发一次定时备份流程(含过期备份清理)。`POST /admin/backup/trigger`
 pub async fn trigger_backup(client: &Client) -> Result<AdminJobView> {
@@ -21,10 +21,11 @@ pub async fn manual_backup(client: &Client) -> Result<AdminJobView> {
         .await
 }
 
-/// 按指定备份源与恢复层级执行数据恢复。`POST /admin/backup/restore`
+/// 按指定备份源与恢复层级入队一次数据恢复。`POST /admin/backup/restore`
 ///
 /// `RestoreRequest::confirm_run_id` 必须与 `run_id` 一致,用于二次确认高危操作。
-pub async fn restore_backup(client: &Client, request: &RestoreRequest) -> Result<RestoreResult> {
+/// 恢复是后台任务,进度与结果通过返回的 `AdminJobView` 查询。
+pub async fn restore_backup(client: &Client, request: &RestoreRequest) -> Result<AdminJobView> {
     client
         .send_json(Request::post("/admin/backup/restore").json(request))
         .await
