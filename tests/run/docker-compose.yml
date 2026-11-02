@@ -110,7 +110,7 @@ services:
 
     server:
         # 运行镜像: debian12 + 预编译 ffmpeg(内置, 见 build/Dockerfile.runtime),
-        # 由 build/build.sh 构建。应用产物仍从 target/dist 挂载。
+        # 由 build/runtime-image.sh 构建。应用产物仍从 target/dist 挂载。
         image: memory-seek-server-test:local
         container_name: memory-seek-test-server
         depends_on:

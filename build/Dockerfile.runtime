@@ -22,7 +22,9 @@ RUN apt-get update \
 RUN set -eux; \
     test -n "$FFMPEG_URL"; \
     test -n "$FFMPEG_SHA256"; \
-    curl -fsSL "$FFMPEG_URL" -o /tmp/ffmpeg.tar.xz; \
+    curl -fsSL --http1.1 --retry 5 --retry-all-errors \
+      --connect-timeout 30 --max-time 600 \
+      "$FFMPEG_URL" -o /tmp/ffmpeg.tar.xz; \
     echo "$FFMPEG_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c -; \
     mkdir -p /opt/ffmpeg; \
     tar -xJf /tmp/ffmpeg.tar.xz -C /opt/ffmpeg --strip-components=1; \
