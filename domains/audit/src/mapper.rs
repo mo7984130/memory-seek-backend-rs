@@ -30,10 +30,11 @@ impl AuditMapper {
         );
         let mut query = Entity::find()
             .select_only()
-            .expr_as(bucket.clone(), "bucket")
+            .expr_as(bucket, "bucket")
             .column_as(Column::EventId.count(), "cnt")
-            .group_by(bucket)
-            // ORDER BY 必须使用聚合后的时间桶，不能直接用未分组的 created_at。
+            // 按输出别名分组。若把 bucket 表达式再写一遍，sea-query 会生成第二个
+            // 绑定参数（$1 / $2），PostgreSQL 视为不同表达式而拒绝。
+            .group_by(Expr::col(Alias::new("bucket")))
             .order_by_asc(Expr::col(Alias::new("bucket")));
         if let Some(event_type) = event_type {
             query = query.filter(Column::EventType.eq(event_type));
