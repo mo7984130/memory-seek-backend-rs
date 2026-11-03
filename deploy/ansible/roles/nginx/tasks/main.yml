@@ -63,6 +63,9 @@
 - name: 应用配置变更
   meta: flush_handlers
 
+# 前端独立仓库、独立发版节奏: 未指定 frontend_version 时跳过,
+# 这样 site.yml 全栈部署不依赖前端版本, 前端由 frontend.yml 单独发布。
 - name: 部署前端
   include_tasks: deploy-frontend.yml
+  when: frontend_version | length > 0
   tags: frontend
