@@ -1,0 +1,34 @@
+---
+- name: 部署 PostgreSQL (含 pgvector)
+  tags: db
+  hosts: db
+  become: true
+  roles:
+      - postgres
+
+- name: 部署 Redis
+  tags: redis
+  hosts: redis
+  become: true
+  roles:
+      - redis
+
+- name: 部署 Nginx 与证书
+  tags: nginx
+  hosts: nginx
+  become: true
+  roles:
+      - nginx
+      - certbot
+  post_tasks:
+      - name: 签发证书后启用 HTTPS 站点
+        ansible.builtin.include_role:
+            name: nginx
+            tasks_from: enable-tls.yml
+
+- name: 部署寻忆后端
+  tags: memory-seek-server
+  hosts: memory_seek_server
+  become: true
+  roles:
+      - memory_seek_server

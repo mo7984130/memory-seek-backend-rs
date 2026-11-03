@@ -1,0 +1,106 @@
+---
+# 组合版本目录(二进制 + libs/models 软链) -> 原子切换 current -> 重启 -> 健康检查 -> 失败回滚。
+# 运行中的进程始终使用旧 inode, 不会被"原地覆盖", 因此升级 libs 也不会影响正在播放/转码的请求。
+
+- name: 记录本版本目录
+  ansible.builtin.set_fact:
+      release_dir: "{{ releases_dir }}/{{ binary_version }}"
+
+- name: 建立 libs 软链
+  ansible.builtin.file:
+      src: "{{ runtime_assets_dir }}/libs"
+      dest: "{{ release_dir }}/libs"
+      state: link
+      force: true
+
+- name: 建立 models 软链
+  ansible.builtin.file:
+      src: "{{ runtime_assets_dir }}/models"
+      dest: "{{ release_dir }}/models"
+      state: link
+      force: true
+
+- name: 读取当前版本软链
+  ansible.builtin.stat:
+      path: "{{ current_link }}"
+      follow: false
+  register: current_link_stat
+
+- name: 计算切换目标与回滚目标
+  ansible.builtin.set_fact:
+      current_target: "{{ current_link_stat.stat.lnk_target | default('') }}"
+      desired_target: "{{ release_dir }}"
+      rollback_target: "{{ '' if (current_link_stat.stat.lnk_target | default('')) in ['', release_dir] else (current_link_stat.stat.lnk_target | default('')) }}"
+
+- name: 更新 previous 软链
+  ansible.builtin.file:
+      src: "{{ rollback_target }}"
+      dest: "{{ previous_link }}"
+      state: link
+      force: true
+  when: rollback_target != ''
+
+- name: 切换 current 软链
+  ansible.builtin.file:
+      src: "{{ desired_target }}"
+      dest: "{{ current_link }}"
+      state: link
+      force: true
+  notify: restart memory-seek-server
+
+# 先执行 handler(重启), 再做健康检查; 否则检查的是旧进程
+- name: 应用重启
+  ansible.builtin.meta: flush_handlers
+
+- name: 确保服务已启动并开机自启
+  ansible.builtin.systemd:
+      name: "{{ service_name }}"
+      state: started
+      enabled: true
+
+- name: 健康检查
+  block:
+      - name: 请求健康检查接口
+        ansible.builtin.command:
+            cmd: "curl -fsS -m 3 {{ health_url }}"
+        register: health_check
+        until: health_check.rc == 0
+        retries: "{{ health_retries }}"
+        delay: "{{ health_delay }}"
+        changed_when: false
+  rescue:
+      - name: 新版本健康检查失败
+        ansible.builtin.debug:
+            msg: "{{ binary_version }} 健康检查失败, 开始回滚"
+
+      - name: 回滚到上一版本
+        ansible.builtin.file:
+            src: "{{ rollback_target }}"
+            dest: "{{ current_link }}"
+            state: link
+            force: true
+        when: rollback_target != ''
+        notify: restart memory-seek-server
+
+      - name: 应用回滚
+        ansible.builtin.meta: flush_handlers
+        when: rollback_target != ''
+
+      - name: 失败且无可用回滚版本
+        ansible.builtin.fail:
+            msg: "{{ binary_version }} 健康检查失败, 且没有可回滚的历史版本(首次部署?)"
+        when: rollback_target == ''
+
+      - name: 确认回滚后服务恢复
+        ansible.builtin.command:
+            cmd: "curl -fsS -m 3 {{ health_url }}"
+        register: rollback_health
+        until: rollback_health.rc == 0
+        retries: "{{ health_retries }}"
+        delay: "{{ health_delay }}"
+        changed_when: false
+        when: rollback_target != ''
+
+      - name: 部署失败(已回滚)
+        ansible.builtin.fail:
+            msg: "{{ binary_version }} 部署失败, 已回滚到 {{ rollback_target }}"

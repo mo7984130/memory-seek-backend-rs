@@ -7,6 +7,8 @@
 - `common/*`：错误、数据库、Redis、Web、指标等基础设施；`libs/*`：邮件、S3、校验、宏等通用库。
 - `server`：组合根，只做配置加载、依赖装配、中间件与启动。
 - `clients/api-rs`：Rust API 客户端，DTO 直接复用 `types-*`；`tests/e2e`：真实栈端到端测试。
+- `deploy/ansible`：生产部署（systemd + PostgreSQL/Redis/Nginx），见该目录 README。
+- `build/`：构建与打包脚本；`tools/`：仓库工具（版本号、运行时资产 hash 等）。
 
 依赖方向：`types/*` 不依赖 `domains/*`；`domains/*` 依赖 `types/*` 与 `common/*`；`server` 依赖所有业务域。
 
@@ -36,8 +38,15 @@ cargo build -p server --features "metrics,auth,user,visual,face-engine,audit,aud
 - 配置查找顺序：`--config` / `-c` > `MEMORY_SEEK_CONFIG_PATH` > `./config.yml` > `/etc/memory-seek-server/config.yml`；从 `example.config.yaml` 复制起步。
 - 环境变量覆盖格式为 `MEMORY_SEEK_<SECTION>__<KEY>`（双下划线），如 `MEMORY_SEEK_SERVER__PORT=8080`、`MEMORY_SEEK_DATABASE__URL=...`。
 - `AppConfig` 的字段按 feature 条件编译：开启某个域/能力后，对应配置段变成必填（如 `smtp`、`s3`、`token_cipher`、`face_engine`）。
-- `visual` 启动时会校验 ffmpeg 并探测 `libsvtav1`，缺失直接启动失败；容器部署依赖 `build/Dockerfile.runtime` 内置的 ffmpeg。
+- `visual` 启动时会校验 ffmpeg 并探测 `libsvtav1`，缺失直接启动失败；容器部署依赖 `build/Dockerfile.runtime` 内置的 ffmpeg，裸机部署由 ansible 角色安装。
 - 新增业务域需同时补 `server/Cargo.toml` feature、`server/src/config/mod.rs` 的 cfg 字段、`server/src/setup/domains/` 的模块与 `#[cfg(feature = ...)]` 声明。
+
+## 打包与部署
+
+- 产物按变更频率分层：二进制包(≈13MB, 每次发版)与运行时资产包 libs+models(≈180MB, 按内容 hash 发布)。`build/package-dist.sh` 的 `--mode=release|dist` 分别产出两者，本地 compose 与 CI 发布共用。
+- 二进制包内 `manifest.yaml` 声明依赖的运行时资产 hash；改 `thirdparty/**` 后由 `Runtime Assets` workflow 自动发布新资产包，不需要手工改版本号。
+- 生产部署走 `deploy/ansible`（`cd deploy/ansible && ansible-playbook playbooks/server.yml`）。部署版本固定写在 `deploy/ansible/group_vars/all/versions.yml`（不读本地仓库状态），回滚用 `-e binary_version=vX.Y.Z`；CI 校验它与 `server/Cargo.toml` 一致，bump 版本时必须同步修改。
+- 部署相关校验：`cd deploy/ansible && ansible-lint && ansible-playbook --syntax-check playbooks/site.yml`。
 
 ## 启动编排与路由
 

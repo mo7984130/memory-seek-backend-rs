@@ -1,0 +1,27 @@
+---
+# 非敏感的环境参数。密钥类值一律放 group_vars/all/vault.yml(ansible-vault 加密)。
+
+domain_name: memory-seek.driftcloud.cn
+letsencrypt_email: 3291382264@qq.com
+
+# ── 数据库 ──
+db_database: memory_seek
+db_user: memory_seek
+
+# ── 对象存储 ──
+# endpoint 走阿里云内网(服务器侧读写走内网, 节省流量);
+# public_url 是"若直接下发 OSS 链接时"使用的外部域名。目前媒体统一由后端
+# /visual/{token} 转发, 该字段实际未被使用, 但请保持为公网可访问域名,
+# 以免将来直接下发时指向内网。
+s3_endpoint: "https://oss-cn-hangzhou-internal.aliyuncs.com"
+s3_bucket: "memory-seek-hd"
+s3_region: "cn-hangzhou"
+s3_public_url: "https://memory-seek-hd.oss-cn-hangzhou.aliyuncs.com"
+s3_force_path_style: false
+
+# ── 邮件 ──
+smtp_server: smtpdm.aliyun.com
+smtp_port: 465
+smtp_username: no-reply@mail.driftcloud.cn
+smtp_from_email: no-reply@mail.driftcloud.cn
+smtp_from_name: "寻忆"

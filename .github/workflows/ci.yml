@@ -61,6 +61,41 @@ jobs:
             - name: Run unit tests
               run: cargo test --release --lib
 
+    deploy-lint:
+        name: 部署配置检查
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+
+            - name: Install ansible-lint
+              run: pipx install --include-deps ansible-lint
+
+            - name: Install collections
+              working-directory: deploy/ansible
+              run: ansible-galaxy collection install -r requirements.yml
+
+            - name: 校验部署版本与 Cargo 版本一致
+              # 部署版本是固定值(可复现), 因此发版时必须同步更新, 否则不允许合入
+              run: |
+                  pinned=$(sed -n 's/^backend_version:[[:space:]]*//p' deploy/ansible/group_vars/all/versions.yml | tr -d "\"' ")
+                  cargo=$(sed -n 's/^version = "\(.*\)"$/\1/p' server/Cargo.toml | head -n 1)
+                  if [ "$pinned" != "v$cargo" ]; then
+                      echo "::error::backend_version=$pinned 与 server/Cargo.toml 的 v$cargo 不一致, 请同步 deploy/ansible/group_vars/all/versions.yml"
+                      exit 1
+                  fi
+                  echo "部署版本一致: $pinned"
+
+            - name: Lint
+              working-directory: deploy/ansible
+              run: ansible-lint
+
+            - name: Syntax check
+              working-directory: deploy/ansible
+              run: |
+                  ansible-playbook --syntax-check playbooks/site.yml
+                  ansible-playbook --syntax-check playbooks/server.yml
+                  ansible-playbook --syntax-check playbooks/frontend.yml
+
     # build:
     #     name: 构建验证 (${{ matrix.features }})
     #     runs-on: ubuntu-latest

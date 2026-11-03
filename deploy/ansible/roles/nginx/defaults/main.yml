@@ -1,0 +1,13 @@
+---
+# domain_name 由 group_vars/all/main.yml 提供(环境参数, 不放 role 默认值)。
+
+# nginx 反代到本机后端(后端只监听 127.0.0.1:7984)
+api_host: "http://127.0.0.1:7984/"
+
+frontend_repo: "mo7984130/memory-seek-frontend"
+# 必须显式指定版本(禁止 latest), 保证同一份 playbook 可复现、可回滚
+frontend_version: ""
+# 可选: 前端 Release 包的 sha256(留空则不做内容校验)
+frontend_sha256: ""
+frontend_archive: "/tmp/{{ domain_name }}-{{ frontend_version }}.tar.gz"
+frontend_extract_dir: "/tmp/{{ domain_name }}-extract"

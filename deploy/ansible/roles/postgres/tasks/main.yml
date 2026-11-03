@@ -1,0 +1,52 @@
+---
+- name: 安装依赖包
+  apt:
+    name:
+      - curl
+      - ca-certificates
+      - python3-psycopg2
+    state: present
+    update_cache: true
+
+- name: 添加 PGDG apt 源
+  deb822_repository:
+    name: pgdg
+    types: deb
+    uris: "https://mirrors.aliyun.com/postgresql/repos/apt"
+    suites: "{{ ansible_facts['distribution_release'] }}-pgdg"
+    components: main
+    signed_by: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+    state: present
+
+- name: 安装 PostgreSQL 和 pgvector
+  apt:
+    name:
+      - "postgresql-{{ pg_version }}"
+      - "postgresql-{{ pg_version }}-pgvector"
+    state: present
+    update_cache: true
+
+- name: 确保 PostgreSQL 服务已启动
+  systemd:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: 创建应用用户
+  become_user: postgres
+  postgresql_user:
+    name: "{{ db_user }}"
+    password: "{{ vault_db_password }}"
+    state: present
+
+- name: 创建数据库
+  become_user: postgres
+  postgresql_db:
+    name: "{{ db_database }}"
+    owner: "{{ db_user }}"
+
+- name: 启用 pgvector 扩展
+  become_user: postgres
+  postgresql_ext:
+    name: vector
+    login_db: "{{ db_database }}"

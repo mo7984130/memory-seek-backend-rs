@@ -1,0 +1,14 @@
+---
+# 见 https://ansible.readthedocs.io/projects/lint/configuring/
+profile: basic
+# 现有角色的历史写法(短模块名、变量不加 role 前缀等)不在本次整合范围内统一整改,
+# 先保证"能跑 + 结构正确", 后续再逐步开启 production profile。
+skip_list:
+    - fqcn
+    - no-free-form
+    - var-naming[no-role-prefix]
+    - yaml[line-length]
+    - name[casing]
+    - risky-file-permissions
+    - command-instead-of-module
+    - no-changed-when

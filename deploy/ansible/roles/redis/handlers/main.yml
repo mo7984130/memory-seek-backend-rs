@@ -1,0 +1,5 @@
+---
+- name: 重启 redis
+  systemd:
+    name: redis-server
+    state: restarted

@@ -1,0 +1,3 @@
+---
+# db_database / db_user 由 group_vars/all/main.yml 提供(后端配置模板也要用)。
+pg_version: "17"

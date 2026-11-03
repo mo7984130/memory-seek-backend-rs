@@ -95,18 +95,8 @@ echo -e "${GREEN}构建成功！${NC}"
 
 DIST="target/dist"
 
-rm -rf "$DIST"
-mkdir -p "$DIST/libs"
-
-# 可执行文件
-cp "$CONTAINER_TARGET_DIR/release/memory-seek-server" "$DIST/"
-
-# libs
-find thirdparty \( -type f -o -type l \) \
-  \( -name "*.so" -o -name "*.so.*" \) \
-  -exec cp -a {} $DIST/libs/ \;
-
-cp -r thirdparty/models "$DIST"/
+# 统一由 package-dist.sh 组装, 与 CI 发布包共用同一份复制逻辑
+"$SCRIPT_DIR/package-dist.sh" --mode dist --binary "$CONTAINER_TARGET_DIR/release/$PROJECT_NAME" --out "$DIST"
 
 echo "Build completed:"
 tree "$DIST"

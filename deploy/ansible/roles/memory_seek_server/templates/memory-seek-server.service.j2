@@ -1,0 +1,46 @@
+# {{ ansible_managed }}
+
+[Unit]
+Description=Memory Seek Server
+After=network-online.target postgresql.service redis-server.service
+Requires=network-online.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User={{ service_user }}
+Group={{ service_user }}
+WorkingDirectory={{ data_dir }}
+
+# 版本目录 + 运行时资产软链:
+#   {{ current_link }}/{{ binary_name }}
+#   {{ current_link }}/libs -> {{ runtime_dir }}/<hash>/libs
+# 二进制自带 RUNPATH=$ORIGIN/libs, 无需 LD_LIBRARY_PATH
+ExecStart={{ current_link }}/{{ binary_name }} -c {{ config_dir }}/config.yaml
+
+Environment=RUST_LOG=info
+
+# CPU 限制: 最多用 90%, 留 10% 给系统和 SSH
+CPUQuota=90%
+# 软限制: 达到后节流, 不杀进程; 硬限制: 超出则 OOM Killer 终止进程
+MemoryHigh=80%
+MemoryMax=90%
+
+Restart=on-failure
+RestartSec=5
+
+# 优雅关闭: 主程序响应 SIGTERM 后执行收尾, 超时后由 systemd 强制结束
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+
+# 资源与安全加固
+LimitNOFILE=65535
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths={{ data_dir }} {{ backup_dir }}
+
+[Install]
+WantedBy=multi-user.target

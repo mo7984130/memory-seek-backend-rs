@@ -1,0 +1,79 @@
+---
+# 发布前端静态资源。版本固定(不用 latest), 因此同一份 playbook 重复执行结果一致。
+
+- name: 校验前端版本
+  ansible.builtin.assert:
+      that:
+          - frontend_version is match('^v[0-9]+\.[0-9]+')
+          - frontend_version != 'latest'
+      fail_msg: "frontend_version 必须显式指定 release tag, 例如 -e frontend_version=v1.2.3"
+      quiet: true
+
+- name: 获取指定版本的前端 Release 信息
+  ansible.builtin.uri:
+      url: "https://api.github.com/repos/{{ frontend_repo }}/releases/tags/{{ frontend_version }}"
+      return_content: true
+      status_code: 200
+      headers:
+          Accept: "application/vnd.github+json"
+  register: frontend_release
+  changed_when: false
+
+- name: 选择压缩包资产
+  ansible.builtin.set_fact:
+      frontend_asset_url: "{{ frontend_release.json.assets | selectattr('name', 'match', '.*\\.tar\\.gz$') | map(attribute='browser_download_url') | first }}"
+
+- name: 下载前端 Release 包
+  ansible.builtin.get_url:
+      url: "{{ frontend_asset_url }}"
+      dest: "{{ frontend_archive }}"
+      checksum: "{{ ('sha256:' ~ frontend_sha256) if frontend_sha256 != '' else omit }}"
+      mode: "0644"
+
+- name: 清理解压目录
+  ansible.builtin.file:
+      path: "{{ frontend_extract_dir }}"
+      state: absent
+
+- name: 创建解压目录
+  ansible.builtin.file:
+      path: "{{ frontend_extract_dir }}"
+      state: directory
+      mode: "0755"
+
+- name: 解压 Release 包
+  ansible.builtin.unarchive:
+      src: "{{ frontend_archive }}"
+      dest: "{{ frontend_extract_dir }}"
+      remote_src: true
+
+- name: 查找解压后的实际目录
+  ansible.builtin.find:
+      paths: "{{ frontend_extract_dir }}"
+      file_type: directory
+      depth: 1
+  register: frontend_extracted_dirs
+
+- name: 安装 rsync
+  ansible.builtin.apt:
+      name: rsync
+      state: present
+      cache_valid_time: 3600
+
+- name: 同步前端文件到 web 目录
+  ansible.posix.synchronize:
+      src: "{{ (frontend_extracted_dirs.files | first).path }}/"
+      dest: "/var/www/{{ domain_name }}/"
+      delete: true
+      rsync_opts:
+          - "--chown=www-data:www-data"
+          - "--chmod=D755,F644"
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: 清理临时文件
+  ansible.builtin.file:
+      path: "{{ item }}"
+      state: absent
+  loop:
+      - "{{ frontend_archive }}"
+      - "{{ frontend_extract_dir }}"
