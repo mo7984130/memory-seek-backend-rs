@@ -71,10 +71,26 @@ podman compose -f tests/run/docker-compose.yml run --rm rustfs-init
 - 常用覆盖：`E2E__RUN__SCENARIOS=UploadVisualScenario` 只跑单场景（名字是注册的 Rust 类型名，不是文件路径），`E2E__RUN__CONCURRENCY` 不得超过种子池大小（`auth_users` / `visual_users` / `uit_users`）。
 - 常用命令：`cargo run -p e2e -- -c tests/e2e/e2e.config.yml`。
 
+## 版本与发版
+
+- 全局版本只有一处：`server/Cargo.toml` 的 `version`。启动日志与 `--version`
+  都取自它（`env!("CARGO_PKG_VERSION")`），其余子 crate 保留各自版本，不参与对外版本。
+- **无论修改哪个子 crate，都必须在同一个 PR 里递增 `server` 的版本**：
+
+  ```bash
+  tools/bump-version.sh 2.7.0
+  ```
+
+  该脚本只改 `server/Cargo.toml` 并刷新 `Cargo.lock`。漏改的表现是 `main` 上
+  找不到新版本 tag，发布被跳过（CI 会打印跳过原因）。
+- `main` 的 push 触发 `.github/workflows/release.yml`：读取 `server` 版本，
+  tag `v<version>` 不存在时构建、打 tag、用 GitHub 自动 notes 发布；已存在则跳过。
+- 版本由人决定，不由提交类型自动递增；不依赖任何自动版本工具。
+- 提交信息仍使用 Conventional Commits，仅用于 PR 标题风格与 release notes 可读性。
+
 ## 分支与提交
 
-- CI（fmt / clippy / 单元测试 / e2e）只跑 `develop` 的 push 与 PR；`main` 的 push 触发 semantic-release 发版。
-- 提交信息必须使用 Conventional Commits：`main` 上 semantic-release 依据提交类型生成 release notes 与 tag。
+- CI（fmt / clippy / 单元测试 / e2e）只跑 `develop` 的 push 与 PR。
 
 ## 错误处理
 
