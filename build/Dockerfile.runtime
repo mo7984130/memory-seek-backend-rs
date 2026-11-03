@@ -1,6 +1,6 @@
 # build/Dockerfile.runtime
 #
-# 运行镜像: debian 12(glibc 2.36 >= 产物所需 2.34) + 预编译 ffmpeg。
+# 运行镜像: debian 12(glibc 2.36 >= 产物所需 2.35) + 预编译 ffmpeg。
 #
 # ffmpeg 取自 BtbN FFmpeg-Builds 的 linux64-gpl 构建: 单个自包含二进制, 但
 # 动态链接 glibc(libc/libm/libdl/librt/libpthread/libmvec/libgcc_s), 仅需 glibc 2.28+。

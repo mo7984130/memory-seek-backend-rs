@@ -1,3 +1,5 @@
+#[cfg(feature = "face")]
+use common_core::BoxFuture;
 use common_core::{
     Result,
     error::{
@@ -14,16 +16,6 @@ use types_visual::visual::{Column, Entity};
 use types_visual::{MergePersonParam, PersonView, person::PersonId};
 
 use crate::{repo::TimelineStatRepo, state::VisualState};
-
-/// 跨 crate 暴露的异步入口统一返回装箱 future。
-///
-/// 这些入口内部是"多层 await"的长调用链(人脸计算/人物扫描/二次聚类)。
-/// 若由调用方(admin 的 `Dispatcher::execute`)直接内联 await, rustc 计算外层
-/// coroutine 布局时会递归进整条链; rustc 1.99 起会超过编译器的查询深度上限,
-/// 报 `queries overflow the depth limit`。装箱后调用方只持有一个指针, 布局深度
-/// 不再随本域内部层级增长。
-#[cfg(feature = "face")]
-type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
 
 /// 影像域的管理员用例。
 pub struct VisualAdminService;

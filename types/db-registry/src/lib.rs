@@ -12,13 +12,11 @@
 //! ⚠️ 依赖方向:本 crate 必须位于所有实体 crate **之下**(实体要引用切片),
 //! 因此这里不能依赖任何 `types-*` 域契约 crate。
 
-use std::pin::Pin;
-
-use common_core::ContextualResult;
+use common_core::{BoxFuture, ContextualResult};
 use sea_orm::DatabaseConnection;
 
 /// 索引初始化回调的返回类型(装箱的 future)。
-pub type InitIndexFuture<'a> = Pin<Box<dyn Future<Output = ContextualResult<()>> + Send + 'a>>;
+pub type InitIndexFuture<'a> = BoxFuture<'a, ContextualResult<()>>;
 
 /// 索引初始化回调签名。
 pub type InitIndexFn = for<'a> fn(&'a DatabaseConnection) -> InitIndexFuture<'a>;

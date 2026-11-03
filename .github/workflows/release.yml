@@ -53,21 +53,50 @@ jobs:
         if: steps.version.outputs.published == 'false'
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install mold
-        if: steps.version.outputs.published == 'false'
-        # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
-        run: sudo apt-get update && sudo apt-get install -y mold
-
       - name: Cache Cargo
         if: steps.version.outputs.published == 'false'
         uses: Swatinem/rust-cache@v2
+        with:
+          # 构建在 ubuntu:22.04 容器内进行, 换 key 避免复用宿主 glibc 下编译的
+          # target 产物(proc-macro 的 .so 不能跨 glibc 加载)
+          key: glibc-2.35
 
-      - name: Build release binary
+      - name: Build release binary (ubuntu:22.04, 固定 glibc 基线)
         if: steps.version.outputs.published == 'false'
-        # 只构建 server: 仓库根是 virtual manifest 且未设 default-members,
-        # 不带 -p 会把全部成员(含 tests/e2e)一起编译, 白白增加构建时间与缓存体积。
-        # feature 组合收敛在 build/build-release.sh, 与 CI 的 release-build job 共用。
-        run: bash build/build-release.sh
+        # 产物必须能在 Debian 12(glibc 2.36) 运行镜像与 Ubuntu 22.04(2.35)
+        # 生产机上运行, 所以构建环境固定在 ubuntu:22.04。直接在 ubuntu-latest
+        # 上编会随 runner 升级把基线抬到 2.43, 导致发布包在生产机无法启动。
+        # feature 组合仍由 build/build-release.sh 决定(与 CI 的 release-build 共用)。
+        run: |
+          docker run --rm \
+            -v "$PWD:/work" \
+            -w /work \
+            -v "$HOME/.cargo:/root/.cargo" \
+            -v "$HOME/.rustup:/root/.rustup" \
+            ubuntu:22.04 bash -c '
+              set -euo pipefail
+              export PATH="/root/.cargo/bin:$PATH"
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                build-essential pkg-config cmake mold curl ca-certificates \
+                libssl-dev libclang-dev clang binutils
+              bash build/build-release.sh
+            '
+          # 容器内以 root 写入, 交还给 runner 以便缓存与清理
+          sudo chown -R "$(id -u):$(id -g)" target "$HOME/.cargo" "$HOME/.rustup"
+
+      - name: 校验 glibc 基线
+        if: steps.version.outputs.published == 'false'
+        # 防止构建环境变化悄悄抬高产物基线: 超过 2.35 直接失败
+        run: |
+          required=$(readelf -V "target/release/${{ env.BINARY_NAME }}" \
+            | grep -o 'GLIBC_[0-9.]*' | sed 's/^GLIBC_//' | sort -Vu | tail -n 1)
+          echo "产物最高 glibc 需求: $required (基线 2.35)"
+          if [ "$(printf '%s\n' 2.35 "$required" | sort -V | tail -n 1)" != "2.35" ]; then
+            echo "::error::产物需要 glibc $required, 超出基线 2.35(生产 Ubuntu 22.04 / 运行镜像 Debian 12)"
+            exit 1
+          fi
 
       - name: 打包 Release
         if: steps.version.outputs.published == 'false'

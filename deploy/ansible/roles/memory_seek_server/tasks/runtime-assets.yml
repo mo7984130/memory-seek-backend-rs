@@ -55,6 +55,12 @@
             path: "{{ runtime_assets_dir }}.tmp"
             state: absent
 
+      - name: 创建临时解压目录
+        ansible.builtin.file:
+            path: "{{ runtime_assets_dir }}.tmp"
+            state: directory
+            mode: "0755"
+
       - name: 解压到临时目录
         ansible.builtin.unarchive:
             src: "/tmp/{{ runtime_assets_package }}"

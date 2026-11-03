@@ -1,8 +1,8 @@
 ---
 # 只发布前端静态资源, 版本必须显式指定(不使用 "latest", 否则不可复现):
-#   ansible-playbook playbooks/frontend.yml -e frontend_version=v1.2.3
+#   ansible-playbook frontend.yml -e frontend_version=v1.2.3
 - name: 发布前端
-  hosts: nginx
+  hosts: all
   become: true
   roles:
       - nginx

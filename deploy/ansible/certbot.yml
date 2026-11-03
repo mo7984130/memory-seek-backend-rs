@@ -1,0 +1,18 @@
+---
+# 申请 Let's Encrypt 证书并启用 HTTPS。
+#
+# 与全栈部署解耦: 证书绑定的是域名与 DNS, 而不是主机数量, 因此不放进 site.yml。
+#   - 测试机/内网: 不执行本 playbook, 站点保持 HTTP;
+#   - 公网首次上线: 先 ansible-playbook site.yml, DNS 就绪后再执行本文件;
+#   - 多机: 把 hosts 改成 TLS 入口所在的组(如 nginx)。
+- name: 申请 TLS 证书并启用 HTTPS
+  tags: certbot
+  hosts: all
+  become: true
+  roles:
+      - certbot
+  post_tasks:
+      - name: 签发证书后启用 HTTPS 站点
+        ansible.builtin.include_role:
+            name: nginx
+            tasks_from: enable-tls.yml
