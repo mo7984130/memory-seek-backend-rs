@@ -6,7 +6,8 @@ use common_core::{
     types::CursorPage,
 };
 use sea_orm::{
-    ColumnTrait, Condition, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, Condition, EntityTrait, ExprTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect,
     sea_query::{Expr, Query},
 };
 use types_core::cursor::TimeIdCursor;
@@ -269,7 +270,6 @@ impl FaceMapper {
             )))
             .and_where(Column::PersonId.is_null())
             .to_owned();
-
         let mut query = types_visual::visual::Entity::find()
             .filter(Expr::exists(subquery))
             .order_by(types_visual::visual::Column::CreatedAt, Order::Desc)
@@ -293,6 +293,24 @@ impl FaceMapper {
         Ok(CursorPage::from_oversize(records, size))
     }
 
+    /// 统计至少含一张未分配人脸的不同影像数。
+    pub async fn count_unassigned_face_visuals(db: &impl ConnectionTrait) -> Result<u64> {
+        let subquery = Query::select()
+            .expr(Expr::val(1))
+            .from(Entity)
+            .and_where(Expr::col((Entity, Column::VisualId)).equals((
+                types_visual::visual::Entity,
+                types_visual::visual::Column::Id,
+            )))
+            .and_where(Column::PersonId.is_null())
+            .to_owned();
+        types_visual::visual::Entity::find()
+            .filter(Expr::exists(subquery))
+            .count(db)
+            .await
+            .map_err(Into::into)
+    }
+
     // 游标查询人物的照片
     /// 游标分页查询人物关联的照片 ID
     pub async fn query_person_visual_ids(
@@ -310,7 +328,6 @@ impl FaceMapper {
             )))
             .and_where(Column::PersonId.eq(person_id))
             .to_owned();
-
         let mut query = types_visual::visual::Entity::find()
             .filter(Expr::exists(subquery))
             .order_by(types_visual::visual::Column::CreatedAt, Order::Desc)
@@ -332,6 +349,27 @@ impl FaceMapper {
             .await?;
 
         Ok(CursorPage::from_oversize(records, size))
+    }
+
+    /// 统计与人物关联的不同影像数。
+    pub async fn count_person_visuals(
+        db: &impl ConnectionTrait,
+        person_id: PersonId,
+    ) -> Result<u64> {
+        let subquery = Query::select()
+            .expr(Expr::val(1))
+            .from(Entity)
+            .and_where(Expr::col((Entity, Column::VisualId)).equals((
+                types_visual::visual::Entity,
+                types_visual::visual::Column::Id,
+            )))
+            .and_where(Column::PersonId.eq(person_id))
+            .to_owned();
+        types_visual::visual::Entity::find()
+            .filter(Expr::exists(subquery))
+            .count(db)
+            .await
+            .map_err(Into::into)
     }
 
     /// 按人物 ID 加行锁查询其人脸

@@ -9,8 +9,6 @@ use crate::{AuditId, AuditRecord};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export, export_to = "audit/"))]
 pub enum AuditGranularity {
     #[default]
     Day,
@@ -29,7 +27,7 @@ impl AuditGranularity {
     }
 }
 
-crate::dto!(AuditStatsQuery, "audit/", serde_default, docs = "审计统计查询参数"; {
+crate::dto!(AuditStatsQuery, serde_default, docs = "审计统计查询参数"; {
     pub event_type: Option<String>,
     pub target_type: Option<String>,
     pub start: Option<DateTime>,
@@ -50,25 +48,20 @@ impl Default for AuditStatsQuery {
     }
 }
 
-crate::dto!(AuditStatsItem, "audit/", docs = "审计统计结果项"; {
+crate::dto!(AuditStatsItem, docs = "审计统计结果项"; {
     pub bucket: DateTime,
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub count: i64,
 });
 
-crate::dto!(AuditTopItem, "audit/", docs = "审计热门目标结果项"; {
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
+crate::dto!(AuditTopItem, docs = "审计热门目标结果项"; {
     pub target_id: i64,
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub count: i64,
 });
 
-crate::dto!(AuditTopQuery, "audit/", serde_default, docs = "审计热门目标查询参数"; {
+crate::dto!(AuditTopQuery, serde_default, docs = "审计热门目标查询参数"; {
     pub event_type: String,
     pub target_type: String,
     #[validate(range(min = 1, max = 100, message = "limit 在 1 到 100 之间"))]
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub limit: u64,
 });
 
@@ -83,17 +76,13 @@ impl Default for AuditTopQuery {
     }
 }
 
-crate::dto!(AuditQuery, "audit/", serde_default, docs = "审计流水查询参数"; {
+crate::dto!(AuditQuery, serde_default, docs = "审计流水查询参数"; {
     pub event_type: Option<String>,
     pub target_type: Option<String>,
-    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub target_id: Option<i64>,
     pub actor_id: Option<UserId>,
-    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
     pub cursor: Option<TimeIdCursor<AuditId>>,
     #[validate(range(min = 1, max = 100, message = "size 在 1 到 100 之间"))]
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 
@@ -111,14 +100,12 @@ impl Default for AuditQuery {
     }
 }
 
-crate::dto!(AuditItem, "audit/", docs = "审计流水响应项"; {
+crate::dto!(AuditItem, docs = "审计流水响应项"; {
     pub id: AuditId,
     pub event_type: String,
     pub actor_id: Option<UserId>,
     pub target_type: Option<String>,
-    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub target_id: Option<i64>,
-    #[cfg_attr(feature = "ts", ts(type = "Record<string, unknown> | null"))]
     pub detail: Option<serde_json::Value>,
     pub created_at: DateTime,
 });

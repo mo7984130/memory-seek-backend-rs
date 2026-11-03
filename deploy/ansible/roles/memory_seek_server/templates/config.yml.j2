@@ -1,0 +1,75 @@
+# {{ ansible_managed }}
+#
+# 由 Ansible 渲染: roles/memory_seek_server/templates/config.yml.j2
+# 修改请改模板, 不要直接编辑本文件。
+# 所有字段均可通过环境变量覆盖: MEMORY_SEEK_<SECTION>__<KEY>
+
+server:
+  # 只监听回环: 对外由 nginx 反代 /api/
+  host: "{{ server_host }}"
+  port: {{ server_port }}
+  max_upload_bytes: 1073741824
+  tmp_path: "{{ data_dir }}/tmp"
+
+metrics:
+  interval_seconds: 5
+
+database:
+  url: "postgres://{{ db_user }}:{{ vault_db_password }}@127.0.0.1:5432/{{ db_database }}"
+  max_connections: 10
+
+redis:
+  url: "redis://:{{ vault_redis_password }}@127.0.0.1:6379"
+  max_connections: 10
+
+cache:
+  enabled: true
+  local_capacity: 10000
+  local_ttl_secs: 60
+
+smtp:
+  server: "{{ smtp_server }}"
+  port: {{ smtp_port }}
+  username: "{{ smtp_username }}"
+  password: "{{ vault_smtp_password }}"
+  from_email: "{{ smtp_from_email }}"
+  from_name: "{{ smtp_from_name }}"
+
+s3:
+  endpoint: "{{ s3_endpoint }}"
+  bucket: "{{ s3_bucket }}"
+  access_key: "{{ vault_s3_access_key }}"
+  secret_key: "{{ vault_s3_secret_key }}"
+  region: "{{ s3_region }}"
+  # 媒体由后端 /visual/{token} 转发, 此字段当前不参与下发;
+  # 保持为公网域名, 避免将来直接下发时指向内网 endpoint
+  public_url: "{{ s3_public_url }}"
+  force_path_style: {{ s3_force_path_style | lower }}
+
+token_cipher:
+  key: "{{ vault_token_cipher_key }}"
+  salt: "{{ vault_token_cipher_salt }}"
+
+backup:
+  local_path: "{{ backup_dir }}"
+  s3_prefix: "backup/"
+  scheduled:
+    daily_retention: 7
+    weekly_retention: 4
+    monthly_retention: 6
+
+face_engine:
+  # 模型随版本软链切换, 回滚时路径自动跟着回滚
+  detect_model_path: "{{ current_link }}/models/det.onnx"
+  recognize_model_path: "{{ current_link }}/models/rec.onnx"
+
+visual:
+  transcode:
+    # 使用 Ansible 安装的、带 libsvtav1 的 ffmpeg
+    ffmpeg_path: "{{ ffmpeg_install_path }}"
+
+admin:
+  poll_interval_secs: 5
+  heartbeat_interval_secs: 10
+  stale_after_secs: 30
+  max_concurrency: 2

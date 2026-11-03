@@ -11,7 +11,6 @@ use sea_orm::entity::prelude::*;
 /// 带 `orm` feature 时附加 SeaORM ActiveEnum 派生,轻量构建仅序列化。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "orm", derive(EnumIter, DeriveActiveEnum))]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(
     feature = "orm",
     sea_orm(rs_type = "String", db_type = "String(StringLen::N(10))")

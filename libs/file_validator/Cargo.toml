@@ -2,6 +2,7 @@
 name = "file-validator"
 version = "0.4.0"
 edition = "2024"
+license.workspace = true
 
 [dependencies]
 const_format.workspace = true

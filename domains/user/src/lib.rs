@@ -12,5 +12,8 @@ pub use controller::Controller;
 mod config;
 mod error_ext;
 
+pub mod admin;
+pub use admin::UserAdminService;
+
 pub use repo::UserRepo;
 pub use state::UserState;

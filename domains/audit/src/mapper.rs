@@ -8,11 +8,9 @@ use sea_orm::{
     ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Alias, Expr, Func},
 };
-use types_audit::{AuditId, AuditRecord};
+use types_audit::{AuditQuery, AuditRecord};
 use types_audit::{Column, Entity};
 
-use types_core::UserId;
-use types_core::cursor::TimeIdCursor;
 pub(super) struct AuditMapper;
 
 impl AuditMapper {
@@ -32,10 +30,12 @@ impl AuditMapper {
         );
         let mut query = Entity::find()
             .select_only()
-            .expr_as(bucket.clone(), "bucket")
+            .expr_as(bucket, "bucket")
             .column_as(Column::EventId.count(), "cnt")
-            .group_by(bucket)
-            .order_by_asc(Column::CreatedAt);
+            // 按输出别名分组。若把 bucket 表达式再写一遍，sea-query 会生成第二个
+            // 绑定参数（$1 / $2），PostgreSQL 视为不同表达式而拒绝。
+            .group_by(Expr::col(Alias::new("bucket")))
+            .order_by_asc(Expr::col(Alias::new("bucket")));
         if let Some(event_type) = event_type {
             query = query.filter(Column::EventType.eq(event_type));
         }
@@ -82,30 +82,26 @@ impl AuditMapper {
     /// 游标分页查询审计事件记录
     pub(super) async fn query_audit_page(
         db: &impl DbConn,
-        event_type: Option<&str>,
-        target_type: Option<&str>,
-        target_id: Option<i64>,
-        actor_id: Option<UserId>,
-        cursor: &Option<TimeIdCursor<AuditId>>,
-        size: u64,
+        req: &AuditQuery,
     ) -> Result<CursorPage<AuditRecord, ()>> {
-        let mut query = Entity::find()
+        let mut base_query = Entity::find();
+        if let Some(event_type) = req.event_type.as_deref() {
+            base_query = base_query.filter(Column::EventType.eq(event_type));
+        }
+        if let Some(target_type) = req.target_type.as_deref() {
+            base_query = base_query.filter(Column::TargetType.eq(target_type));
+        }
+        if let Some(target_id) = req.target_id {
+            base_query = base_query.filter(Column::TargetId.eq(target_id));
+        }
+        if let Some(actor_id) = req.actor_id {
+            base_query = base_query.filter(Column::ActorId.eq(actor_id.0));
+        }
+        let mut query = base_query
             .order_by_desc(Column::CreatedAt)
             .order_by_desc(Column::EventId)
-            .limit(size + 1);
-        if let Some(event_type) = event_type {
-            query = query.filter(Column::EventType.eq(event_type));
-        }
-        if let Some(target_type) = target_type {
-            query = query.filter(Column::TargetType.eq(target_type));
-        }
-        if let Some(target_id) = target_id {
-            query = query.filter(Column::TargetId.eq(target_id));
-        }
-        if let Some(actor_id) = actor_id {
-            query = query.filter(Column::ActorId.eq(actor_id.0));
-        }
-        if let Some(cursor) = cursor {
+            .limit(req.size + 1);
+        if let Some(cursor) = &req.cursor {
             query = query.filter(cursor.before(Column::CreatedAt, Column::EventId));
         }
 
@@ -118,7 +114,7 @@ impl AuditMapper {
             .collect::<Vec<_>>();
 
         Ok(CursorPage {
-            has_more: records.len() > size as usize,
+            has_more: records.len() > req.size as usize,
             records,
             next_cursor: None,
         })

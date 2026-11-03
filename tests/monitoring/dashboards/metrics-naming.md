@@ -175,7 +175,7 @@ method / route（路由 pattern）/ module / status_class / kind / op / mode
 | `server.http.in_flight` | gauge | - | 当前在途请求数 |
 
 - `module` 按路由前缀归类：`/auth/*` → `auth`、`/user/*` → `user`、`/visual/*` → `visual`、
-  `/admin/backup/*` → `backup`、其余 `/admin/*` → `audit`，其余（`/health`、`/hello`、
+  `/admin/backup/*` → `backup`、`/admin/audits/*` → `audit`、其余 `/admin/*` → `admin`，其余（`/health`、`/hello`、
   `unmatched` 等）→ `other`。
   模块 dashboard 的 HTTP 行按 `module` 过滤，全局视图（system dashboard）不过滤。
 - Prometheus 导出名：`server_http_requests_total`、`server_http_duration_seconds_bucket`。
@@ -343,7 +343,8 @@ L1 本地 moka → L2 Redis → L3 数据库（loader）。
 | append | `audit:append:attempts` `audit:append:success` `audit:append:duration_seconds` |
 | append_many | `audit:append_many:attempts` `audit:append_many:success` `audit:append_many:duration_seconds` `audit:append_many:db_insert`（`recording`） |
 
-HTTP 视角仍由 `server.http.*{module="audit"}` 覆盖（`/admin/audits`；`/admin/backup/*` 归 `module="backup"`）。
+HTTP 视角由 `server.http.*` 按管理端子域拆分：`/admin/audits/*` 归 `audit`，
+`/admin/backup/*` 归 `backup`，其它 `/admin/*` 归 `admin`。
 
 ### server 系统指标
 

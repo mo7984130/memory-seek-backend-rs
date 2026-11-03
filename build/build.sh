@@ -13,19 +13,13 @@ NC=$'\033[0m'
 
 IMAGE_NAME="ubuntu22.04-rust-build-base"
 PROJECT_NAME="memory-seek-server"
-FEATURES="metrics,auth,user,visual,face-engine,audit,audit-recording,backup"
+FEATURES="metrics,auth,user,visual,face-engine,audit,audit-recording,backup,admin"
 
 # 容器内 cargo 产物目录(容器专用), 与宿主 target/ 完全隔离:
 # 1) 两边 glibc 不同(宿主较新), 编译产物(尤其 proc-macro .so)不可互相加载;
 # 2) 共享同一 target 时, 宿主一次 cargo check 就会改写 rustc 指纹
 #    (target/.rustc_info.json), 导致容器缓存整体失效、全量重编译。
 CONTAINER_TARGET_DIR="target/container"
-
-# 运行镜像(内置 ffmpeg)与 ffmpeg 来源
-# 锁定 BtbN autobuild tag + sha256, 保证可复现; 需要加速时可换镜像站
-RUNTIME_IMAGE="memory-seek-server-test:local"
-FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-21-13-06/ffmpeg-n9.0.2-31-gc89d6ee1ca-linux64-gpl-9.0.tar.xz"
-FFMPEG_SHA256="2212009529e7a18809c0a23700e8045364c17853c4390cf8c051e6b65dd97bde"
 
 # 构建基础镜像（如果不存在）
 if ! podman image exists $IMAGE_NAME; then
@@ -38,7 +32,7 @@ if ! podman image exists $IMAGE_NAME; then
         podman pull ubuntu:22.04
     }
 
-    podman build -t $IMAGE_NAME -f "$SCRIPT_DIR/Dockerfile.build" "$SCRIPT_DIR"
+    podman build --http-proxy=false -t $IMAGE_NAME -f "$SCRIPT_DIR/Dockerfile.build" "$SCRIPT_DIR"
     echo -e "${GREEN}基础镜像构建完成${NC}"
 else
     echo -e "${GREEN}基础镜像已存在: $IMAGE_NAME${NC}"
@@ -57,7 +51,7 @@ fi
 
 echo -e "${GREEN}开始构建项目...${NC}"
 # 容器使用独立 target($CONTAINER_TARGET_DIR), 与宿主 target/ 隔离, 避免缓存互相失效。
-podman run -it --rm \
+podman run -i --rm \
   --http-proxy=false \
   --name rust-build-$(date +%s) \
   -e CARGO_TARGET_DIR="/app/$CONTAINER_TARGET_DIR" \
@@ -65,26 +59,27 @@ podman run -it --rm \
   -v "$HOME/.rustup:/root/.rustup:Z" \
   -v "$HOME/.cargo:/root/.cargo:Z" \
   -v "$HOME/.cargo/registry:/root/.cargo/registry:Z" \
-  $IMAGE_NAME \
-  bash -c "
-    set -e
-    export PATH=\"/root/.cargo/bin:\$PATH\"
-    cd /app
+  "$IMAGE_NAME" \
+  bash -s -- "$FEATURES" <<'CONTAINER_BUILD'
+set -e
+FEATURES="$1"
+export PATH="/root/.cargo/bin:$PATH"
+cd /app
 
-    echo '=== 环境信息 ==='
-    rustc --version
-    cargo --version
-    mold --version
-    echo '=== 开始构建 ==='
+echo '=== 环境信息 ==='
+rustc --version
+cargo --version
+mold --version
+echo '=== 开始构建 ==='
 
-    # 构建项目
-    cargo build \
-      --release \
-      -p server \
-      --features \"$FEATURES\"
+# 构建项目
+cargo build \
+  --release \
+  -p server \
+  --features "$FEATURES"
 
-    echo '=== 构建完成 ==='
-  "
+echo '=== 构建完成 ==='
+CONTAINER_BUILD
 
 # 检查构建结果
 if [ ! -f "$CONTAINER_TARGET_DIR/release/$PROJECT_NAME" ]; then
@@ -100,32 +95,11 @@ echo -e "${GREEN}构建成功！${NC}"
 
 DIST="target/dist"
 
-rm -rf "$DIST"
-mkdir -p "$DIST/libs"
-
-# 可执行文件
-cp "$CONTAINER_TARGET_DIR/release/memory-seek-server" "$DIST/"
-
-# libs
-find thirdparty \( -type f -o -type l \) \
-  \( -name "*.so" -o -name "*.so.*" \) \
-  -exec cp -a {} $DIST/libs/ \;
-
-cp -r thirdparty/models "$DIST"/
+# 统一由 package-dist.sh 组装, 与 CI 发布包共用同一份复制逻辑
+"$SCRIPT_DIR/package-dist.sh" --mode dist --binary "$CONTAINER_TARGET_DIR/release/$PROJECT_NAME" --out "$DIST"
 
 echo "Build completed:"
 tree "$DIST"
 
-# -------------------------
-# 构建运行镜像(内置 ffmpeg)
-# -------------------------
-# 应用产物仍由 compose 挂载, 该镜像只提供底座 + ffmpeg + 系统运行库。
-echo -e "${GREEN}构建运行镜像 $RUNTIME_IMAGE...${NC}"
-podman build \
-  -t "$RUNTIME_IMAGE" \
-  -f "$SCRIPT_DIR/Dockerfile.runtime" \
-  --build-arg "FFMPEG_URL=$FFMPEG_URL" \
-  --build-arg "FFMPEG_SHA256=$FFMPEG_SHA256" \
-  "$SCRIPT_DIR"
-
-echo -e "${GREEN}运行镜像构建完成: $RUNTIME_IMAGE${NC}"
+echo -e "${GREEN}二进制构建完成: $DIST${NC}"
+echo -e "${YELLOW}运行镜像请执行: ./build/runtime-image.sh${NC}"

@@ -2,6 +2,7 @@
 name = "oss"
 version = "0.7.0"
 edition = "2024"
+license.workspace = true
 
 [features]
 default = []

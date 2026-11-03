@@ -1,0 +1,62 @@
+---
+# 保留最近 keep_releases 个版本(当前/回滚目标永不删除);
+# 运行时资产只删除"没有任何版本引用"的目录, 正在运行的进程不受影响。
+
+- name: 查找已安装版本
+  ansible.builtin.find:
+      paths: "{{ releases_dir }}"
+      file_type: directory
+      depth: 1
+  register: release_dirs
+
+- name: 计算待清理版本(按部署时间保留最近 {{ keep_releases }} 个)
+  ansible.builtin.set_fact:
+      releases_to_remove: >-
+          {{ (release_dirs.files | sort(attribute='mtime', reverse=true) | map(attribute='path') | list)[keep_releases | int :] }}
+
+- name: 清理旧版本目录
+  ansible.builtin.file:
+      path: "{{ item }}"
+      state: absent
+  loop: "{{ releases_to_remove }}"
+  loop_control:
+      label: "{{ item | basename }}"
+  when: item not in [desired_target, rollback_target]
+
+- name: 收集仍被版本引用的运行时资产
+  ansible.builtin.command:
+      argv:
+          - find
+          - "{{ releases_dir }}"
+          - -mindepth
+          - "2"
+          - -maxdepth
+          - "2"
+          - -type
+          - l
+          - -name
+          - libs
+          - -printf
+          - '%l\n'
+  register: runtime_asset_links
+  changed_when: false
+
+- name: 计算被引用的资产 id
+  ansible.builtin.set_fact:
+      referenced_assets: "{{ runtime_asset_links.stdout_lines | map('dirname') | map('basename') | unique | list }}"
+
+- name: 查找已安装的运行时资产
+  ansible.builtin.find:
+      paths: "{{ runtime_dir }}"
+      file_type: directory
+      depth: 1
+  register: runtime_asset_dirs
+
+- name: 清理不被任何版本引用的运行时资产
+  ansible.builtin.file:
+      path: "{{ item.path }}"
+      state: absent
+  loop: "{{ runtime_asset_dirs.files }}"
+  loop_control:
+      label: "{{ item.path | basename }}"
+  when: item.path | basename not in referenced_assets

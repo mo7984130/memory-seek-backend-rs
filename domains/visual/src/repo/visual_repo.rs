@@ -5,7 +5,7 @@ use common_core::time::Duration;
 use audit::{AuditEvent, AuditRecorder};
 use common_core::error::contextual::ext::{ContextualResultExt, IntoContextualExt, OptionExt};
 use common_core::error::{AppError, contextual::Result};
-use common_core::{ext::ToOk, types::CursorPage};
+use common_core::{ext::ToOk, types::CursorPage, types::CursorPageWithTotal};
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
 use constants::RedisKeys;
@@ -17,6 +17,7 @@ use types_visual::visual::{ActiveModel, Model, NewVisualRecord, VisualId, Visual
 
 use crate::{
     mappers::{visual_like_mapper::VisualLikeMapper, visual_mapper::VisualMapper},
+    repo::TimelineStatRepo,
     state::{CachedVisualLike, VisualState},
 };
 
@@ -117,7 +118,18 @@ impl VisualRepo {
     pub async fn query_visual_cursor_ids(
         state: &VisualState,
         req: VisualCursorParam,
-    ) -> Result<CursorPage<VisualId, ()>> {
+    ) -> Result<CursorPageWithTotal<VisualId, ()>> {
+        let total_count = if req.cursor.is_none() {
+            Some(
+                TimelineStatRepo::get_monthly_stats(state)
+                    .await?
+                    .into_iter()
+                    .map(|stat| stat.count.max(0) as u64)
+                    .sum(),
+            )
+        } else {
+            None
+        };
         let visual_ids = if req.cursor.is_none() && req.anchor_time.is_none() {
             let key = RedisKeys::visual::visual::visual_cursor_page_ids(req.direction);
             let direction = req.direction;
@@ -149,7 +161,7 @@ impl VisualRepo {
             .await?
         };
 
-        Ok(visual_ids)
+        Ok(visual_ids.with_optional_total(total_count))
     }
 
     /// 失效影像游标 ID 缓存

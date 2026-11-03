@@ -33,7 +33,7 @@ pub enum BackupSource {
 }
 
 /// 管理员触发备份恢复的请求。
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RestoreRequest {
     pub tier: BackupTier,

@@ -1,4 +1,4 @@
-use common_core::{Result, ext::ToOk, types::CursorPage};
+use common_core::{Result, ext::ToOk, types::CursorPageWithTotal};
 use common_metrics::{MetricsTimerExt, metrics_name};
 use types_core::cursor::TimeIdCursor;
 use types_identity::auth::user::UserId;
@@ -38,17 +38,22 @@ impl VisualLikeService {
         state: &VisualState,
         user_id: UserId,
         req: LikedVisualsQuery,
-    ) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+    ) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
         // 查询用户点赞的影像ID列表和点赞时间
         let page = VisualLikeRepo::query_liked_visual_ids(state, user_id, &req)
             .timed(metrics_name!("query_ids"))
             .await?;
-        if page.records.is_empty() {
-            return Ok(CursorPage::empty());
+        if page.page.records.is_empty() {
+            return Ok(CursorPageWithTotal::empty(page.total_count));
         }
 
         // 加载影像详细信息
-        let visual_ids = page.records.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        let visual_ids = page
+            .page
+            .records
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
         let visuals = VisualService::load_visuals_info(state, user_id, &visual_ids)
             .timed(metrics_name!("load_visuals_info"))
             .await?;

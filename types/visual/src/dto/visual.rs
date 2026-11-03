@@ -8,19 +8,18 @@ use crate::visual::{VisualId, VisualKind};
 use types_core::UserId;
 use types_core::cursor::TimeIdCursor;
 
-crate::dto!(VisualTokens, "visual/", rename = "VisualTokens"; {
+crate::dto!(VisualTokens; {
     pub thumbnail: String,
     pub preview: String,
     pub original: String,
 });
 
-crate::dto!(VisualView, "visual/", rename = "Visual"; {
+crate::dto!(VisualView; {
     pub id: VisualId,
     pub user_id: UserId,
     pub name: String,
     pub width: u32,
     pub height: u32,
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size: u64,
     pub created_at: DateTime,
     pub kind: VisualKind,
@@ -85,12 +84,9 @@ impl VisualView {
     }
 }
 
-crate::dto!(VisualCursorParam, "visual/", serde_default, docs = "影像游标参数（cursor 为 TimeIdCursor<VisualId> 的 Base64 编码）"; {
-    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
+crate::dto!(VisualCursorParam, serde_default, docs = "影像游标参数（cursor 为 TimeIdCursor<VisualId> 的 Base64 编码）"; {
     pub cursor: Option<TimeIdCursor<VisualId>>,
     #[validate(range(min = 1, max = 1024, message = "分页大小在 1 到 1024 之间"))]
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
     pub direction: PageDirection,
     pub anchor_time: Option<DateTime>,

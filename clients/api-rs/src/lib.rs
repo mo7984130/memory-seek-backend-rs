@@ -59,6 +59,8 @@ pub use common_core::r::R;
 
 /// 分页游标壳(后端 `common_core::types::CursorPage`)。
 pub use common_core::types::CursorPage;
+/// 带记录总数的分页壳(后端 `common_core::types::CursorPageWithTotal`)。
+pub use common_core::types::CursorPageWithTotal;
 
 /// 跨上下文共享内核:`types-core` 的强类型 ID、枚举与游标。
 pub use types_core::cursor::{CountIdCursor, TimeIdCursor};
@@ -97,6 +99,14 @@ pub use types_backup::{
     BackupSource, BackupTier, ManualBackupResult, RestoreRequest, RestoreResult,
     ScheduledBackupResult,
 };
+
+/// 管理端契约:`types-admin`。
+pub use types_admin::dashboard::VisualDashboardStats;
+pub use types_admin::job::{
+    AbandonAdminJobRequest, AdminJobKind, AdminJobPayload, AdminJobQuery, AdminJobStatus,
+    AdminJobView, StartAdminJobRequest,
+};
+pub use types_admin::user::AdminUserQuery;
 
 /// 时间类型(UTC),与后端契约一致。
 pub use common_core::time::DateTime;

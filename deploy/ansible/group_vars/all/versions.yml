@@ -1,0 +1,13 @@
+---
+# 部署版本(固定值)
+#
+# 故意不读取本地仓库状态: 同一份仓库在任何机器、任何时间执行 playbook,
+# 装出来的都是同一个版本, 回滚也有确定的参照物。
+#
+# 改动时机: 发版时 bump server/Cargo.toml -> 合并/打 tag -> 把这里改成新 tag。
+# CI 会校验这里的值必须等于 v + server/Cargo.toml 的 version, 忘记改会直接失败。
+# 临时回滚/指定版本: -e binary_version=vX.Y.Z (优先级高于本文件, 无需修改这里)。
+backend_version: v2.7.0
+
+# 前端版本不在这里固定: 前端是独立仓库、独立发版节奏,
+# 发布时用 -e frontend_version=vX.Y.Z 显式指定(role 会强制校验非 latest)。

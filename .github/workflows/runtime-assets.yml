@@ -1,0 +1,87 @@
+name: Runtime Assets
+
+# 运行时资产 = libs(onnxruntime) + models(人脸模型)。
+# 它们几乎不随版本变化, 因此不放进二进制发布包, 而是按"内容 hash"单独发布:
+#   - 内容变了 -> 生成新的 runtime-assets-<hash12>.tar.gz, 可并存, 不覆盖旧包;
+#   - 内容没变 -> 什么都不做, 部署时也不会重复下载。
+# 二进制包的 manifest.yaml 记录它需要的资产 hash, 部署脚本据此安装。
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - "thirdparty/**"
+            - "tools/runtime-assets-hash.sh"
+            - ".github/workflows/runtime-assets.yml"
+    workflow_dispatch:
+
+env:
+    ASSET_RELEASE_TAG: runtime-assets
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              with:
+                  # 资产包需要真实的 .so / .onnx 内容
+                  lfs: true
+
+            - name: 计算内容 hash
+              id: hash
+              run: |
+                  hash=$(./tools/runtime-assets-hash.sh)
+                  echo "full=$hash" >> "$GITHUB_OUTPUT"
+                  echo "id=${hash:0:12}" >> "$GITHUB_OUTPUT"
+                  echo "运行时资产 id: ${hash:0:12}"
+
+            - name: 检查是否已发布
+              id: exists
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  name="runtime-assets-${{ steps.hash.outputs.id }}.tar.gz"
+                  if gh release view "$ASSET_RELEASE_TAG" --json assets \
+                      -q '.assets[].name' 2>/dev/null | grep -qx "$name"; then
+                      echo "已存在 $name, 跳过发布"
+                      echo "published=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "published=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: 打包
+              if: steps.exists.outputs.published == 'false'
+              id: package
+              run: |
+                  staging=$(mktemp -d)
+                  mkdir -p "$staging/libs" "$staging/models"
+                  # 保留符号链接(.so -> .so.1 -> .so.1.x.y), 二进制 RUNPATH=$ORIGIN/libs
+                  cp -a thirdparty/onnxruntime/. "$staging/libs/"
+                  cp -a thirdparty/models/. "$staging/models/"
+                  name="runtime-assets-${{ steps.hash.outputs.id }}.tar.gz"
+                  tar -czf "$name" -C "$staging" .
+                  sha256sum "$name" > "$name.sha256"
+                  echo "name=$name" >> "$GITHUB_OUTPUT"
+
+            - name: 发布
+              if: steps.exists.outputs.published == 'false'
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  NAME: ${{ steps.package.outputs.name }}
+              run: |
+                  if ! gh release view "$ASSET_RELEASE_TAG" >/dev/null 2>&1; then
+                      gh release create "$ASSET_RELEASE_TAG" \
+                          --title "运行时资产 (libs + models)" \
+                          --notes "按内容 hash 命名的运行时资产包, 由 Runtime Assets workflow 自动维护。"
+                  fi
+                  gh release upload "$ASSET_RELEASE_TAG" "$NAME" "$NAME.sha256" --clobber
+                  {
+                      echo "### 运行时资产已发布"
+                      echo ""
+                      echo "- 包: \`$NAME\`"
+                      echo "- 内容 hash: \`${{ steps.hash.outputs.full }}\`"
+                  } >> "$GITHUB_STEP_SUMMARY"

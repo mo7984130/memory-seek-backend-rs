@@ -9,15 +9,16 @@ use common_core::{
         },
     },
     ext::ToOk,
-    types::CursorPage,
+    types::CursorPageWithTotal,
 };
 use common_metrics::{MetricsTimerExt, metrics_name};
+use constants::RedisKeys;
 use file_validator::FileMetaData;
 use tracing::instrument;
 
 use crate::{
     mappers::visual_mapper::VisualMapper,
-    repo::VisualRepo,
+    repo::{VisualRepo, count_cache},
     services::visual_service::{
         AfterVisualDelete, AfterVisualUpload, VisualDeleteContext, publish_after_visual_delete,
         run_visual_delete_pipeline,
@@ -92,17 +93,17 @@ impl VisualService {
         state: &VisualState,
         user_id: UserId,
         req: VisualCursorParam,
-    ) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+    ) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
         // 获取visual_id
         let page = VisualRepo::query_visual_cursor_ids(state, req)
             .timed(metrics_name!("find_cursor_page_ids"))
             .await?;
-        if page.records.is_empty() {
-            return Ok(CursorPage::empty());
+        if page.page.records.is_empty() {
+            return Ok(CursorPageWithTotal::empty(page.total_count));
         }
 
         // 加载信息
-        let visual_vos = Self::load_visuals_info(state, user_id, &page.records)
+        let visual_vos = Self::load_visuals_info(state, user_id, &page.page.records)
             .timed(metrics_name!("load_visuals_info"))
             .await?;
 
@@ -174,6 +175,7 @@ impl VisualService {
                 visuals: ctx.visuals,
             },
         );
+        count_cache::invalidate(&state, &RedisKeys::visual::count::liked_visuals(user_id)).await;
 
         Ok(())
     }

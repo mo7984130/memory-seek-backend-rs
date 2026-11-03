@@ -33,6 +33,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .miss_dep("User", "S3Client")?
             .clone(),
     ));
+    register.insert(Arc::clone(&user_state));
 
     // 获取路由
     let public_router = user::Controller::public_routes().with_state(user_state.clone());

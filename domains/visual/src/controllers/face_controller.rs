@@ -5,13 +5,13 @@ use axum::{
     extract::State,
     routing::{delete, get, post},
 };
-use common_core::{Result, types::CursorPage};
+use common_core::{Result, types::CursorPageWithTotal};
 use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
     extractors::ValidatedPath, extractors::ValidatedQuery,
 };
 use types_core::cursor::TimeIdCursor;
-use types_identity::auth::user::{AdminId, UserId};
+use types_identity::auth::user::UserId;
 use types_visual::{
     FaceView, dto::face::FaceDeleteBatchParam, dto::face::FaceDeleteBatchResult,
     dto::face::UnassignedFaceVisualCursorParam, dto::visual::VisualView, face::FaceId,
@@ -28,8 +28,6 @@ impl ControllerRouter for FaceController {
     /// 人脸模块的受保护路由
     fn protected_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
-            .route("/admin/full", get(Self::full_compute))
-            .route("/admin/incremental", get(Self::incremental_compute))
             .route("/visual/{visual_id}", get(Self::get_faces_by_visual_id))
             .route(
                 "/unassigned-visuals",
@@ -47,31 +45,6 @@ impl ControllerRouter for FaceController {
     /// 人脸模块无公开路由
     fn public_routes() -> axum::Router<std::sync::Arc<Self::State>> {
         Router::new()
-    }
-}
-
-// 创建
-impl FaceController {
-    /// 启动全量人脸计算任务
-    async fn full_compute(
-        State(state): State<Arc<VisualState>>,
-        Extension(user_id): Extension<UserId>,
-    ) -> Result<R<()>> {
-        let admin = AdminId::new(user_id)?;
-        FaceService::compute(state.clone(), admin, true).await?;
-
-        Ok(()).to_r_ok()
-    }
-
-    /// 启动增量人脸计算任务
-    async fn incremental_compute(
-        State(state): State<Arc<VisualState>>,
-        Extension(user_id): Extension<UserId>,
-    ) -> Result<R<()>> {
-        let admin = AdminId::new(user_id)?;
-        FaceService::compute(state.clone(), admin, false).await?;
-
-        Ok(()).to_r_ok()
     }
 }
 
@@ -117,7 +90,7 @@ impl FaceController {
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<UnassignedFaceVisualCursorParam>,
-    ) -> Result<R<CursorPage<VisualView, TimeIdCursor<VisualId>>>> {
+    ) -> Result<R<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>>> {
         FaceService::get_unassigned_face_visuals(&state, user_id, req)
             .await
             .to_r_ok()

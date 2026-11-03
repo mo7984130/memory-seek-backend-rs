@@ -2,6 +2,7 @@
 name = "common-db"
 version = "0.1.0"
 edition = "2024"
+license.workspace = true
 description = "关系型持久化能力: 连接工具、表元数据、事务管道与事务宏"
 
 [dependencies]

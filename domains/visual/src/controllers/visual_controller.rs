@@ -8,7 +8,7 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
-use common_core::{Result, types::CursorPage};
+use common_core::{Result, types::CursorPageWithTotal};
 use common_web::{
     R, controller_router::ControllerRouter, ext::ToROkExt, extractors::ValidatedJson,
     extractors::ValidatedPath, extractors::ValidatedQuery,
@@ -69,7 +69,7 @@ impl VisualController {
         State(state): State<Arc<VisualState>>,
         Extension(user_id): Extension<UserId>,
         ValidatedQuery(req): ValidatedQuery<VisualCursorParam>,
-    ) -> Result<R<CursorPage<VisualView, TimeIdCursor<VisualId>>>> {
+    ) -> Result<R<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>>> {
         VisualService::get_visual_cursor_page(&state, user_id, req)
             .await
             .to_r_ok()

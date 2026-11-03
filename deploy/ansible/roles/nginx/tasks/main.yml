@@ -1,0 +1,68 @@
+---
+- name: 安装 nginx
+  apt:
+      name: nginx
+      state: present
+      update_cache: true
+
+- name: 创建 web 根目录
+  file:
+      path: /var/www/{{ domain_name }}
+      state: directory
+      owner: www-data
+      group: www-data
+      mode: '0755'
+
+- name: 检查 TLS 证书是否存在
+  stat:
+      path: /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem
+  register: nginx_tls_certificate
+
+- name: 配置 Nginx 站点
+  template:
+      src: site.conf.j2
+      dest: "/etc/nginx/conf.d/{{ domain_name }}-ssl.conf"
+      owner: root
+      group: root
+  vars:
+      nginx_tls_enabled: "{{ nginx_tls_certificate.stat.exists }}"
+  notify: reload nginx
+
+- name: 删除默认站点配置
+  file:
+      path: /etc/nginx/sites-enabled/default
+      state: absent
+
+- name: 配置 Nginx 缓存目录
+  file:
+      path: /var/cache/nginx/cache
+      state: directory
+      owner: www-data
+      group: www-data
+      mode: '0755'
+
+- name: 配置代理缓存
+  blockinfile:
+      path: /etc/nginx/nginx.conf
+      block: |
+          proxy_cache_path /var/cache/nginx/cache levels=1:2 keys_zone=cache:10m max_size=1g inactive=7d use_temp_path=off;
+      insertafter: "^http {"
+      marker: "    # {mark} ANSIBLE MANAGED BLOCK - cache"
+  notify: reload nginx
+
+- name: 验证 Nginx 配置
+  command: nginx -t
+  changed_when: false
+
+- name: 确保 Nginx 服务已启动
+  systemd:
+      name: nginx
+      state: started
+      enabled: true
+
+- name: 应用配置变更
+  meta: flush_handlers
+
+- name: 部署前端
+  include_tasks: deploy-frontend.yml
+  tags: frontend

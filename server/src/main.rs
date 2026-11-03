@@ -27,7 +27,7 @@ use crate::state::AppState;
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 #[derive(Parser)]
-#[command(name = "memory-seek-server")]
+#[command(name = "memory-seek-server", version, about)]
 struct Cli {
     /// 配置文件路径
     #[arg(short = 'c', long = "config")]
@@ -41,6 +41,14 @@ async fn main() -> Result<()> {
 
     // 初始化日志
     setup::bases::log::init();
+
+    // 版本号是全局版本(server 的 package version), 在加载配置之前打印,
+    // 保证配置出错时也能从日志确认当前部署的是哪个版本。
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
+        commit = env!("MEMORY_SEEK_GIT_COMMIT"),
+        "memory-seek-server 启动"
+    );
 
     // 加载配置
     let cfg = AppConfig::load(cli.config);

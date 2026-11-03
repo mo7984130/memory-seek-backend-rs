@@ -6,7 +6,8 @@
 
 use crate::client::{Client, Request};
 use crate::error::Result;
-use common_core::types::CursorPage;
+use common_core::types::CursorPageWithTotal;
+use types_admin::job::{AdminJobView, StartAdminJobRequest};
 use types_core::cursor::TimeIdCursor;
 use types_core::{FaceId, PersonId, VisualId};
 use types_visual::{
@@ -27,7 +28,7 @@ pub async fn get_unassigned_face_visuals(
     client: &Client,
     cursor: Option<TimeIdCursor<VisualId>>,
     size: Option<u64>,
-) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
     let param = UnassignedFaceVisualCursorParam {
         cursor,
         size: size.unwrap_or(32),
@@ -76,16 +77,12 @@ pub async fn delete_faces_batch(
         .await
 }
 
-/// 启动全量人脸计算任务(管理员)。`GET /visual/face/admin/full`
-pub async fn full_compute(client: &Client) -> Result<()> {
-    client
-        .send_unit(Request::get("/visual/face/admin/full"))
-        .await
+/// 启动全量人脸计算任务(管理员)，返回持久化任务记录。
+pub async fn full_compute(client: &Client) -> Result<AdminJobView> {
+    crate::api::admin::start_job(client, &StartAdminJobRequest::FaceFull).await
 }
 
-/// 启动增量人脸计算任务(管理员)。`GET /visual/face/admin/incremental`
-pub async fn incremental_compute(client: &Client) -> Result<()> {
-    client
-        .send_unit(Request::get("/visual/face/admin/incremental"))
-        .await
+/// 启动增量人脸计算任务(管理员)，返回持久化任务记录。
+pub async fn incremental_compute(client: &Client) -> Result<AdminJobView> {
+    crate::api::admin::start_job(client, &StartAdminJobRequest::FaceIncremental).await
 }

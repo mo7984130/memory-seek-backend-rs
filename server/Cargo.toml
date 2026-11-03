@@ -1,7 +1,8 @@
 [package]
 name = "server"
-version = "0.8.1"
+version = "2.7.0"
 edition = "2024"
+license.workspace = true
 
 [[bin]]
 name = "memory-seek-server"
@@ -10,7 +11,7 @@ path = "src/main.rs"
 [features]
 # ============================================================
 # 对外功能开关:部署时通过 --features 按需开启(可多选)
-#   业务域:auth / user / visual / audit / backup
+#   业务域:auth / user / visual / audit / backup / admin
 #   能力:   metrics / face-engine / audit-recording
 # ============================================================
 default = []
@@ -19,6 +20,7 @@ user = ["dep:user", "_s3", "_token_cipher", "_cache"]
 visual = ["dep:visual", "_s3", "_token_cipher", "_cache"]
 audit = ["dep:audit"]
 backup = ["dep:backup", "_s3"]
+admin = ["dep:admin", "admin/face", "user", "face-engine", "audit", "audit-recording", "types-db-init/admin"]
 metrics = [
     "dep:common-metrics",
     "dep:metrics",
@@ -57,7 +59,8 @@ auth = { path = "../domains/auth", features = ["controller"], optional = true }
 user = { path = "../domains/user", features = ["controller"], optional = true }
 visual = { path = "../domains/visual", features = ["controller"], optional = true }
 backup = { path = "../domains/backup", optional = true }
-audit = { path = "../domains/audit", features = ["controller"], optional = true }
+audit = { path = "../domains/audit", features = ["query"], optional = true }
+admin = { path = "../domains/admin", optional = true }
 
 # 基础设施
 common-core = { workspace = true, features = ["axum", "tokio"] }

@@ -1,0 +1,49 @@
+---
+# ── 发布来源 ──
+# 部署版本固定在 group_vars/all/versions.yml, 不读取本地仓库状态;
+# 临时回滚用 -e binary_version=vX.Y.Z 覆盖。必须带 v 前缀, 与 release tag 一致。
+binary_version: "{{ backend_version }}"
+binary_name: memory-seek-server
+release_repo: mo7984130/memory-seek-backend-rs
+
+binary_package: "{{ binary_name }}-{{ binary_version }}-linux-x86_64.tar.gz"
+release_base_url: "https://github.com/{{ release_repo }}/releases/download/{{ binary_version }}"
+
+# 运行时资产(libs + models)单独发布, 按二进制包内 manifest.yaml 声明的 hash 安装;
+# 内容未变则永不重新下载。
+runtime_assets_tag: runtime-assets
+runtime_assets_base_url: "https://github.com/{{ release_repo }}/releases/download/{{ runtime_assets_tag }}"
+
+# ── 目录布局 ──
+service_name: memory-seek-server
+service_user: memory-seek
+
+base_dir: /opt/memory-seek
+releases_dir: "{{ base_dir }}/releases"
+runtime_dir: "{{ base_dir }}/runtime"
+current_link: "{{ base_dir }}/current"
+previous_link: "{{ base_dir }}/previous"
+
+config_dir: /etc/memory-seek
+data_dir: /var/lib/memory-seek
+backup_dir: /var/backups/memory-seek
+control_cache_dir: /tmp/memory-seek-artifacts
+
+# 保留的历史版本数量(支持秒级回滚); 被引用的运行时资产不会被清理
+keep_releases: 3
+
+# ── 监听与健康检查 ──
+server_host: 127.0.0.1
+server_port: 7984
+health_url: "http://{{ server_host }}:{{ server_port }}/health"
+health_retries: 30
+health_delay: 1
+
+# ── 视频转码依赖: 必须带 libsvtav1 的 ffmpeg(BtbN 静态构建) ──
+ffmpeg_release_url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-21-13-06/ffmpeg-n9.0.2-31-gc89d6ee1ca-linux64-gpl-9.0.tar.xz"
+ffmpeg_release_sha256: "2212009529e7a18809c0a23700e8045364c17853c4390cf8c051e6b65dd97bde"
+ffmpeg_archive_name: "ffmpeg-libsvtav1.tar.xz"
+ffmpeg_local_archive: "/tmp/{{ ffmpeg_archive_name }}"
+ffmpeg_remote_archive: "/tmp/{{ ffmpeg_archive_name }}"
+ffmpeg_extract_dir: "/opt/ffmpeg"
+ffmpeg_install_path: "/usr/local/bin/ffmpeg"

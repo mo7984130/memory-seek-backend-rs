@@ -1,15 +1,3 @@
-# TypeScript 类型导出配置
-#
-# ts-rs 原生导出机制（#[ts(export, export_to = "...")]）：
-# 编译带 ts feature 的 crate 时自动把类型写到统一输出目录，
-# 无需手动维护导出清单（旧方案 tools/export-ts bin 已移除）。
-#
-# relative = true 表示相对本配置文件所在目录（仓库根），
-# 因此 types-* / common-* / visual 等 crate 都会输出到仓库根 bindings/ 下，
-# 目录归属由各类型上的 export_to 属性决定（auth / visual / user）。
-[env]
-TS_RS_EXPORT_DIR = { value = "target/bindings", relative = true }
-
 # 构建参数。注意 `target.<triple>.rustflags` 会覆盖 `[build].rustflags`,
 # 因此所有 rustflags 集中写在这一张表里,不要再往 [build] 里放。
 [target.x86_64-unknown-linux-gnu]

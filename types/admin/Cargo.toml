@@ -1,0 +1,26 @@
+[package]
+name = "types-admin"
+version = "0.6.1"
+edition = "2024"
+license.workspace = true
+
+[features]
+default = []
+orm = ["dep:sea-orm", "dep:linkme", "types-db-registry", "common-core/sea-orm"]
+
+[dependencies]
+common-core = { workspace = true }
+common_macros.path = "../../libs/common_macros"
+types-core = { workspace = true }
+types-visual = { workspace = true }
+types-backup.workspace = true
+types-db-registry = { path = "../db-registry", optional = true }
+serde.workspace = true
+serde_json.workspace = true
+validator.workspace = true
+sea-orm = { workspace = true, optional = true }
+linkme = { workspace = true, optional = true }
+
+[dev-dependencies]
+sea-orm = { workspace = true, features = ["schema-sync", "entity-registry"] }
+tokio.workspace = true

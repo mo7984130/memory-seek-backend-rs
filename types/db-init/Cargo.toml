@@ -1,18 +1,21 @@
 [package]
 name = "types-db-init"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
+license.workspace = true
 description = "数据库初始化编排: 按注册表同步表结构并执行幂等索引回调"
 
 [features]
 default = []
 face = ["types-visual/face"]
+admin = ["types-admin/orm"]
 
 [dependencies]
 types-db-registry.workspace = true
 types-audit = { workspace = true, features = ["orm"] }
 types-identity = { workspace = true, features = ["orm"] }
 types-visual = { workspace = true, features = ["orm"] }
+types-admin = { workspace = true, optional = true }
 
 common-core.path = "../../common/core"
 sea-orm = { workspace = true, features = ["sqlx-postgres", "macros", "schema-sync", "entity-registry"] }

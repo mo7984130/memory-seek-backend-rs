@@ -14,7 +14,6 @@ crate::validated_newtype!(
     VisualIds,
     Vec<VisualId>,
     1024,
-    "visual/",
     "影像ID列表不能为空",
     "影像数量不能超过1024"
 );
@@ -27,7 +26,6 @@ crate::validated_newtype!(
     FaceIds,
     Vec<FaceId>,
     1024,
-    "visual/",
     "人脸ID列表不能为空",
     "人脸数量不能超过1024"
 );
@@ -40,7 +38,6 @@ crate::validated_newtype!(
     CommentContent,
     String,
     1024,
-    "visual/",
     "评论内容不能为空",
     "评论内容不能超过1024个字符"
 );
@@ -53,23 +50,22 @@ crate::validated_newtype!(
     PersonName,
     String,
     64,
-    "visual/",
     "人物名称不能为空",
     "人物名称长度不能超过64个字符"
 );
 
-crate::dto!(UploadVisualParam, "visual/", docs = "上传影像请求参数（文件的二进制数据由 multipart 单独传递）"; {
+crate::dto!(UploadVisualParam, docs = "上传影像请求参数（文件的二进制数据由 multipart 单独传递）"; {
     /// 指定创建时间（可选，仅管理员可设置，RFC3339 格式）
     pub created_at: Option<DateTime>,
 });
 
-crate::dto!(ExistsByHashBatchParam, "visual/"; {
+crate::dto!(ExistsByHashBatchParam; {
     /// 哈希值列表，数量限制 1~128
     #[validate(length(min = 1, max = 128, message = "哈希值数量在 1 到 128 之间"))]
     pub hashes: Vec<String>,
 });
 
-crate::dto!(DeleteVisualsParam, "visual/"; {
+crate::dto!(DeleteVisualsParam; {
     /// 影像 ID 列表
     #[validate(nested)]
     pub visual_ids: VisualIds,
@@ -80,16 +76,13 @@ fn liked_visuals_default_size() -> u64 {
     32
 }
 
-crate::dto!(LikedVisualsQuery, "visual/"; {
+crate::dto!(LikedVisualsQuery; {
     /// 分页游标（可选，首次查询不传）
-    #[cfg_attr(feature = "ts", ts(type = "string | null"))]
     pub cursor: Option<TimeIdCursor<VisualId>>,
 
     /// 每页大小（可选，默认 32，最大 100）
     #[serde(default = "liked_visuals_default_size")]
     #[validate(range(min = 1, max = 128, message = "size 在 1 到 128 之间"))]
-    #[cfg_attr(feature = "ts", ts(type = "number"))]
-    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub size: u64,
 });
 

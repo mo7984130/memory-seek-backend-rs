@@ -1,6 +1,6 @@
 //! 影像列表 / 哈希查存在 / 时间线统计。
 
-use common_core::types::CursorPage;
+use common_core::types::CursorPageWithTotal;
 use memory_seek_api::{Method, api};
 use memseek_test::{TaskIndex, register_scenario, scenario::Scenario};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
@@ -35,7 +35,7 @@ impl Scenario for GetVisualsCursorScenario {
 
     type Error = E2eError;
 
-    type Output = CursorPage<VisualView, TimeIdCursor<VisualId>>;
+    type Output = CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>;
 
     type Setup = CursorSetup;
 
@@ -81,9 +81,10 @@ impl Scenario for GetVisualsCursorScenario {
         output: &Self::Output,
     ) -> Result<bool, Self::Error> {
         let page = output;
-        let size_ok = page.records.len() == PAGE_SIZE as usize && page.has_more;
+        let size_ok = page.page.records.len() == PAGE_SIZE as usize && page.page.has_more;
         // 每一页记录都应带当前浏览者可用的 original token
         let viewer_ok = page
+            .page
             .records
             .iter()
             .all(|p| token_viewer(&p.tokens.original, setup.session.user_id));

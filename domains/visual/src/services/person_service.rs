@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     VisualRepo, VisualState,
     mappers::{face_mapper::FaceMapper, person_mapper::PersonMapper},
-    repo::{FaceRepo, PersonRepo},
+    repo::{FaceRepo, PersonRepo, count_cache},
     services::visual_service::VisualService,
 };
 use audit::{AuditEvent, AuditRecorder};
@@ -14,14 +14,16 @@ use common_core::{
         contextual::ext::{IntoContextualExt, OptionExt, ResultExt},
     },
     ext::ToOk,
-    types::CursorPage,
+    types::{CursorPage, CursorPageWithTotal},
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
+use constants::RedisKeys;
 use insight_face_rs::{FaceEmbedding, types::DIMS};
 use ndarray::Array2;
 use petal_clustering::{Fit, HDbscan};
-use tokio::{spawn, task::spawn_blocking};
+use tokio::task::spawn_blocking;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 use types_core::cursor::{CountIdCursor, TimeIdCursor};
 use types_identity::auth::user::{AdminId, UserId};
@@ -35,19 +37,23 @@ pub struct PersonService;
 
 // 创建
 impl PersonService {
-    /// 异步启动全量人物扫描任务
-    #[instrument(skip_all, fields(admin_user_id = %admin))]
-    pub async fn full_scan(state: Arc<VisualState>, admin: AdminId) -> Result<()> {
-        let user_id = admin.into_inner();
-        let admin = AdminId::new(user_id)?;
-        spawn(async move { Self::inner_full_scan(state, admin).await });
-        Ok(())
+    /// 由管理员任务编排器调用并等待扫描完成。
+    pub async fn run_full_scan(
+        state: Arc<VisualState>,
+        admin: AdminId,
+        cancellation: CancellationToken,
+    ) -> Result<()> {
+        Self::inner_full_scan(state, admin, cancellation).await
     }
 
     /// 执行全量扫描，重建人物聚类和人脸归属
     #[common_macros::metered(name = "person_full_scan")]
     #[instrument(name = "person_full_scan", skip_all, fields(admin_user_id = %admin))]
-    pub async fn inner_full_scan(state: Arc<VisualState>, admin: AdminId) -> Result<()> {
+    pub async fn inner_full_scan(
+        state: Arc<VisualState>,
+        admin: AdminId,
+        cancellation: CancellationToken,
+    ) -> Result<()> {
         let user_id = admin.into_inner();
         info!(user_id = %user_id, "管理员触发人物全量聚类");
 
@@ -55,6 +61,9 @@ impl PersonService {
         let (faces, visual_file_ids) = PersonRepo::load_faces_with_visual_files(&state).await?;
 
         info!("加载照片数据完成");
+        if cancellation.is_cancelled() {
+            return Err(AppError::conflict("任务已取消"));
+        }
 
         info!("开始聚类");
         let embedding_array = {
@@ -82,6 +91,9 @@ impl PersonService {
         .await
         .into_contextual()?;
         info!("聚类完成");
+        if cancellation.is_cancelled() {
+            return Err(AppError::conflict("任务已取消"));
+        }
 
         info!("开始保存 person/face 表");
         FaceRepo::backup_and_truncate(&state).await?;
@@ -147,28 +159,34 @@ impl PersonService {
         })
         .await?;
 
+        count_cache::invalidate(&state, RedisKeys::visual::count::PERSONS).await;
+        count_cache::invalidate(&state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
+
         Ok(())
     }
 
-    /// 将全部未分配人脸按 centroid 余弦相似度指派到已有人物；低于阈值的保持未分配
-    #[instrument(skip_all, fields(admin_id = %admin))]
-    pub async fn assign_unassigned_faces(
+    /// 由管理员任务编排器调用并等待二次聚类完成。
+    pub async fn run_secondary_cluster(
         state: Arc<VisualState>,
         admin: AdminId,
         req: SecondaryClusterParam,
+        cancellation: CancellationToken,
     ) -> Result<()> {
-        spawn(async move { Self::inner_assign_unassigned_faces(state, admin, req).await });
-        Ok(())
+        Self::inner_assign_unassigned_faces(state, admin, req, cancellation).await
     }
 
     /// 执行未分配人脸与人物质心的匹配和归属更新
     #[common_macros::metered(name = "person_secondary_cluster")]
     #[instrument(name = "person_secondary_cluster", skip_all, fields(admin_id = %admin))]
-    async fn inner_assign_unassigned_faces(
+    pub(crate) async fn inner_assign_unassigned_faces(
         state: Arc<VisualState>,
         admin: AdminId,
         req: SecondaryClusterParam,
+        cancellation: CancellationToken,
     ) -> Result<()> {
+        if cancellation.is_cancelled() {
+            return Err(AppError::conflict("任务已取消"));
+        }
         let SecondaryClusterParam { threshold } = req;
         info!(admin_id = %admin, threshold, "管理员触发二次聚类");
         db_transaction!(&state.db, |txn| {
@@ -183,6 +201,9 @@ impl PersonService {
 
         let faces = FaceRepo::lock_unassigned_faces(&state).await?;
         let persons = PersonRepo::query_all(&state).await?;
+        if cancellation.is_cancelled() {
+            return Err(AppError::conflict("任务已取消"));
+        }
         info!(
             "加载完成: 未分配人脸 {} 张, 人物 {} 个",
             faces.len(),
@@ -205,6 +226,9 @@ impl PersonService {
         .await
         .into_contextual()?;
         let (classified, faces, persons) = classified;
+        if cancellation.is_cancelled() {
+            return Err(AppError::conflict("任务已取消"));
+        }
 
         let matched = classified.len();
         let unmatched = faces.len() - matched;
@@ -225,6 +249,9 @@ impl PersonService {
             }
         }
         for (person_id, faces) in per_person {
+            if cancellation.is_cancelled() {
+                return Err(AppError::conflict("任务已取消"));
+            }
             if let Some(person) = person_map.remove(&person_id) {
                 PersonRepo::add_faces(&state, person, faces).await?;
             }
@@ -239,6 +266,8 @@ impl PersonService {
             Ok(())
         })
         .await?;
+
+        count_cache::invalidate(&state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
 
         Ok(())
     }
@@ -313,10 +342,12 @@ impl PersonService {
         state: &VisualState,
         user_id: UserId,
         req: PersonCursorParam,
-    ) -> Result<CursorPage<PersonView, CountIdCursor<PersonId>>> {
+    ) -> Result<CursorPageWithTotal<PersonView, CountIdCursor<PersonId>>> {
+        let CursorPageWithTotal { page, total_count } =
+            PersonRepo::query_page(state, req.cursor, req.size).await?;
         let CursorPage {
             records, has_more, ..
-        } = PersonRepo::query_page(state, req.cursor, req.size).await?;
+        } = page;
 
         let mut views = Vec::with_capacity(records.len());
         for person in records.into_iter() {
@@ -332,6 +363,7 @@ impl PersonService {
                 count: view.face_count,
                 id: view.id,
             })
+            .with_optional_total(total_count)
             .to_ok()
     }
 
@@ -342,15 +374,17 @@ impl PersonService {
         state: &VisualState,
         user_id: UserId,
         req: PersonSearchParam,
-    ) -> Result<CursorPage<PersonView, PersonId>> {
+    ) -> Result<CursorPageWithTotal<PersonView, PersonId>> {
         let PersonSearchParam {
             keyword,
             cursor,
             size,
         } = req;
+        let CursorPageWithTotal { page, total_count } =
+            PersonRepo::search_person_page(state, &keyword, cursor, size).await?;
         let CursorPage {
             records, has_more, ..
-        } = PersonRepo::search_person_page(state, &keyword, cursor, size).await?;
+        } = page;
 
         let mut views = Vec::with_capacity(records.len());
         for person in records.into_iter() {
@@ -363,6 +397,7 @@ impl PersonService {
         }
         CursorPage::from_has_more(views, has_more)
             .with_next_cursor(|view| view.id)
+            .with_optional_total(total_count)
             .to_ok()
     }
 
@@ -377,15 +412,15 @@ impl PersonService {
         user_id: UserId,
         person_id: PersonId,
         req: PersonVisualCursorParam,
-    ) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+    ) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
         let page = FaceRepo::query_person_visual_ids(state, person_id, &req)
             .timed(metrics_name!("query_visual_ids"))
             .await?;
-        if page.records.is_empty() {
-            return Ok(CursorPage::empty());
+        if page.page.records.is_empty() {
+            return Ok(CursorPageWithTotal::empty(page.total_count));
         }
 
-        let visuals = VisualService::load_visuals_info(state, user_id, &page.records)
+        let visuals = VisualService::load_visuals_info(state, user_id, &page.page.records)
             .timed(metrics_name!("load_visuals_info"))
             .await?;
 

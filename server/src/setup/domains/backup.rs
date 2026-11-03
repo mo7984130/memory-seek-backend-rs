@@ -3,7 +3,6 @@ use crate::{config::AppConfig, setup::AppSetup};
 use backup::BackupState;
 use common_core::Result;
 use common_runtime::TaskManager;
-use common_web::controller_router::ControllerRouter;
 use oss::S3Client;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
@@ -49,10 +48,6 @@ pub async fn register(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
 
     // 注册每日凌晨 6 点（本地时间）的定时备份任务
     backup::scheduler::register_scheduled(Arc::clone(&state));
-
-    let protected_router =
-        backup::controller::BackupController::protected_routes().with_state(Arc::clone(&state));
-    setup.router.add_protected(protected_router);
 
     setup.registry.insert(BackupRuntime {
         state: Arc::clone(&state),

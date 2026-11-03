@@ -8,7 +8,7 @@ use common_core::{
 };
 use insight_face_rs::BoundingBox;
 use sea_orm::{
-    ColumnTrait, Condition, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
     sea_query::{Expr, extension::postgres::PgExpr},
 };
 use types_core::cursor::CountIdCursor;
@@ -253,6 +253,11 @@ impl PersonMapper {
         Ok(CursorPage::from_oversize(records, size))
     }
 
+    /// 查询人物列表总量。
+    pub async fn count_persons(db: &impl ConnectionTrait) -> Result<u64> {
+        Entity::find().count(db).await.map_err(Into::into)
+    }
+
     /// 按关键词前缀搜索人物，匹配 `name` 或 `name_initials`（忽略大小写）
     pub async fn query_search(
         db: &impl ConnectionTrait,
@@ -264,13 +269,10 @@ impl PersonMapper {
             .replace('\\', "\\\\")
             .replace('%', "\\%")
             .replace('_', "\\_");
-        let mut query = Entity::find()
-            .filter(
-                Condition::any()
-                    .add(Expr::col(Column::Name).ilike(format!("{escaped}%")))
-                    .add(Expr::col(Column::NameInitials).ilike(format!("{escaped}%"))),
-            )
-            .order_by_desc(Column::Id);
+        let filter = Condition::any()
+            .add(Expr::col(Column::Name).ilike(format!("{escaped}%")))
+            .add(Expr::col(Column::NameInitials).ilike(format!("{escaped}%")));
+        let mut query = Entity::find().filter(filter).order_by_desc(Column::Id);
         if let Some(person_id) = cursor {
             query = query.filter(Column::Id.lt(person_id));
         }
@@ -283,6 +285,22 @@ impl PersonMapper {
             .collect();
 
         Ok(CursorPage::from_oversize(records, size))
+    }
+
+    /// 查询关键词匹配的人物总量。
+    pub async fn count_person_search(db: &impl ConnectionTrait, keyword: &str) -> Result<u64> {
+        let escaped = keyword
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let filter = Condition::any()
+            .add(Expr::col(Column::Name).ilike(format!("{escaped}%")))
+            .add(Expr::col(Column::NameInitials).ilike(format!("{escaped}%")));
+        Entity::find()
+            .filter(filter)
+            .count(db)
+            .await
+            .map_err(Into::into)
     }
 }
 

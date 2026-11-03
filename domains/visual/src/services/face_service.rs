@@ -9,14 +9,16 @@ use common_core::{
     error::contextual::ext::{IntoContextualExt, OptionExt, ResultExt},
     error::{AppError, ContextualError, contextual},
     ext::ToOk,
-    types::CursorPage,
+    types::CursorPageWithTotal,
 };
 use common_metrics::{
     GaugeGuard, MetricsTimer, MetricsTimerExt, inc_counter, metrics_name, set_gauge,
 };
+use constants::RedisKeys;
 use image::{ImageBuffer, Rgb};
 use insight_face_rs::Face;
-use tokio::{spawn, sync::mpsc, task::spawn_blocking};
+use tokio::{sync::mpsc, task::spawn_blocking};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use types_core::cursor::TimeIdCursor;
 use types_identity::auth::user::{AdminId, UserId};
@@ -32,7 +34,7 @@ use crate::{
         face_mapper::FaceMapper, face_task_mapper::FaceTaskMapper, person_mapper::PersonMapper,
         visual_mapper::VisualMapper,
     },
-    repo::FaceRepo,
+    repo::{FaceRepo, count_cache},
     services::visual_service::{AfterVisualUpload, VisualService},
 };
 
@@ -45,8 +47,13 @@ const DETECT_IMAGE_MAX_EDGE: u32 = 1920;
 
 // 创建
 impl FaceService {
-    /// 触发人脸计算；全量先备份并清空表重算，增量按有无 face 判断
-    pub async fn compute(state: Arc<VisualState>, admin: AdminId, full: bool) -> Result<()> {
+    /// 由管理员任务编排器调用并等待计算完成。
+    pub async fn run_for_admin(
+        state: Arc<VisualState>,
+        admin: AdminId,
+        full: bool,
+        cancellation: CancellationToken,
+    ) -> Result<()> {
         let user_id = admin.into_inner();
         let admin = AdminId::new(user_id)?;
         common_db::db_transaction!(&state.db, |txn| {
@@ -60,8 +67,7 @@ impl FaceService {
             Ok(())
         })
         .await?;
-        spawn(async move { Self::compute_inner(state, admin, full).await });
-        Ok(())
+        Self::compute_inner(state, admin, full, cancellation).await
     }
 
     /// 人脸计算
@@ -71,7 +77,12 @@ impl FaceService {
         skip_all,
         fields(user_id = %admin, full = %full)
     )]
-    async fn compute_inner(state: Arc<VisualState>, admin: AdminId, full: bool) -> Result<()> {
+    async fn compute_inner(
+        state: Arc<VisualState>,
+        admin: AdminId,
+        full: bool,
+        cancellation: CancellationToken,
+    ) -> Result<()> {
         let user_id = admin.into_inner();
         info!(user_id = %user_id, "人脸计算触发, full: {}", full);
 
@@ -81,6 +92,9 @@ impl FaceService {
         // 如果是全量计算的话
         // 备份并且清空表
         if full {
+            if cancellation.is_cancelled() {
+                return Err(AppError::conflict("任务已取消"));
+            }
             FaceRepo::backup_and_truncate(&state).await?;
         }
 
@@ -91,6 +105,9 @@ impl FaceService {
         let mut total_faces = 0u64;
         let mut total_no_face = 0u64;
         loop {
+            if !full && cancellation.is_cancelled() {
+                return Err(AppError::conflict("任务已取消"));
+            }
             batch_idx += 1;
             set_gauge!("batch", batch_idx as f64);
 
@@ -301,15 +318,15 @@ impl FaceService {
         state: &VisualState,
         user_id: UserId,
         req: UnassignedFaceVisualCursorParam,
-    ) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+    ) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
         let page = FaceRepo::query_unassigned_face_visual_ids(state, &req)
             .timed(metrics_name!("query_unassigned_face_visual_ids"))
             .await?;
-        if page.records.is_empty() {
-            return Ok(CursorPage::empty());
+        if page.page.records.is_empty() {
+            return Ok(CursorPageWithTotal::empty(page.total_count));
         }
 
-        let visuals = VisualService::load_visuals_info(state, user_id, &page.records)
+        let visuals = VisualService::load_visuals_info(state, user_id, &page.page.records)
             .timed(metrics_name!("load_visuals_info"))
             .await?;
 
@@ -572,6 +589,7 @@ impl FaceService {
         visual_id: VisualId,
         faces: Vec<face::NewFaceRecord>,
     ) -> common_core::Result<()> {
+        let has_faces = !faces.is_empty();
         common_db::db_transaction!(&state.db, |txn| {
             // 任务在检测期间被删(影像被删)则不落库
             if !FaceTaskMapper::mark_done(txn, visual_id).await? {
@@ -583,6 +601,9 @@ impl FaceService {
             Ok(())
         })
         .await?;
+        if has_faces {
+            count_cache::invalidate(state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
+        }
         Ok(())
     }
 

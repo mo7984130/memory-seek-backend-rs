@@ -68,6 +68,7 @@ pub async fn init(config: &AppConfig, setup: &mut AppSetup) -> Result<()> {
             .clone(),
         config.visual.clone(),
     );
+    register.insert(Arc::clone(&visual_state));
 
     // 获取路由
     let public_router = visual::Controller::public_routes().with_state(visual_state.clone());

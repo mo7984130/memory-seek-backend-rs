@@ -15,6 +15,7 @@ members = [
     "types/audit",
     "types/identity",
     "types/visual",
+    "types/admin",
     "types/db-init",
     "libs/common_macros",
     "libs/file_validator",
@@ -28,9 +29,13 @@ members = [
     "domains/user",
     "domains/visual",
     "domains/backup",
+    "domains/admin",
     "server",
     "tests/e2e"
 ]
+
+[workspace.package]
+license = "MIT OR Apache-2.0"
 
 [profile.release]
 opt-level = 3
@@ -61,6 +66,7 @@ types-backup = { path = "types/backup" }
 types-audit = { path = "types/audit" }
 types-identity = { path = "types/identity" }
 types-visual = { path = "types/visual" }
+types-admin = { path = "types/admin" }
 types-db-init = { path = "types/db-init" }
 axum = { version = "0.8.8", features = ["macros"] }
 tokio = { version = "1.49.0", features = ["full"] }
@@ -80,7 +86,6 @@ sea-orm = { version = "2.0.3", features = [
 chrono = { version = "0.4.44", features = ["serde"] }
 thiserror = "2.0.18"
 derive_more = { version = "1", default-features = false, features = ["from", "into", "display", "deref"] }
-ts-rs = { version = "12", features = ["chrono-impl", "no-serde-warnings"] }
 bcrypt = "0.19.0"
 argon2 = { version = "0.5", features = ["std"] }
 password-hash = "0.5"

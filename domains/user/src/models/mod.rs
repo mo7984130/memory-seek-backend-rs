@@ -12,6 +12,44 @@ pub struct UserBriefRow {
     pub avatar_file_id: Option<String>,
 }
 
+/// 管理员用户列表只选取可展示字段，不读取密码等凭据。
+#[derive(FromQueryResult, Debug, Clone)]
+pub(crate) struct AdminUserRow {
+    pub id: UserId,
+    pub username: String,
+    pub email: String,
+    pub nickname: String,
+    pub avatar_file_id: Option<String>,
+    pub created_at: common_core::time::DateTime,
+}
+
+impl AdminUserRow {
+    /// 转为用户视图；头像令牌始终以用户自身 ID 为主体签发。
+    pub(crate) fn into_user_info(
+        self,
+    ) -> common_core::ContextualResult<types_identity::user::UserInfo> {
+        use types_identity::user::UserInfo;
+
+        let avatar_token = self
+            .avatar_file_id
+            .map(|file_id| {
+                types_visual_token::VisualTokenStr::encrypt(
+                    &types_visual_token::VisualToken::image_thumbnail(self.id, file_id),
+                )
+            })
+            .transpose()?;
+
+        Ok(UserInfo {
+            id: self.id,
+            username: self.username,
+            nickname: self.nickname,
+            email: self.email,
+            avatar_token,
+            created_at: self.created_at,
+        })
+    }
+}
+
 impl UserBriefRow {
     /// 转换为用户摘要视图，头像 token 按浏览者签发
     pub fn into_brief_view(self, viewer: UserId) -> common_core::ContextualResult<UserBriefView> {

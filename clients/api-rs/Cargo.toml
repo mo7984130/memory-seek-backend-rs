@@ -1,9 +1,9 @@
 [package]
 name = "memory-seek-api-rs"
-version = "0.6.1"
+version = "0.12.0"
 edition = "2024"
 description = "Memory Seek API 客户端(Rust)，运行时与 HTTP 库无关"
-license = "MIT"
+license.workspace = true
 publish = false
 
 [lib]
@@ -26,6 +26,7 @@ types-visual = { workspace = true }
 types-visual-token = { workspace = true }
 types-audit = { workspace = true }
 types-backup = { workspace = true }
+types-admin = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }

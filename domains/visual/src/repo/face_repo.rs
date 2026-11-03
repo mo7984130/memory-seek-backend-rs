@@ -3,10 +3,11 @@ use common_core::{
     DbConn as ConnectionTrait,
     error::{AppError, ContextualError, contextual::Result},
     ext::ToOk,
-    types::CursorPage,
+    types::CursorPageWithTotal,
 };
 use common_db::{db_transaction, utils::DbUtils};
 use common_metrics::{MetricsTimerExt, metrics_name};
+use constants::RedisKeys;
 use sea_orm::{DbBackend, EntityName, Statement};
 use types_identity::auth::user::UserId;
 use types_visual::{
@@ -17,6 +18,7 @@ use types_visual::{
 use crate::{
     VisualState,
     mappers::{face_mapper::FaceMapper, person_mapper::PersonMapper},
+    repo::count_cache,
 };
 
 pub struct FaceRepo;
@@ -28,6 +30,8 @@ impl FaceRepo {
         FaceMapper::inserts(&state.db, faces)
             .timed(metrics_name!("db_insert"))
             .await?;
+
+        count_cache::invalidate(state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
 
         Ok(())
     }
@@ -42,12 +46,13 @@ impl FaceRepo {
         person_id: Option<PersonId>,
         user_id: UserId,
     ) -> Result<()> {
-        db_transaction!(&state.db, |txn| {
+        let old_person_id = db_transaction!(&state.db, |txn| {
             // 锁定人脸
             let face = FaceMapper::lock_by_id(txn, face_id).await?;
+            let old_person_id = face.person_id;
             // 归属未变化, 直接返回
             if person_id == face.person_id {
-                return Ok(());
+                return Ok(old_person_id);
             }
 
             // 移动人脸归属
@@ -100,10 +105,23 @@ impl FaceRepo {
             )
             .await?;
 
-            Ok(())
+            Ok(old_person_id)
         })
         .timed(metrics_name!("db_transaction"))
         .await?;
+
+        count_cache::invalidate(state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
+        if let Some(old_person_id) = old_person_id {
+            count_cache::invalidate(
+                state,
+                &RedisKeys::visual::count::person_visuals(old_person_id),
+            )
+            .await;
+        }
+        if let Some(person_id) = person_id {
+            count_cache::invalidate(state, &RedisKeys::visual::count::person_visuals(person_id))
+                .await;
+        }
 
         Ok(())
     }
@@ -155,14 +173,27 @@ impl FaceRepo {
     pub async fn query_unassigned_face_visual_ids(
         state: &VisualState,
         param: &UnassignedFaceVisualCursorParam,
-    ) -> Result<CursorPage<VisualId, ()>> {
-        FaceMapper::query_unassigned_face_visual_ids_cursor_page(
+    ) -> Result<CursorPageWithTotal<VisualId, ()>> {
+        let total_count = if param.cursor.is_none() {
+            Some(
+                count_cache::get_or_load(
+                    state,
+                    RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS,
+                    || async { FaceMapper::count_unassigned_face_visuals(&state.db).await },
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+        Ok(FaceMapper::query_unassigned_face_visual_ids_cursor_page(
             &state.db,
             param.cursor.clone(),
             param.size,
         )
         .timed(metrics_name!("query_unassigned_face_visual_ids"))
-        .await
+        .await?
+        .with_optional_total(total_count))
     }
 
     /// 查询人物关联的照片 ID
@@ -170,10 +201,24 @@ impl FaceRepo {
         state: &VisualState,
         person_id: PersonId,
         req: &PersonVisualCursorParam,
-    ) -> Result<CursorPage<VisualId, ()>> {
-        FaceMapper::query_person_visual_ids(&state.db, person_id, req.cursor.clone(), req.size)
-            .timed(metrics_name!("query_visual_ids"))
-            .await
+    ) -> Result<CursorPageWithTotal<VisualId, ()>> {
+        let key = RedisKeys::visual::count::person_visuals(person_id);
+        let total_count = if req.cursor.is_none() {
+            Some(
+                count_cache::get_or_load(state, &key, || async {
+                    FaceMapper::count_person_visuals(&state.db, person_id).await
+                })
+                .await?,
+            )
+        } else {
+            None
+        };
+        Ok(
+            FaceMapper::query_person_visual_ids(&state.db, person_id, req.cursor.clone(), req.size)
+                .timed(metrics_name!("query_visual_ids"))
+                .await?
+                .with_optional_total(total_count),
+        )
     }
 }
 
@@ -186,7 +231,7 @@ impl FaceRepo {
         face_ids: Vec<FaceId>,
         user_id: UserId,
     ) -> Result<u64> {
-        db_transaction!(&state.db, |txn| {
+        let affected = db_transaction!(&state.db, |txn| {
             // 行锁读取人脸
             let faces = FaceMapper::lock_by_ids(txn, &face_ids).await?;
 
@@ -214,8 +259,11 @@ impl FaceRepo {
             Ok(affected)
         })
         .timed(metrics_name!("db_transaction"))
-        .await?
-        .to_ok()
+        .await?;
+        if affected > 0 {
+            count_cache::invalidate(state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
+        }
+        affected.to_ok()
     }
 }
 
@@ -223,6 +271,11 @@ impl FaceRepo {
     /// 备份人脸与人物表后清空两表（重置自增）
     pub async fn backup_and_truncate(state: &VisualState) -> Result<()> {
         Self::backup_face_tables(state).await?;
+        let person_ids = PersonMapper::query_all(&state.db)
+            .await?
+            .into_iter()
+            .map(|person| person.id)
+            .collect::<Vec<_>>();
 
         common_db::db_transaction!(&state.db, |txn| {
             txn.execute_raw(Statement::from_string(
@@ -245,6 +298,13 @@ impl FaceRepo {
         })
         .timed(metrics_name!("db_transaction"))
         .await?;
+
+        count_cache::invalidate(state, RedisKeys::visual::count::PERSONS).await;
+        count_cache::invalidate(state, RedisKeys::visual::count::UNASSIGNED_FACE_VISUALS).await;
+        for person_id in person_ids {
+            count_cache::invalidate(state, &RedisKeys::visual::count::person_visuals(person_id))
+                .await;
+        }
 
         Ok(())
     }

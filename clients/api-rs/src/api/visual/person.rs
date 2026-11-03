@@ -6,7 +6,8 @@
 
 use crate::client::{Client, Request};
 use crate::error::Result;
-use common_core::types::CursorPage;
+use common_core::types::CursorPageWithTotal;
+use types_admin::job::{AdminJobView, StartAdminJobRequest};
 use types_core::cursor::{CountIdCursor, TimeIdCursor};
 use types_core::{PersonId, VisualId};
 use types_visual::{
@@ -19,7 +20,7 @@ pub async fn get_persons(
     client: &Client,
     cursor: Option<CountIdCursor<PersonId>>,
     size: Option<u64>,
-) -> Result<CursorPage<PersonView, CountIdCursor<PersonId>>> {
+) -> Result<CursorPageWithTotal<PersonView, CountIdCursor<PersonId>>> {
     let param = PersonCursorParam {
         cursor,
         size: size.unwrap_or(32),
@@ -38,7 +39,7 @@ pub async fn search_persons(
     keyword: &str,
     cursor: Option<PersonId>,
     size: Option<u64>,
-) -> Result<CursorPage<PersonView, PersonId>> {
+) -> Result<CursorPageWithTotal<PersonView, PersonId>> {
     let param = PersonSearchParam {
         keyword: keyword.to_owned(),
         cursor,
@@ -59,7 +60,7 @@ pub async fn get_person_visuals(
     person_id: PersonId,
     cursor: Option<TimeIdCursor<VisualId>>,
     size: Option<u64>,
-) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
     let param = PersonVisualCursorParam {
         cursor,
         size: size.unwrap_or(32),
@@ -84,15 +85,15 @@ pub async fn rename_person(
         .await
 }
 
-/// 删除人物及其关联数据(管理员)。`DELETE /visual/person/{personId}`
+/// 删除人物及其关联数据(管理员)。`DELETE /admin/visual/person/{personId}`
 pub async fn delete_person(client: &Client, person_id: PersonId) -> Result<()> {
     client
-        .send_unit(Request::delete(format!("/visual/person/{person_id}")))
+        .send_unit(Request::delete(format!("/admin/visual/person/{person_id}")))
         .await
 }
 
 /// 合并两个人物,将源人物的人脸转移到目标人物(管理员)。
-/// `POST /visual/person/merge`
+/// `POST /admin/visual/person/merge`
 pub async fn merge_person(
     client: &Client,
     source_person_id: PersonId,
@@ -103,21 +104,26 @@ pub async fn merge_person(
         target_person_id,
     };
     client
-        .send_json(Request::post("/visual/person/merge").json(&param))
+        .send_json(Request::post("/admin/visual/person/merge").json(&param))
         .await
 }
 
-/// 启动全量人物扫描任务(管理员)。`GET /visual/person/admin/full_scan`
-pub async fn full_scan(client: &Client) -> Result<()> {
-    client
-        .send_unit(Request::get("/visual/person/admin/full_scan"))
-        .await
+/// 启动全量人物扫描任务(管理员)，返回持久化任务记录。
+pub async fn full_scan(client: &Client) -> Result<AdminJobView> {
+    crate::api::admin::start_job(client, &StartAdminJobRequest::PersonFullScan).await
 }
 
 /// 对未分配人脸执行二次聚类指派(管理员)。
-/// `POST /visual/person/admin/secondary_cluster`
-pub async fn secondary_cluster(client: &Client, param: &SecondaryClusterParam) -> Result<()> {
-    client
-        .send_unit(Request::post("/visual/person/admin/secondary_cluster").json(param))
-        .await
+/// 通过管理端任务 API 启动二次聚类并返回持久化任务记录。
+pub async fn secondary_cluster(
+    client: &Client,
+    param: &SecondaryClusterParam,
+) -> Result<AdminJobView> {
+    crate::api::admin::start_job(
+        client,
+        &StartAdminJobRequest::FaceSecondaryCluster {
+            threshold: param.threshold,
+        },
+    )
+    .await
 }

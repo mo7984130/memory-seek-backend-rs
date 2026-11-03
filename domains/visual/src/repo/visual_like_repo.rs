@@ -2,10 +2,11 @@ use audit::{AuditEvent, AuditRecorder};
 use common_core::{
     error::{AppError, ContextualError, contextual::Result},
     time::DateTime,
-    types::CursorPage,
+    types::CursorPageWithTotal,
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
+use constants::RedisKeys;
 use types_core::cursor::TimeIdCursor;
 use types_identity::auth::user::UserId;
 use types_visual::{models::LikedVisualsQuery, visual::VisualId};
@@ -13,7 +14,7 @@ use types_visual::{models::LikedVisualsQuery, visual::VisualId};
 use crate::state::VisualState;
 use crate::{
     mappers::{visual_like_mapper::VisualLikeMapper, visual_mapper::VisualMapper},
-    repo::VisualRepo,
+    repo::{VisualRepo, count_cache},
 };
 
 pub(crate) struct VisualLikeRepo;
@@ -53,6 +54,7 @@ impl VisualLikeRepo {
 
         VisualRepo::cache_visual_like_status(state, user_id, visual_id, true).await;
         VisualRepo::invalidate_visual_info(state, visual_id).await;
+        count_cache::invalidate(state, &RedisKeys::visual::count::liked_visuals(user_id)).await;
 
         Ok(())
     }
@@ -85,6 +87,7 @@ impl VisualLikeRepo {
         .await?;
         VisualRepo::cache_visual_like_status(state, user_id, visual_id, false).await;
         VisualRepo::invalidate_visual_info(state, visual_id).await;
+        count_cache::invalidate(state, &RedisKeys::visual::count::liked_visuals(user_id)).await;
         Ok(())
     }
 
@@ -93,9 +96,29 @@ impl VisualLikeRepo {
         state: &VisualState,
         user_id: UserId,
         req: &LikedVisualsQuery,
-    ) -> Result<CursorPage<(VisualId, DateTime), TimeIdCursor<VisualId>>> {
-        VisualLikeMapper::query_user_liked_visual_ids(&state.db, user_id, &req.cursor, req.size)
+    ) -> Result<CursorPageWithTotal<(VisualId, DateTime), TimeIdCursor<VisualId>>> {
+        let key = RedisKeys::visual::count::liked_visuals(user_id);
+        let total_count = if req.cursor.is_none() {
+            Some(
+                count_cache::get_or_load(state, &key, || async {
+                    VisualLikeMapper::count_user_liked_visuals(&state.db, user_id).await
+                })
+                .await?,
+            )
+        } else {
+            None
+        };
+
+        Ok(
+            VisualLikeMapper::query_user_liked_visual_ids(
+                &state.db,
+                user_id,
+                &req.cursor,
+                req.size,
+            )
             .timed(metrics_name!("query_ids"))
-            .await
+            .await?
+            .with_optional_total(total_count),
+        )
     }
 }

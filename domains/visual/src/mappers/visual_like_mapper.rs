@@ -8,7 +8,7 @@ use common_core::{
     types::CursorPage,
 };
 use sea_orm::ActiveValue::Set;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 use types_core::cursor::TimeIdCursor;
 use types_identity::auth::user::UserId;
 use types_visual::visual::VisualId;
@@ -74,12 +74,14 @@ impl VisualLikeMapper {
         size: u64,
     ) -> Result<CursorPage<(VisualId, DateTime), TimeIdCursor<VisualId>>> {
         let mut query = Entity::find()
-            .select_only()
-            .column(Column::VisualId)
-            .column(Column::CreatedAt)
             .filter(Column::UserId.eq(user_id))
             .order_by_desc(Column::CreatedAt)
             .order_by_desc(Column::VisualId);
+
+        query = query
+            .select_only()
+            .column(Column::VisualId)
+            .column(Column::CreatedAt);
 
         if let Some(c) = cursor {
             query = query.filter(c.before(Column::CreatedAt, Column::VisualId));
@@ -93,6 +95,18 @@ impl VisualLikeMapper {
 
         Ok(CursorPage::from_oversize(records, size)
             .with_next_cursor(|&(id, time_at)| TimeIdCursor { time_at, id }))
+    }
+
+    /// 查询用户点赞列表总量。
+    pub async fn count_user_liked_visuals(
+        db: &impl ConnectionTrait,
+        user_id: UserId,
+    ) -> Result<u64> {
+        Entity::find()
+            .filter(Column::UserId.eq(user_id))
+            .count(db)
+            .await
+            .map_err(Into::into)
     }
 }
 

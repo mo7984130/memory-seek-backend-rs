@@ -1,0 +1,75 @@
+---
+# 视频转码依赖带 libsvtav1 的 ffmpeg; 已安装且包含该编码器时跳过。
+# 压缩包在控制机下载后上传, 避免被管机无法访问 GitHub。
+- name: 检查 ffmpeg 是否带 libsvtav1
+  ansible.builtin.command:
+      cmd: "{{ ffmpeg_install_path }} -hide_banner -encoders"
+  register: ffmpeg_encoders
+  changed_when: false
+  failed_when: false
+
+- name: 判断是否需要安装 ffmpeg
+  ansible.builtin.set_fact:
+      ffmpeg_needs_install: "{{ 'libsvtav1' not in (ffmpeg_encoders.stdout | default('')) }}"
+
+- name: 安装 ffmpeg 解压依赖
+  ansible.builtin.apt:
+      name:
+          - xz-utils
+          - ca-certificates
+      state: present
+      update_cache: true
+  when: ffmpeg_needs_install | bool
+
+- name: 控制机下载带 libsvtav1 的 ffmpeg
+  ansible.builtin.get_url:
+      url: "{{ ffmpeg_release_url }}"
+      dest: "{{ ffmpeg_local_archive }}"
+      checksum: "sha256:{{ ffmpeg_release_sha256 }}"
+      mode: "0644"
+      force: true
+  delegate_to: localhost
+  become: false
+  when: ffmpeg_needs_install | bool
+
+- name: 上传 ffmpeg 压缩包
+  ansible.builtin.copy:
+      src: "{{ ffmpeg_local_archive }}"
+      dest: "{{ ffmpeg_remote_archive }}"
+      mode: "0644"
+  when: ffmpeg_needs_install | bool
+
+- name: 创建 ffmpeg 解压目录
+  ansible.builtin.file:
+      path: "{{ ffmpeg_extract_dir }}"
+      state: directory
+      mode: "0755"
+  when: ffmpeg_needs_install | bool
+
+- name: 解压 ffmpeg
+  ansible.builtin.unarchive:
+      src: "{{ ffmpeg_remote_archive }}"
+      dest: "{{ ffmpeg_extract_dir }}"
+      remote_src: true
+      extra_opts:
+          - "--strip-components=1"
+  when: ffmpeg_needs_install | bool
+
+- name: 安装 ffmpeg
+  ansible.builtin.copy:
+      src: "{{ ffmpeg_extract_dir }}/bin/ffmpeg"
+      dest: "{{ ffmpeg_install_path }}"
+      remote_src: true
+      owner: root
+      group: root
+      mode: "0755"
+  when: ffmpeg_needs_install | bool
+  notify: restart memory-seek-server
+
+- name: 验证 ffmpeg 带 libsvtav1
+  ansible.builtin.command:
+      cmd: "{{ ffmpeg_install_path }} -hide_banner -encoders"
+  register: ffmpeg_verify
+  changed_when: false
+  failed_when: "'libsvtav1' not in ffmpeg_verify.stdout"
+  when: ffmpeg_needs_install | bool

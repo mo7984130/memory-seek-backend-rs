@@ -4,7 +4,7 @@
 
 use crate::client::{Client, Request};
 use crate::error::Result;
-use common_core::types::CursorPage;
+use common_core::types::CursorPageWithTotal;
 use types_core::VisualId;
 use types_core::cursor::TimeIdCursor;
 use types_visual::dto::visual::VisualView;
@@ -28,7 +28,7 @@ pub async fn get_liked_visuals(
     client: &Client,
     cursor: Option<TimeIdCursor<VisualId>>,
     size: Option<u64>,
-) -> Result<CursorPage<VisualView, TimeIdCursor<VisualId>>> {
+) -> Result<CursorPageWithTotal<VisualView, TimeIdCursor<VisualId>>> {
     let mut request = Request::get("/visual/visual/liked");
     if let Some(cursor) = cursor {
         request = request.query("cursor", cursor);

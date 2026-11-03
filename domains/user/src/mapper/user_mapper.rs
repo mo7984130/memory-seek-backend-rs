@@ -1,18 +1,49 @@
 use common_core::{DbConn, error::contextual::Result, ext::ToOk};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set,
 };
 use types_identity::auth::user::{ActiveModel, Column, Entity, UserId, UserRecord};
 
 use crate::error_ext::UserOptionExt;
-use crate::models::UserBriefRow;
+use crate::models::{AdminUserRow, UserBriefRow};
 
 /// 用户表数据访问，向 repo 层提供统一的数据库访问入口
 pub struct UserMapper;
 
 // 修改
 impl UserMapper {
+    /// 按 ID 倒序分页查询用户。
+    pub(crate) async fn query_admin_users(
+        db: &impl DbConn,
+        cursor: Option<UserId>,
+        limit: u64,
+    ) -> Result<Vec<AdminUserRow>> {
+        let mut query = Entity::find()
+            .select_only()
+            .columns([
+                Column::Id,
+                Column::Username,
+                Column::Email,
+                Column::Nickname,
+                Column::AvatarFileId,
+                Column::CreatedAt,
+            ])
+            .order_by_desc(Column::Id);
+
+        if let Some(cursor) = cursor {
+            query = query.filter(Column::Id.lt(cursor));
+        }
+
+        query
+            .limit(limit)
+            .into_model::<AdminUserRow>()
+            .all(db)
+            .await
+            .map_err(Into::into)
+    }
+
     /// 修改用户昵称
     pub async fn update_nickname(
         db: &impl DbConn,

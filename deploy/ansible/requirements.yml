@@ -1,0 +1,9 @@
+---
+# 安装: ansible-galaxy collection install -r requirements.yml
+collections:
+    # nginx 前端发布使用 synchronize
+    - name: ansible.posix
+      version: ">=1.5.0"
+    # postgres 角色使用 postgresql_user / postgresql_db / postgresql_ext
+    - name: community.postgresql
+      version: ">=3.0.0"

@@ -1,7 +1,8 @@
 [package]
 name = "visual"
-version = "0.12.2"
+version = "0.16.1"
 edition = "2024"
+license.workspace = true
 
 [features]
 default = []
@@ -9,7 +10,6 @@ metrics = ["multi-level-cache/metrics", "oss/metrics"]
 controller = ["dep:axum", "dep:common-web"]
 audit = ["audit/recording"]
 face = ["dep:insight-face-rs", "dep:backup", "types-visual/face"]
-ts = ["types-visual/ts", "common-core/ts"]
 
 [dependencies]
 common-core = { workspace = true, features = [
@@ -30,11 +30,13 @@ oss.path = "../../libs/oss"
 types-core = { workspace = true, features = ["orm"] }
 types-identity = { workspace = true }
 types-visual = { workspace = true, features = ["orm"] }
+types-admin.workspace = true
 
 linkme.workspace = true
 async-trait.workspace = true
 
 tokio.workspace = true
+tokio-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sea-orm.workspace = true

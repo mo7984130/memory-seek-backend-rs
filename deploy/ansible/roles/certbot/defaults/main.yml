@@ -1,0 +1,2 @@
+---
+# domain_name / letsencrypt_email 由 group_vars/all/main.yml 提供。

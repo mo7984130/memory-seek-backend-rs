@@ -3,7 +3,7 @@ use common_core::{
     error::contextual::ext::UintExt,
     error::{AppError, ContextualError, contextual::Result},
     ext::ToErr,
-    types::CursorPage,
+    types::CursorPageWithTotal,
 };
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
@@ -52,8 +52,10 @@ impl CollectionRepo {
         user_id: UserId,
         collection_id: CollectionId,
         req: &CollectionVisualCursorPageParam,
-    ) -> Result<CursorPage<VisualId, ()>> {
-        CollectionVisualMapper::query_visual_id_by_collection_id(
+    ) -> Result<CursorPageWithTotal<VisualId, ()>> {
+        let collection = Self::ensure_belong_with_return(state, user_id, collection_id).await?;
+        let total_count = req.cursor.is_none().then_some(collection.visual_count);
+        Ok(CollectionVisualMapper::query_visual_id_by_collection_id(
             &state.db,
             user_id,
             collection_id,
@@ -61,7 +63,8 @@ impl CollectionRepo {
             req.size,
         )
         .timed(metrics_name!("query_visual_ids"))
-        .await
+        .await?
+        .with_optional_total(total_count))
     }
 
     /// 确保收藏夹属于指定用户，否则返回禁止访问

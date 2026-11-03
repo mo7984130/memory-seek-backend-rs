@@ -1,0 +1,26 @@
+---
+- name: 安装Redis
+  apt:
+      name: redis-server
+      state: present
+      update_cache: true
+
+- name: 设置Redis密码
+  lineinfile:
+      path: /etc/redis/redis.conf
+      regexp: '^#?\s*requirepass\s+'
+      line: "requirepass {{ vault_redis_password }}"
+  notify: 重启 redis
+
+- name: 设置Redis监听地址
+  lineinfile:
+      path: /etc/redis/redis.conf
+      regexp: '^#?\s*bind\s+'
+      line: "bind {{ redis_bind }}"
+  notify: 重启 redis
+
+- name: 确保 Redis 服务已启动
+  systemd:
+      name: redis-server
+      state: started
+      enabled: true

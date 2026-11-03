@@ -3,7 +3,7 @@
 //! `UserId` 被身份、视觉(`visual.user_id` 等外键)、审计(`actor_id`)、
 //! 令牌(`VisualToken.viewer_id`)与备份共同引用,因此位于共享内核。
 
-crate::id_type!(UserId, "user/");
+crate::id_type!(UserId);
 
 /// 已通过管理员校验的用户身份。
 ///
@@ -36,5 +36,16 @@ impl AdminId {
         } else {
             Err(common_core::error::AppError::forbidden("仅管理员可访问"))
         }
+    }
+}
+
+#[cfg(all(test, feature = "orm"))]
+mod tests {
+    use super::{AdminId, UserId};
+
+    #[test]
+    fn admin_id_requires_the_configured_admin_user() {
+        assert!(AdminId::new(UserId(1)).is_ok());
+        assert!(AdminId::new(UserId(2)).is_err());
     }
 }

@@ -1,0 +1,91 @@
+---
+# 运行时资产(libs + models, 约 180MB)按内容 hash 安装:
+#   - 已安装(存在 .installed 标记) -> 完全跳过, 不下载不传输;
+#   - 未安装 -> 下载 + 校验 + 原子落位到 runtime/<hash>/。
+# 因此只有 onnxruntime/模型真正变化时才会产生一次大流量。
+
+- name: 确定运行时资产的本地路径
+  ansible.builtin.set_fact:
+      runtime_assets_dir: "{{ runtime_dir }}/{{ runtime_assets_id }}"
+      runtime_assets_package: "runtime-assets-{{ runtime_assets_id }}.tar.gz"
+
+- name: 检查运行时资产是否已安装
+  ansible.builtin.stat:
+      path: "{{ runtime_assets_dir }}/.installed"
+  register: runtime_assets_installed
+
+- name: 安装运行时资产
+  when: not runtime_assets_installed.stat.exists
+  block:
+      - name: 下载运行时资产包
+        ansible.builtin.get_url:
+            url: "{{ runtime_assets_base_url }}/{{ runtime_assets_package }}"
+            dest: "{{ control_cache_dir }}/{{ runtime_assets_package }}"
+            timeout: 900
+            mode: "0644"
+        delegate_to: localhost
+        become: false
+
+      - name: 下载运行时资产包校验和
+        ansible.builtin.get_url:
+            url: "{{ runtime_assets_base_url }}/{{ runtime_assets_package }}.sha256"
+            dest: "{{ control_cache_dir }}/{{ runtime_assets_package }}.sha256"
+            timeout: 60
+            force: true
+            mode: "0644"
+        delegate_to: localhost
+        become: false
+
+      - name: 校验运行时资产包
+        ansible.builtin.command:
+            cmd: "sha256sum -c {{ runtime_assets_package }}.sha256"
+            chdir: "{{ control_cache_dir }}"
+        delegate_to: localhost
+        become: false
+        changed_when: false
+
+      - name: 传输运行时资产包
+        ansible.builtin.copy:
+            src: "{{ control_cache_dir }}/{{ runtime_assets_package }}"
+            dest: "/tmp/{{ runtime_assets_package }}"
+            mode: "0600"
+
+      - name: 清理上次残留的临时目录
+        ansible.builtin.file:
+            path: "{{ runtime_assets_dir }}.tmp"
+            state: absent
+
+      - name: 解压到临时目录
+        ansible.builtin.unarchive:
+            src: "/tmp/{{ runtime_assets_package }}"
+            dest: "{{ runtime_assets_dir }}.tmp"
+            remote_src: true
+            extra_opts:
+                - "--no-same-owner"
+
+      - name: 修正属主与权限
+        ansible.builtin.file:
+            path: "{{ runtime_assets_dir }}.tmp"
+            state: directory
+            recurse: true
+            owner: root
+            group: "{{ service_user }}"
+            mode: "u=rwX,g=rX,o="
+
+      - name: 原子落位
+        ansible.builtin.command:
+            cmd: "mv {{ runtime_assets_dir }}.tmp {{ runtime_assets_dir }}"
+            creates: "{{ runtime_assets_dir }}"
+
+      - name: 写入资产安装标记
+        ansible.builtin.copy:
+            content: "{{ runtime_assets_id }}\n"
+            dest: "{{ runtime_assets_dir }}/.installed"
+            owner: root
+            group: "{{ service_user }}"
+            mode: "0640"
+
+      - name: 清理被管机临时包
+        ansible.builtin.file:
+            path: "/tmp/{{ runtime_assets_package }}"
+            state: absent

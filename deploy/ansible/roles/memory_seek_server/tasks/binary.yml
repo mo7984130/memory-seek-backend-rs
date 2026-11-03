@@ -1,0 +1,117 @@
+---
+# 下载并解压二进制发布包(≈13MB)。libs/models 不在这里, 见 runtime-assets.yml。
+# 控制机缓存避免重复下载; 校验和不匹配时自动重下一次。
+
+- name: 确保控制机缓存目录存在
+  ansible.builtin.file:
+      path: "{{ control_cache_dir }}"
+      state: directory
+      mode: "0755"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: 下载二进制发布包
+  ansible.builtin.get_url:
+      url: "{{ release_base_url }}/{{ binary_package }}"
+      dest: "{{ control_cache_dir }}/{{ binary_package }}"
+      timeout: 300
+      force: false
+      mode: "0644"
+  delegate_to: localhost
+  become: false
+
+- name: 下载二进制发布包校验和
+  ansible.builtin.get_url:
+      url: "{{ release_base_url }}/{{ binary_package }}.sha256"
+      dest: "{{ control_cache_dir }}/{{ binary_package }}.sha256"
+      timeout: 60
+      force: true
+      mode: "0644"
+  delegate_to: localhost
+  become: false
+
+- name: 校验并（必要时）重新下载发布包
+  block:
+      - name: 校验发布包
+        ansible.builtin.command:
+            cmd: "sha256sum -c {{ binary_package }}.sha256"
+            chdir: "{{ control_cache_dir }}"
+        delegate_to: localhost
+        become: false
+        changed_when: false
+  rescue:
+      - name: 缓存包校验失败, 重新下载
+        ansible.builtin.get_url:
+            url: "{{ release_base_url }}/{{ binary_package }}"
+            dest: "{{ control_cache_dir }}/{{ binary_package }}"
+            timeout: 300
+            force: true
+            mode: "0644"
+        delegate_to: localhost
+        become: false
+
+      - name: 重新校验发布包
+        ansible.builtin.command:
+            cmd: "sha256sum -c {{ binary_package }}.sha256"
+            chdir: "{{ control_cache_dir }}"
+        delegate_to: localhost
+        become: false
+        changed_when: false
+
+- name: 传输发布包到被管机
+  ansible.builtin.copy:
+      src: "{{ control_cache_dir }}/{{ binary_package }}"
+      dest: "/tmp/{{ binary_package }}"
+      mode: "0600"
+
+- name: 创建版本目录
+  ansible.builtin.file:
+      path: "{{ releases_dir }}/{{ binary_version }}"
+      state: directory
+      owner: root
+      group: "{{ service_user }}"
+      mode: "0750"
+
+- name: 检查该版本是否已解压
+  ansible.builtin.stat:
+      path: "{{ releases_dir }}/{{ binary_version }}/.installed"
+  register: release_installed
+
+- name: 解压发布包
+  ansible.builtin.unarchive:
+      src: "/tmp/{{ binary_package }}"
+      dest: "{{ releases_dir }}/{{ binary_version }}"
+      remote_src: true
+      extra_opts:
+          - "--no-same-owner"
+  when: not release_installed.stat.exists
+
+- name: 设置二进制权限
+  ansible.builtin.file:
+      path: "{{ releases_dir }}/{{ binary_version }}/{{ binary_name }}"
+      owner: root
+      group: "{{ service_user }}"
+      mode: "0750"
+
+- name: 读取发布包声明的运行时资产
+  ansible.builtin.slurp:
+      src: "{{ releases_dir }}/{{ binary_version }}/manifest.yaml"
+  register: release_manifest
+
+- name: 解析 manifest.yaml
+  ansible.builtin.set_fact:
+      runtime_assets_id: "{{ (release_manifest.content | b64decode | from_yaml).runtime_assets.id }}"
+
+- name: 写入版本标记
+  ansible.builtin.copy:
+      content: "{{ runtime_assets_id }}\n"
+      dest: "{{ releases_dir }}/{{ binary_version }}/.installed"
+      owner: root
+      group: "{{ service_user }}"
+      mode: "0640"
+
+- name: 清理被管机临时包
+  ansible.builtin.file:
+      path: "/tmp/{{ binary_package }}"
+      state: absent

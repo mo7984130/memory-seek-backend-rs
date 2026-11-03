@@ -1,0 +1,37 @@
+---
+# 目录与配置。配置变更通过 handler 触发重启, 与版本切换共用同一次重启。
+
+- name: 创建目录
+  ansible.builtin.file:
+      path: "{{ item.path }}"
+      state: directory
+      owner: "{{ item.owner | default('root') }}"
+      group: "{{ item.group | default(service_user) }}"
+      mode: "{{ item.mode }}"
+  loop:
+      - { path: "{{ base_dir }}", owner: root, mode: "0750" }
+      - { path: "{{ releases_dir }}", owner: root, mode: "0750" }
+      - { path: "{{ runtime_dir }}", owner: root, mode: "0755" }
+      - { path: "{{ config_dir }}", owner: root, mode: "0750" }
+      - { path: "{{ data_dir }}", owner: "{{ service_user }}", group: "{{ service_user }}", mode: "0700" }
+      - { path: "{{ backup_dir }}", owner: "{{ service_user }}", group: "{{ service_user }}", mode: "0750" }
+  loop_control:
+      label: "{{ item.path }}"
+
+- name: 传入配置文件
+  ansible.builtin.template:
+      src: config.yml.j2
+      dest: "{{ config_dir }}/config.yaml"
+      owner: root
+      group: "{{ service_user }}"
+      mode: "0640"
+  notify: restart memory-seek-server
+
+- name: 分发 systemd 单元
+  ansible.builtin.template:
+      src: memory-seek-server.service.j2
+      dest: "/etc/systemd/system/{{ service_name }}.service"
+      owner: root
+      group: root
+      mode: "0644"
+  notify: restart memory-seek-server

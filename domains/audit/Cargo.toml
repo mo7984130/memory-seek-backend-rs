@@ -1,24 +1,23 @@
 [package]
 name = "audit"
-version = "0.3.0"
+version = "0.6.1"
 edition = "2024"
+license.workspace = true
 
 [features]
 default = []
 recording = ["common-core/id-gen"]
 metrics = []
-controller = ["dep:axum", "dep:common-web"]
+query = []
 
 [dependencies]
+blake3.workspace = true
 common-core = { workspace = true }
 common-metrics = { workspace = true }
-common-web = { workspace = true, optional = true }
+multi-level-cache.workspace = true
 types-core = { workspace = true, features = ["orm"] }
 types-audit = { workspace = true, features = ["orm"] }
 common_macros.path = "../../libs/common_macros"
-
-# controller 需要
-axum = { workspace = true, optional = true }
 
 # mapper 需要
 sea-orm = { workspace = true }

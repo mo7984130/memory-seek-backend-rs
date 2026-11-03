@@ -1,5 +1,6 @@
 mod collection_repo;
 mod comment_repo;
+pub(crate) mod count_cache;
 #[cfg(feature = "face")]
 mod face_repo;
 #[cfg(feature = "face")]
