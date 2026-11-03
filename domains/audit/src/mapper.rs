@@ -33,7 +33,8 @@ impl AuditMapper {
             .expr_as(bucket.clone(), "bucket")
             .column_as(Column::EventId.count(), "cnt")
             .group_by(bucket)
-            .order_by_asc(Column::CreatedAt);
+            // ORDER BY 必须使用聚合后的时间桶，不能直接用未分组的 created_at。
+            .order_by_asc(Expr::col(Alias::new("bucket")));
         if let Some(event_type) = event_type {
             query = query.filter(Column::EventType.eq(event_type));
         }

@@ -5,7 +5,7 @@ use common_core::{
         contextual::ext::{IntoContextualExt, ResultExt},
     },
 };
-use sea_orm::{ColumnTrait, EntityTrait, QuerySelect, sea_query::ExprTrait};
+use sea_orm::{ColumnTrait, EntityTrait, QuerySelect, sea_query::Alias, sea_query::ExprTrait};
 use types_admin::dashboard::VisualDashboardStats;
 use types_admin::job::AdminJobKind;
 use types_core::AdminId;
@@ -27,7 +27,11 @@ impl VisualAdminService {
         let (total_count, total_bytes): (i64, i64) = Entity::find()
             .select_only()
             .column_as(Column::Id.count(), "total_count")
-            .column_as(Column::Size.sum().if_null(0), "total_bytes")
+            // PostgreSQL 的 SUM(bigint) 返回 NUMERIC，显式转回 BIGINT 才能解码为 i64。
+            .column_as(
+                Column::Size.sum().if_null(0).cast_as(Alias::new("bigint")),
+                "total_bytes",
+            )
             .into_tuple()
             .one(&state.db)
             .await
