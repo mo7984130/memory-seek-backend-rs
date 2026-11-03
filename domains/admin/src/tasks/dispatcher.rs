@@ -1,26 +1,11 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
-use common_core::{Result, error::AppError};
+use common_core::{BoxFuture, Result, error::AppError};
 use types_admin::job::AdminJobKind;
 use types_admin::job_entity::Model;
 use types_core::{AdminId, UserId};
 
 use crate::AdminState;
-
-/// 单个任务分支的 future 类型。
-///
-/// 分支会被显式装箱(`Box::pin`)，目的是切断 rustc 对 coroutine 布局的递归：
-/// 若 `execute` 的每个 match 分支都内联 `await` 一整条业务链，编译器计算
-/// 该 async fn 状态机布局时会沿所有分支递归展开子 future 的布局，深度随
-/// handler 的调用层级累加。rustc 1.99 起，`admin` 打开 `face` feature 后
-/// 这个深度会超过编译器默认的查询深度上限，报
-/// `queries overflow the depth limit`（指向本函数）。
-///
-/// 装箱后外层 coroutine 每个分支只保存一个指针，布局深度与 handler 内部层级
-/// 无关；不依赖 `#![recursion_limit]` 抬高编译器的递归上限。
-type JobFuture<'a> = Pin<Box<dyn Future<Output = Result<serde_json::Value>> + Send + 'a>>;
 
 /// 把任务类型分发到具体业务域执行器。
 pub struct Dispatcher;
@@ -34,7 +19,11 @@ impl Dispatcher {
     ) -> Result<serde_json::Value> {
         let admin = AdminId::new(UserId(job.requested_by))?;
 
-        let job_future: JobFuture<'_> = match job.kind {
+        // 每个分支都装箱：若在 match 里内联 await 整条业务链，rustc 计算本函数
+        // 状态机布局时会沿链递归展开，深度随 handler 层级累加并可能超过编译器
+        // 的查询上限（`queries overflow the depth limit`）。装箱后本函数只持有
+        // 指针，布局深度与 handler 内部层级无关，也不依赖 `#![recursion_limit]`。
+        let job_future: BoxFuture<'_, Result<serde_json::Value>> = match job.kind {
             #[cfg(feature = "face")]
             AdminJobKind::FaceFull => {
                 let visual = state.visual.clone();

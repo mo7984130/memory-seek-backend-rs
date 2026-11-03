@@ -7,12 +7,14 @@
 //!   sea-orm / redis 转换分别受 `sea-orm` / `redis` feature 门控)
 //! - [`time`]：`DateTime` / `now` / `after`
 //! - [`ext`]：`Result` / `Option` 组合辅助 trait
+//! - [`future`]：装箱 future 的公共别名 [`BoxFuture`]
 //! - [`types`]：`HasChanged`、`CursorPage` / `CursorPageWithTotal` 等通用值类型
 //! - [`snowflake`]：分布式有序 ID 生成(`id-gen` feature)
 //! - [`local_store`]：本地 JSON 文件存储
 
 pub mod error;
 pub mod ext;
+pub mod future;
 pub mod time;
 pub mod types;
 
@@ -34,6 +36,7 @@ pub use local_store::{JsonFile, StoreError};
 pub mod r;
 
 pub use error::{AppError, ContextualError, ContextualResult, Result};
+pub use future::BoxFuture;
 
 /// sea-orm 连接抽象的重导出(实体与仓储代码常用别名,`sea-orm` feature)。
 #[cfg(feature = "sea-orm")]
