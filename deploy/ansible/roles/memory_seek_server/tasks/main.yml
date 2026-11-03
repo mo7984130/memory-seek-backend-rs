@@ -11,6 +11,7 @@
           - vault_s3_secret_key is defined
           - vault_token_cipher_key is defined
           - vault_token_cipher_salt is defined
+          - vault_admin_password is defined
       fail_msg: >-
           binary_version 需形如 v2.6.1; 密钥类变量必须存在于
           group_vars/all/vault.yml(执行 ansible-vault edit group_vars/all/vault.yml 补齐)。
@@ -48,6 +49,10 @@
 
 - name: 切换版本并校验
   ansible.builtin.include_tasks: activate.yml
+
+- name: 创建默认管理员
+  ansible.builtin.include_tasks: bootstrap-admin.yml
+  tags: admin-user
 
 - name: 清理历史版本与无用资产
   ansible.builtin.include_tasks: prune.yml

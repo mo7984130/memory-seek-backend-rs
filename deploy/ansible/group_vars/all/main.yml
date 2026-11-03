@@ -8,6 +8,13 @@ letsencrypt_email: 3291382264@qq.com
 db_database: memory_seek
 db_user: memory_seek
 
+# ── 默认管理员 ──
+# 首次部署后由 `memory-seek-server admin create` 创建(auth_user.id = 1),
+# 密码在 vault.yml 的 vault_admin_password; 登录后请立即修改密码。
+admin_username: admin
+admin_email: admin@driftcloud.cn
+admin_nickname: 管理员
+
 # ── 对象存储 ──
 # endpoint 走阿里云内网(服务器侧读写走内网, 节省流量);
 # public_url 是"若直接下发 OSS 链接时"使用的外部域名。目前媒体统一由后端

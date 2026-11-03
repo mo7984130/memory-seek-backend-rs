@@ -53,6 +53,7 @@ vault_s3_access_key
 vault_s3_secret_key
 vault_token_cipher_key
 vault_token_cipher_salt
+vault_admin_password
 ```
 
 非敏感参数在 `group_vars/all/main.yml`(域名、数据库名、S3 endpoint/public_url、SMTP 地址等)。
@@ -62,6 +63,24 @@ vault_token_cipher_salt
 
 部署版本固定在 `group_vars/all/versions.yml`(不读本地仓库状态), 发版时必须同步更新,
 CI 会校验它与 `server/Cargo.toml` 一致。
+
+## 默认管理员
+
+系统管理员被硬编码为 `auth_user.id = 1`(`AdminId`), 而注册接口要求邮箱验证码 + 邀请码,
+所以首个账号只能由 CLI 创建。`server.yml` / `site.yml` 在健康检查通过后会自动执行一次
+`admin create`, 账号信息取 `group_vars/all/main.yml` 的 `admin_username` / `admin_email` /
+`admin_nickname`, 密码取 vault 的 `vault_admin_password`。
+
+命令是幂等的: 管理员已存在时只提示并跳过, 不会覆盖已改过的密码。手动执行:
+
+```bash
+sudo -u memory-seek /opt/memory-seek/current/memory-seek-server \
+  -c /etc/memory-seek/config.yaml \
+  admin create --username admin --email admin@example.com --password-stdin
+# 密码从 stdin 读取, 例如: echo '密码' | ... --password-stdin
+```
+
+登录后请立即用 `PATCH /user/password` 修改密码。
 
 ## 日常部署
 
