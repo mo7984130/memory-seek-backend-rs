@@ -65,8 +65,9 @@ jobs:
       - name: Build release binary
         if: steps.version.outputs.published == 'false'
         # 只构建 server: 仓库根是 virtual manifest 且未设 default-members,
-        # 不带 -p 会把全部成员(含 tests/e2e)一起编译, 白白增加构建时间与缓存体积
-        run: cargo build --release --all-features -p server
+        # 不带 -p 会把全部成员(含 tests/e2e)一起编译, 白白增加构建时间与缓存体积。
+        # feature 组合收敛在 build/build-release.sh, 与 CI 的 release-build job 共用。
+        run: bash build/build-release.sh
 
       - name: 打包 Release
         if: steps.version.outputs.published == 'false'
