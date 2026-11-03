@@ -61,6 +61,30 @@ jobs:
             - name: Run unit tests
               run: cargo test --release --lib
 
+    release-build:
+        name: 发布配置构建
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  # server/build.rs 链接 thirdparty/onnxruntime, 必须是真实 .so
+                  lfs: true
+
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Install mold
+              # .cargo/config.toml 指定 -fuse-ld=mold, 缺失时链接会直接报错
+              run: sudo apt-get update && sudo apt-get install -y mold
+
+            - uses: Swatinem/rust-cache@v2
+
+            - name: Build (与发布完全相同的 feature 组合)
+              # 与 .github/workflows/release.yml 共用同一脚本, feature 组合不会漂移。
+              # clippy/单测按各 crate 默认 feature 编译, 覆盖不到 admin/face 这类
+              # 只在发布构型下实例化的代码路径。
+              run: bash build/build-release.sh
+
     deploy-lint:
         name: 部署配置检查
         runs-on: ubuntu-latest
