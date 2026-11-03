@@ -1,6 +1,7 @@
 target
 other
 
-# ansible: 主机清单与 vault 密码不入库
+# ansible: 主机清单、vault 文件与 vault 密码不入库
 deploy/ansible/inventory/
+deploy/ansible/group_vars/all/vault.yml
 deploy/ansible/.vault_pass*
