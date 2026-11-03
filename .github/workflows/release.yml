@@ -83,6 +83,24 @@ jobs:
           sha256sum "$package" > "${package}.sha256"
           cat target/release-package/manifest.yaml
 
+      - name: 读取运行时资产 id
+        if: steps.version.outputs.published == 'false'
+        id: assets
+        # manifest.yaml 由 package-dist.sh 生成, 形如:
+        #   runtime_assets:
+        #     id: "791ab6bcc827"
+        #     source_sha256: "..."
+        run: |
+          id=$(sed -n 's/^  id: "\(.*\)"$/\1/p' target/release-package/manifest.yaml)
+          sha=$(sed -n 's/^  source_sha256: "\(.*\)"$/\1/p' target/release-package/manifest.yaml)
+          if [ -z "$id" ] || [ -z "$sha" ]; then
+              echo "错误: 无法从 manifest.yaml 读取运行时资产 id/sha256" >&2
+              exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "运行时资产: $id"
+
       - name: 打 tag
         if: steps.version.outputs.published == 'false'
         run: |
@@ -95,9 +113,50 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           generate_release_notes: true
+          # 让 "Latest" 指向真正的版本, 而不是运行时资产 release
+          make_latest: true
+          # 在自动生成的 notes 后面追加依赖说明, 让"一个页面拿全"
+          append_body: true
+          body: |
+
+            ---
+
+            ### 运行时资产 (libs + models)
+
+            本版本依赖的运行时资产不随二进制重复分发, 按内容 hash 单独发布:
+
+            - 包: ${{ github.server_url }}/${{ github.repository }}/releases/download/runtime-assets/runtime-assets-${{ steps.assets.outputs.id }}.tar.gz
+            - sha256: `${{ steps.assets.outputs.sha }}`
+
+            部署脚本会读取包内 `manifest.yaml` 自动安装对应资产; 同一份资产的多个版本可共存。
+            人工下载时也可直接到 [runtime-assets](${{ github.server_url }}/${{ github.repository }}/releases/tag/runtime-assets) 页面,
+            该页面同时挂着当前版本的二进制包。
           # 二进制包 + 校验和; manifest.yaml 在包内声明所需运行时资产 hash
           files: |
             memory-seek-server-v${{ steps.version.outputs.version }}-linux-x86_64.tar.gz
             memory-seek-server-v${{ steps.version.outputs.version }}-linux-x86_64.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 同步二进制到运行时资产 release
+        if: steps.version.outputs.published == 'false'
+        # 让 "一个页面拿到二进制 + 运行时资产": 在 runtime-assets release 里始终保留
+        # 当前版本的二进制(旧版本会被清理), 避免人工下载要跑两个页面。
+        # 注意: 这只是人用入口, 部署仍按版本号从 vX.Y.Z release 取包。
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          package="memory-seek-server-v${{ steps.version.outputs.version }}-linux-x86_64.tar.gz"
+          if ! gh release view runtime-assets >/dev/null 2>&1; then
+              gh release create runtime-assets \
+                  --title "运行时资产 (libs + models)" \
+                  --notes "按内容 hash 命名的运行时资产包; 同时保留当前版本的二进制包。"
+          fi
+          gh release upload runtime-assets "$package" "${package}.sha256" --clobber
+          # 清理旧版本的二进制, 该 release 只保留当前版本
+          gh release view runtime-assets --json assets -q '.assets[].name' \
+              | grep -E '^memory-seek-server-v.*-linux-x86_64\.tar\.gz(\.sha256)?$' \
+              | grep -vF "$package" \
+              | while read -r old; do
+                    gh release delete-asset runtime-assets "$old" --yes
+                done
