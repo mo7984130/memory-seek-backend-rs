@@ -71,6 +71,13 @@ impl BackupService {
         if request.run_id != request.confirm_run_id {
             return Err(BackupError::Msg("恢复确认 ID 不匹配".to_string()).into());
         }
+        let started = std::time::Instant::now();
+        tracing::info!(
+            run_id = %request.run_id,
+            source = ?request.source,
+            tier = ?request.tier,
+            "开始恢复备份"
+        );
         let _guard = tokio::select! {
             biased;
             _ = cancellation.cancelled() => {
@@ -108,6 +115,12 @@ impl BackupService {
             return Err(BackupError::Msg("备份清单包含非法路径片段".to_string()).into());
         }
         let tables = manifest.tables.clone();
+        tracing::info!(
+            run_id = %run_id,
+            tables = tables.len(),
+            postgres_major,
+            "备份清单校验通过，开始导入数据"
+        );
         let restore_dir = state.temp_dir.join(format!("restore-{run_id}"));
         if matches!(source, BackupSource::S3) {
             tokio::fs::create_dir_all(&restore_dir)
@@ -132,6 +145,7 @@ impl BackupService {
                     file.write_all(&chunk).await.map_err(BackupError::from)?;
                 }
                 file.flush().await.map_err(BackupError::from)?;
+                tracing::debug!(run_id = %run_id, table = %table, "已下载备份归档");
             }
         }
         let result = BinaryCopyImporter::restore_local(
@@ -146,6 +160,13 @@ impl BackupService {
         .await;
         let _ = tokio::fs::remove_dir_all(&restore_dir).await;
         let restored = result?;
+        tracing::info!(
+            run_id = %run_id,
+            tables = tables.len(),
+            rows = restored,
+            duration = ?started.elapsed(),
+            "备份恢复完成"
+        );
         let event = AuditEvent::new("backup.restored")
             .with_detail(json!({
                 "run_id": run_id, "tables": tables, "rows": restored,

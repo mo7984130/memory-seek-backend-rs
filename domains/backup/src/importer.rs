@@ -52,7 +52,9 @@ impl BinaryCopyImporter {
                 .await?;
             copy.read_from(ZstdDecoder::new(BufReader::new(file)))
                 .await?;
-            rows += copy.finish().await?;
+            let table_rows = copy.finish().await?;
+            rows += table_rows;
+            tracing::info!(table = %table, rows = table_rows, "已恢复表数据");
         }
         // 提交前最后确认一次，避免任务已被放弃或回收后仍写入数据。
         Self::ensure_not_cancelled(cancellation)?;
