@@ -21,6 +21,13 @@ impl Runner {
         let Some(run_id) = job.run_id.clone() else {
             return;
         };
+        let started = std::time::Instant::now();
+        tracing::info!(
+            job_id = %job.id,
+            kind = job.kind.as_str(),
+            requested_by = job.requested_by,
+            "开始执行后台任务"
+        );
 
         let job_token = CancellationToken::new();
         let mut execution = Box::pin(Dispatcher::execute(state.clone(), &job, job_token.clone()));
@@ -36,10 +43,10 @@ impl Runner {
                     job_token.cancel();
                     match timeout(SHUTDOWN_GRACE, &mut execution).await {
                         Ok(Ok(value)) => {
-                            Self::finish(&state, &job, &run_id, AdminJobStatus::Succeeded, Some(value), None).await;
+                            Self::finish(&state, &job, &run_id, AdminJobStatus::Succeeded, Some(value), None, started).await;
                         }
                         Ok(Err(error)) if cancel_seen => {
-                            Self::finish(&state, &job, &run_id, AdminJobStatus::Cancelled, None, Some(error.to_string())).await;
+                            Self::finish(&state, &job, &run_id, AdminJobStatus::Cancelled, None, Some(error.to_string()), started).await;
                         }
                         Ok(Err(error)) => {
                             // 关闭信号打断了执行：交还队列，让其它实例立即接手。
@@ -94,7 +101,7 @@ impl Runner {
                             Err(error) => (AdminJobStatus::Failed, None, Some(error.to_string())),
                         }
                     };
-                    Self::finish(&state, &job, &run_id, status, result, error).await;
+                    Self::finish(&state, &job, &run_id, status, result, error, started).await;
                     return;
                 }
             }
@@ -109,9 +116,18 @@ impl Runner {
         status: AdminJobStatus,
         result: Option<serde_json::Value>,
         error: Option<String>,
+        started: std::time::Instant,
     ) {
         match repo::finish(&state.db, &job.id, run_id, status, result, error).await {
-            Ok(true) => {}
+            Ok(true) => {
+                tracing::info!(
+                    job_id = %job.id,
+                    kind = job.kind.as_str(),
+                    status = status.as_str(),
+                    duration = ?started.elapsed(),
+                    "后台任务结束"
+                );
+            }
             Ok(false) => {
                 tracing::warn!(job_id = %job.id, "任务结果写入被拒绝：任务已不再由当前执行者持有");
             }
