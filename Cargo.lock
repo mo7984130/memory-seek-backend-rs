@@ -5358,7 +5358,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "2.13.0"
+version = "2.14.0"
 dependencies = [
  "admin",
  "audit",
@@ -5396,8 +5396,10 @@ dependencies = [
  "tracing-subscriber",
  "types-core",
  "types-db-init",
+ "types-identity",
  "user",
  "uuid",
+ "validator",
  "visual",
 ]
 

@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "2.13.0"
+version = "2.14.0"
 edition = "2024"
 license.workspace = true
 
@@ -64,6 +64,8 @@ admin = { path = "../domains/admin", optional = true }
 
 # 基础设施
 common-core = { workspace = true, features = ["axum", "tokio"] }
+types-identity = { workspace = true, features = ["orm"] }
+validator = { workspace = true }
 common-redis = { workspace = true }
 common-crypto = { workspace = true, optional = true }
 common-metrics = { workspace = true, optional = true }

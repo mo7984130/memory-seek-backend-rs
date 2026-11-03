@@ -1,0 +1,29 @@
+---
+# 创建默认管理员(auth_user.id = 1)。
+#
+# 系统管理员被硬编码为 id=1, 而注册接口要求邮箱验证码 + 邀请码, 所以首个账号
+# 只能由 CLI 创建。命令是幂等的: 管理员已存在时只打印提示并返回 0, 不会覆盖密码。
+# 密码只经 stdin 传入, 不出现在命令行参数与进程列表中。
+
+- name: 创建默认管理员(仅首次)
+  ansible.builtin.command:
+      argv:
+          - "{{ current_link }}/{{ binary_name }}"
+          - "--config"
+          - "{{ config_dir }}/config.yaml"
+          - "admin"
+          - "create"
+          - "--username"
+          - "{{ admin_username }}"
+          - "--email"
+          - "{{ admin_email }}"
+          - "--nickname"
+          - "{{ admin_nickname }}"
+          - "--password-stdin"
+      stdin: "{{ vault_admin_password }}"
+  register: admin_create
+  changed_when: "'已创建管理员' in admin_create.stdout"
+
+- name: 显示管理员创建结果
+  ansible.builtin.debug:
+      msg: "{{ admin_create.stdout }}"
