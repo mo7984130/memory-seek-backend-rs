@@ -45,8 +45,8 @@ cargo build -p server --features "metrics,auth,user,visual,face-engine,audit,aud
 
 - 产物按变更频率分层：二进制包(≈13MB, 每次发版)与运行时资产包 libs+models(≈180MB, 按内容 hash 发布)。`build/package-dist.sh` 的 `--mode=release|dist` 分别产出两者，本地 compose 与 CI 发布共用。
 - 二进制包内 `manifest.yaml` 声明依赖的运行时资产 hash；改 `thirdparty/**` 后由 `Runtime Assets` workflow 自动发布新资产包，不需要手工改版本号。
-- 生产部署走 `deploy/ansible`（`cd deploy/ansible && ansible-playbook playbooks/server.yml`）。部署版本固定写在 `deploy/ansible/group_vars/all/versions.yml`（不读本地仓库状态），回滚用 `-e binary_version=vX.Y.Z`；CI 校验它与 `server/Cargo.toml` 一致，bump 版本时必须同步修改。
-- 部署相关校验：`cd deploy/ansible && ansible-lint && ansible-playbook --syntax-check playbooks/site.yml`。
+- 生产部署走 `deploy/ansible`（`cd deploy/ansible && ansible-playbook server.yml`）。部署版本固定写在 `deploy/ansible/group_vars/all/versions.yml`（不读本地仓库状态），回滚用 `-e binary_version=vX.Y.Z`；CI 校验它与 `server/Cargo.toml` 一致，bump 版本时必须同步修改。
+- 部署相关校验：`cd deploy/ansible && ansible-lint && ansible-playbook --syntax-check site.yml`。
 
 ## 启动编排与路由
 

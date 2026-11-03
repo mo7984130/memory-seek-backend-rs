@@ -1,9 +1,9 @@
 ---
 # 只部署后端(最常用): 版本取 group_vars/all/versions.yml 中固定的 backend_version。
 #   发布新版本后:  先改 versions.yml 的 backend_version, 再执行本 playbook
-#   回滚到旧版本:  ansible-playbook playbooks/server.yml -e binary_version=v2.5.0
+#   回滚到旧版本:  ansible-playbook server.yml -e binary_version=v2.5.0
 - name: 部署寻忆后端
-  hosts: memory_seek_server
+  hosts: all
   become: true
   roles:
       - memory_seek_server

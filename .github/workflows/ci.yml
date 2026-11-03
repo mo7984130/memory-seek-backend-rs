@@ -116,9 +116,10 @@ jobs:
             - name: Syntax check
               working-directory: deploy/ansible
               run: |
-                  ansible-playbook --syntax-check playbooks/site.yml
-                  ansible-playbook --syntax-check playbooks/server.yml
-                  ansible-playbook --syntax-check playbooks/frontend.yml
+                  ansible-playbook --syntax-check site.yml
+                  ansible-playbook --syntax-check server.yml
+                  ansible-playbook --syntax-check frontend.yml
+                  ansible-playbook --syntax-check certbot.yml
 
     # build:
     #     name: 构建验证 (${{ matrix.features }})

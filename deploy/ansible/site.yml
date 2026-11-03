@@ -1,34 +1,31 @@
 ---
+# 单机部署: 所有角色都跑在同一台主机上, 因此统一用 all;
+# 需要只跑某一部分时用 --tags db / redis / nginx / memory-seek-server。
+# 证书签发不在这里, 见 certbot.yml(域名/DNS 就绪后再单独执行)。
 - name: 部署 PostgreSQL (含 pgvector)
   tags: db
-  hosts: db
+  hosts: all
   become: true
   roles:
       - postgres
 
 - name: 部署 Redis
   tags: redis
-  hosts: redis
+  hosts: all
   become: true
   roles:
       - redis
 
-- name: 部署 Nginx 与证书
+- name: 部署 Nginx
   tags: nginx
-  hosts: nginx
+  hosts: all
   become: true
   roles:
       - nginx
-      - certbot
-  post_tasks:
-      - name: 签发证书后启用 HTTPS 站点
-        ansible.builtin.include_role:
-            name: nginx
-            tasks_from: enable-tls.yml
 
 - name: 部署寻忆后端
   tags: memory-seek-server
-  hosts: memory_seek_server
+  hosts: all
   become: true
   roles:
       - memory_seek_server
