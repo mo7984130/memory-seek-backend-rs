@@ -11,6 +11,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
+mod cli;
 mod config;
 mod middlewares;
 mod setup;
@@ -32,6 +33,10 @@ struct Cli {
     /// 配置文件路径
     #[arg(short = 'c', long = "config")]
     config: Option<String>,
+
+    /// 一次性运维子命令; 省略时启动 HTTP 服务
+    #[command(subcommand)]
+    command: Option<cli::Command>,
 }
 
 /// 服务入口：初始化日志、配置、应用状态并启动 HTTP 服务
@@ -52,6 +57,13 @@ async fn main() -> Result<()> {
 
     // 加载配置
     let cfg = AppConfig::load(cli.config);
+
+    // 一次性运维子命令: 执行完直接退出, 不启动服务
+    if let Some(command) = cli.command {
+        return cli::run(&cfg, command)
+            .await
+            .map_err(common_core::ContextualError::emit);
+    }
 
     // 初始化应用(临时文件目录在 AppSetup 的 base 阶段创建)
     let mut app_setup = AppSetup::init(&cfg).await?;
