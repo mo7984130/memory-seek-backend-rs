@@ -12,7 +12,7 @@
 - name: 计算待清理版本(按部署时间保留最近 {{ keep_releases }} 个)
   ansible.builtin.set_fact:
       releases_to_remove: >-
-          {{ (release_dirs.files | sort(attribute='mtime', reverse=true) | map(attribute='path') | list)[keep_releases | int:] }}
+          {{ (release_dirs.files | sort(attribute='mtime', reverse=true) | map(attribute='path') | list)[keep_releases | int :] }}
 
 - name: 清理旧版本目录
   ansible.builtin.file:

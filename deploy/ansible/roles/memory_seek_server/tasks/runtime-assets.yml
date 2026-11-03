@@ -15,6 +15,7 @@
   register: runtime_assets_installed
 
 - name: 安装运行时资产
+  when: not runtime_assets_installed.stat.exists
   block:
       - name: 下载运行时资产包
         ansible.builtin.get_url:
@@ -88,4 +89,3 @@
         ansible.builtin.file:
             path: "/tmp/{{ runtime_assets_package }}"
             state: absent
-  when: not runtime_assets_installed.stat.exists

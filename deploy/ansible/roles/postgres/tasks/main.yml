@@ -33,6 +33,7 @@
     enabled: true
 
 - name: 创建应用用户
+  become: true
   become_user: postgres
   postgresql_user:
     name: "{{ db_user }}"
@@ -40,12 +41,14 @@
     state: present
 
 - name: 创建数据库
+  become: true
   become_user: postgres
   postgresql_db:
     name: "{{ db_database }}"
     owner: "{{ db_user }}"
 
 - name: 启用 pgvector 扩展
+  become: true
   become_user: postgres
   postgresql_ext:
     name: vector
