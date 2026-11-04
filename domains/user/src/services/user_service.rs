@@ -180,6 +180,8 @@ pub async fn change_password(
 ) -> Result<()> {
     //  获取旧密码
     let old_password = state.repo.query_password_hash(user_id).await?;
+    // 旧密码哈希同时作为 CAS 的期望值: 校验与更新之间可能被其它请求改写。
+    let expected_hash = old_password.clone();
 
     // 获取信号量许可，限制并发密码验证
     let _permit = common_crypto::password_verify_semaphore()
@@ -209,11 +211,19 @@ pub async fn change_password(
         hash_result?
     };
 
-    // 更新数据库
-    state
+    // 更新数据库(仅当旧密码仍是校验时的那一份)
+    let updated = state
         .repo
-        .update_password(user_id, new_password_hash)
+        .update_password(user_id, expected_hash, new_password_hash)
         .await?;
+    if !updated {
+        return Err(ContextualError::warn_without_source(
+            "password_changed_concurrently",
+            "并发修改密码, 旧密码已被其它请求消费",
+            AppError::bad_request("原密码已失效, 请重新登录后再试"),
+        )
+        .emit());
+    }
 
     // 登出. 清除token
     do_logout(state, user_id).await?;

@@ -141,17 +141,31 @@ impl UserRepo {
             .await
     }
 
-    /// 更新用户密码哈希
-    pub async fn update_password(&self, user_id: UserId, new_password_hash: String) -> Result<()> {
+    /// 按旧密码哈希做 CAS 更新; 返回是否真正写入。
+    pub async fn update_password(
+        &self,
+        user_id: UserId,
+        expected_hash: String,
+        new_password_hash: String,
+    ) -> Result<bool> {
         db_transaction!(&self.db, |txn| {
-            UserMapper::update_password(txn, user_id, new_password_hash).await?;
-            AuditRecorder::append(
+            let updated = UserMapper::update_password_if_unchanged(
                 txn,
-                AuditEvent::new("user.password_changed")
-                    .with_actor(user_id.0)
-                    .with_target("user", user_id.0),
+                user_id,
+                &expected_hash,
+                new_password_hash,
             )
-            .await
+            .await?;
+            if updated {
+                AuditRecorder::append(
+                    txn,
+                    AuditEvent::new("user.password_changed")
+                        .with_actor(user_id.0)
+                        .with_target("user", user_id.0),
+                )
+                .await?;
+            }
+            Ok(updated)
         })
         .timed(metrics_name!("db_transaction"))
         .await
