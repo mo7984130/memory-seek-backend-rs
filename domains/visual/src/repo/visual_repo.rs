@@ -4,12 +4,12 @@ use common_core::time::Duration;
 
 use audit::{AuditEvent, AuditRecorder};
 use common_core::error::contextual::ext::{ContextualResultExt, IntoContextualExt, OptionExt};
-use common_core::error::{AppError, contextual::Result};
+use common_core::error::{AppError, ContextualError, contextual::Result};
 use common_core::{ext::ToOk, types::CursorPage, types::CursorPageWithTotal};
 use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
 use constants::RedisKeys;
-use sea_orm::ActiveModelTrait;
+use sea_orm::{ActiveModelTrait, DbErr, RuntimeErr};
 use types_core::UserId;
 use types_visual::ImageDimensions;
 use types_visual::dto::visual::{PageDirection, VisualCursorParam};
@@ -194,7 +194,9 @@ impl VisualRepo {
     pub async fn insert_visual(state: &VisualState, visual: NewVisualRecord) -> Result<Model> {
         db_transaction!(&state.db, |txn| {
             let visual: ActiveModel = visual.into();
-            let visual = visual.insert(txn).await?;
+            // 去重查询与插入之间没有锁: 并发上传相同内容时, 后插入者会撞
+            // `visual_visual_hash_key` 唯一约束, 这里统一映射为业务 400。
+            let visual = visual.insert(txn).await.map_err(handle_insert_err)?;
             AuditRecorder::append(
                 txn,
                 AuditEvent::new("upload")
@@ -286,6 +288,32 @@ impl VisualRepo {
                 .timed(metrics_name!("cache_invalidate_cursor_ids")),
         );
     }
+}
+
+/// 把影像插入时的唯一约束冲突映射为业务 400。
+///
+/// 上传服务先做 `exists_by_hash` 快速路径, 但两步之间没有锁; 并发上传同一内容时
+/// 由数据库唯一约束兜底。此时更合适的是「已存在」而不是 500。
+fn handle_insert_err(error: DbErr) -> ContextualError {
+    if let DbErr::Query(RuntimeErr::SqlxError(sqlx_error)) = &error
+        && let Some(db_error) = sqlx_error.as_database_error()
+        && db_error.code().as_deref() == Some("23505")
+        && db_error.constraint() == Some("visual_visual_hash_key")
+    {
+        return ContextualError::warn(
+            "upload_visual:img_exist",
+            "并发上传相同内容, 唯一约束兜底",
+            error,
+            AppError::bad_request("影像已存在"),
+        );
+    }
+
+    ContextualError::error(
+        "visual_insert_err",
+        "写入影像记录失败",
+        error,
+        AppError::InternalServerError,
+    )
 }
 
 #[cfg(test)]
