@@ -11,9 +11,9 @@ members = [
     "types/core",
     "types/visual-token",
     "types/db-registry",
+    "types/db-registry/identity",
     "types/backup",
     "types/audit",
-    "types/identity",
     "types/visual",
     "types/admin",
     "types/db-init",
@@ -64,7 +64,7 @@ types-visual-token = { path = "types/visual-token" }
 types-db-registry = { path = "types/db-registry" }
 types-backup = { path = "types/backup" }
 types-audit = { path = "types/audit" }
-types-identity = { path = "types/identity" }
+types-identity = { path = "types/db-registry/identity" }
 types-visual = { path = "types/visual" }
 types-admin = { path = "types/admin" }
 types-db-init = { path = "types/db-init" }

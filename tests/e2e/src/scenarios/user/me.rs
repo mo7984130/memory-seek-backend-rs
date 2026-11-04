@@ -83,6 +83,9 @@ impl Scenario for MeUnauthorizedScenario {
     type Output = u16;
 
     type Setup = ();
+    async fn setup(_ctx: &Self::Ctx, _task: &TaskIndex) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     async fn run(
         ctx: &Self::Ctx,
@@ -119,6 +122,9 @@ impl Scenario for MeForgedTokenScenario {
     type Output = u16;
 
     type Setup = ();
+    async fn setup(_ctx: &Self::Ctx, _task: &TaskIndex) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     async fn run(
         ctx: &Self::Ctx,

@@ -8,6 +8,7 @@
 
 pub mod collection;
 pub mod comment;
+pub mod concurrency;
 pub mod crop;
 pub mod delete;
 pub mod detail;

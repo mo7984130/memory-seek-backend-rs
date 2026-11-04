@@ -98,6 +98,8 @@ jobs:
             MIN_PASS_RATE: "0.99"
             MAX_TIMEOUT_RATE: "0.005"
             MAX_TEARDOWN_FAIL_RATE: "0.02"
+            MAX_5XX_RATE: "0.001"
+            MAX_INVARIANT_FAILURES: "0"
             # 基线对比阈值: 超过只在报告里标注, 不判定失败
             MAX_P95_REGRESSION_PCT: "20"
             MIN_RPS_RATIO: "0.9"

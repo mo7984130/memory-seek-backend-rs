@@ -111,6 +111,9 @@ impl Scenario for ChangeNicknameUnauthorizedScenario {
     type Output = u16;
 
     type Setup = ();
+    async fn setup(_ctx: &Self::Ctx, _task: &TaskIndex) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     async fn run(
         ctx: &Self::Ctx,

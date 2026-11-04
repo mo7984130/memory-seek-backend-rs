@@ -74,6 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ctx = Context {
         client,
+        shared: e2e::shared::SharedState::default(),
         db: Database::connect(&cfg.database.url).await?,
         mailhog: Client::new(cfg.mailhog.url.clone())?,
         redis,

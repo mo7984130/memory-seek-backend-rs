@@ -18,11 +18,14 @@ use crate::context::Context;
 /// Test123456 的 argon2id 哈希(由 common_crypto::HashAlgorithm 生成, 参数 m=16384,t=2,p=1)
 const PASS_HASH: &str = "$argon2id$v=19$m=16384,t=2,p=1$T5U+IfQVViaUNr7dhPHmww$CCUS5IsGLNeg0//M+1Iyuwe1izIKPB0oyRud71qofLY";
 
+/// 并发场景共享账号数量(每个场景独占一个, 避免相互踢掉 token)。
+const SHARED_ACCOUNTS: usize = 6;
+
 /// 种子 SQL 语句(占位符 `:NAME` 由 [`SeedConfig`] 替换, 对应原 seed.sh 的 sed 注入)。
 /// 前 6 条清理 e2e 自建的相册/评论/点赞与上传影像(保证可重复运行), 其后为清空+灌入。
 /// id 规划(避开 admin id=1): auth 用户 id = g+1; visual 用户 id = AUTH_USERS+g+1;
 /// user 模块测试池 id = AUTH_USERS + MEDIA_USERS + g(+1)。
-const SEED_STATEMENTS: [&str; 22] = [
+const SEED_STATEMENTS: [&str; 24] = [
     // 1. 清理 e2e 自建的评论点赞
     "DELETE FROM visual_comment_like",
     // 2. 清理 e2e 自建的评论
@@ -43,8 +46,8 @@ const SEED_STATEMENTS: [&str; 22] = [
     "DELETE FROM visual_visual WHERE file_id LIKE 'seed_file_%'",
     // 9. 清空种子账号(保 admin), e2e 自建/测试池账号一并清理保证可重复运行
     "DELETE FROM auth_user WHERE username LIKE 'loadtest_%' OR username LIKE 'e2e_%' OR username LIKE 'uit_%'",
-    // 10. 清空当前月时间线统计(由种子数据重建)
-    "DELETE FROM visual_timeline_stat WHERE date_str = to_char(now(), 'YYYY-MM')",
+    // 10. 清空全部时间线统计(种子只重建当前月; 跨月场景留下的历史月份也要清掉)
+    "DELETE FROM visual_timeline_stat",
     // 11. auth 种子用户
     "
     INSERT INTO auth_user (id, username, email, password, nickname, inviter, created_at, updated_at)
@@ -88,10 +91,17 @@ const SEED_STATEMENTS: [&str; 22] = [
            now()
     FROM generate_series(1, :MEDIA_USERS) AS u
     CROSS JOIN generate_series(1, :MEDIAS_PER_USER) AS p",
-    // 14. 时间线统计(当前月份, 供 /visual/timeline/stats)
+    // 14. 时间线统计: 按 created_at 的真实月份分布聚合, 与业务重算口径一致
+    //     (created_at 跨月, 统一写当前月会让统计与影像分布不一致)
     "
     INSERT INTO visual_timeline_stat (date_str, count, anchor_time, created_at, updated_at)
-    VALUES (to_char(now(), 'YYYY-MM'), :MEDIA_COUNT, now(), now(), now())",
+    SELECT to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM'),
+           count(*),
+           max(created_at),
+           now(),
+           now()
+    FROM visual_visual
+    GROUP BY 1",
     // 15. 人脸(每张 seed 影像 1 张, 初始未分配; embedding 为随机 512 维)
     "
     INSERT INTO visual_face (visual_id, person_id, bbox, landmarks, score, embedding, created_at, updated_at)
@@ -184,7 +194,29 @@ const SEED_STATEMENTS: [&str; 22] = [
            now(),
            now()
     FROM generate_series(1, :UIT_USERS) AS g",
-    // 22. 重置 auth_user 主键序列: 种子显式插入 id 不会推进 BIGSERIAL,
+    // 22. 并发场景专用账号: 同一账号被多个并发任务共享, 必须与其它池隔离,
+    //     否则登录/改密/登出会互相踢掉对方 token。
+    "
+    INSERT INTO auth_user (id, username, email, password, nickname, inviter, created_at, updated_at)
+    SELECT (:AUTH_USERS + :MEDIA_USERS + :UIT_USERS * 4 + g + 1),
+           'e2e_shared_' || g,
+           'e2e_shared_' || g || '@test.com',
+           ':PASS_HASH',
+           'E2eShared',
+           0,
+           now(),
+           now()
+    FROM generate_series(1, :SHARED_ACCOUNTS) AS g",
+    // 23. 管理员账号(id=1): 指定 created_at 的上传只有管理员可调用,
+    //     跨月时间线统计场景需要它。测试库可重置密码, 保证账号可登录。
+    "
+    INSERT INTO auth_user (id, username, email, password, nickname, inviter, created_at, updated_at)
+    VALUES (1, 'admin', 'admin@test.com', ':PASS_HASH', 'Admin', 0, now(), now())
+    ON CONFLICT (id) DO UPDATE
+    SET username = EXCLUDED.username,
+        email    = EXCLUDED.email,
+        password = EXCLUDED.password",
+    // 24. 重置 auth_user 主键序列: 种子显式插入 id 不会推进 BIGSERIAL,
     //     不重置会导致后续业务插入 nextval 撞上种子 id
     "SELECT setval(pg_get_serial_sequence('auth_user', 'id'), (SELECT max(id) FROM auth_user))",
 ];
@@ -262,5 +294,6 @@ fn expand(sql: &str, seed: &SeedConfig) -> String {
         .replace(":MEDIAS_PER_USER", &seed.visuals_per_user.to_string())
         .replace(":FACES_PER_PERSON", &seed.faces_per_person.to_string())
         .replace(":UIT_USERS", &seed.uit_users.to_string())
+        .replace(":SHARED_ACCOUNTS", &SHARED_ACCOUNTS.to_string())
         .replace(":MEDIA_COUNT", &seed.visual_count().to_string())
 }

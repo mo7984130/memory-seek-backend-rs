@@ -39,11 +39,11 @@ cd deploy/ansible
 ansible-galaxy collection install -r requirements.yml
 # 主机清单不进仓库: 从模板复制后填一个 IP 即可(单机部署)
 cp inventory.example.ini inventory/production.ini
-# 密钥(已有 vault 请直接编辑补齐下面缺少的项)
-ansible-vault edit group_vars/all/vault.yml
+# 密钥文件不入库(gitignore): 首次用 create 生成, 之后用 edit 维护
+ansible-vault create group_vars/all/vault.yml
 ```
 
-`group_vars/all/vault.yml` 需要包含(加密存储):
+`group_vars/all/vault.yml` 需要包含(加密存储, 本地维护):
 
 ```
 vault_db_password
@@ -110,7 +110,7 @@ ansible-playbook certbot.yml --ask-vault-pass
 
 - 部署版本固定写在 `group_vars/all/versions.yml`, 不随本地仓库变化; 发版时与 `server/Cargo.toml` 一起改, CI 会校验两者一致。
 - 前端发布禁止使用 `latest`, 否则同一份 playbook 不可复现。
-- vault 密码不要进仓库(`.vault_pass*` 已 gitignore), CI 里用 secret。
+- vault 文件与密码都不进仓库: `group_vars/all/vault.yml`、`.vault_pass*` 已 gitignore, 本地 `ansible-vault create/edit` 维护。
 - 主机清单不入库: `inventory/` 整个目录已 gitignore, 只提交 `inventory.example.ini` 模板。
 - 单机部署: 清单里只有一台主机(隐式 `all` 组), 所有 playbook 用 `hosts: all`,
   SSH 用户由 `ansible.cfg` 的 `remote_user` 提供(默认 root, 可用 `-u` 覆盖)。

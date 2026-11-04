@@ -11,6 +11,8 @@ use serde::Deserialize;
 pub struct Context {
     /// 基础设施用的框架 HTTP 客户端(MailHog 等直连;业务 API 请用 [`Self::api_client`])。
     pub client: ctxlibs::http_client::Client,
+    /// 并发场景间共享的登录态、Barrier 与计数器。
+    pub shared: crate::shared::SharedState,
     pub db: DatabaseConnection,
     pub mailhog: ctxlibs::http_client::Client,
     pub redis: deadpool_redis::Pool,

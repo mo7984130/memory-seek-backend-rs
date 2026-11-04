@@ -71,6 +71,13 @@ impl BackupService {
         if request.run_id != request.confirm_run_id {
             return Err(BackupError::Msg("恢复确认 ID 不匹配".to_string()).into());
         }
+        let started = std::time::Instant::now();
+        tracing::info!(
+            run_id = %request.run_id,
+            source = ?request.source,
+            tier = ?request.tier,
+            "开始恢复备份"
+        );
         let _guard = tokio::select! {
             biased;
             _ = cancellation.cancelled() => {
@@ -107,7 +114,37 @@ impl BackupService {
         {
             return Err(BackupError::Msg("备份清单包含非法路径片段".to_string()).into());
         }
-        let tables = manifest.tables.clone();
+        let existing = TableMetadata::get_all_tables(&state.db)
+            .await
+            .map_err(BackupError::from)?;
+        let (tables, missing): (Vec<String>, Vec<String>) = manifest
+            .tables
+            .iter()
+            .cloned()
+            .partition(|table| existing.contains(table));
+        if !missing.is_empty() {
+            // 备份可能来自旧版本 schema, 其中的遗留表在当前库已不存在;
+            // 跳过这些表而不是让整个恢复失败(应用当前也读不到它们的数据)。
+            tracing::warn!(
+                run_id = %run_id,
+                missing = ?missing,
+                "备份包含目标库不存在的表，已跳过"
+            );
+        }
+        if tables.is_empty() {
+            return Err(BackupError::Msg(format!(
+                "备份中的表在目标库均不存在: {}",
+                missing.join(", ")
+            ))
+            .into());
+        }
+        let table_count = tables.len();
+        tracing::info!(
+            run_id = %run_id,
+            tables = table_count,
+            postgres_major,
+            "备份清单校验通过，开始导入数据"
+        );
         let restore_dir = state.temp_dir.join(format!("restore-{run_id}"));
         if matches!(source, BackupSource::S3) {
             tokio::fs::create_dir_all(&restore_dir)
@@ -132,6 +169,7 @@ impl BackupService {
                     file.write_all(&chunk).await.map_err(BackupError::from)?;
                 }
                 file.flush().await.map_err(BackupError::from)?;
+                tracing::debug!(run_id = %run_id, table = %table, "已下载备份归档");
             }
         }
         let result = BinaryCopyImporter::restore_local(
@@ -146,13 +184,20 @@ impl BackupService {
         .await;
         let _ = tokio::fs::remove_dir_all(&restore_dir).await;
         let restored = result?;
+        tracing::info!(
+            run_id = %run_id,
+            tables = table_count,
+            rows = restored,
+            duration = ?started.elapsed(),
+            "备份恢复完成"
+        );
         let event = AuditEvent::new("backup.restored")
             .with_detail(json!({
-                "run_id": run_id, "tables": tables, "rows": restored,
+                "run_id": run_id, "tables": tables, "rows": restored, "skipped": missing,
             }))
             .with_actor(admin.into_inner().0);
         Self::record_restore_audit(&state, event).await?;
-        inc_counter!("restore", "tables", manifest.tables.len() as u64);
+        inc_counter!("restore", "tables", table_count as u64);
         inc_counter!("restore", "rows", restored);
         Ok(restored)
     }
@@ -304,6 +349,15 @@ impl BackupService {
         mode: BackupMode,
         cancellation: Option<&CancellationToken>,
     ) -> std::result::Result<BackupResult, BackupError> {
+        let start = std::time::Instant::now();
+        let run_id = now().format("%Y%m%d_%H%M%S").to_string();
+        tracing::info!(
+            run_id = %run_id,
+            mode = %mode.metric_scope(),
+            tables = tables.len(),
+            "开始备份"
+        );
+
         let _operation_guard = if let Some(cancellation) = cancellation {
             tokio::select! {
                 biased;
@@ -315,16 +369,14 @@ impl BackupService {
         } else {
             state.operation_lock.lock().await
         };
+        tracing::debug!(run_id = %run_id, "已获取备份操作锁");
 
         let manifest_tables = tables.clone();
-        let start = std::time::Instant::now();
-        let run_id = now().format("%Y%m%d_%H%M%S").to_string();
         // tier 选择基于本地日期(周一/每月 1 号),与调度时刻的时区一致
         let backup_time = Local::now();
         let work_dir = state.temp_dir.join(&run_id);
         state.ensure_dirs()?;
 
-        tracing::info!(run_id = %run_id, mode = %mode.metric_scope(), "开始备份");
         let mut result = BackupResult::new(run_id.clone());
 
         for table_name in tables {

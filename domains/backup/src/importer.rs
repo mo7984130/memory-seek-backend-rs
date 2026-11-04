@@ -42,22 +42,36 @@ impl BinaryCopyImporter {
         let mut rows = 0;
         for table in tables {
             Self::ensure_not_cancelled(cancellation)?;
-            let file = tokio::fs::File::open(path_for(table)).await?;
-            let mut copy = transaction
-                .as_mut()
-                .copy_in_raw(&format!(
-                    "COPY {} FROM STDIN (FORMAT binary)",
-                    Self::quote_identifier(table)
-                ))
-                .await?;
-            copy.read_from(ZstdDecoder::new(BufReader::new(file)))
-                .await?;
-            rows += copy.finish().await?;
+            tracing::info!(table = %table, "开始恢复表数据");
+            let table_rows = Self::restore_table(&mut transaction, table, path_for(table))
+                .await
+                .map_err(|error| BackupError::Msg(format!("恢复表 {table} 失败: {error}")))?;
+            rows += table_rows;
+            tracing::info!(table = %table, rows = table_rows, "已恢复表数据");
         }
         // 提交前最后确认一次，避免任务已被放弃或回收后仍写入数据。
         Self::ensure_not_cancelled(cancellation)?;
         transaction.commit().await?;
         Ok(rows)
+    }
+
+    /// 通过 COPY 将单张表的归档文件导入事务，返回该表导入行数
+    async fn restore_table(
+        transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        table: &str,
+        path: std::path::PathBuf,
+    ) -> Result<u64> {
+        let file = tokio::fs::File::open(path).await?;
+        let mut copy = transaction
+            .as_mut()
+            .copy_in_raw(&format!(
+                "COPY {} FROM STDIN (FORMAT binary)",
+                Self::quote_identifier(table)
+            ))
+            .await?;
+        copy.read_from(ZstdDecoder::new(BufReader::new(file)))
+            .await?;
+        Ok(copy.finish().await?)
     }
 
     fn ensure_not_cancelled(cancellation: &CancellationToken) -> Result<()> {

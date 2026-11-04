@@ -1,5 +1,6 @@
 pub mod avatar;
 pub mod batch;
+pub mod concurrency;
 pub mod inviter_code;
 pub mod logout;
 pub mod me;

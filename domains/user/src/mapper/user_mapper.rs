@@ -1,4 +1,4 @@
-use common_core::{DbConn, error::contextual::Result, ext::ToOk};
+use common_core::{DbConn, error::contextual::Result, ext::ToOk, time::now};
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder,
@@ -85,21 +85,25 @@ impl UserMapper {
         Ok(old_key)
     }
 
-    /// 更新用户密码哈希
-    pub async fn update_password(
+    /// 仅当密码仍等于 `expected_hash` 时才更新。
+    ///
+    /// 用旧密码哈希做 compare-and-set: 并发的两个改密请求都通过「旧密码校验」时,
+    /// 只有第一个能真正写入, 第二个 `rows_affected == 0`。
+    pub async fn update_password_if_unchanged(
         db: &impl DbConn,
         user_id: UserId,
+        expected_hash: &str,
         new_password_hash: String,
-    ) -> Result<()> {
-        ActiveModel {
-            id: Set(user_id),
-            password: Set(new_password_hash),
-            ..Default::default()
-        }
-        .update(db)
-        .await?;
+    ) -> Result<bool> {
+        let result = Entity::update_many()
+            .col_expr(Column::Password, Expr::value(new_password_hash))
+            .col_expr(Column::UpdatedAt, Expr::value(now()))
+            .filter(Column::Id.eq(user_id))
+            .filter(Column::Password.eq(expected_hash))
+            .exec(db)
+            .await?;
 
-        Ok(())
+        Ok(result.rows_affected == 1)
     }
 
     /// 登出时清除 refresh_token 与过期时间

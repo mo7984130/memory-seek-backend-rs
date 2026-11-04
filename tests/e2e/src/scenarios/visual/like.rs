@@ -4,12 +4,12 @@
 //! (user, visual) 在不同场景重复点赞触发 400。
 
 use common_core::types::CursorPageWithTotal;
-use memory_seek_api::{CommentContent, CommentPublishParam, api};
+use memory_seek_api::{ApiError, CommentContent, CommentPublishParam, api};
 use memseek_test::{
-    TaskIndex, register_scenario,
+    InvariantViolation, TaskIndex, register_scenario,
     scenario::{Scenario, SetupMode, TeardownMode},
 };
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Statement};
 use types_core::cursor::TimeIdCursor;
 use types_visual::comment::CommentId;
 use types_visual::comment_like as comment_like_entity;
@@ -18,9 +18,9 @@ use types_visual::visual::VisualId;
 use types_visual::visual_like as visual_like_entity;
 
 use crate::context::Context;
-use crate::error::E2eError;
+use crate::error::{E2eError, status};
 
-use super::{Session, seed_visual, session};
+use super::{Session, login, seed_visual, session};
 
 /// 在影像下发表评论(用于评论点赞场景), 返回评论 id。
 async fn publish_comment(session: &Session, visual_id: VisualId) -> Result<CommentId, E2eError> {
@@ -426,3 +426,244 @@ impl Scenario for UnlikeCommentScenario {
 }
 
 register_scenario!(UnlikeCommentScenario);
+
+// ---------------------------------------------------------------------------
+// 共享热点:同一影像上多用户并发点赞/取消 + 同账号唯一约束竞争 + 读缓存
+// ---------------------------------------------------------------------------
+
+/// 热点影像的种子序号(现有场景使用 1-8,9 预留给本场景)。
+const HOTSPOT_ORDINAL: u64 = 9;
+
+/// 共享热点场景中的任务角色。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HotRole {
+    /// 独立账号,循环 like → unlike,打同一行 like_count。
+    Writer,
+    /// 共享同一账号,并发 like/unlike 同一 `(user, visual)`。
+    Racer,
+    /// 独立账号,只读详情,验证读路径与缓存。
+    Reader,
+}
+
+/// 按总并发度切分角色:racer 约 1/8,reader 约 1/4,其余为 writer。
+fn hot_roles(total: usize) -> (usize, usize, usize) {
+    let racers = (total / 8).max(2);
+    let readers = (total / 4).max(1);
+    let writers = total.saturating_sub(racers + readers);
+    (writers, racers, readers)
+}
+
+fn hot_role(task: &TaskIndex) -> HotRole {
+    let (writers, racers, _) = hot_roles(task.total);
+    if task.index < racers {
+        HotRole::Racer
+    } else if task.index < racers + writers {
+        HotRole::Writer
+    } else {
+        HotRole::Reader
+    }
+}
+
+/// 热点场景每轮产出。
+pub enum HotLikeOutput {
+    Writer(u16),
+    Racer(u16),
+    Reader(VisualView),
+}
+
+pub struct HotLikeSetup {
+    pub session: Session,
+    pub visual_id: VisualId,
+    pub role: HotRole,
+}
+
+/// 同一影像上的高并发点赞/取消,结束后对账计数与明细行数。
+#[derive(Default)]
+pub struct HotLikeConcurrencyScenario;
+
+impl Scenario for HotLikeConcurrencyScenario {
+    type Ctx = Context;
+    type Error = E2eError;
+    type Output = HotLikeOutput;
+    type Setup = HotLikeSetup;
+
+    const TEARDOWN_MODE: TeardownMode = TeardownMode::Round;
+
+    async fn setup(ctx: &Self::Ctx, task: &TaskIndex) -> Result<Self::Setup, Self::Error> {
+        if task.total < 4 {
+            return Err(E2eError::internal(
+                "HotLikeConcurrencyScenario 并发度需 >= 4",
+            ));
+        }
+        let role = hot_role(task);
+        let visual = seed_visual(ctx, HOTSPOT_ORDINAL)
+            .await
+            .ok_or_else(super::seed_missing)?;
+
+        let session = match role {
+            HotRole::Racer => {
+                // 共享账号只登录一次:4 个 racer 拿到同一份 token。
+                let account = format!("loadtest_visual_{}", task.total + 1);
+                let session = ctx
+                    .shared
+                    .get_or_init("hot_like_racer_session", || async {
+                        login(ctx, &account)
+                            .await
+                            .map_err(|error| error.to_string())
+                    })
+                    .await;
+                (*session).clone().map_err(E2eError::internal)?
+            }
+            HotRole::Writer | HotRole::Reader => session(ctx, task.index).await?,
+        };
+
+        if role == HotRole::Racer {
+            // 共享账号可能残留上一轮/上一次运行的点赞,先清到未点赞状态。
+            let _ = api::visual::like::unlike_visual(session.client(), visual.id).await;
+        }
+
+        Ok(HotLikeSetup {
+            session,
+            visual_id: visual.id,
+            role,
+        })
+    }
+
+    async fn run(
+        _ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+    ) -> Result<Self::Output, Self::Error> {
+        Ok(match setup.role {
+            HotRole::Writer => HotLikeOutput::Writer(status(
+                api::visual::like::like_visual(setup.session.client(), setup.visual_id).await,
+            )?),
+            HotRole::Racer => HotLikeOutput::Racer(status(
+                api::visual::like::like_visual(setup.session.client(), setup.visual_id).await,
+            )?),
+            HotRole::Reader => HotLikeOutput::Reader(
+                api::visual::get_visual_info(setup.session.client(), setup.visual_id).await?,
+            ),
+        })
+    }
+
+    async fn validate(
+        _ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        output: &Self::Output,
+    ) -> Result<bool, Self::Error> {
+        Ok(match (setup.role, output) {
+            (HotRole::Writer, HotLikeOutput::Writer(code)) => *code == 200,
+            // 共享账号:同一时刻只有一个请求能插入成功,其余应是 400。
+            (HotRole::Racer, HotLikeOutput::Racer(code)) => *code == 200 || *code == 400,
+            (HotRole::Reader, HotLikeOutput::Reader(view)) => {
+                view.id == setup.visual_id && !view.is_liked
+            }
+            _ => false,
+        })
+    }
+
+    async fn teardown(
+        _ctx: &Self::Ctx,
+        _task: &TaskIndex,
+        setup: &Self::Setup,
+        _result: Option<Result<&Self::Output, &Self::Error>>,
+    ) -> Result<(), Self::Error> {
+        if setup.role == HotRole::Reader {
+            return Ok(());
+        }
+        match api::visual::like::unlike_visual(setup.session.client(), setup.visual_id).await {
+            Ok(_) => Ok(()),
+            // 本轮没点赞成功 / 已被同账号其它 racer 取消:都算收尾完成。
+            Err(ApiError::HttpStatus {
+                code: 400 | 404, ..
+            }) => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    async fn reconcile(ctx: &Self::Ctx) -> Result<Vec<InvariantViolation>, Self::Error> {
+        let Some(visual) = seed_visual(ctx, HOTSPOT_ORDINAL).await else {
+            return Ok(vec![InvariantViolation::new(
+                "hot_visual_missing",
+                "seed_file_9_1 不存在,无法对账",
+            )]);
+        };
+
+        let backend = ctx.db.get_database_backend();
+        let stmt = Statement::from_sql_and_values(
+            backend,
+            "SELECT like_count, \
+                    (SELECT count(*) FROM visual_visual_like WHERE visual_id = $1) AS actual \
+             FROM visual_visual WHERE id = $1",
+            [visual.id.0.into()],
+        );
+        let row = ctx
+            .db
+            .query_one_raw(stmt)
+            .await
+            .map_err(|error| E2eError::internal(format!("热点影像对账查询失败: {error}")))?
+            .ok_or_else(|| E2eError::internal("热点影像在结算时不存在"))?;
+        let expected: i64 = row
+            .try_get("", "like_count")
+            .map_err(|error| E2eError::internal(format!("读取 like_count 失败: {error}")))?;
+        let actual: i64 = row
+            .try_get("", "actual")
+            .map_err(|error| E2eError::internal(format!("读取 like 行数失败: {error}")))?;
+
+        let mut violations = Vec::new();
+        if expected != actual {
+            violations.push(InvariantViolation::new(
+                "like_count_mismatch",
+                format!("visual={} expected={expected} actual={actual}", visual.id.0),
+            ));
+        }
+        if expected < 0 {
+            violations.push(InvariantViolation::new(
+                "like_count_negative",
+                format!("visual={} like_count={expected}", visual.id.0),
+            ));
+        }
+        if expected != 0 {
+            violations.push(InvariantViolation::new(
+                "like_count_not_settled",
+                format!(
+                    "visual={} 结算后仍为 {expected}(所有任务 teardown 应已取消点赞)",
+                    visual.id.0
+                ),
+            ));
+        }
+
+        let dup_stmt = Statement::from_sql_and_values(
+            backend,
+            "SELECT count(*) AS duplicates FROM ( \
+                 SELECT user_id FROM visual_visual_like WHERE visual_id = $1 \
+                 GROUP BY user_id HAVING count(*) > 1 \
+             ) duplicated",
+            [visual.id.0.into()],
+        );
+        let dup_row = ctx
+            .db
+            .query_one_raw(dup_stmt)
+            .await
+            .map_err(|error| E2eError::internal(format!("重复点赞对账查询失败: {error}")))?
+            .ok_or_else(|| E2eError::internal("重复点赞对账无结果"))?;
+        let duplicates: i64 = dup_row
+            .try_get("", "duplicates")
+            .map_err(|error| E2eError::internal(format!("读取重复行数失败: {error}")))?;
+        if duplicates > 0 {
+            violations.push(InvariantViolation::new(
+                "duplicate_like_rows",
+                format!(
+                    "visual={} 存在 {duplicates} 个 (user_id, visual_id) 重复组",
+                    visual.id.0
+                ),
+            ));
+        }
+
+        Ok(violations)
+    }
+}
+
+register_scenario!(HotLikeConcurrencyScenario);
