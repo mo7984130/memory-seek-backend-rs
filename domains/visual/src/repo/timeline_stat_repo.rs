@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use common_core::error::contextual::ext::{ContextualResultExt, IntoContextualExt};
 use common_core::{error::contextual::Result, time::DateTime};
+use common_db::db_transaction;
 use common_metrics::{MetricsTimerExt, metrics_name};
 use constants::RedisKeys;
 use sea_orm::DatabaseTransaction;
@@ -19,10 +20,14 @@ pub struct TimelineStatRepo;
 
 impl TimelineStatRepo {
     /// 记录新上传影像对应月份的时间线统计
+    ///
+    /// 统计写入需要与删除侧的重算共享同一把事务级咨询锁, 因此必须包在事务里。
     pub async fn record_uploaded_visual(state: &VisualState, created_at: DateTime) -> Result<()> {
-        TimelineStatMapper::incr_stat(&state.db, created_at)
-            .timed(metrics_name!("db_update"))
-            .await?;
+        db_transaction!(&state.db, |txn| {
+            TimelineStatMapper::incr_stat(txn, created_at).await
+        })
+        .timed(metrics_name!("db_update"))
+        .await?;
         Self::invalidate_cache(state).await;
         Ok(())
     }
