@@ -85,7 +85,11 @@ jobs:
             # VideoDerivativeScenario 会触发真实视频转码(单 worker 串行), 压测下会拖长耗时
             # 并增加 CPU 负载; DownloadImageThumbnailScenario 走本地图片处理(CPU)。
             # 两者同 UploadDuplicateVisualScenario 一样只在正确性验收(e2e.yml)中跑。
-            E2E__RUN__EXCLUDE: UploadDuplicateVisualScenario,VideoDerivativeScenario,DownloadImageThumbnailScenario,DownloadImageCropScenario
+            # 正确性对抗场景(duration 模式下没有意义):
+            # - 同内容上传/跨月上传是构造型竞态, 不是负载;
+            # - 共享账号登录/改密/刷新-登出只在固定轮次真实执行, 其余轮次立即返回,
+            #   会空转出巨量假轮次并污染 RPS。
+            E2E__RUN__EXCLUDE: UploadDuplicateVisualScenario,VideoDerivativeScenario,DownloadImageThumbnailScenario,DownloadImageCropScenario,ConcurrentDuplicateUploadScenario,CrossMonthFirstUploadScenario,SharedAccountLoginScenario,SharedPasswordChangeScenario,LogoutRefreshRaceScenario
             # 自建环境每轮重建种子; 外部目标跳过(否则会清空对方数据)
             # 注意: push/schedule 触发时 inputs 为空, 必须用 `|| ''` 归一化后再比较
             E2E__RUN__PREPARE: ${{ (inputs.target_url || '') == '' && 'true' || 'false' }}
