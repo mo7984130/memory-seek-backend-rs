@@ -35,6 +35,7 @@ pub fn pwd_account(index: usize) -> String {
 }
 
 /// 已登录会话: 携带已注入登录态的 api-rs 客户端, 供受保护端点复用.
+#[derive(Clone)]
 pub struct Session {
     pub user_id: UserId,
     pub access_token: String,

@@ -21,6 +21,9 @@ impl Scenario for SendCodeScenario {
     type Output = String;
 
     type Setup = ();
+    async fn setup(_ctx: &Self::Ctx, _task: &TaskIndex) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     async fn run(
         ctx: &Self::Ctx,

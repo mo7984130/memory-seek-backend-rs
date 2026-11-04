@@ -17,6 +17,8 @@
   MIN_RPS_RATIO            整体吞吐低于基线的该倍率, 默认 0.9 —— 仅标注
   MAX_TIMEOUT_RATE         超时率上限, 默认 0.005
   MAX_TEARDOWN_FAIL_RATE   收尾失败率上限(收尾失败不影响通过率, 这里单独看), 默认 0.02
+  MAX_5XX_RATE             意外 5xx 占轮次上限, 默认 0.0
+  INVARIANT_FAILURES       全局对账失败上限, 默认 0(必须为 0)
 """
 
 from __future__ import annotations
@@ -39,6 +41,17 @@ MAX_P95_REGRESSION_PCT = env_float("MAX_P95_REGRESSION_PCT", 20.0)
 MIN_RPS_RATIO = env_float("MIN_RPS_RATIO", 0.9)
 MAX_TIMEOUT_RATE = env_float("MAX_TIMEOUT_RATE", 0.005)
 MAX_TEARDOWN_FAIL_RATE = env_float("MAX_TEARDOWN_FAIL_RATE", 0.02)
+MAX_5XX_RATE = env_float("MAX_5XX_RATE", 0.0)
+MAX_INVARIANT_FAILURES = env_float("MAX_INVARIANT_FAILURES", 0)
+
+
+def scenario_5xx(item: dict[str, Any]) -> int:
+    """单个场景的 5xx 计数; 旧报告没有 status_counts 时按 0 处理。"""
+    return sum(
+        count
+        for code, count in item.get("status_counts", {}).items()
+        if 500 <= int(code) <= 599
+    )
 
 
 def load(path: str) -> dict[str, Any]:
@@ -100,6 +113,20 @@ def evaluate(
     if overall.get("interrupted"):
         reasons.append("存在被中断的场景(优雅关闭)")
 
+    invariant_failures = int(overall.get("invariant_failures", 0))
+    if invariant_failures > MAX_INVARIANT_FAILURES:
+        reasons.append(
+            f"全局对账失败 {invariant_failures} 项, 超过上限 "
+            f"{MAX_INVARIANT_FAILURES:.0f}——存在数据一致性问题"
+        )
+    http_5xx = int(overall.get("http_5xx", 0))
+    http_5xx_rate = http_5xx / times
+    if http_5xx_rate > MAX_5XX_RATE:
+        reasons.append(
+            f"意外 5xx {http_5xx} 次, 占轮次 {http_5xx_rate:.4f}, "
+            f"超过上限 {MAX_5XX_RATE:.4f}"
+        )
+
     if baseline_overall and baseline_overall["rps"] > 0:
         ratio = overall["rps"] / baseline_overall["rps"]
         if ratio < MIN_RPS_RATIO:
@@ -109,8 +136,8 @@ def evaluate(
             )
 
     rows = [
-        "| 场景 | 轮次 | 通过率 | RPS | P50 | P95 | P99 | 失败 | 超时 | 收尾失败 | P95 vs 基线 |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| 场景 | 轮次 | 通过率 | RPS | P50 | P95 | P99 | 失败 | 超时 | 收尾失败 | 5xx | 对账 | P95 vs 基线 |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for item in sorted(scenarios, key=lambda s: s["name"]):
         item_times = max(item["times"], 1)
@@ -136,7 +163,7 @@ def evaluate(
                 )
         rows.append(
             "| {name} | {times} | {pass_rate:.1%} | {rps:.1f} | {p50} | {p95} | {p99} "
-            "| {failures} | {timeouts} | {teardown} | {delta} |".format(
+            "| {failures} | {timeouts} | {teardown} | {http_5xx} | {invariants} | {delta} |".format(
                 name=item["name"],
                 times=item["times"],
                 pass_rate=item_pass,
@@ -147,6 +174,8 @@ def evaluate(
                 failures=item["failures"] + item["validate_failures"],
                 timeouts=item["timeouts"],
                 teardown=item["teardown_failures"],
+                http_5xx=scenario_5xx(item),
+                invariants=len(item.get("invariant_failures", [])),
                 delta=delta,
             )
         )
@@ -194,6 +223,8 @@ def evaluate(
         f"- 参数: {mode} / {scope} / 并发 {environment['concurrency']} / 种子准备 {environment['prepared']}",
         f"- 总量: {overall['times']} 轮, 有效通过率 {pass_rate:.2%}, 超时率 {timeout_rate:.4%}, "
         f"收尾失败 {teardown_failures}/{teardown_total}",
+        f"- 错误: 4xx {int(overall.get('http_4xx', 0))} | "
+        f"5xx {http_5xx} | 对账失败 {invariant_failures}",
         f"- 吞吐: {throughput}",
         "",
     ]

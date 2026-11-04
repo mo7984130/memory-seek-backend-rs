@@ -17,6 +17,9 @@ impl Scenario for LoginScenario {
     type Output = LoginResponse;
 
     type Setup = ();
+    async fn setup(_ctx: &Self::Ctx, _task: &TaskIndex) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     async fn run(
         ctx: &Self::Ctx,
@@ -58,6 +61,9 @@ impl Scenario for LoginWrongPasswordScenario {
     type Output = u16;
 
     type Setup = ();
+    async fn setup(_ctx: &Self::Ctx, _task: &TaskIndex) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     async fn run(
         ctx: &Self::Ctx,
@@ -94,6 +100,9 @@ impl Scenario for LoginUnknownAccountScenario {
     type Output = u16;
 
     type Setup = ();
+    async fn setup(_ctx: &Self::Ctx, _task: &TaskIndex) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     async fn run(
         ctx: &Self::Ctx,

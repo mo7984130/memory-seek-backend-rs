@@ -47,6 +47,23 @@ impl ScenarioError for E2eError {
             Self::Api(_) | Self::Internal(_) => false,
         }
     }
+
+    /// 把 HTTP 状态码交给框架聚合 4xx/5xx。
+    ///
+    /// 负向场景通过 [`status`] 把预期 4xx 归一成 `Ok(code)`,不会走到这里;
+    /// 因此这里统计的是「意外错误」。
+    fn status_code(&self) -> Option<u16> {
+        match self {
+            Self::Api(ApiError::HttpStatus { code, .. }) => Some(*code),
+            Self::Api(ApiError::Transport(error)) => error
+                .downcast_ref::<reqwest::Error>()
+                .and_then(reqwest::Error::status)
+                .map(|status| status.as_u16()),
+            Self::Infra(HttpError::Status { status, .. }) => Some(status.as_u16()),
+            Self::Infra(HttpError::Reqwest(error)) => error.status().map(|status| status.as_u16()),
+            Self::Api(_) | Self::Infra(_) | Self::Internal(_) => None,
+        }
+    }
 }
 
 /// `ApiError` → 错误分类(与 [`HttpError`] 的分类语义对齐)。

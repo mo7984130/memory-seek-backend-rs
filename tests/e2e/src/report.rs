@@ -8,6 +8,7 @@
 //! 但会拖慢轮次节奏, 因此 RPS 反映的是"含准备与收尾"的整体吞吐。
 
 use std::{
+    collections::BTreeMap,
     fmt::Write as _,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -18,7 +19,7 @@ use serde::Serialize;
 use crate::config::RunConfig;
 
 /// JSON 报告的结构版本, 便于将来做基线兼容判断。
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 
 /// 汇总判定结果。
 #[derive(Debug)]
@@ -33,6 +34,8 @@ pub struct Verdict {
     pub timeout_rate: f64,
     /// teardown 失败数: 只告警, 不参与判定
     pub teardown_failures: u64,
+    /// 全局对账失败项数: 单独判定, 不混入单轮通过率
+    pub invariant_failures: u64,
     pub times: u64,
 }
 
@@ -44,6 +47,10 @@ impl Verdict {
         let validate_failures: u64 = reports.iter().map(|r| r.validate_failures).sum();
         let timeouts: u64 = reports.iter().map(|r| r.timeouts).sum();
         let teardown_failures: u64 = reports.iter().map(|r| r.teardown_failures).sum();
+        let invariant_failures: u64 = reports
+            .iter()
+            .map(|r| r.invariant_failures.len() as u64)
+            .sum();
 
         let rate = |part: u64| part as f64 / times.max(1) as f64;
         let failure_rate = rate(failures + validate_failures);
@@ -76,6 +83,11 @@ impl Verdict {
                 timeout_rate, run.max_timeout_rate
             ));
         }
+        if invariant_failures > 0 {
+            reasons.push(format!(
+                "全局对账失败 {invariant_failures} 项(不影响单轮通过率, 详见 invariant_failures)"
+            ));
+        }
 
         Self {
             passed: reasons.is_empty(),
@@ -83,6 +95,7 @@ impl Verdict {
             failure_rate,
             timeout_rate,
             teardown_failures,
+            invariant_failures,
             times,
         }
     }
@@ -92,8 +105,12 @@ impl Verdict {
         let mut out = String::new();
         let _ = writeln!(
             out,
-            "汇总: 轮次 {} | 失败率 {:.4} | 超时率 {:.4} | 收尾失败 {}",
-            self.times, self.failure_rate, self.timeout_rate, self.teardown_failures
+            "汇总: 轮次 {} | 失败率 {:.4} | 超时率 {:.4} | 收尾失败 {} | 对账失败 {}",
+            self.times,
+            self.failure_rate,
+            self.timeout_rate,
+            self.teardown_failures,
+            self.invariant_failures
         );
         if self.teardown_failures > 0 && self.passed {
             let _ = writeln!(
@@ -155,6 +172,11 @@ pub struct JsonOverall {
     pub teardown_failures: u64,
     pub timeouts: u64,
     pub interrupted: bool,
+    /// 全局对账失败项数(不影响 failure_rate)
+    pub invariant_failures: u64,
+    /// 意外 4xx / 5xx 计数(来自 `ScenarioError::status_code`)
+    pub http_4xx: u64,
+    pub http_5xx: u64,
     /// 各场景墙钟耗时之和(毫秒)
     pub elapsed_ms: f64,
     pub rps: f64,
@@ -187,7 +209,18 @@ pub struct JsonScenario {
     pub timeouts: u64,
     pub interrupted: bool,
     /// 错误分类计数(`teardown:*` 为收尾失败)
-    pub errors: std::collections::BTreeMap<String, u64>,
+    pub errors: BTreeMap<String, u64>,
+    /// 错误携带的 HTTP 状态码计数(键为状态码字符串)
+    pub status_counts: BTreeMap<String, u64>,
+    /// 全局对账失败明细
+    pub invariant_failures: Vec<JsonInvariantViolation>,
+}
+
+/// 单条全局对账失败。
+#[derive(Debug, Serialize)]
+pub struct JsonInvariantViolation {
+    pub name: String,
+    pub detail: String,
 }
 
 impl JsonReport {
@@ -203,6 +236,10 @@ impl JsonReport {
 
         let times: u64 = reports.iter().map(|r| r.times).sum();
         let elapsed_ms: f64 = reports.iter().map(|r| ms(r.elapsed)).sum();
+        let (http_4xx, http_5xx) = reports.iter().fold((0, 0), |(a4, a5), r| {
+            let (s4, s5) = status_class_counts(&r.status_counts);
+            (a4 + s4, a5 + s5)
+        });
         let overall = JsonOverall {
             times,
             success: reports.iter().map(|r| r.success).sum(),
@@ -211,6 +248,9 @@ impl JsonReport {
             teardown_failures: verdict.teardown_failures,
             timeouts: reports.iter().map(|r| r.timeouts).sum(),
             interrupted: reports.iter().any(|r| r.interrupted),
+            invariant_failures: verdict.invariant_failures,
+            http_4xx,
+            http_5xx,
             elapsed_ms,
             rps: rps(times, elapsed_ms),
             failure_rate: verdict.failure_rate,
@@ -282,8 +322,32 @@ impl From<&ScenarioReport> for JsonScenario {
                 .iter()
                 .map(|(kind, count)| (kind.to_string(), *count))
                 .collect(),
+            status_counts: r
+                .status_counts
+                .iter()
+                .map(|(status, count)| (status.to_string(), *count))
+                .collect(),
+            invariant_failures: r
+                .invariant_failures
+                .iter()
+                .map(|violation| JsonInvariantViolation {
+                    name: violation.name.to_string(),
+                    detail: violation.detail.clone(),
+                })
+                .collect(),
         }
     }
+}
+
+/// 按 4xx / 5xx 聚合状态码计数(其它状态码忽略)。
+fn status_class_counts(counts: &BTreeMap<u16, u64>) -> (u64, u64) {
+    counts
+        .iter()
+        .fold((0, 0), |(c4, c5), (code, count)| match code {
+            400..=499 => (c4 + count, c5),
+            500..=599 => (c4, c5 + count),
+            _ => (c4, c5),
+        })
 }
 
 fn ms(duration: std::time::Duration) -> f64 {
@@ -295,4 +359,81 @@ fn rps(times: u64, elapsed_ms: f64) -> f64 {
         return 0.0;
     }
     times as f64 / (elapsed_ms / 1000.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        borrow::Cow,
+        collections::{BTreeMap, HashMap},
+        time::Duration,
+    };
+
+    use memseek_test::{InvariantViolation, ScenarioReport};
+
+    use super::*;
+
+    fn sample_report(invariant_failures: Vec<InvariantViolation>) -> ScenarioReport {
+        ScenarioReport {
+            name: Cow::Borrowed("sample"),
+            concurrency: 2,
+            times: 1,
+            total: Duration::from_millis(1),
+            elapsed: Duration::from_millis(1),
+            avg: Duration::from_millis(1),
+            min: Duration::from_millis(1),
+            max: Duration::from_millis(1),
+            p50: Duration::from_millis(1),
+            p95: Duration::from_millis(1),
+            p99: Duration::from_millis(1),
+            validate_success: 1,
+            validate_failures: 0,
+            setup_total: Duration::ZERO,
+            validate_total: Duration::ZERO,
+            teardown_total: Duration::ZERO,
+            teardown_success: 0,
+            teardown_failures: 0,
+            success: 1,
+            failures: 0,
+            timeouts: 0,
+            error_map: HashMap::new(),
+            status_counts: BTreeMap::new(),
+            invariant_failures,
+            reconcile_total: Duration::ZERO,
+            interrupted: false,
+        }
+    }
+
+    #[test]
+    fn invariant_failure_fails_verdict_without_touching_failure_rate() {
+        let report = sample_report(vec![InvariantViolation::new(
+            "like_count_mismatch",
+            "expected=0 actual=1",
+        )]);
+        let verdict = Verdict::evaluate(&[report], &RunConfig::default());
+
+        assert!(!verdict.passed);
+        assert_eq!(verdict.invariant_failures, 1);
+        assert_eq!(verdict.failure_rate, 0.0);
+        assert_eq!(verdict.timeout_rate, 0.0);
+        assert!(
+            verdict
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("全局对账失败")),
+            "{:?}",
+            verdict.reasons
+        );
+    }
+
+    #[test]
+    fn status_counts_split_into_4xx_and_5xx() {
+        let mut counts = BTreeMap::new();
+        counts.insert(400, 3);
+        counts.insert(404, 2);
+        counts.insert(500, 4);
+        counts.insert(503, 1);
+        counts.insert(302, 9);
+        assert_eq!(status_class_counts(&counts), (5, 5));
+    }
 }

@@ -5,3 +5,4 @@ pub mod error;
 pub mod preprea;
 pub mod report;
 pub mod scenarios;
+pub mod shared;
