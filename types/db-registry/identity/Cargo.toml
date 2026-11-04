@@ -12,7 +12,7 @@ orm = ["dep:sea-orm", "dep:linkme", "dep:types-db-registry", "types-core/orm", "
 [dependencies]
 types-core.workspace = true
 types-visual-token.workspace = true
-common-core.path = "../../common/core"
+common-core.path = "../../../common/core"
 
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
