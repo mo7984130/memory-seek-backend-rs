@@ -432,6 +432,47 @@ python3 tests/e2e/ci/load_compare.py --current hot-like.json --baseline <基线>
 - [x] `tests/e2e`：Verdict/JSON/`load_compare.py` 接入对账与 4xx/5xx
 - [x] 共享热点场景 `HotLikeConcurrencyScenario`（同影像并发点赞 + 计数对账）
 - [x] `Context` 共享 Session / Barrier / 计数器
-- [ ] 阶梯加压（ramp）
+- [x] 同内容并发上传（`ConcurrentDuplicateUploadScenario`）
+- [x] 跨月首次上传 + 并发删除后的统计对账（`CrossMonthFirstUploadScenario`）
+- [x] 同评论并发点赞（`HotCommentLikeConcurrencyScenario`）
+- [x] 同收藏夹并发添加（`HotCollectionConcurrencyScenario`）
+- [x] 同账号并发登录（`SharedAccountLoginScenario`）
+- [x] 同账号并发换头像（`SharedAvatarReplaceScenario`）
+- [x] 同账号并发改密（`SharedPasswordChangeScenario`）
+- [x] 刷新与登出交错（`LogoutRefreshRaceScenario`）
+- [ ] 同影像并发删除 + 读取
+- [ ] 收藏夹并发 remove + 读取
+- [ ] 同邮箱并发发码
+- [ ] admin / backup 多实例并发（需要开启 feature + 多实例）
 - [ ] 多实例 L1 缓存一致性验证
-- [ ] 同内容并发上传 / 同账号写竞争场景
+- [ ] 阶梯加压（ramp）
+
+## 10. 体检发现与修复（2026-11）
+
+第一轮对抗场景跑出的三个真实缺陷，均已修复：
+
+### 10.1 同内容并发上传返回 500
+
+- 现象：128 轮 / 32 并发中 124 次 500，日志为 `23505 visual_visual_hash_key`。
+- 原因：`exists_by_hash` 与 `insert_visual` 之间无锁，后插入者撞唯一约束。
+- 修复：`VisualRepo::insert_visual` 捕获 23505 并映射为 400「影像已存在」。
+- 回归：`ConcurrentDuplicateUploadScenario` 128/128 通过，`5xx = 0`。
+
+### 10.2 同账号并发改密全部成功（丢失更新）
+
+- 现象：32 个使用同一旧密码的并发请求全部 200，只有最后一次生效。
+- 原因：读取旧密码哈希 → 校验 → 更新三步分离，无并发控制。
+- 修复：`UPDATE ... WHERE id = ? AND password = <旧哈希>` 条件更新（CAS），
+  未命中返回 400；仅成功时才登出并写审计。
+- 回归：`SharedPasswordChangeScenario` 恰好 1 次成功，密码可还原。
+
+### 10.3 并发删除导致时间线统计漂移
+
+- 现象：空月份仍残留 24/28/25 条计数，十月多 30 条。
+- 原因：删除后按「剩余影像」重算，并发事务互相看不到对方未提交的删除。
+- 修复：
+  - `incr_stat` 改为单条 `INSERT ... ON CONFLICT DO UPDATE`（消除跨月首次上传的主键窗口）；
+  - 上传与删除共享按月的事务级 advisory lock（`pg_advisory_xact_lock`），
+    读改写整体串行化；
+  - 批量删除按月升序加锁，避免 ABBA 死锁。
+- 回归：`CrossMonthFirstUploadScenario` 每月 `count == 实际影像数`，空月份无残留。
